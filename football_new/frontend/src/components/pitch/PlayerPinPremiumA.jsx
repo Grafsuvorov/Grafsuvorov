@@ -55,7 +55,7 @@ export default function PlayerPinPremiumA({ player, side, meta, onClick }) {
       }}
       onClick={() => onClick?.(player)}
     >
-      <div className="relative w-[38px] h-[38px] rounded-full overflow-visible">
+      <div className="relative h-[26px] w-[26px] overflow-visible rounded-full sm:h-[38px] sm:w-[38px]">
         <div className="w-full h-full rounded-full overflow-hidden bg-[#0a1a27] transition-shadow duration-200 hover:shadow-[0_0_12px_rgba(168,85,247,0.25)]">
           <img
             src={`/icons/player_photos/${player.player_id}.png`}
@@ -74,32 +74,32 @@ export default function PlayerPinPremiumA({ player, side, meta, onClick }) {
 
         <div
           className={clsx(
-            "absolute top-[6px] flex flex-col gap-1",
-            side === "away" ? "-left-[16px]" : "-right-[16px]"
+            "absolute top-[3px] flex flex-col gap-0.5 sm:top-[6px] sm:gap-1",
+            side === "away" ? "-left-[11px] sm:-left-[16px]" : "-right-[11px] sm:-right-[16px]"
           )}
         >
           {goals > 0 && (
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] bg-amber-500 text-[9px] font-semibold text-slate-950">
+            <span className="inline-flex h-3 w-3 items-center justify-center rounded-[3px] bg-amber-500 text-[7px] font-semibold text-slate-950 sm:h-4 sm:w-4 sm:text-[9px]">
               ⚽
             </span>
           )}
           {assists > 0 && (
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] bg-emerald-500 text-[9px] font-semibold text-white">
+            <span className="inline-flex h-3 w-3 items-center justify-center rounded-[3px] bg-emerald-500 text-[7px] font-semibold text-white sm:h-4 sm:w-4 sm:text-[9px]">
               A
             </span>
           )}
           {yellow > 0 && (
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] bg-yellow-400 text-transparent">
+            <span className="inline-flex h-3 w-3 items-center justify-center rounded-[3px] bg-yellow-400 text-transparent sm:h-4 sm:w-4">
               •
             </span>
           )}
           {red > 0 && (
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] bg-red-500 text-transparent">
+            <span className="inline-flex h-3 w-3 items-center justify-center rounded-[3px] bg-red-500 text-transparent sm:h-4 sm:w-4">
               •
             </span>
           )}
           {hasSub && (
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-[3px] bg-sky-500 text-[9px] leading-none text-white">
+            <span className="inline-flex h-3 w-3 items-center justify-center rounded-[3px] bg-sky-500 text-[7px] leading-none text-white sm:h-4 sm:w-4 sm:text-[9px]">
               ↕
             </span>
           )}
@@ -108,7 +108,7 @@ export default function PlayerPinPremiumA({ player, side, meta, onClick }) {
         {rating && ratingBadge && (
           <div
             className={clsx(
-              "absolute left-0 top-0 -translate-x-[35%] -translate-y-[35%] min-w-[22px] h-[12px] px-1 rounded text-[8px] font-bold leading-[12px] text-center shadow-sm z-30",
+              "absolute left-0 top-0 z-30 h-[10px] min-w-[18px] -translate-x-[35%] -translate-y-[35%] rounded px-0.5 text-center text-[7px] font-bold leading-[10px] shadow-sm sm:h-[12px] sm:min-w-[22px] sm:px-1 sm:text-[8px] sm:leading-[12px]",
               ratingBadge
             )}
           >
@@ -117,17 +117,17 @@ export default function PlayerPinPremiumA({ player, side, meta, onClick }) {
         )}
 
         {isMvp && (
-          <div className="absolute -right-1 -top-1 h-[12px] w-[12px] rounded-full bg-sky-500 text-white text-[9px] leading-[12px] text-center">
+          <div className="absolute -right-1 -top-1 h-[10px] w-[10px] rounded-full bg-sky-500 text-center text-[7px] leading-[10px] text-white sm:h-[12px] sm:w-[12px] sm:text-[9px] sm:leading-[12px]">
             ★
           </div>
         )}
       </div>
 
       <div
-        className="mt-1 w-[100px] max-w-[100px] rounded-lg bg-[#0a1223]/70 backdrop-blur-sm px-2 py-1 text-center text-[13px] font-medium text-white/90 border border-white/10 whitespace-nowrap overflow-hidden text-ellipsis tracking-[0.2px]"
+        className="mt-0.5 w-[58px] max-w-[58px] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-white/10 bg-[#0a1223]/70 px-1 py-0.5 text-center text-[9px] font-medium tracking-[0.1px] text-white/90 backdrop-blur-sm sm:mt-1 sm:w-[100px] sm:max-w-[100px] sm:rounded-lg sm:px-2 sm:py-1 sm:text-[13px] sm:tracking-[0.2px]"
         title={fullName}
       >
-        <span className="inline-flex items-center justify-center h-[14px] min-w-[16px] px-1 rounded-md bg-white/5 text-[11px] text-white/50 align-middle">
+        <span className="inline-flex h-[11px] min-w-[12px] items-center justify-center rounded bg-white/5 px-0.5 align-middle text-[8px] text-white/50 sm:h-[14px] sm:min-w-[16px] sm:rounded-md sm:px-1 sm:text-[11px]">
           {number}
         </span>{" "}
         <span>{shortName}</span>

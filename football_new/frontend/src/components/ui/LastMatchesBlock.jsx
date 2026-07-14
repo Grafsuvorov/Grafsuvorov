@@ -103,7 +103,7 @@ export default function LastMatchesBlock({
               onClick={() => onOpenMatch?.(m)}
               className={[
                 isTable
-                  ? "grid grid-cols-[64px,1fr,70px,1fr] gap-3 py-2.5 min-h-[40px] items-center"
+                  ? "grid min-w-0 grid-cols-[42px_minmax(0,1fr)_52px_minmax(0,1fr)] items-center gap-1.5 py-2.5 sm:grid-cols-[64px_minmax(0,1fr)_70px_minmax(0,1fr)] sm:gap-3"
                   : "flex items-center gap-3 py-2",
                 "transition text-white/70",
                 isTable
@@ -115,7 +115,7 @@ export default function LastMatchesBlock({
               ].join(" ")}
             >
               {/* DATE */}
-              <div className="text-[11px] text-white/45 tabular-nums">
+              <div className="text-[10px] text-white/45 tabular-nums sm:text-[11px]">
                 {toDDMM(m.date)}
               </div>
 
@@ -129,19 +129,19 @@ export default function LastMatchesBlock({
                   }}
                   className={
                     isTable
-                      ? "h-6 w-6 flex items-center justify-center opacity-85 hover:opacity-100"
+                      ? "flex h-5 w-5 shrink-0 items-center justify-center opacity-85 hover:opacity-100 sm:h-6 sm:w-6"
                       : "h-6 w-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden"
                   }
                 >
                   <SafeImg
                     src={logoSrc(m.home_team_id, m.home_team)}
                     alt={m.home_team}
-                    className={isTable ? "h-5 w-5 object-contain" : "h-5 w-5 object-contain"}
+                    className={isTable ? "h-4 w-4 object-contain sm:h-5 sm:w-5" : "h-5 w-5 object-contain"}
                     fallbackSrc={logoFallback(m.home_team_id, m.home_team)}
                   />
                 </button>
 
-                <span className="truncate text-[13px] text-white/55">
+                <span className="truncate text-[11px] text-white/55 sm:text-[13px]">
                   {m.home_team || "—"}
                 </span>
               </div>
@@ -152,7 +152,7 @@ export default function LastMatchesBlock({
                   const s = scoreParts(m);
                   if (!s) {
                     return (
-                      <span className="inline-flex min-w-[56px] justify-center text-[13px] font-semibold text-white/60 tabular-nums">
+                      <span className="inline-flex min-w-0 justify-center text-[12px] font-semibold text-white/60 tabular-nums sm:min-w-[56px] sm:text-[13px]">
                         {fmtScore(m)}
                       </span>
                     );
@@ -172,7 +172,7 @@ export default function LastMatchesBlock({
                         ? "text-white/60"
                         : "text-white/40";
                   return (
-                    <span className="inline-flex min-w-[56px] justify-center text-[13px] tabular-nums">
+                    <span className="inline-flex min-w-0 justify-center text-[12px] tabular-nums sm:min-w-[56px] sm:text-[13px]">
                       <span className={homeCls}>{s.home}</span>
                       <span className="text-white/45 px-1">:</span>
                       <span className={awayCls}>{s.away}</span>
@@ -183,7 +183,7 @@ export default function LastMatchesBlock({
 
               {/* AWAY */}
               <div className="flex items-center justify-end gap-2 min-w-0">
-                <span className="truncate text-[13px] text-white/55 text-right">
+                <span className="truncate text-right text-[11px] text-white/55 sm:text-[13px]">
                   {m.away_team || "—"}
                 </span>
 
@@ -195,14 +195,14 @@ export default function LastMatchesBlock({
                   }}
                   className={
                     isTable
-                      ? "h-6 w-6 flex items-center justify-center opacity-85 hover:opacity-100"
+                      ? "flex h-5 w-5 shrink-0 items-center justify-center opacity-85 hover:opacity-100 sm:h-6 sm:w-6"
                       : "h-6 w-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden"
                   }
                 >
                   <SafeImg
                     src={logoSrc(m.away_team_id, m.away_team)}
                     alt={m.away_team}
-                    className={isTable ? "h-5 w-5 object-contain" : "h-5 w-5 object-contain"}
+                    className={isTable ? "h-4 w-4 object-contain sm:h-5 sm:w-5" : "h-5 w-5 object-contain"}
                     fallbackSrc={logoFallback(m.away_team_id, m.away_team)}
                   />
                 </button>

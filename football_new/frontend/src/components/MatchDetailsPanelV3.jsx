@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import TeamLogoLink from "@/components/TeamLogoLink";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* ===================== BADGES ===================== */
 
@@ -89,6 +90,7 @@ function mapSchedulePrediction(m) {
 /* ===================== MAIN COMPONENT ===================== */
 
 export default function MatchDetailsPanelV3({ match }) {
+  const { language } = useLanguage();
   const [details, setDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -249,9 +251,9 @@ export default function MatchDetailsPanelV3({ match }) {
                 <div className="mt-1 text-slate-300">{prediction.rec_reason}</div>
                 {prediction.signal_value != null && (
                   <div className="mt-1 text-slate-400">
-                    value: <b>{prediction.signal_value.toFixed(3)}</b>
+                    {language === "ru" ? "value" : "value"}: <b>{prediction.signal_value.toFixed(3)}</b>
                     {prediction.signal_market ? (
-                      <> • рынок: <b>{prediction.signal_market}</b></>
+                      <> • {language === "ru" ? "рынок" : "market"}: <b>{prediction.signal_market}</b></>
                     ) : null}
                   </div>
                 )}
@@ -260,7 +262,7 @@ export default function MatchDetailsPanelV3({ match }) {
               {/* Odds */}
               <div className="border-t border-glass pt-2 text-xs">
                 <div className="font-semibold text-slate-200 mb-1">
-                  Средние коэффициенты
+                  {language === "ru" ? "Средние коэффициенты" : "Average odds"}
                 </div>
                 <div className="grid grid-cols-3 gap-y-1">
                   <div>K1: <b>{odd(prediction.avg_odds_home)}</b></div>
@@ -271,7 +273,7 @@ export default function MatchDetailsPanelV3({ match }) {
                   <div>ТМ 2.5: <b>{odd(prediction.avg_odds_under25)}</b></div>
 
                   <div className="col-span-3 text-right text-slate-400">
-                    букмекеров: <b>{prediction.n_bookmakers ?? "—"}</b>
+                    {language === "ru" ? "bookmakers" : "bookmakers"}: <b>{prediction.n_bookmakers ?? "—"}</b>
                   </div>
                 </div>
               </div>
@@ -284,7 +286,7 @@ export default function MatchDetailsPanelV3({ match }) {
               onClick={getPrediction}
               disabled={loadingPrediction}
             >
-              {loadingPrediction ? "Загрузка…" : "Получить прогноз"}
+              {loadingPrediction ? (language === "ru" ? "Загрузка…" : "Loading…") : (language === "ru" ? "Получить прогноз" : "Get prediction")}
             </Button>
           )}
         </div>
@@ -292,7 +294,7 @@ export default function MatchDetailsPanelV3({ match }) {
         {/* AVERAGES */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {loadingDetails ? (
-            <div className="text-xs text-slate-400">Загружаем статистику…</div>
+            <div className="text-xs text-slate-400">{language === "ru" ? "Загружаем статистику…" : "Loading stats…"}</div>
           ) : (
             <>
               {renderAvgCard("home", match.home_team)}
@@ -304,7 +306,7 @@ export default function MatchDetailsPanelV3({ match }) {
         {/* LAST MATCHES — HOME */}
         <div>
           <div className="font-semibold mb-1 text-slate-200">
-            {match.home_team}: последние матчи
+            {match.home_team}: {language === "ru" ? "последние матчи" : "last matches"}
           </div>
 
           <div className="space-y-1">
@@ -329,7 +331,7 @@ export default function MatchDetailsPanelV3({ match }) {
         {/* LAST MATCHES — AWAY */}
         <div>
           <div className="font-semibold mb-1 text-slate-200">
-            {match.away_team}: последние матчи
+            {match.away_team}: {language === "ru" ? "последние матчи" : "last matches"}
           </div>
 
           <div className="space-y-1">

@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { ReferenceLine } from "recharts";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const avatarByPlayerId = (id) =>
-  id ? `https://media.api-sports.io/football/players/${id}.png` : "/icons/player_photos/default.png";
+  id ? `/icons/player_photos/${id}.png` : "/icons/player_photos/default.png";
 
 function initials(name = "") {
   return name
@@ -21,6 +22,16 @@ function PlayerDot({ cx, cy, payload }) {
   return (
     <g>
       <circle cx={cx} cy={cy} r={size / 2 + 1} fill="rgba(124,140,255,0.3)" stroke="#fff" strokeWidth={1} />
+      <text
+        x={cx}
+        y={cy + 4}
+        textAnchor="middle"
+        fontSize={9}
+        fontWeight="700"
+        fill="rgba(226,232,240,0.92)"
+      >
+        {payload.short}
+      </text>
       <defs>
         <clipPath id={clipId}>
           <circle cx={cx} cy={cy} r={size / 2 - 1} />
@@ -28,6 +39,7 @@ function PlayerDot({ cx, cy, payload }) {
       </defs>
       <image
         href={payload.avatar}
+        xlinkHref={payload.avatar}
         x={cx - size / 2}
         y={cy - size / 2}
         width={size}
@@ -47,27 +59,31 @@ const fmtAxis = (value) => {
 };
 
 function CreatorTooltip({ active, payload }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
     <div className="rounded-lg border border-white/10 bg-[rgba(10,10,20,0.9)] px-3 py-2 text-xs text-[#e6e9ef] shadow-[0_0_12px_rgba(124,140,255,0.18)]">
       <div className="mb-1 text-sm font-semibold text-white">{p.name}</div>
-      <div>Команда: {p.team || "—"}</div>
-      <div>Ключевые передачи: {fmtAxis(p.key_passes)}</div>
-      <div>Ассисты: {fmtAxis(p.assists)}</div>
-      <div>Нереализованные: {fmtAxis(p.key_passes - p.assists)}</div>
+      <div>{isRu ? "Команда" : "Team"}: {p.team || "—"}</div>
+      <div>{isRu ? "Ключевые передачи" : "Key passes"}: {fmtAxis(p.key_passes)}</div>
+      <div>{isRu ? "Ассисты" : "Assists"}: {fmtAxis(p.assists)}</div>
+      <div>{isRu ? "Нереализованные" : "Unused chances"}: {fmtAxis(p.key_passes - p.assists)}</div>
     </div>
   );
 }
 
 export default function ChanceCreatorsChart({ players = [], teamFilter = "all", onPlayerSelect = null }) {
   const [mode, setMode] = useState("top20");
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const { data, modeLabel } = useMemo(() => {
     const base = players
       .filter((p) => p.key_passes != null && p.assists != null)
       .map((p) => ({
         player_id: p.api_player_id ?? (Number(p.player_id) > 0 ? p.player_id : null),
-        name: p.player_name || p.player || "Unknown",
+        name: p.player_name || p.player || (isRu ? "Неизвестный" : "Unknown"),
         team: p.team_name || p.team || "—",
         shots: Number(p.shots || 0),
         key_passes: Number(p.key_passes),
@@ -85,17 +101,17 @@ export default function ChanceCreatorsChart({ players = [], teamFilter = "all", 
       .sort((a, b) => b.key_passes - a.key_passes);
 
     let filtered = [...base];
-    let label = "Все доступные игроки";
+    let label = isRu ? "Все доступные игроки" : "All available players";
     if (filtered.length < 6) {
       filtered = [...base].sort((a, b) => b.shots - a.shots).slice(0, 15);
-      label = "Топ игроков по ударам";
+      label = isRu ? "Топ игроков по ударам" : "Top players by shots";
     }
 
     if (mode === "top20") {
-      return { data: filtered.slice(0, 20), modeLabel: "ТОП-20 игроков по ключевым передачам" };
+      return { data: filtered.slice(0, 20), modeLabel: isRu ? "ТОП-20 игроков по ключевым передачам" : "TOP 20 players by key passes" };
     }
     return { data: filtered.slice(0, 25), modeLabel: label };
-  }, [players, teamFilter, mode]);
+  }, [players, teamFilter, mode, isRu]);
   const maxX = Math.max(1, ...data.map((d) => d.key_passes));
   const ratio = data.length
     ? data.reduce((s, d) => s + (d.key_passes > 0 ? d.assists / d.key_passes : 0), 0) / data.length
@@ -103,26 +119,26 @@ export default function ChanceCreatorsChart({ players = [], teamFilter = "all", 
 
   return (
     <div className="glass-card p-6">
-      <div className="text-sm font-semibold text-white mb-3">Создатели моментов</div>
+      <div className="text-sm font-semibold text-white mb-3">{isRu ? "Создатели моментов" : "Chance creators"}</div>
       <div className="mb-3 flex items-center gap-2">
         <button
           type="button"
           onClick={() => setMode("top20")}
           className={mode === "top20" ? "rounded-full border border-primary bg-primary/20 px-2 py-1 text-xs text-white" : "rounded-full border border-white/10 px-2 py-1 text-xs text-white/65"}
         >
-          ТОП-20
+          {isRu ? "ТОП-20" : "TOP 20"}
         </button>
         <button
           type="button"
           onClick={() => setMode("all")}
           className={mode === "all" ? "rounded-full border border-primary bg-primary/20 px-2 py-1 text-xs text-white" : "rounded-full border border-white/10 px-2 py-1 text-xs text-white/65"}
         >
-          Все
+          {isRu ? "Все" : "All"}
         </button>
       </div>
       {data.length < 6 && (
-        <div className="mb-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70">
-          Недостаточно данных
+        <div className="surface-empty mb-3 px-3 py-2 text-xs text-white/70">
+          {isRu ? "Недостаточно данных" : "Not enough data"}
         </div>
       )}
       <div className="h-[480px]">
@@ -147,7 +163,7 @@ export default function ChanceCreatorsChart({ players = [], teamFilter = "all", 
               stroke="rgba(124,140,255,0.5)"
               strokeDasharray="4 4"
               segment={[{ x: 0, y: 0 }, { x: maxX, y: maxX * ratio }]}
-              label={{ value: "Ожидаемые ассисты", fill: "#9aa3b2", fontSize: 10 }}
+              label={{ value: isRu ? "Ожидаемые ассисты" : "Expected assists", fill: "#9aa3b2", fontSize: 10 }}
             />
             <Tooltip content={<CreatorTooltip />} />
             <Scatter

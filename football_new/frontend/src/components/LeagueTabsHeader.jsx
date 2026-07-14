@@ -10,6 +10,9 @@ import { createPortal } from "react-dom";
 
 import AuthIndicator from "@/components/auth/AuthIndicator";
 import { shouldHideMonetization } from "@/lib/pilotAccess.js";
+import LanguageSwitcher from "@/components/LanguageSwitcher.jsx";
+import { useLanguage } from "@/context/LanguageContext.jsx";
+import SafeImg from "@/components/SafeImg.jsx";
 
 /* ========= constants & helpers ========= */
 
@@ -218,6 +221,22 @@ function resolveLeagueLogo(name) {
   return LEAGUE_LOGO_INDEX[name] || getLeagueLogo(name) || DEFAULT_LEAGUE_ICON;
 }
 
+function countryLabel(country, t) {
+  const map = {
+    Англия: "countryEngland",
+    Испания: "countrySpain",
+    Германия: "countryGermany",
+    Италия: "countryItaly",
+    Франция: "countryFrance",
+    Европа: "countryEurope",
+    Сборные: "countryNationalTeams",
+    Португалия: "countryPortugal",
+    Нидерланды: "countryNetherlands",
+    Турция: "countryTurkey",
+  };
+  return map[country] ? t(map[country]) : country;
+}
+
 /* ========= MAIN HEADER ========= */
 
 export default function LeagueTabsHeader({
@@ -229,14 +248,19 @@ export default function LeagueTabsHeader({
   const navigate = useNavigate();
   const location = useLocation();
   const hideMonetization = shouldHideMonetization();
+  const { t } = useLanguage();
 
   const isMatchCenter = location.pathname.startsWith("/match/");
   const active = isMatchCenter
     ? null
+    : location.pathname.includes("/dashboard")
+    ? "today"
     : location.pathname.includes("/matches-v3")
     ? "results"
     : location.pathname.includes("/schedule")
     ? "calendar"
+    : location.pathname.includes("/about")
+    ? "about"
     : location.pathname.includes("/insights")
     ? "insights"
     : location.pathname.includes("/best-picks")
@@ -246,17 +270,17 @@ export default function LeagueTabsHeader({
     : "table";
 
   const [openAll, setOpenAll] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const tabs = [
-    { key: "overview", label: "Обзор", path: "table" },
-    { key: "results", label: "Результаты", path: "matches-v3" },
-    { key: "calendar", label: "Календарь", path: "schedule" },
-    { key: "table", label: "Таблица", path: "table" },
-    { key: "insights", label: "Инсайты", path: "insights" },
-    { key: "picks", label: "Подборки", path: "best-picks" },
+    { key: "today", label: t("today"), path: "dashboard" },
+    { key: "results", label: t("results"), path: "matches-v3" },
+    { key: "calendar", label: t("calendar"), path: "schedule" },
+    { key: "table", label: t("table"), path: "table" },
+    { key: "insights", label: t("insights"), path: "insights" },
+    { key: "picks", label: t("picks"), path: "best-picks" },
+    { key: "about", label: t("aboutProject"), path: "about" },
     ...(!hideMonetization
-      ? [{ key: "subscriptions", label: "Подписки", path: "subscriptions" }]
+      ? [{ key: "subscriptions", label: t("subscriptions"), path: "subscriptions" }]
       : []),
   ];
 
@@ -277,6 +301,14 @@ export default function LeagueTabsHeader({
     const handler = () => setOpenAll(true);
     window.addEventListener("open-league-catalog", handler);
     return () => window.removeEventListener("open-league-catalog", handler);
+  }, []);
+
+  useEffect(() => {
+    TOP_LEAGUES_META.forEach((item) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = resolveLeagueLogo(item.name);
+    });
   }, []);
 
   function emitLeagueChange(name, seasonYear) {
@@ -304,10 +336,12 @@ export default function LeagueTabsHeader({
     const isActive = active === tab;
 
     let path;
-    if (tab === "results") path = "matches-v3";
+    if (tab === "today") path = "dashboard";
+    else if (tab === "results") path = "matches-v3";
     else if (tab === "calendar") path = "schedule";
     else if (tab === "insights") path = "insights";
     else if (tab === "picks") path = "best-picks";
+    else if (tab === "about") path = "about";
     else if (tab === "subscriptions") path = "subscriptions";
     else path = "table";
 
@@ -325,20 +359,15 @@ export default function LeagueTabsHeader({
         role="tab"
         aria-selected={isActive}
         className={clsx(
-          "relative px-4 py-1.5 text-[15px] font-medium rounded-full",
-          tab === "results" && "min-w-[136px]",
-          !isActive && "text-slate-200/80 hover:text-white"
+          "relative shrink-0 rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors sm:px-4 sm:text-[15px]",
+          tab === "results" && "sm:min-w-[136px]",
+          isActive ? "text-white" : "text-slate-200/80 hover:text-white"
         )}
         whileTap={{ scale: 0.97 }}
       >
-        <AnimatePresence>
-          {isActive && (
-            <motion.span
-              layoutId="activeTabPill"
-              className="absolute inset-0 rounded-full bg-gradient-to-r from-[#7b5cff] to-[#5b3fd6] shadow-[0_0_16px_rgba(123,92,255,0.35)]"
-            />
-          )}
-        </AnimatePresence>
+        {isActive && (
+          <span className="absolute inset-0 rounded-full bg-gradient-to-r from-[#7b5cff] to-[#5b3fd6] shadow-[0_0_14px_rgba(123,92,255,0.24)]" />
+        )}
 
         <span
           className={clsx(
@@ -356,35 +385,27 @@ export default function LeagueTabsHeader({
     <>
       {/* ------- HEADER ------- */}
 
-      <div className="relative flex flex-col gap-2 select-none">
-        {/* BRAND + AUTH */}
-        <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 px-0 pt-4">
-          <div className="flex items-center gap-3 xl:pl-6">
-            <span className="text-[12px] font-semibold uppercase tracking-[0.22em] text-slate-200/70">
-              EDGESCORE
-            </span>
-            <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500/70">
-              Football Analytics
-            </span>
+      <div className="relative flex min-w-0 flex-col gap-2 select-none">
+        <div className="sm:hidden space-y-3">
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-200/72">
+                EDGESCORE
+              </div>
+              <div className="truncate pt-1 text-[10px] uppercase tracking-[0.18em] text-slate-500/80">
+                {t("footballAnalytics")}
+              </div>
+            </div>
+            <AuthIndicator compact />
           </div>
-          <div className="flex items-center justify-end gap-3 pr-2">
-            <AuthIndicator />
-          </div>
-        </div>
 
-        {/* MAIN HEADER ROW */}
-        <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 px-0 pb-2 pt-2">
-          {/* LEFT — logo + league */}
-          <div className="flex min-w-0 items-center gap-3 xl:pl-6">
-            <span
-              className="
-                grid h-9 w-9 place-items-center rounded-2xl
-                bg-[#0f1527]/70
-                border border-white/8
-                backdrop-blur-md
-                shadow-[0_0_12px_rgba(255,255,255,0.04)]
-              "
-            >
+          <button
+            type="button"
+            onClick={() => setOpenAll(true)}
+            className="flex w-full min-w-0 items-center gap-3 rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.022))] px-3.5 py-3 text-left shadow-[0_14px_30px_rgba(0,0,0,0.22)] transition hover:bg-white/[0.06]"
+            aria-label={t("changeLeague")}
+          >
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#0f1527]/85 shadow-[0_8px_18px_rgba(0,0,0,0.22)]">
               <img
                 src={resolveLeagueLogo(league)}
                 alt={league}
@@ -396,31 +417,112 @@ export default function LeagueTabsHeader({
               />
             </span>
 
-            <div className="flex flex-col min-w-0">
-              <span className="truncate text-[15px] font-semibold text-white">
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                {t("currentLeague")}
+              </span>
+              <span className="truncate pt-0.5 text-[16px] font-semibold leading-tight text-white">
                 {league}
               </span>
-              <span className="text-[11px] text-slate-400">
-                Сезон {season}
+              <span className="pt-1 text-[11px] text-slate-400">
+                {t("season")} {season}
               </span>
+            </span>
+
+            <span className="shrink-0 rounded-full bg-white/[0.055] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/92">
+              {t("changeLeague")}
+            </span>
+          </button>
+
+          <div className="flex items-center justify-between gap-3 rounded-[18px] bg-white/[0.02] px-3 py-2.5">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+              {t("language")}
             </div>
+            <LanguageSwitcher compact />
           </div>
 
-          <div className="flex items-center justify-between gap-3">
+          {!hideTabs && (
+            <div className="rounded-[20px] bg-white/[0.025] px-2 py-2">
+              <div className="no-scrollbar overflow-x-auto overscroll-x-contain">
+                <div className="flex w-max items-center gap-2 pr-1">
+                  {tabs.map((t, idx) => renderTab(t.key, t.label, idx))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden sm:grid grid-cols-1 items-center gap-2 px-0 pt-2 sm:gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 xl:pt-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 xl:pl-6">
+            <span className="text-[12px] font-semibold uppercase tracking-[0.22em] text-slate-200/70">
+              EDGESCORE
+            </span>
+            <span className="truncate text-[10px] uppercase tracking-[0.14em] text-slate-500/70 sm:text-[11px] sm:tracking-[0.18em]">
+              {t("footballAnalytics")}
+            </span>
+          </div>
+          <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-end sm:gap-3 sm:pr-2">
+            <AuthIndicator />
+          </div>
+        </div>
+
+        <div className="hidden sm:grid grid-cols-1 items-center gap-2 px-0 pb-1 pt-1 sm:gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 xl:pb-2 xl:pt-2">
+          <div className="min-w-0 xl:pl-6">
+            <button
+              type="button"
+              onClick={() => setOpenAll(true)}
+              className="flex w-full min-w-0 items-center gap-3 rounded-3xl bg-white/[0.03] px-3 py-3 text-left shadow-[0_12px_30px_rgba(0,0,0,0.24)] transition hover:bg-white/[0.05] sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none xl:rounded-none"
+              aria-label={t("changeLeague")}
+            >
+              <span
+                className="
+                  grid h-10 w-10 shrink-0 place-items-center rounded-2xl
+                  bg-[#0f1527]/70
+                  backdrop-blur-md
+                  shadow-[0_0_12px_rgba(255,255,255,0.04)]
+                  sm:h-9 sm:w-9
+                "
+              >
+                <img
+                  src={resolveLeagueLogo(league)}
+                  alt={league}
+                  className="h-6 w-6 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_LEAGUE_ICON;
+                  }}
+                />
+              </span>
+
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 sm:hidden">
+                  {t("currentLeague")}
+                </span>
+                <span className="truncate text-[16px] font-semibold text-white sm:text-[15px]">
+                  {league}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {t("season")} {season}
+                </span>
+              </span>
+
+              <span className="rounded-full bg-white/[0.055] px-3 py-1.5 text-[11px] font-semibold text-slate-100 sm:hidden">
+                {t("changeLeague")}
+              </span>
+            </button>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             {!hideTabs && (
-              <div className="flex w-full justify-end pr-[3px]">
-                <div className="flex items-center gap-2">
-                {tabs.map((t, idx) => renderTab(t.key, t.label, idx))}
+              <div className="no-scrollbar min-w-0 flex-1 overflow-x-auto overscroll-x-contain pr-1">
+                <div className="flex w-max min-w-full items-center gap-1.5 sm:justify-end sm:gap-2">
+                  {tabs.map((t, idx) => renderTab(t.key, t.label, idx))}
                 </div>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="inline-flex lg:hidden items-center gap-2 rounded-full border border-white/20 bg-slate-950/80 px-3 py-1.5 text-xs text-white/90"
-            >
-              ≡ Лиги
-            </button>
+            <div className="hidden sm:block">
+              <LanguageSwitcher compact />
+            </div>
           </div>
         </div>
       </div>
@@ -440,8 +542,6 @@ export default function LeagueTabsHeader({
           </AnimatePresence>,
           document.body
         )}
-
-      {/* MOBILE DRAWER можно оставить как есть, я его не трогал */}
     </>
   );
 }
@@ -449,6 +549,8 @@ export default function LeagueTabsHeader({
 /* ========= Quick nav (НЕО-СТЕКЛО iOS 18) ========= */
 
 export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
+  const { t } = useLanguage();
+
   function handleCatalogClick() {
     window.dispatchEvent(new Event("open-league-catalog"));
   }
@@ -459,10 +561,10 @@ export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-100/85">
-            Топ турниры
+            {t("topTournaments")}
           </span>
           <span className="text-[10px] text-slate-400/80">
-            Быстрый переход по лигам
+            {t("quickLeagueNav")}
           </span>
         </div>
 
@@ -483,7 +585,7 @@ export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
           "
         >
           <span className="h-1.5 w-1.5 rounded-full bg-pink-400 shadow-[0_0_8px_rgba(244,114,182,0.9)]" />
-          <span>Каталог</span>
+          <span>{t("catalog")}</span>
         </button>
       </div>
 
@@ -496,7 +598,7 @@ export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
             <button
               key={meta.name}
               onClick={() => onSelectLeague?.(meta.name, meta.seasonYear)}
-              title={`${meta.country} · ${meta.teams} команд`}
+              title={`${countryLabel(meta.country, t)} · ${meta.teams} ${t("teams")}`}
               className={clsx(
                 "relative flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm transition-colors duration-150",
                 "border backdrop-blur-md",
@@ -515,14 +617,14 @@ export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
                       : "border-white/20 bg-white/75"
                   )}
                 >
-                  <img
+                  <SafeImg
                     src={resolveLeagueLogo(meta.name)}
                     alt={meta.name}
                     className="h-5 w-5 object-contain"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = DEFAULT_LEAGUE_ICON;
-                    }}
+                    fallbackSrc={DEFAULT_LEAGUE_ICON}
+                    loading="eager"
+                    decoding="sync"
+                    fetchPriority="high"
                   />
                 </span>
 
@@ -531,7 +633,7 @@ export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
                     {meta.name}
                   </div>
                   <div className="text-[10px] text-slate-300/85">
-                    {meta.country} · {meta.teams} команд
+                    {countryLabel(meta.country, t)} · {meta.teams} {t("teams")}
                   </div>
                 </div>
               </div>
@@ -548,6 +650,7 @@ export function LeagueQuickNavCard({ activeLeague, onSelectLeague }) {
 function MegaCatalogModal({ current, onClose, onSelect }) {
   const [search, setSearch] = useState("");
   const searchRef = useRef(null);
+  const { t } = useLanguage();
 
   const entries = useMemo(
     () =>
@@ -617,11 +720,8 @@ function MegaCatalogModal({ current, onClose, onSelect }) {
           w-[min(900px,95vw)]
           max-h-[80vh]
           overflow-hidden
-          rounded-[18px]
-          bg-white/[0.02]
-          border border-white/5
+          surface-toolbar
           shadow-[0_18px_50px_rgba(15,23,42,0.85)]
-          backdrop-blur
         "
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -632,8 +732,8 @@ function MegaCatalogModal({ current, onClose, onSelect }) {
         {/* HEADER */}
         <div className="flex items-start justify-between border-b border-white/10 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-white">Каталог лиг</h2>
-            <p className="text-xs text-white/55">Выберите лигу</p>
+            <h2 className="text-base font-semibold text-white">{t("catalog")}</h2>
+            <p className="text-xs text-white/55">{t("chooseLeague")}</p>
           </div>
         </div>
 
@@ -656,15 +756,8 @@ function MegaCatalogModal({ current, onClose, onSelect }) {
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Найти лигу"
-              className="
-                w-full rounded-lg
-                border border-white/8
-                bg-surface-3/70
-                pl-9 pr-3 py-1.5 text-[13px] text-white
-                placeholder:text-white/45
-                focus:border-white/20 focus:ring-0
-              "
+              placeholder={t("searchLeague")}
+              className="surface-input w-full rounded-lg pl-9 pr-3 py-1.5 text-[13px] text-white placeholder:text-white/45 focus:ring-0"
             />
           </div>
         </div>
@@ -672,8 +765,8 @@ function MegaCatalogModal({ current, onClose, onSelect }) {
         {/* LIST */}
         <div className="h-[calc(100%-112px)] overflow-y-auto px-6 py-4">
           {ordered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 bg-surface-3/70 px-4 py-6 text-slate-300">
-              Ничего не найдено
+            <div className="surface-empty border-dashed px-4 py-6 text-slate-300">
+              {t("nothingFound")}
             </div>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
@@ -708,7 +801,7 @@ function MegaCatalogModal({ current, onClose, onSelect }) {
                         {league.name}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {league.country} • {league.teams} команд
+                        {countryLabel(league.country, t)} • {league.teams} {t("teams")}
                       </div>
                     </div>
                   </button>

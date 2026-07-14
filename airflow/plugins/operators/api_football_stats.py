@@ -127,6 +127,8 @@ class FetchMatchStatsOperator(BaseOperator):
         api_host: str = "https://v3.football.api-sports.io",
         postgres_conn_id: str = "dwh_postgres",
         throttle_sec: float = 0.5,
+        request_timeout_sec: int = 12,
+        max_fixtures_per_run: Optional[int] = 80,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -137,6 +139,8 @@ class FetchMatchStatsOperator(BaseOperator):
         self.api_host = api_host
         self.postgres_conn_id = postgres_conn_id
         self.throttle_sec = throttle_sec
+        self.request_timeout_sec = request_timeout_sec
+        self.max_fixtures_per_run = max_fixtures_per_run
 
     def _resolve_fixture_ids(self, engine: Engine) -> List[int]:
         """
@@ -162,6 +166,7 @@ class FetchMatchStatsOperator(BaseOperator):
                OR s.status ILIKE '%aet%'
                OR s.status ILIKE '%pen%'
             )
+          ORDER BY s.date DESC NULLS LAST, s.fixture_id DESC
         """)
         with engine.begin() as conn:
             rows = conn.execute(
@@ -173,7 +178,15 @@ class FetchMatchStatsOperator(BaseOperator):
                     "leagues_empty": len(self.leagues) == 0,
                 },
             ).fetchall()
-        return [int(r[0]) for r in rows]
+        fixture_ids = [int(r[0]) for r in rows]
+        if self.max_fixtures_per_run and self.max_fixtures_per_run > 0 and len(fixture_ids) > self.max_fixtures_per_run:
+            self.log.info(
+                "Limiting stats backfill from %s to %s fixtures for this run",
+                len(fixture_ids),
+                self.max_fixtures_per_run,
+            )
+            return fixture_ids[: self.max_fixtures_per_run]
+        return fixture_ids
 
     def _fetch_stats_for_fixture(self, api_key: str, fixture_id: int) -> List[Dict[str, Any]]:
         headers = {
@@ -181,7 +194,12 @@ class FetchMatchStatsOperator(BaseOperator):
             "x-rapidapi-host": "v3.football.api-sports.io",
         }
         url = f"{self.api_host}/fixtures/statistics"
-        r = requests.get(url, headers=headers, params={"fixture": fixture_id}, timeout=20)
+        r = requests.get(
+            url,
+            headers=headers,
+            params={"fixture": fixture_id},
+            timeout=self.request_timeout_sec,
+        )
         r.raise_for_status()
         return r.json().get("response", []) or []
 
@@ -290,7 +308,12 @@ class FetchMatchStatsOperator(BaseOperator):
 
         try:
             fx_ids = self._resolve_fixture_ids(engine)
-            self.log.info("Finished fixtures missing in stats: %s", len(fx_ids))
+            self.log.info(
+                "Finished fixtures queued for stats in this run: %s (max_per_run=%s, timeout=%ss)",
+                len(fx_ids),
+                self.max_fixtures_per_run,
+                self.request_timeout_sec,
+            )
 
             if not fx_ids:
                 _log_finish(
@@ -318,7 +341,11 @@ class FetchMatchStatsOperator(BaseOperator):
             _log_finish(
                 engine, log_id, status="success",
                 rows_read=total_read, rows_inserted=total_inserted,
-                extra={"fixtures_processed": len(fx_ids)}
+                extra={
+                    "fixtures_processed": len(fx_ids),
+                    "max_fixtures_per_run": self.max_fixtures_per_run,
+                    "request_timeout_sec": self.request_timeout_sec,
+                }
             )
             return {"fixtures": fx_ids, "rows": total_read}
 

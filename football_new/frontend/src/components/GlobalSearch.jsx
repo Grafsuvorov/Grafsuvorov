@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const EMPTY = { players: [], teams: [], matches: [] };
 
 export default function GlobalSearch({ league, season }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -89,7 +92,7 @@ export default function GlobalSearch({ league, season }) {
 
   return (
     <div ref={containerRef} className="relative w-full max-w-[520px]">
-      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
+      <div className="surface-toolbar flex items-center gap-2 px-3 py-2">
         <span className="text-white/50 text-xs">⌕</span>
         <input
           value={query}
@@ -98,25 +101,25 @@ export default function GlobalSearch({ league, season }) {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search players, teams..."
+          placeholder={isRu ? "Поиск игроков, команд..." : "Search players, teams..."}
           className="w-full bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none"
         />
         {loading && <span className="text-[11px] text-white/40">...</span>}
       </div>
 
       {open && (query.trim() || hasAny) && (
-        <div className="absolute z-50 mt-2 w-full rounded-2xl border border-white/10 bg-[#0b0f1a]/95 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+        <div className="surface-toolbar absolute z-50 mt-2 w-full rounded-[22px] shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
           <div className="p-3 space-y-3">
             {!hasAny && !loading && (
-              <div className="text-xs text-white/45 px-1">
-                Нет результатов
+              <div className="surface-empty px-1 py-3 text-xs">
+                {isRu ? "Нет результатов" : "No results"}
               </div>
             )}
 
             {data.players.length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                  Players
+                  {isRu ? "Игроки" : "Players"}
                 </div>
                 <div className="space-y-1">
                   {data.players.map((p) => (
@@ -139,7 +142,7 @@ export default function GlobalSearch({ league, season }) {
             {data.teams.length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                  Teams
+                  {isRu ? "Команды" : "Teams"}
                 </div>
                 <div className="space-y-1">
                   {data.teams.map((t) => (
@@ -159,7 +162,7 @@ export default function GlobalSearch({ league, season }) {
             {data.matches.length > 0 && (
               <div className="space-y-1.5">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
-                  Matches
+                  {isRu ? "Матчи" : "Matches"}
                 </div>
                 <div className="space-y-1">
                   {data.matches.map((m) => (

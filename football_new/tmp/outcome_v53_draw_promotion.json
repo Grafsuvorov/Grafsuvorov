@@ -1,0 +1,118 @@
+{
+  "base": {
+    "matches": 1478,
+    "correct": 778,
+    "accuracy": 0.526387,
+    "draw_predictions": 28,
+    "draw_precision": 0.25
+  },
+  "market": {
+    "matches": 1478,
+    "correct": 792,
+    "accuracy": 0.535859,
+    "draw_predictions": 1,
+    "draw_precision": 1.0
+  },
+  "best_configs": [
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.28,
+      "max_gap": 0.08,
+      "matches": 1478,
+      "correct": 776,
+      "accuracy": 0.525034,
+      "draw_predictions": 63,
+      "draw_precision": 0.301587
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.26,
+      "max_gap": 0.08,
+      "matches": 1478,
+      "correct": 772,
+      "accuracy": 0.522327,
+      "draw_predictions": 110,
+      "draw_precision": 0.290909
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.26,
+      "max_gap": 0.06,
+      "matches": 1478,
+      "correct": 772,
+      "accuracy": 0.522327,
+      "draw_predictions": 63,
+      "draw_precision": 0.285714
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.26,
+      "max_gap": 0.06,
+      "matches": 1478,
+      "correct": 772,
+      "accuracy": 0.522327,
+      "draw_predictions": 78,
+      "draw_precision": 0.282051
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.26,
+      "max_gap": 0.1,
+      "matches": 1478,
+      "correct": 771,
+      "accuracy": 0.521651,
+      "draw_predictions": 140,
+      "draw_precision": 0.3
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.26,
+      "max_gap": 0.08,
+      "matches": 1478,
+      "correct": 771,
+      "accuracy": 0.521651,
+      "draw_predictions": 84,
+      "draw_precision": 0.285714
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.24,
+      "max_gap": 0.08,
+      "matches": 1478,
+      "correct": 770,
+      "accuracy": 0.520974,
+      "draw_predictions": 120,
+      "draw_precision": 0.275
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.24,
+      "max_gap": 0.06,
+      "matches": 1478,
+      "correct": 770,
+      "accuracy": 0.520974,
+      "draw_predictions": 66,
+      "draw_precision": 0.272727
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.24,
+      "max_gap": 0.08,
+      "matches": 1478,
+      "correct": 769,
+      "accuracy": 0.520298,
+      "draw_predictions": 88,
+      "draw_precision": 0.272727
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.24,
+      "max_gap": 0.06,
+      "matches": 1478,
+      "correct": 769,
+      "accuracy": 0.520298,
+      "draw_predictions": 83,
+      "draw_precision": 0.26506
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "league_gap": [
+    {
+      "league": "Bundesliga",
+      "matches": 269,
+      "market_beats_v55": 11,
+      "v55_beats_market": 12,
+      "net_market_edge": -1,
+      "v55_accuracy": 0.557621,
+      "market_accuracy": 0.553903
+    },
+    {
+      "league": "La Liga",
+      "matches": 312,
+      "market_beats_v55": 25,
+      "v55_beats_market": 13,
+      "net_market_edge": 12,
+      "v55_accuracy": 0.512821,
+      "market_accuracy": 0.551282
+    },
+    {
+      "league": "Ligue 1",
+      "matches": 235,
+      "market_beats_v55": 7,
+      "v55_beats_market": 2,
+      "net_market_edge": 5,
+      "v55_accuracy": 0.497872,
+      "market_accuracy": 0.519149
+    },
+    {
+      "league": "Premier League",
+      "matches": 323,
+      "market_beats_v55": 7,
+      "v55_beats_market": 7,
+      "net_market_edge": 0,
+      "v55_accuracy": 0.520124,
+      "market_accuracy": 0.520124
+    },
+    {
+      "league": "Serie A",
+      "matches": 339,
+      "market_beats_v55": 12,
+      "v55_beats_market": 17,
+      "net_market_edge": -5,
+      "v55_accuracy": 0.548673,
+      "market_accuracy": 0.533923
+    }
+  ],
+  "market_beats_by_actual": [
+    {
+      "actual_outcome": "Away",
+      "cases": 2
+    },
+    {
+      "actual_outcome": "Draw",
+      "cases": 1
+    },
+    {
+      "actual_outcome": "Home",
+      "cases": 59
+    }
+  ],
+  "market_beats_by_v55_pred": [
+    {
+      "v55_pred": "Away",
+      "cases": 40
+    },
+    {
+      "v55_pred": "Draw",
+      "cases": 20
+    },
+    {
+      "v55_pred": "Home",
+      "cases": 2
+    }
+  ],
+  "confidence_gap": [
+    {
+      "bucket": "<=0.40",
+      "matches": 290,
+      "v55_accuracy": 0.434483,
+      "market_accuracy": 0.451724,
+      "market_beats_v55": 46
+    },
+    {
+      "bucket": "0.40-0.50",
+      "matches": 511,
+      "v55_accuracy": 0.430528,
+      "market_accuracy": 0.44227,
+      "market_beats_v55": 16
+    },
+    {
+      "bucket": "0.50-0.60",
+      "matches": 359,
+      "v55_accuracy": 0.582173,
+      "market_accuracy": 0.582173,
+      "market_beats_v55": 0
+    },
+    {
+      "bucket": "0.60-0.70",
+      "matches": 225,
+      "v55_accuracy": 0.702222,
+      "market_accuracy": 0.702222,
+      "market_beats_v55": 0
+    },
+    {
+      "bucket": "0.70+",
+      "matches": 93,
+      "v55_accuracy": 0.731183,
+      "market_accuracy": 0.731183,
+      "market_beats_v55": 0
+    }
+  ],
+  "market_beats_by_league_actual": [
+    {
+      "league": "Bundesliga",
+      "actual_outcome": "Home",
+      "cases": 11
+    },
+    {
+      "league": "La Liga",
+      "actual_outcome": "Home",
+      "cases": 25
+    },
+    {
+      "league": "Ligue 1",
+      "actual_outcome": "Home",
+      "cases": 7
+    },
+    {
+      "league": "Premier League",
+      "actual_outcome": "Away",
+      "cases": 1
+    },
+    {
+      "league": "Premier League",
+      "actual_outcome": "Home",
+      "cases": 6
+    },
+    {
+      "league": "Serie A",
+      "actual_outcome": "Away",
+      "cases": 1
+    },
+    {
+      "league": "Serie A",
+      "actual_outcome": "Draw",
+      "cases": 1
+    },
+    {
+      "league": "Serie A",
+      "actual_outcome": "Home",
+      "cases": 10
+    }
+  ]
+}

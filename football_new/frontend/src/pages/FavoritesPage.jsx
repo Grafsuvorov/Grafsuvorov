@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import LeagueTabsHeader from "@/components/LeagueTabsHeader";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const FALLBACK_SVG = {
   player:
@@ -43,6 +44,20 @@ const SafeImg = ({ src, alt = "", className = "", fallback = "team", ...rest }) 
 const teamLogo = (id) => `/icons/team_logos/${id}.png`;
 const playerPhoto = (id) => `/icons/player_photos/${id}.png`;
 
+const FAVORITES_COPY = {
+  date: { ru: "Дата", en: "Date" },
+  league: { ru: "Лига", en: "League" },
+  match: { ru: "Матч", en: "Match" },
+  mins: { ru: "Мин", en: "Min" },
+  goals: { ru: "Г", en: "G" },
+  assists: { ru: "П", en: "A" },
+  yellow: { ru: "ЖК", en: "YC" },
+  red: { ru: "КК", en: "RC" },
+  rating: { ru: "Рейт", en: "Rate" },
+  apps: { ru: "И", en: "Apps" },
+  club: { ru: "Клуб", en: "Club" },
+};
+
 const loadWatch = () => {
   try { return JSON.parse(localStorage.getItem("watch_players") || "[]"); } catch { return []; }
 };
@@ -51,6 +66,8 @@ const saveWatch = (arr) => {
 };
 
 function PlayerModal({ playerId, onClose }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const [ov, setOv] = useState(null);
   const [recent, setRecent] = useState([]);
   const [career, setCareer] = useState([]);
@@ -91,15 +108,15 @@ function PlayerModal({ playerId, onClose }) {
   return (
     <div className="fixed inset-0 z-[100]">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="absolute left-1/2 top-10 -translate-x-1/2 w-[min(960px,96vw)] bg-surface-1/95 rounded-2xl shadow-2xl border border-glass overflow-hidden">
+      <div className="surface-toolbar absolute left-1/2 top-10 -translate-x-1/2 w-[min(960px,96vw)] overflow-hidden shadow-2xl">
         <div className="relative bg-gradient-to-r from-rose-600 via-rose-500 to-rose-400 text-white p-4">
-          <button onClick={onClose} className="absolute right-3 top-3 h-8 w-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center">×</button>
+          <button onClick={onClose} className="surface-button absolute right-3 top-3 h-8 w-8 justify-center px-0 text-white">×</button>
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 rounded-xl bg-surface-2 p-1 overflow-hidden grid place-items-center border border-glass">
               <SafeImg src={playerPhoto(playerId)} className="h-14 w-14 rounded-lg object-cover" alt="" fallback="player" />
             </div>
             <div className="min-w-0">
-              <div className="text-xl font-bold truncate">{ov?.player || "Игрок"}</div>
+              <div className="text-xl font-bold truncate">{ov?.player || (language === "ru" ? "Игрок" : "Player")}</div>
               <div className="text-sm opacity-90 truncate inline-flex items-center gap-2">
                 {ov?.last_team_id && <SafeImg src={teamLogo(ov.last_team_id)} className="w-4 h-4 object-contain" alt="" fallback="team" />}
                 <span>{ov?.last_team || "—"}</span>
@@ -110,28 +127,28 @@ function PlayerModal({ playerId, onClose }) {
         </div>
 
         <div className="p-4 space-y-4">
-          {loading ? <div className="h-40 rounded-xl border border-glass bg-surface-2/70 animate-pulse" /> : (
+          {loading ? <div className="glass-card h-40 animate-pulse" /> : (
             <>
               <div className="rounded-xl border border-glass overflow-hidden">
                 <div className="px-3 py-2 bg-surface-2 border-b border-glass text-sm font-semibold text-slate-100">
-                  Последние игры
+                  {language === "ru" ? "Последние игры" : "Recent matches"}
                 </div>
                 <div className="px-3 py-1.5 text-xs text-slate-400 bg-surface-1/70 border-b border-glass">
-                  Последние матчи игрока: минуты, голы, ассисты и рейтинг.
+                  {language === "ru" ? "Последние матчи игрока: минуты, голы, ассисты и рейтинг." : "Player recent matches: minutes, goals, assists and rating."}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-surface-2/80 text-slate-300">
                       <tr className="[&>th]:px-3 [&>th]:py-2">
-                        <th className="text-left">Дата</th>
-                        <th className="text-left">Лига</th>
-                        <th className="text-left">Матч</th>
-                        <th className="text-center">Мин</th>
-                        <th className="text-center">Г</th>
-                        <th className="text-center">П</th>
-                        <th className="text-center">ЖК</th>
-                        <th className="text-center">КК</th>
-                        <th className="text-center">Рейт</th>
+                        <th className="text-left">{isRu ? FAVORITES_COPY.date.ru : FAVORITES_COPY.date.en}</th>
+                        <th className="text-left">{isRu ? FAVORITES_COPY.league.ru : FAVORITES_COPY.league.en}</th>
+                        <th className="text-left">{isRu ? FAVORITES_COPY.match.ru : FAVORITES_COPY.match.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.mins.ru : FAVORITES_COPY.mins.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.goals.ru : FAVORITES_COPY.goals.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.assists.ru : FAVORITES_COPY.assists.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.yellow.ru : FAVORITES_COPY.yellow.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.red.ru : FAVORITES_COPY.red.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.rating.ru : FAVORITES_COPY.rating.en}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -143,7 +160,7 @@ function PlayerModal({ playerId, onClose }) {
                             <span className="inline-flex items-center gap-2">
                               <SafeImg src={teamLogo(r.team_id)} className="w-5 h-5 object-contain" alt="" fallback="team" />
                               <span className="font-medium">{r.team_name}</span>
-                              <span className="text-slate-500">vs</span>
+                              <span className="text-slate-500">{isRu ? "vs" : "vs"}</span>
                               <SafeImg src={teamLogo(r.opponent_team_id)} className="w-5 h-5 object-contain" alt="" fallback="team" />
                               <span>{r.opponent}</span>
                             </span>
@@ -156,30 +173,30 @@ function PlayerModal({ playerId, onClose }) {
                           <td className="px-3 py-2 text-center">{r.rating?.toFixed ? r.rating.toFixed(2) : r.rating ?? "—"}</td>
                         </tr>
                       ))}
-                      {recent.length === 0 && <tr><td className="px-3 py-4 text-center text-slate-400" colSpan={9}>Нет данных</td></tr>}
+                      {recent.length === 0 && <tr><td className="px-3 py-4 text-center" colSpan={9}><div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div></td></tr>}
                     </tbody>
                   </table>
                 </div>
               </div>
 
               <div className="rounded-xl border border-glass overflow-hidden">
-                <div className="px-3 py-2 bg-surface-2 border-b border-glass text-sm font-semibold text-slate-100">Карьера</div>
+                  <div className="px-3 py-2 bg-surface-2 border-b border-glass text-sm font-semibold text-slate-100">{language === "ru" ? "Карьера" : "Career"}</div>
                 <div className="px-3 py-1.5 text-xs text-slate-400 bg-surface-1/70 border-b border-glass">
-                  Итоги по сезонам: игры, минуты, результативность.
+                  {language === "ru" ? "Итоги по сезонам: игры, минуты, результативность." : "Season totals: apps, minutes and production."}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-surface-2/80 text-slate-300">
                       <tr className="[&>th]:px-3 [&>th]:py-2">
-                        <th className="text-left">Сезон</th>
-                        <th className="text-left">Клуб</th>
-                        <th className="text-center">И</th>
-                        <th className="text-center">Мин</th>
-                        <th className="text-center">Г</th>
-                        <th className="text-center">П</th>
-                        <th className="text-center">ЖК</th>
-                        <th className="text-center">КК</th>
-                        <th className="text-center">Рейт</th>
+                        <th className="text-left">{language === "ru" ? "Сезон" : "Season"}</th>
+                        <th className="text-left">{isRu ? FAVORITES_COPY.club.ru : FAVORITES_COPY.club.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.apps.ru : FAVORITES_COPY.apps.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.mins.ru : FAVORITES_COPY.mins.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.goals.ru : FAVORITES_COPY.goals.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.assists.ru : FAVORITES_COPY.assists.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.yellow.ru : FAVORITES_COPY.yellow.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.red.ru : FAVORITES_COPY.red.en}</th>
+                        <th className="text-center">{isRu ? FAVORITES_COPY.rating.ru : FAVORITES_COPY.rating.en}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -196,7 +213,7 @@ function PlayerModal({ playerId, onClose }) {
                           <td className="px-3 py-2 text-center">{r.rating?.toFixed ? r.rating.toFixed(2) : r.rating}</td>
                         </tr>
                       ))}
-                      {career.length === 0 && <tr><td className="px-3 py-4 text-center text-slate-400" colSpan={9}>Нет данных</td></tr>}
+                      {career.length === 0 && <tr><td className="px-3 py-4 text-center" colSpan={9}><div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div></td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -210,6 +227,7 @@ function PlayerModal({ playerId, onClose }) {
 }
 
 export default function FavoritesPage() {
+  const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const [league, setLeague] = useState(searchParams.get("league") || "Premier League");
   const [season, setSeason] = useState(searchParams.get("season") || "2025");
@@ -249,13 +267,13 @@ export default function FavoritesPage() {
       <LeagueTabsHeader league={league} season={season} onLeagueChange={setLeague} onSeasonChange={setSeason} />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-100">Избранное</h1>
+        <h1 className="text-xl font-bold text-slate-100">{language === "ru" ? "Избранное" : "Favorites"}</h1>
         {ids.length > 0 && (
           <button
             onClick={() => { saveWatch([]); setIds([]); }}
             className="h-9 px-3 rounded-lg border border-glass bg-surface-2 hover:bg-surface-1/70 text-sm"
           >
-            Очистить всё
+            {language === "ru" ? "Очистить всё" : "Clear all"}
           </button>
         )}
       </div>
@@ -277,12 +295,12 @@ export default function FavoritesPage() {
                   </div>
                 </button>
                 <div className="ml-auto">
-                  <button onClick={() => remove(p.player_id)} className="h-8 px-3 rounded-md border border-glass bg-surface-2 hover:bg-surface-1/70 text-sm">Убрать</button>
+                  <button onClick={() => remove(p.player_id)} className="h-8 px-3 rounded-md border border-glass bg-surface-2 hover:bg-surface-1/70 text-sm">{language === "ru" ? "Убрать" : "Remove"}</button>
                 </div>
               </div>
             ))}
             {rows.length === 0 && (
-              <div className="p-6 text-center text-slate-400">Список пуст. Добавляйте игроков из таблиц звездочкой.</div>
+              <div className="p-6 text-center text-slate-400">{language === "ru" ? "Список пуст. Добавляйте игроков из таблиц звездочкой." : "The list is empty. Add players from tables using the star."}</div>
             )}
           </div>
         </CardContent>

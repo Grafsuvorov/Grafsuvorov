@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Business Cards Preview</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 32px;
+      background: #141016;
+      color: #faf7fd;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+    }
+    p {
+      margin: 0 0 28px;
+      max-width: 880px;
+      color: #cbbbd8;
+      line-height: 1.45;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 20px;
+    }
+    .item {
+      background: #1d1720;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 22px;
+      padding: 16px;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: #d9c9e5;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    img {
+      width: 100%;
+      display: block;
+      border-radius: 16px;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>Аккуратные варианты визитки</h1>
+  <p>Оба концепта сделаны в пропорции стандартной визитки 90x50 мм. Первый более спокойный и дорогой, второй чуть контрастнее и ближе к fashion-подаче. У обоих есть лицевая и оборотная сторона.</p>
+  <div class="grid">
+    
+    <section class="item">
+      <h2>concept a front</h2>
+      <img src="concept_a_front.svg" alt="concept_a_front.svg" />
+    </section>
+
+
+    <section class="item">
+      <h2>concept a back</h2>
+      <img src="concept_a_back.svg" alt="concept_a_back.svg" />
+    </section>
+
+
+    <section class="item">
+      <h2>concept b front</h2>
+      <img src="concept_b_front.svg" alt="concept_b_front.svg" />
+    </section>
+
+
+    <section class="item">
+      <h2>concept b back</h2>
+      <img src="concept_b_back.svg" alt="concept_b_back.svg" />
+    </section>
+
+  </div>
+</body>
+</html>

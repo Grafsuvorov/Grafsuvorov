@@ -76,6 +76,64 @@ def _ev_threshold(league_id, bet_type):
     return MIN_EV_BY_TYPE.get(bet_type, 0.0)
 
 
+def _passes_realized_roi_policy(league_id, bet_type, tier):
+    """
+    Conservative policy tuned on the latest settled production season data.
+    It intentionally trades coverage for cleaner realized ROI.
+    """
+    lid = int(league_id) if pd.notna(league_id) else None
+
+    if bet_type == "TOTAL":
+        # La Liga totals were the main negative league slice in the latest
+        # settled production season. Keep tier-A everywhere, and re-open a
+        # curated subset of tier-B totals only where the wider coverage still
+        # held up on the out-of-sample ROI window.
+        if lid == 140:
+            return False
+        if tier == "A":
+            return True
+        if tier == "B":
+            return lid in {39, 78, 135}
+        return False
+
+    if bet_type == "1X2":
+        # Outcomes add little value unless they clear the stronger tier.
+        return tier == "A"
+
+    return True
+
+
+def _block_home_outcome_segment(league_id, outcome):
+    lid = int(league_id) if pd.notna(league_id) else None
+    return outcome == "Home" and lid in {61, 140}
+
+
+def _block_low_ev_away_segment(outcome, ev_value):
+    return outcome == "Away" and (not np.isfinite(ev_value) or ev_value < 0.10)
+
+
+def _prefer_home_outcome_candidate(best, candidates):
+    if best[0] == "1X2":
+        return best
+
+    best_1x2 = max((c for c in candidates if c[0] == "1X2"), default=None, key=lambda x: x[3])
+    if best_1x2 is None:
+        return best
+
+    bet_type, outcome, odds, ev_val = best_1x2
+    if outcome != "Home":
+        return best
+    if odds is None or not (1.75 <= odds <= 2.25):
+        return best
+    if ev_val is None or ev_val < 0.10:
+        return best
+
+    ev_gap = float(best[3] - ev_val)
+    if ev_gap <= 0.16:
+        return best_1x2
+    return best
+
+
 def pick_best(row):
     """Продовая логика выбора ставки"""
     candidates = []
@@ -88,14 +146,25 @@ def pick_best(row):
         if not _bet_allowed(league_id, t):
             return
         if t == "1X2":
+            if _block_home_outcome_segment(league_id, name):
+                return
+            if _block_low_ev_away_segment(name, e):
+                return
             lid = int(league_id) if pd.notna(league_id) else -1
             tier = decide_outcome_bet(e, o, lid, name)
             if tier == "NO BET":
+                return
+            if not _passes_realized_roi_policy(league_id, t, tier):
                 return
         elif t == "TOTAL":
             if should_block_total_candidate(row, name):
                 return
             if e < _ev_threshold(league_id, t):
+                return
+            tier = decide_total_bet(e, o, int(league_id) if pd.notna(league_id) else -1, p)
+            if tier == "NO BET":
+                return
+            if not _passes_realized_roi_policy(league_id, t, tier):
                 return
         elif e < _ev_threshold(league_id, t):
             return
@@ -124,6 +193,7 @@ def pick_best(row):
         )
 
     best = max(candidates, key=lambda x: x[3])
+    best = _prefer_home_outcome_candidate(best, candidates)
     # Prefer 1X2 only in leagues/outcomes where the signal is historically stronger.
     eps = 0.01
     best_1x2 = max((c for c in candidates if c[0] == "1X2"), default=None, key=lambda x: x[3])
@@ -315,6 +385,7 @@ def main():
         from features.h2h import build_h2h_features
         from features.h2h_recent import build_h2h_recent_features
         from features.league import build_league_context_features
+        from features.match_context import build_match_context_features
         from features.draw_diff import add_draw_diff_features
         from features.outcome_script import build_result_script_features, add_outcome_scenario_features
         from models.inference import predict_outcomes
@@ -331,6 +402,7 @@ def main():
             build_h2h_features(df_all, mode="inference"),
             build_h2h_recent_features(df_all, window=5),
             build_league_context_features(df_all, window=60),
+            build_match_context_features(df_all, lookback=5),
         ]
         df_feat_out = build_feature_matrix(df_all, feats_out)
         df_feat_out = add_draw_diff_features(df_feat_out)

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import SafeImg from "@/components/SafeImg";
 import { teamLogoMap } from "@/constants/teamLogoMap";
 import { loadFavorites, saveFavorites } from "@/lib/favoritesStorage.js";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* =====================================================================
    UTIL: LOGO RESOLVER
@@ -31,7 +32,8 @@ function InfoRow({ label, value }) {
 /* =====================================================================
    FORM GRAPH — Dynamic based on rating history (variant #3)
 ===================================================================== */
-function FormGraph({ recent }) {
+function FormGraph({ recent, language = "ru" }) {
+  const isRu = language === "ru";
   // берём рейтинги (не null)
   const ratings = recent
     .map((m) => (typeof m.rating === "number" ? m.rating : null))
@@ -40,7 +42,7 @@ function FormGraph({ recent }) {
   if (!ratings.length)
     return (
       <div className="text-slate-500 text-xs mt-1">
-        Нет данных формы
+        {isRu ? "Нет данных формы" : "No form data"}
       </div>
     );
 
@@ -59,7 +61,7 @@ function FormGraph({ recent }) {
   return (
     <div className="mt-2">
       <div className="text-[11px] text-slate-500 mb-1">
-        Форма (последние матчи)
+        {isRu ? "Форма (последние матчи)" : "Form (recent matches)"}
       </div>
       <div className="flex items-end gap-1 h-12">
       {norm.map((v, i) => (
@@ -195,20 +197,21 @@ function MatchRow({ r, onOpen }) {
 /* =====================================================================
    RECENT TABLE
 ===================================================================== */
-function RecentTable({ items, onOpenMatch }) {
+function RecentTable({ items, onOpenMatch, language = "ru" }) {
+  const isRu = language === "ru";
   return (
     <div className="table-surface rounded-2xl overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-white/5 text-white/45 text-[11px] uppercase tracking-[0.18em]">
-            <th className="px-3 py-2 text-left w-[110px]">Дата</th>
-            <th className="px-3 py-2 text-left w-[360px]">Матч</th>
-            <th className="px-3 py-2 text-center w-[60px]">Мин</th>
-            <th className="px-3 py-2 text-center w-[50px]">Г</th>
-            <th className="px-3 py-2 text-center w-[50px]">П</th>
-            <th className="px-3 py-2 text-center w-[50px]">ЖК</th>
-            <th className="px-3 py-2 text-center w-[50px]">КК</th>
-            <th className="px-3 py-2 text-center w-[60px]">Рейт</th>
+            <th className="px-3 py-2 text-left w-[110px]">{isRu ? "Дата" : "Date"}</th>
+            <th className="px-3 py-2 text-left w-[360px]">{isRu ? "Матч" : "Match"}</th>
+            <th className="px-3 py-2 text-center w-[60px]">{isRu ? "Мин" : "Min"}</th>
+            <th className="px-3 py-2 text-center w-[50px]">{isRu ? "Г" : "G"}</th>
+            <th className="px-3 py-2 text-center w-[50px]">{isRu ? "П" : "A"}</th>
+            <th className="px-3 py-2 text-center w-[50px]">{isRu ? "ЖК" : "YC"}</th>
+            <th className="px-3 py-2 text-center w-[50px]">{isRu ? "КК" : "RC"}</th>
+            <th className="px-3 py-2 text-center w-[60px]">{isRu ? "Рейт" : "Rate"}</th>
           </tr>
         </thead>
         <tbody>
@@ -228,21 +231,22 @@ function RecentTable({ items, onOpenMatch }) {
 /* =====================================================================
    CAREER TABLE
 ===================================================================== */
-function CareerTable({ items }) {
+function CareerTable({ items, language = "ru" }) {
+  const isRu = language === "ru";
   return (
     <div className="table-surface rounded-2xl overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-white/5 text-white/45 text-[11px] uppercase tracking-[0.18em]">
-            <th className="px-3 py-2 text-left">Сезон</th>
-            <th className="px-3 py-2 text-left">Клуб</th>
-            <th className="px-3 py-2 text-center">И</th>
-            <th className="px-3 py-2 text-center">Мин</th>
-            <th className="px-3 py-2 text-center">Г</th>
-            <th className="px-3 py-2 text-center">П</th>
-            <th className="px-3 py-2 text-center">ЖК</th>
-            <th className="px-3 py-2 text-center">КК</th>
-            <th className="px-3 py-2 text-center">Рейт</th>
+            <th className="px-3 py-2 text-left">{isRu ? "Сезон" : "Season"}</th>
+            <th className="px-3 py-2 text-left">{isRu ? "Клуб" : "Club"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "И" : "Apps"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "Мин" : "Min"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "Г" : "G"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "П" : "A"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "ЖК" : "YC"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "КК" : "RC"}</th>
+            <th className="px-3 py-2 text-center">{isRu ? "Рейт" : "Rate"}</th>
           </tr>
         </thead>
 
@@ -279,6 +283,8 @@ function CareerTable({ items }) {
    MAIN PAGE
 ===================================================================== */
 export default function PlayerPage() {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const { id } = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
@@ -398,7 +404,7 @@ export default function PlayerPage() {
             {/* MAIN INFO */}
             <div className="min-w-0 flex-1 space-y-2">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
-                Профиль игрока
+                {isRu ? "Профиль игрока" : "Player profile"}
               </div>
               <div className="flex flex-wrap items-start gap-3">
                 <div className="text-2xl sm:text-3xl font-semibold leading-tight text-white truncate">
@@ -411,17 +417,17 @@ export default function PlayerPage() {
                       ? "border-white/25 text-white bg-white/10"
                       : "border-white/15 text-slate-300 hover:border-white/30 hover:text-white"
                   }`}
-                  title={isFav ? "Убрать из избранного" : "Добавить в избранное"}
+                  title={isFav ? (isRu ? "Убрать из избранного" : "Remove from favorites") : (isRu ? "Добавить в избранное" : "Add to favorites")}
                 >
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 3.99 4 6.5 4c1.54 0 3.04.74 4 1.9C11.46 4.74 12.96 4 14.5 4 17.01 4 19 6 19 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                   </svg>
-                  {isFav ? "В избранном" : "В избранное"}
+                  {isFav ? (isRu ? "В избранном" : "Saved") : (isRu ? "В избранное" : "Save")}
                 </button>
               </div>
               <div className="text-sm text-slate-400 whitespace-normal break-words">
                 {overview?.last_team || "—"} · {overview?.last_league || "—"} ·{" "}
-                Сезон {overview?.last_season || "—"}
+                {isRu ? "Сезон" : "Season"} {overview?.last_season || "—"}
               </div>
               <div className="text-xs text-slate-500 whitespace-normal break-words">
                 {(() => {
@@ -444,15 +450,15 @@ export default function PlayerPage() {
                     ageRaw == null || ageRaw === "—"
                       ? "—"
                       : `${ageRaw}`;
-                  return `Возраст: ${age} · Позиция: ${pos}`;
+                  return isRu ? `Возраст: ${age} · Позиция: ${pos}` : `Age: ${age} · Position: ${pos}`;
                 })()}
               </div>
               {showLowDataNote && (
                 <div className="text-xs text-slate-500">
-                  Недостаточно матчей для устойчивых выводов. Используй данные как ориентир.
+                  {isRu ? "Недостаточно матчей для устойчивых выводов. Используй данные как ориентир." : "Not enough matches for stable conclusions. Use the data as a guide."}
                 </div>
               )}
-              <FormGraph recent={recent} />
+              <FormGraph recent={recent} language={language} />
             </div>
             </div>
 
@@ -464,13 +470,14 @@ export default function PlayerPage() {
       {/* RECENT MATCHES */}
       <Card className="panel rounded-3xl">
         <CardContent className="p-6">
-          <div className="text-lg font-semibold mb-1 text-white">Последние игры</div>
+          <div className="text-lg font-semibold mb-1 text-white">{isRu ? "Последние игры" : "Recent matches"}</div>
           <div className="text-xs text-slate-400 mb-3">
-            Последние матчи игрока: минуты, результативность и рейтинг.
+            {isRu ? "Последние матчи игрока: минуты, результативность и рейтинг." : "Player recent matches: minutes, production, and rating."}
           </div>
           {recent.length ? (
             <RecentTable
               items={recent}
+              language={language}
               onOpenMatch={(r) => {
                 if (!r?.fixture_id) return;
                 const league =
@@ -493,7 +500,7 @@ export default function PlayerPage() {
               }}
             />
           ) : (
-            <div className="text-slate-400">Нет данных.</div>
+            <div className="text-slate-400">{isRu ? "Нет данных." : "No data."}</div>
           )}
         </CardContent>
       </Card>
@@ -502,20 +509,20 @@ export default function PlayerPage() {
       <Card className="panel rounded-3xl">
         <CardContent className="p-6">
           <div className="text-lg font-semibold mb-1 text-white">
-            Карьера (по сезонам и клубам)
+            {isRu ? "Карьера (по сезонам и клубам)" : "Career (by seasons and clubs)"}
           </div>
           <div className="text-xs text-slate-400 mb-3">
-            Итоги по сезонам: игры, минуты, голы, ассисты и дисциплина.
+            {isRu ? "Итоги по сезонам: игры, минуты, голы, ассисты и дисциплина." : "Season totals: appearances, minutes, goals, assists, and discipline."}
           </div>
           {career.length ? (
-            <CareerTable items={career} />
+            <CareerTable items={career} language={language} />
           ) : (
-            <div className="text-slate-400">Нет данных.</div>
+            <div className="text-slate-400">{isRu ? "Нет данных." : "No data."}</div>
           )}
         </CardContent>
       </Card>
 
-      {loading && <div className="text-slate-400">Загрузка…</div>}
+      {loading && <div className="text-slate-400">{isRu ? "Загрузка…" : "Loading…"}</div>}
     </div>
   );
 }

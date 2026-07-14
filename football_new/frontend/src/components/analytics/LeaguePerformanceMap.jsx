@@ -9,9 +9,19 @@ import {
   ReferenceArea,
   ReferenceLine,
 } from "recharts";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const logoByTeamId = (id) =>
-  id ? `https://media.api-sports.io/football/teams/${id}.png` : "/icons/default_league.png";
+  id ? `/icons/team_logos/${id}.png` : "/icons/default_league.png";
+
+function teamMark(name = "") {
+  return String(name)
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
 
 const hashColor = (name = "") => {
   let hash = 0;
@@ -31,8 +41,19 @@ function DotShape({ cx, cy, payload, highlightedTeam, onTeamHover }) {
       onMouseLeave={() => onTeamHover?.(null)}
     >
       <circle cx={cx} cy={cy} r={box / 2 + 1} fill="#0f172a" stroke="rgba(255,255,255,0.16)" strokeWidth={1} />
+      <text
+        x={cx}
+        y={cy + 4}
+        textAnchor="middle"
+        fontSize={isActive ? 10 : 9}
+        fontWeight="700"
+        fill="rgba(226,232,240,0.9)"
+      >
+        {payload.mark}
+      </text>
       <image
         href={payload.logo}
+        xlinkHref={payload.logo}
         x={cx - logo / 2}
         y={cy - logo / 2}
         width={logo}
@@ -44,6 +65,8 @@ function DotShape({ cx, cy, payload, highlightedTeam, onTeamHover }) {
 }
 
 function MapTooltip({ active, payload }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
@@ -51,13 +74,15 @@ function MapTooltip({ active, payload }) {
       <div className="mb-1 text-sm font-semibold text-white">{p.name}</div>
       <div>xG: {p.xg.toFixed(2)}</div>
       <div>xGA: {p.xga.toFixed(2)}</div>
-      <div>Голы: {p.goals != null ? Number(p.goals).toFixed(2) : "—"}</div>
-      <div>Пропущено: {p.conceded != null ? Number(p.conceded).toFixed(2) : "—"}</div>
+      <div>{isRu ? "Голы" : "Goals"}: {p.goals != null ? Number(p.goals).toFixed(2) : "—"}</div>
+      <div>{isRu ? "Пропущено" : "Conceded"}: {p.conceded != null ? Number(p.conceded).toFixed(2) : "—"}</div>
     </div>
   );
 }
 
 export default function LeaguePerformanceMap({ teams = [], height = 320, highlightedTeam = null, onTeamHover = null }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const data = teams
     .filter((t) => t.xg != null && t.xga != null)
     .map((t) => ({
@@ -69,6 +94,7 @@ export default function LeaguePerformanceMap({ teams = [], height = 320, highlig
       conceded: t.goals_conceded,
       color: hashColor(t.team),
       logo: logoByTeamId(t.team_id),
+      mark: teamMark(t.team),
     }));
   const xVals = data.map((d) => d.xg);
   const yVals = data.map((d) => d.xga);
@@ -81,7 +107,7 @@ export default function LeaguePerformanceMap({ teams = [], height = 320, highlig
 
   return (
     <div className="rounded-[14px] border border-white/10 bg-[#121826] p-5 shadow-[0_0_18px_rgba(124,140,255,0.12)]">
-      <div className="text-sm font-semibold text-white mb-3">Карта силы команд</div>
+      <div className="text-sm font-semibold text-white mb-3">{isRu ? "Карта силы команд" : "Team strength map"}</div>
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart>
@@ -96,15 +122,15 @@ export default function LeaguePerformanceMap({ teams = [], height = 320, highlig
               dataKey="xg"
               type="number"
               tick={{ fill: "rgba(230,233,239,0.7)", fontSize: 12 }}
-              name="Атака (xG)"
-              label={{ value: "Атака (xG за матч)", position: "insideBottom", offset: -4, fill: "rgba(230,233,239,0.7)", fontSize: 12 }}
+              name={isRu ? "Атака (xG)" : "Attack (xG)"}
+              label={{ value: isRu ? "Атака (xG за матч)" : "Attack (xG per match)", position: "insideBottom", offset: -4, fill: "rgba(230,233,239,0.7)", fontSize: 12 }}
             />
             <YAxis
               dataKey="xga"
               type="number"
               tick={{ fill: "rgba(230,233,239,0.7)", fontSize: 12 }}
-              name="Защита (xGA)"
-              label={{ value: "Защита (xGA за матч)", angle: -90, position: "insideLeft", fill: "rgba(230,233,239,0.7)", fontSize: 12 }}
+              name={isRu ? "Защита (xGA)" : "Defense (xGA)"}
+              label={{ value: isRu ? "Защита (xGA за матч)" : "Defense (xGA per match)", angle: -90, position: "insideLeft", fill: "rgba(230,233,239,0.7)", fontSize: 12 }}
             />
             <Tooltip cursor={{ stroke: "rgba(124,140,255,0.35)", strokeWidth: 1 }} content={<MapTooltip />} />
             <Scatter data={data} shape={(props) => <DotShape {...props} highlightedTeam={highlightedTeam} onTeamHover={onTeamHover} />} />
@@ -112,10 +138,10 @@ export default function LeaguePerformanceMap({ teams = [], height = 320, highlig
         </ResponsiveContainer>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-[#9aa3b2]">
-        <div>Верх-лево: сильная команда</div>
-        <div>Верх-право: атакующая команда</div>
-        <div>Низ-лево: оборонительная команда</div>
-        <div>Низ-право: слабая команда</div>
+        <div>{isRu ? "Верх-лево: сильная команда" : "Top left: strong team"}</div>
+        <div>{isRu ? "Верх-право: атакующая команда" : "Top right: attacking team"}</div>
+        <div>{isRu ? "Низ-лево: оборонительная команда" : "Bottom left: defensive team"}</div>
+        <div>{isRu ? "Низ-право: слабая команда" : "Bottom right: weak team"}</div>
       </div>
     </div>
   );

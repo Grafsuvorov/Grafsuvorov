@@ -1,0 +1,196 @@
+{
+  "league": "Premier League",
+  "top_n": 30,
+  "wins": 11,
+  "losses": 19,
+  "losses_with_context_shock": 9,
+  "losses_without_context_shock": 10,
+  "examples_context_shock": [
+    {
+      "date_utc": "2025-09-13 16:30:00",
+      "home_team": "West Ham",
+      "away_team": "Tottenham",
+      "score": "0:3",
+      "odds": 3.75,
+      "p_model": 0.4299638096723033,
+      "p_market": 0.2531692760749341,
+      "edge": 0.1767945335973692,
+      "ev": 0.6123642862711376,
+      "shock_reason": "home:recent coach change; away:recent coach change; away:formation surprise;"
+    },
+    {
+      "date_utc": "2026-01-25 14:00:00",
+      "home_team": "Crystal Palace",
+      "away_team": "Chelsea",
+      "score": "1:3",
+      "odds": 3.418,
+      "p_model": 0.3962623453224771,
+      "p_market": 0.2772218777762767,
+      "edge": 0.1190404675462004,
+      "ev": 0.354424696312227,
+      "shock_reason": "away:recent coach change;"
+    },
+    {
+      "date_utc": "2025-01-06 20:00:00",
+      "home_team": "Wolves",
+      "away_team": "Nottingham Forest",
+      "score": "0:3",
+      "odds": 3.28,
+      "p_model": 0.4003263042309597,
+      "p_market": 0.284995551241608,
+      "edge": 0.1153307529893516,
+      "ev": 0.3130702778775478,
+      "shock_reason": "home:recent coach change;"
+    },
+    {
+      "date_utc": "2025-01-18 15:00:00",
+      "home_team": "West Ham",
+      "away_team": "Crystal Palace",
+      "score": "0:2",
+      "odds": 2.61,
+      "p_model": 0.4967224645067957,
+      "p_market": 0.3578852236782648,
+      "edge": 0.1388372408285308,
+      "ev": 0.2964456323627367,
+      "shock_reason": "home:recent coach change; home:formation surprise;"
+    },
+    {
+      "date_utc": "2025-05-18 13:15:00",
+      "home_team": "West Ham",
+      "away_team": "Nottingham Forest",
+      "score": "1:2",
+      "odds": 2.83,
+      "p_model": 0.45641445816784,
+      "p_market": 0.3420157761778939,
+      "edge": 0.114398681989946,
+      "ev": 0.2916529166149872,
+      "shock_reason": "away:formation surprise;"
+    },
+    {
+      "date_utc": "2025-12-28 14:00:00",
+      "home_team": "Sunderland",
+      "away_team": "Leeds",
+      "score": "1:1",
+      "odds": 2.5439999999999996,
+      "p_model": 0.5025377151580729,
+      "p_market": 0.3724159414364426,
+      "edge": 0.1301217737216302,
+      "ev": 0.2784559473621373,
+      "shock_reason": "home:recent coach change;"
+    },
+    {
+      "date_utc": "2026-01-04 15:00:00",
+      "home_team": "Everton",
+      "away_team": "Brentford",
+      "score": "2:4",
+      "odds": 2.416,
+      "p_model": 0.5253000570835686,
+      "p_market": 0.3969030339042796,
+      "edge": 0.1283970231792889,
+      "ev": 0.2691249379139018,
+      "shock_reason": "home:recent coach change;"
+    },
+    {
+      "date_utc": "2026-01-19 20:00:00",
+      "home_team": "Brighton",
+      "away_team": "Bournemouth",
+      "score": "1:1",
+      "odds": 1.874,
+      "p_model": 0.6765723934354825,
+      "p_market": 0.506835505131989,
+      "edge": 0.1697368883034934,
+      "ev": 0.2678966652980943,
+      "shock_reason": "home:recent coach change; away:recent coach change;"
+    }
+  ],
+  "examples_clean_model_error": [
+    {
+      "date_utc": "2025-04-21 19:00:00",
+      "home_team": "Tottenham",
+      "away_team": "Nottingham Forest",
+      "score": "1:2",
+      "odds": 2.64,
+      "p_model": 0.5192021883586173,
+      "p_market": 0.3693069306930693,
+      "edge": 0.149895257665548,
+      "ev": 0.3706937772667498
+    },
+    {
+      "date_utc": "2025-03-09 14:00:00",
+      "home_team": "Tottenham",
+      "away_team": "Bournemouth",
+      "score": "2:2",
+      "odds": 2.75,
+      "p_model": 0.493551938863205,
+      "p_market": 0.3461313584096667,
+      "edge": 0.1474205804535382,
+      "ev": 0.3572678318738136
+    },
+    {
+      "date_utc": "2025-11-29 17:30:00",
+      "home_team": "Everton",
+      "away_team": "Newcastle",
+      "score": "1:4",
+      "odds": 2.874,
+      "p_model": 0.4695957443581836,
+      "p_market": 0.3303561385935482,
+      "edge": 0.1392396057646353,
+      "ev": 0.3496181692854196
+    },
+    {
+      "date_utc": "2025-05-03 16:30:00",
+      "home_team": "Arsenal",
+      "away_team": "Bournemouth",
+      "score": "1:2",
+      "odds": 2.07,
+      "p_model": 0.6496334206528785,
+      "p_market": 0.4675236447397752,
+      "edge": 0.1821097759131033,
+      "ev": 0.3447411807514584
+    },
+    {
+      "date_utc": "2025-05-11 13:15:00",
+      "home_team": "Tottenham",
+      "away_team": "Crystal Palace",
+      "score": "0:2",
+      "odds": 2.62,
+      "p_model": 0.5095187549109117,
+      "p_market": 0.3548667439165701,
+      "edge": 0.1546520109943415,
+      "ev": 0.3349391378665887
+    },
+    {
+      "date_utc": "2025-09-20 14:00:00",
+      "home_team": "Brighton",
+      "away_team": "Tottenham",
+      "score": "2:2",
+      "odds": 2.232,
+      "p_model": 0.5920638849380807,
+      "p_market": 0.4248851917848619,
+      "edge": 0.1671786931532188,
+      "ev": 0.3214865911817963
+    },
+    {
+      "date_utc": "2026-03-04 19:30:00",
+      "home_team": "Fulham",
+      "away_team": "West Ham",
+      "score": "0:1",
+      "odds": 2.024,
+      "p_model": 0.6378159673282802,
+      "p_market": 0.4694961996367794,
+      "edge": 0.1683197676915007,
+      "ev": 0.290939517872439
+    },
+    {
+      "date_utc": "2025-12-07 16:30:00",
+      "home_team": "Fulham",
+      "away_team": "Crystal Palace",
+      "score": "1:2",
+      "odds": 2.612,
+      "p_model": 0.4941727936640633,
+      "p_market": 0.3638216698909582,
+      "edge": 0.1303511237731051,
+      "ev": 0.2907793370505334
+    }
+  ]
+}

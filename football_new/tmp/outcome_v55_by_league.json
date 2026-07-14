@@ -1,0 +1,154 @@
+{
+  "by_league": [
+    {
+      "league": "Bundesliga",
+      "model": "base_v53",
+      "matches": 269,
+      "correct": 150,
+      "accuracy": 0.557621,
+      "draw_predictions": 3,
+      "draw_precision": 0.333333,
+      "draw_recall": 0.014493
+    },
+    {
+      "league": "Bundesliga",
+      "model": "draw_side_v55",
+      "matches": 269,
+      "correct": 150,
+      "accuracy": 0.557621,
+      "draw_predictions": 4,
+      "draw_precision": 0.5,
+      "draw_recall": 0.028986
+    },
+    {
+      "league": "Bundesliga",
+      "model": "market",
+      "matches": 269,
+      "correct": 149,
+      "accuracy": 0.553903,
+      "draw_predictions": 0,
+      "draw_precision": 0.0,
+      "draw_recall": 0.0
+    },
+    {
+      "league": "La Liga",
+      "model": "base_v53",
+      "matches": 312,
+      "correct": 160,
+      "accuracy": 0.512821,
+      "draw_predictions": 9,
+      "draw_precision": 0.222222,
+      "draw_recall": 0.027778
+    },
+    {
+      "league": "La Liga",
+      "model": "draw_side_v55",
+      "matches": 312,
+      "correct": 160,
+      "accuracy": 0.512821,
+      "draw_predictions": 18,
+      "draw_precision": 0.222222,
+      "draw_recall": 0.055556
+    },
+    {
+      "league": "La Liga",
+      "model": "market",
+      "matches": 312,
+      "correct": 172,
+      "accuracy": 0.551282,
+      "draw_predictions": 0,
+      "draw_precision": 0.0,
+      "draw_recall": 0.0
+    },
+    {
+      "league": "Ligue 1",
+      "model": "base_v53",
+      "matches": 235,
+      "correct": 119,
+      "accuracy": 0.506383,
+      "draw_predictions": 4,
+      "draw_precision": 0.0,
+      "draw_recall": 0.0
+    },
+    {
+      "league": "Ligue 1",
+      "model": "draw_side_v55",
+      "matches": 235,
+      "correct": 117,
+      "accuracy": 0.497872,
+      "draw_predictions": 10,
+      "draw_precision": 0.2,
+      "draw_recall": 0.033898
+    },
+    {
+      "league": "Ligue 1",
+      "model": "market",
+      "matches": 235,
+      "correct": 122,
+      "accuracy": 0.519149,
+      "draw_predictions": 0,
+      "draw_precision": 0.0,
+      "draw_recall": 0.0
+    },
+    {
+      "league": "Premier League",
+      "model": "base_v53",
+      "matches": 323,
+      "correct": 168,
+      "accuracy": 0.520124,
+      "draw_predictions": 1,
+      "draw_precision": 1.0,
+      "draw_recall": 0.011765
+    },
+    {
+      "league": "Premier League",
+      "model": "draw_side_v55",
+      "matches": 323,
+      "correct": 168,
+      "accuracy": 0.520124,
+      "draw_predictions": 2,
+      "draw_precision": 0.5,
+      "draw_recall": 0.011765
+    },
+    {
+      "league": "Premier League",
+      "model": "market",
+      "matches": 323,
+      "correct": 168,
+      "accuracy": 0.520124,
+      "draw_predictions": 0,
+      "draw_precision": 0.0,
+      "draw_recall": 0.0
+    },
+    {
+      "league": "Serie A",
+      "model": "base_v53",
+      "matches": 339,
+      "correct": 181,
+      "accuracy": 0.533923,
+      "draw_predictions": 11,
+      "draw_precision": 0.272727,
+      "draw_recall": 0.034091
+    },
+    {
+      "league": "Serie A",
+      "model": "draw_side_v55",
+      "matches": 339,
+      "correct": 186,
+      "accuracy": 0.548673,
+      "draw_predictions": 17,
+      "draw_precision": 0.529412,
+      "draw_recall": 0.102273
+    },
+    {
+      "league": "Serie A",
+      "model": "market",
+      "matches": 339,
+      "correct": 181,
+      "accuracy": 0.533923,
+      "draw_predictions": 1,
+      "draw_precision": 1.0,
+      "draw_recall": 0.011364
+    }
+  ]
+}

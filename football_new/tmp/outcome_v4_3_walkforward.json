@@ -1,0 +1,665 @@
+{
+  "config": {
+    "train_days": 540,
+    "cal_days": 120,
+    "val_days": 30,
+    "step_days": 30
+  },
+  "windows": [
+    {
+      "window": "2026-04-19__2026-05-19",
+      "n_val": 217,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 217,
+          "logloss": 1.024226,
+          "accuracy": 0.506912
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 217,
+          "logloss": 1.020681,
+          "accuracy": 0.483871
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 217,
+          "logloss": 1.021947,
+          "accuracy": 0.502304
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.08,
+            "min_edge": 0.0,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 160,
+            "wins": 73,
+            "hit_rate": 0.45625,
+            "avg_odds": 2.72385,
+            "avg_ev": 0.130356,
+            "profit": 29.332,
+            "roi": 0.183325
+          },
+          "val": {
+            "bets": 45,
+            "wins": 17,
+            "hit_rate": 0.377778,
+            "avg_odds": 2.794259,
+            "avg_ev": 0.13141,
+            "profit": 0.898,
+            "roi": 0.019956
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.08,
+            "min_edge": 0.05,
+            "min_odds": 1.8,
+            "max_odds": 3.2
+          },
+          "cal": {
+            "bets": 23,
+            "wins": 15,
+            "hit_rate": 0.652174,
+            "avg_odds": 2.381565,
+            "avg_ev": 0.112959,
+            "profit": 12.588,
+            "roi": 0.547304
+          },
+          "val": {
+            "bets": 6,
+            "wins": 4,
+            "hit_rate": 0.666667,
+            "avg_odds": 2.337111,
+            "avg_ev": 0.118995,
+            "profit": 3.738,
+            "roi": 0.623
+          }
+        }
+      }
+    },
+    {
+      "window": "2026-03-20__2026-04-19",
+      "n_val": 165,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 165,
+          "logloss": 0.999122,
+          "accuracy": 0.509091
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 165,
+          "logloss": 1.009105,
+          "accuracy": 0.515152
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 165,
+          "logloss": 1.005057,
+          "accuracy": 0.521212
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.05,
+            "min_edge": 0.05,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 177,
+            "wins": 84,
+            "hit_rate": 0.474576,
+            "avg_odds": 2.506712,
+            "avg_ev": 0.136526,
+            "profit": 24.008,
+            "roi": 0.135638
+          },
+          "val": {
+            "bets": 35,
+            "wins": 19,
+            "hit_rate": 0.542857,
+            "avg_odds": 2.383771,
+            "avg_ev": 0.137413,
+            "profit": 9.912,
+            "roi": 0.2832
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.03,
+            "min_edge": 0.0,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 82,
+            "wins": 33,
+            "hit_rate": 0.402439,
+            "avg_odds": 2.616951,
+            "avg_ev": 0.065536,
+            "profit": 1.408,
+            "roi": 0.017171
+          },
+          "val": {
+            "bets": 18,
+            "wins": 4,
+            "hit_rate": 0.222222,
+            "avg_odds": 2.791222,
+            "avg_ev": 0.064536,
+            "profit": -7.358,
+            "roi": -0.408778
+          }
+        }
+      }
+    },
+    {
+      "window": "2026-02-18__2026-03-20",
+      "n_val": 193,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 193,
+          "logloss": 0.983848,
+          "accuracy": 0.53886
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 193,
+          "logloss": 0.996427,
+          "accuracy": 0.518135
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 193,
+          "logloss": 0.988414,
+          "accuracy": 0.512953
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.1,
+            "min_edge": 0.0,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 198,
+            "wins": 88,
+            "hit_rate": 0.444444,
+            "avg_odds": 2.793192,
+            "avg_ev": 0.193052,
+            "profit": 40.27,
+            "roi": 0.203384
+          },
+          "val": {
+            "bets": 51,
+            "wins": 17,
+            "hit_rate": 0.333333,
+            "avg_odds": 2.744353,
+            "avg_ev": 0.176878,
+            "profit": -5.292,
+            "roi": -0.103765
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.1,
+            "min_edge": 0.0,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 97,
+            "wins": 45,
+            "hit_rate": 0.463918,
+            "avg_odds": 2.825732,
+            "avg_ev": 0.179309,
+            "profit": 25.242,
+            "roi": 0.260227
+          },
+          "val": {
+            "bets": 20,
+            "wins": 7,
+            "hit_rate": 0.35,
+            "avg_odds": 2.5939,
+            "avg_ev": 0.154579,
+            "profit": -2.692,
+            "roi": -0.1346
+          }
+        }
+      }
+    },
+    {
+      "window": "2026-01-19__2026-02-18",
+      "n_val": 192,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 192,
+          "logloss": 0.976899,
+          "accuracy": 0.541667
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 192,
+          "logloss": 0.992589,
+          "accuracy": 0.53125
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 192,
+          "logloss": 0.988862,
+          "accuracy": 0.536458
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.08,
+            "min_edge": 0.0,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 220,
+            "wins": 104,
+            "hit_rate": 0.472727,
+            "avg_odds": 2.51403,
+            "avg_ev": 0.159621,
+            "profit": 34.532667,
+            "roi": 0.156967
+          },
+          "val": {
+            "bets": 42,
+            "wins": 19,
+            "hit_rate": 0.452381,
+            "avg_odds": 2.38181,
+            "avg_ev": 0.181558,
+            "profit": 2.612,
+            "roi": 0.06219
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.1,
+            "min_edge": 0.0,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 100,
+            "wins": 49,
+            "hit_rate": 0.49,
+            "avg_odds": 2.672765,
+            "avg_ev": 0.164723,
+            "profit": 26.636667,
+            "roi": 0.266367
+          },
+          "val": {
+            "bets": 18,
+            "wins": 7,
+            "hit_rate": 0.388889,
+            "avg_odds": 2.429667,
+            "avg_ev": 0.179355,
+            "profit": -1.394,
+            "roi": -0.077444
+          }
+        }
+      }
+    },
+    {
+      "window": "2025-12-20__2026-01-19",
+      "n_val": 188,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 188,
+          "logloss": 0.978998,
+          "accuracy": 0.521277
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 188,
+          "logloss": 0.985458,
+          "accuracy": 0.515957
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 188,
+          "logloss": 0.97919,
+          "accuracy": 0.526596
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.03,
+            "min_edge": 0.0,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 254,
+            "wins": 91,
+            "hit_rate": 0.358268,
+            "avg_odds": 2.695616,
+            "avg_ev": 0.092298,
+            "profit": -14.808,
+            "roi": -0.058299
+          },
+          "val": {
+            "bets": 58,
+            "wins": 24,
+            "hit_rate": 0.413793,
+            "avg_odds": 2.671552,
+            "avg_ev": 0.094017,
+            "profit": 7.696,
+            "roi": 0.13269
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.05,
+            "min_edge": 0.03,
+            "min_odds": 1.6,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 0,
+            "wins": 0,
+            "hit_rate": 0.0,
+            "avg_odds": 0.0,
+            "avg_ev": 0.0,
+            "profit": 0.0,
+            "roi": 0.0
+          },
+          "val": {
+            "bets": 0,
+            "wins": 0,
+            "hit_rate": 0.0,
+            "avg_odds": 0.0,
+            "avg_ev": 0.0,
+            "profit": 0.0,
+            "roi": 0.0
+          }
+        }
+      }
+    },
+    {
+      "window": "2025-11-20__2025-12-20",
+      "n_val": 221,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 221,
+          "logloss": 0.971979,
+          "accuracy": 0.552036
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 221,
+          "logloss": 0.981377,
+          "accuracy": 0.529412
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 221,
+          "logloss": 0.972295,
+          "accuracy": 0.552036
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.1,
+            "min_edge": 0.0,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 148,
+            "wins": 49,
+            "hit_rate": 0.331081,
+            "avg_odds": 2.796746,
+            "avg_ev": 0.162053,
+            "profit": -13.608,
+            "roi": -0.091946
+          },
+          "val": {
+            "bets": 65,
+            "wins": 29,
+            "hit_rate": 0.446154,
+            "avg_odds": 2.582369,
+            "avg_ev": 0.178355,
+            "profit": 8.568,
+            "roi": 0.131815
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.03,
+            "min_edge": 0.02,
+            "min_odds": 1.7,
+            "max_odds": 3.5
+          },
+          "cal": {
+            "bets": 40,
+            "wins": 17,
+            "hit_rate": 0.425,
+            "avg_odds": 2.78475,
+            "avg_ev": 0.052967,
+            "profit": 6.448,
+            "roi": 0.1612
+          },
+          "val": {
+            "bets": 21,
+            "wins": 10,
+            "hit_rate": 0.47619,
+            "avg_odds": 2.780381,
+            "avg_ev": 0.060696,
+            "profit": 6.688,
+            "roi": 0.318476
+          }
+        }
+      }
+    },
+    {
+      "window": "2025-10-21__2025-11-20",
+      "n_val": 163,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 163,
+          "logloss": 0.953669,
+          "accuracy": 0.546012
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 163,
+          "logloss": 0.97884,
+          "accuracy": 0.515337
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 163,
+          "logloss": 0.954958,
+          "accuracy": 0.539877
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.1,
+            "min_edge": 0.0,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 132,
+            "wins": 48,
+            "hit_rate": 0.363636,
+            "avg_odds": 3.044994,
+            "avg_ev": 0.169066,
+            "profit": 13.095333,
+            "roi": 0.099207
+          },
+          "val": {
+            "bets": 56,
+            "wins": 16,
+            "hit_rate": 0.285714,
+            "avg_odds": 3.052,
+            "avg_ev": 0.172987,
+            "profit": -11.04,
+            "roi": -0.197143
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.1,
+            "min_edge": 0.05,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 36,
+            "wins": 18,
+            "hit_rate": 0.5,
+            "avg_odds": 2.734556,
+            "avg_ev": 0.16473,
+            "profit": 11.816,
+            "roi": 0.328222
+          },
+          "val": {
+            "bets": 15,
+            "wins": 5,
+            "hit_rate": 0.333333,
+            "avg_odds": 2.610933,
+            "avg_ev": 0.159631,
+            "profit": -3.95,
+            "roi": -0.263333
+          }
+        }
+      }
+    },
+    {
+      "window": "2024-04-29__2024-05-29",
+      "n_val": 139,
+      "overall": {
+        "market": {
+          "label": "market",
+          "n": 139,
+          "logloss": 0.919561,
+          "accuracy": 0.582734
+        },
+        "catboost_v41": {
+          "label": "catboost_v41",
+          "n": 139,
+          "logloss": 0.95602,
+          "accuracy": 0.57554
+        },
+        "catboost_leagueblend_v42": {
+          "label": "catboost_leagueblend_v42",
+          "n": 139,
+          "logloss": 0.935277,
+          "accuracy": 0.568345
+        }
+      },
+      "roi": {
+        "catboost_v41": {
+          "rule": {
+            "min_ev": 0.08,
+            "min_edge": 0.0,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 59,
+            "wins": 21,
+            "hit_rate": 0.355932,
+            "avg_odds": 2.788305,
+            "avg_ev": 0.141289,
+            "profit": -4.04,
+            "roi": -0.068475
+          },
+          "val": {
+            "bets": 18,
+            "wins": 4,
+            "hit_rate": 0.222222,
+            "avg_odds": 3.008333,
+            "avg_ev": 0.147454,
+            "profit": -4.23,
+            "roi": -0.235
+          }
+        },
+        "catboost_leagueblend_v42": {
+          "rule": {
+            "min_ev": 0.08,
+            "min_edge": 0.0,
+            "min_odds": 1.55,
+            "max_odds": 4.0
+          },
+          "cal": {
+            "bets": 25,
+            "wins": 14,
+            "hit_rate": 0.56,
+            "avg_odds": 2.47,
+            "avg_ev": 0.121006,
+            "profit": 8.33,
+            "roi": 0.3332
+          },
+          "val": {
+            "bets": 6,
+            "wins": 1,
+            "hit_rate": 0.166667,
+            "avg_odds": 3.348333,
+            "avg_ev": 0.121391,
+            "profit": -2.45,
+            "roi": -0.408333
+          }
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "market": {
+      "windows": 8,
+      "avg_logloss": 0.976038,
+      "avg_accuracy": 0.537324
+    },
+    "catboost_v41": {
+      "windows": 8,
+      "avg_logloss": 0.990062,
+      "avg_accuracy": 0.523082
+    },
+    "catboost_leagueblend_v42": {
+      "windows": 8,
+      "avg_logloss": 0.98075,
+      "avg_accuracy": 0.532473
+    },
+    "roi_catboost_v41": {
+      "windows": 8,
+      "bets": 370,
+      "wins": 145,
+      "profit": 9.124,
+      "roi": 0.024659
+    },
+    "roi_catboost_leagueblend_v42": {
+      "windows": 8,
+      "bets": 104,
+      "wins": 38,
+      "profit": -7.418,
+      "roi": -0.071327
+    }
+  }
+}

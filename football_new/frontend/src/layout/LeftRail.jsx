@@ -1,19 +1,20 @@
 // src/components/LeftRail.jsx
 import { useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-
-const NAV = [
-  { to: "/",           label: "Домой",      icon: "🏠" },
-  { to: "/matches-v3", label: "Результаты", icon: "📊" },
-  { to: "/schedule",   label: "Календарь",  icon: "🗓️" },
-  { to: "/table",      label: "Таблицы",    icon: "🏆" },
-  { to: "/best-picks", label: "Подборки",   icon: "✨" },
-  { to: "/leagues",    label: "Лиги",       icon: "🧭" },
-];
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 export default function LeftRail() {
   const nav = useNavigate();
   const { pathname } = useLocation();
+  const { t, language } = useLanguage();
+  const NAV = [
+    { to: "/", label: language === "ru" ? "Домой" : "Home", icon: "🏠" },
+    { to: "/matches-v3", label: t("results"), icon: "📊" },
+    { to: "/schedule", label: t("calendar"), icon: "🗓️" },
+    { to: "/table", label: t("table"), icon: "🏆" },
+    { to: "/best-picks", label: t("picks"), icon: "✨" },
+    { to: "/leagues", label: language === "ru" ? "Лиги" : "Leagues", icon: "🧭" },
+  ];
 
   return (
     <nav className="w-[74px] rounded-3xl border border-white/15 bg-slate-950/70 p-3 shadow-[0_18px_60px_rgba(15,23,42,0.95)] backdrop-blur-2xl">
@@ -46,7 +47,7 @@ export default function LeftRail() {
         })}
 
         <li className="mt-4 text-center">
-          <div className="text-[10px] text-slate-300/70">live</div>
+          <div className="text-[10px] text-slate-300/70">{language === "ru" ? "лайв" : "live"}</div>
           <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_12px_rgba(248,113,113,0.9)] animate-pulse" />
         </li>
       </ul>

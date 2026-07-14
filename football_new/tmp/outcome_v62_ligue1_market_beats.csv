@@ -1,0 +1,3 @@
+fixture_id,date_utc,league,match,actual_idx,actual_outcome,v62_pred_idx,v62_pred,market_pred,v62_conf,market_conf,recovered_home_flag,window,v62_correct,market_pred_idx,market_correct,conf_bucket
+1387827,2025-12-05 20:00:00+00:00,Ligue 1,Lille - Marseille,2,Home,1,Draw,Home,0.371717733783271,0.3628339742444449,0,2025-11-20__2025-12-20,0,2,1,0.35-0.40
+1387797,2025-11-09 16:15:00+00:00,Ligue 1,Angers - Auxerre,2,Home,1,Draw,Home,0.4981622595632001,0.3628374136848712,0,2025-10-21__2025-11-20,0,2,1,0.45-0.50

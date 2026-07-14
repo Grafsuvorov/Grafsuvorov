@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const avatarByPlayerId = (id) =>
-  id ? `https://media.api-sports.io/football/players/${id}.png` : "/icons/player_photos/default.png";
+  id ? `/icons/player_photos/${id}.png` : "/icons/player_photos/default.png";
 
 function initials(name = "") {
   return name
@@ -27,6 +28,16 @@ function PlayerDot({ cx, cy, payload }) {
         stroke={payload.isElite ? "#facc15" : "#fff"}
         strokeWidth={payload.isElite ? 2 : 1}
       />
+      <text
+        x={cx}
+        y={cy + 4}
+        textAnchor="middle"
+        fontSize={payload.isElite ? 10 : 9}
+        fontWeight="700"
+        fill="rgba(226,232,240,0.92)"
+      >
+        {payload.short}
+      </text>
       <defs>
         <clipPath id={clipId}>
           <circle cx={cx} cy={cy} r={size / 2 - 1} />
@@ -34,6 +45,7 @@ function PlayerDot({ cx, cy, payload }) {
       </defs>
       <image
         href={payload.avatar}
+        xlinkHref={payload.avatar}
         x={cx - size / 2}
         y={cy - size / 2}
         width={size}
@@ -53,16 +65,18 @@ const fmtAxis = (value) => {
 };
 
 function PlayerTooltip({ active, payload }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
     <div className="rounded-lg border border-white/10 bg-[rgba(10,10,20,0.9)] px-3 py-2 text-xs text-[#e6e9ef] shadow-[0_0_12px_rgba(124,140,255,0.18)]">
       <div className="mb-1 text-sm font-semibold text-white">{p.name}</div>
-      <div>Команда: {p.team || "—"}</div>
-      <div>Голы: {fmtAxis(p.goals)}</div>
+      <div>{isRu ? "Команда" : "Team"}: {p.team || "—"}</div>
+      <div>{isRu ? "Голы" : "Goals"}: {fmtAxis(p.goals)}</div>
       <div>xG: {fmtAxis(p.xg)}</div>
-      <div>Удары: {p.shots}</div>
-      <div>Реализация: {(p.goals - p.xg >= 0 ? "+" : "") + fmtAxis(p.goals - p.xg)}</div>
+      <div>{isRu ? "Удары" : "Shots"}: {p.shots}</div>
+      <div>{isRu ? "Реализация" : "Finishing"}: {(p.goals - p.xg >= 0 ? "+" : "") + fmtAxis(p.goals - p.xg)}</div>
     </div>
   );
 }
@@ -89,6 +103,8 @@ export default function PlayerFinishingChart({
   onPlayerSelect = null,
 }) {
   const [mode, setMode] = useState("top20");
+  const { language } = useLanguage();
+  const isRu = language === "ru";
 
   const { data, modeLabel } = useMemo(() => {
     const base = players
@@ -102,7 +118,7 @@ export default function PlayerFinishingChart({
           p.api_player_id ?? (Number(p.player_id) > 0 ? p.player_id : null);
         return {
         player_id: resolvedPlayerId,
-        name: p.player_name || p.player || "Unknown",
+        name: p.player_name || p.player || (isRu ? "Неизвестный" : "Unknown"),
         team: p.team_name || p.team || "—",
         minutes,
         shots,
@@ -110,7 +126,7 @@ export default function PlayerFinishingChart({
         goals,
         conversion: xg > 0 ? goals / xg : 0,
         avatar: avatarByPlayerId(resolvedPlayerId),
-        short: initials(p.player_name),
+        short: initials(p.player_name || p.player),
         isElite: ELITE_PLAYERS.has(String(p.player_name || "").toLowerCase()),
       };
       })
@@ -144,35 +160,35 @@ export default function PlayerFinishingChart({
     }
 
     if (mode === "top20") {
-      return { data: filtered.slice(0, 20), modeLabel: "ТОП-20 игроков по xG" };
+      return { data: filtered.slice(0, 20), modeLabel: isRu ? "ТОП-20 игроков по xG" : "TOP 20 players by xG" };
     }
-    return { data: filtered.slice(0, 25), modeLabel: "Все игроки (до 25)" };
-  }, [players, mode, teamFilter, minMinutes, minShots]);
+    return { data: filtered.slice(0, 25), modeLabel: isRu ? "Все игроки (до 25)" : "All players (up to 25)" };
+  }, [players, mode, teamFilter, minMinutes, minShots, isRu]);
 
   const maxAxis = Math.max(1, ...data.map((d) => Math.max(d.xg, d.goals)));
 
   return (
     <div className="glass-card p-6">
-      <div className="text-sm font-semibold text-white mb-3">Карта реализации игроков</div>
+      <div className="text-sm font-semibold text-white mb-3">{isRu ? "Карта реализации игроков" : "Player finishing map"}</div>
       <div className="mb-3 flex items-center gap-2">
         <button
           type="button"
           onClick={() => setMode("top20")}
           className={mode === "top20" ? "rounded-full border border-primary bg-primary/20 px-2 py-1 text-xs text-white" : "rounded-full border border-white/10 px-2 py-1 text-xs text-white/65"}
         >
-          ТОП-20
+          {isRu ? "ТОП-20" : "TOP 20"}
         </button>
         <button
           type="button"
           onClick={() => setMode("all")}
           className={mode === "all" ? "rounded-full border border-primary bg-primary/20 px-2 py-1 text-xs text-white" : "rounded-full border border-white/10 px-2 py-1 text-xs text-white/65"}
         >
-          Все
+          {isRu ? "Все" : "All"}
         </button>
       </div>
       {data.length < 6 && (
-        <div className="mb-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70">
-          Недостаточно данных
+        <div className="surface-empty mb-3 px-3 py-2 text-xs text-white/70">
+          {isRu ? "Недостаточно данных" : "Not enough data"}
         </div>
       )}
       <div className="h-[480px]">
@@ -211,7 +227,9 @@ export default function PlayerFinishingChart({
         </ResponsiveContainer>
       </div>
       <div className="mt-2 text-xs text-[#9aa3b2]">{modeLabel}</div>
-      <div className="mt-1 text-xs text-[#9aa3b2]">Выше линии: реализует лучше ожидаемого, ниже: хуже ожидаемого</div>
+      <div className="mt-1 text-xs text-[#9aa3b2]">
+        {isRu ? "Выше линии: реализует лучше ожидаемого, ниже: хуже ожидаемого" : "Above the line: finishing above expectation, below: underperforming expectation"}
+      </div>
     </div>
   );
 }

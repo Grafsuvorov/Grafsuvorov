@@ -1,0 +1,400 @@
+{
+  "window": {
+    "date_from": "2025-08-01",
+    "date_to": "2026-05-10"
+  },
+  "overall": {
+    "matches": 1488,
+    "outcome_accuracy": 0.5168010752688172,
+    "outcome_log_loss": 0.9986063038599912,
+    "totals_accuracy": 0.5638440860215054,
+    "totals_log_loss": 0.7395566176404743,
+    "actual_outcome_rates": {
+      "away": 0.30443548387096775,
+      "draw": 0.25268817204301075,
+      "home": 0.4428763440860215
+    },
+    "mean_predicted_outcome_probs": {
+      "away": 0.2953439870788941,
+      "draw": 0.25317164278824,
+      "home": 0.45148437013286596
+    },
+    "actual_over25_rate": 0.5268817204301075,
+    "mean_predicted_over25": 0.5100911536250115
+  },
+  "league_metrics": [
+    {
+      "league_id": 39,
+      "league": "Premier League",
+      "matches": 324,
+      "outcome_accuracy": 0.4876543209876543,
+      "outcome_log_loss": 1.051818509538699,
+      "totals_accuracy": 0.5740740740740741,
+      "totals_log_loss": 0.7148582464692642,
+      "pred_home": 0.4904802829575163,
+      "act_home": 0.41358024691358025,
+      "home_bias": -0.07690003604393603,
+      "pred_draw": 0.21760792787735556,
+      "act_draw": 0.2716049382716049,
+      "draw_bias": 0.05399701039424937,
+      "pred_away": 0.29191178916512805,
+      "act_away": 0.3148148148148148,
+      "away_bias": 0.02290302564968677,
+      "pred_over25": 0.5178095685036361,
+      "act_over25": 0.5370370370370371,
+      "over25_bias": 0.01922746853340096
+    },
+    {
+      "league_id": 61,
+      "league": "Ligue 1",
+      "matches": 262,
+      "outcome_accuracy": 0.48091603053435117,
+      "outcome_log_loss": 1.0076806294937042,
+      "totals_accuracy": 0.549618320610687,
+      "totals_log_loss": 0.8186380624625538,
+      "pred_home": 0.42006966909205007,
+      "act_home": 0.48091603053435117,
+      "home_bias": 0.0608463614423011,
+      "pred_draw": 0.2423721694129898,
+      "act_draw": 0.2366412213740458,
+      "draw_bias": -0.005730948038944,
+      "pred_away": 0.33755816149496004,
+      "act_away": 0.2824427480916031,
+      "away_bias": -0.05511541340335696,
+      "pred_over25": 0.5292395716622096,
+      "act_over25": 0.5076335877862596,
+      "over25_bias": -0.02160598387595003
+    },
+    {
+      "league_id": 78,
+      "league": "Bundesliga",
+      "matches": 267,
+      "outcome_accuracy": 0.550561797752809,
+      "outcome_log_loss": 0.9665008010335713,
+      "totals_accuracy": 0.6142322097378277,
+      "totals_log_loss": 0.6343969589887155,
+      "pred_home": 0.460686616853582,
+      "act_home": 0.43820224719101125,
+      "home_bias": -0.022484369662570725,
+      "pred_draw": 0.24604870593507083,
+      "act_draw": 0.24344569288389514,
+      "draw_bias": -0.00260301305117569,
+      "pred_away": 0.29326467721134725,
+      "act_away": 0.31835205992509363,
+      "away_bias": 0.025087382713746387,
+      "pred_over25": 0.6041292993223476,
+      "act_over25": 0.6292134831460674,
+      "over25_bias": 0.025084183823719797
+    },
+    {
+      "league_id": 135,
+      "league": "Serie A",
+      "matches": 325,
+      "outcome_accuracy": 0.5261538461538462,
+      "outcome_log_loss": 0.9873535084431242,
+      "totals_accuracy": 0.5446153846153846,
+      "totals_log_loss": 0.7958769969419408,
+      "pred_home": 0.40836036110694784,
+      "act_home": 0.40307692307692305,
+      "home_bias": -0.00528343803002479,
+      "pred_draw": 0.29955824568312456,
+      "act_draw": 0.2553846153846154,
+      "draw_bias": -0.04417363029850918,
+      "pred_away": 0.2920813932099276,
+      "act_away": 0.3415384615384615,
+      "away_bias": 0.049457068328533915,
+      "pred_over25": 0.42343910135757323,
+      "act_over25": 0.4646153846153846,
+      "over25_bias": 0.041176283257811364
+    },
+    {
+      "league_id": 140,
+      "league": "La Liga",
+      "matches": 310,
+      "outcome_accuracy": 0.5387096774193548,
+      "outcome_log_loss": 0.9747711419541903,
+      "totals_accuracy": 0.5419354838709678,
+      "totals_log_loss": 0.730061260553798,
+      "pred_home": 0.4745626894118955,
+      "act_home": 0.4870967741935484,
+      "home_bias": 0.01253408478165291,
+      "pred_draw": 0.25697255844759737,
+      "act_draw": 0.25161290322580643,
+      "draw_bias": -0.005359655221790938,
+      "pred_away": 0.26846475214050713,
+      "act_away": 0.26129032258064516,
+      "away_bias": -0.007174429559861972,
+      "pred_over25": 0.49569141213890877,
+      "act_over25": 0.5096774193548387,
+      "over25_bias": 0.013986007215929908
+    }
+  ],
+  "worst_leagues": [
+    {
+      "league": "Premier League",
+      "matches": 324,
+      "outcome_log_loss": 1.051818509538699,
+      "totals_log_loss": 0.7148582464692642,
+      "max_abs_bias": 0.07690003604393603
+    },
+    {
+      "league": "Ligue 1",
+      "matches": 262,
+      "outcome_log_loss": 1.0076806294937042,
+      "totals_log_loss": 0.8186380624625538,
+      "max_abs_bias": 0.0608463614423011
+    },
+    {
+      "league": "Serie A",
+      "matches": 325,
+      "outcome_log_loss": 0.9873535084431242,
+      "totals_log_loss": 0.7958769969419408,
+      "max_abs_bias": 0.049457068328533915
+    },
+    {
+      "league": "La Liga",
+      "matches": 310,
+      "outcome_log_loss": 0.9747711419541903,
+      "totals_log_loss": 0.730061260553798,
+      "max_abs_bias": 0.013986007215929908
+    },
+    {
+      "league": "Bundesliga",
+      "matches": 267,
+      "outcome_log_loss": 0.9665008010335713,
+      "totals_log_loss": 0.6343969589887155,
+      "max_abs_bias": 0.025087382713746387
+    }
+  ],
+  "roi_by_type": [
+    {
+      "best_bet_type": "1X2",
+      "best_bet_outcome": "Draw",
+      "bets": 7,
+      "profit": -7.0,
+      "wins": 0,
+      "roi": -1.0,
+      "hit_rate": 0.0
+    },
+    {
+      "best_bet_type": "TOTAL",
+      "best_bet_outcome": "Under2.5",
+      "bets": 20,
+      "profit": -2.796,
+      "wins": 9,
+      "roi": -0.13979999999999998,
+      "hit_rate": 0.45
+    },
+    {
+      "best_bet_type": "1X2",
+      "best_bet_outcome": "Away",
+      "bets": 10,
+      "profit": -0.33999999999999986,
+      "wins": 4,
+      "roi": -0.03399999999999999,
+      "hit_rate": 0.4
+    },
+    {
+      "best_bet_type": "TOTAL",
+      "best_bet_outcome": "Over2.5",
+      "bets": 204,
+      "profit": 36.77278571428571,
+      "wins": 126,
+      "roi": 0.18025875350140055,
+      "hit_rate": 0.6176470588235294
+    },
+    {
+      "best_bet_type": "1X2",
+      "best_bet_outcome": "Home",
+      "bets": 1,
+      "profit": 0.6419999999999999,
+      "wins": 1,
+      "roi": 0.6419999999999999,
+      "hit_rate": 1.0
+    }
+  ],
+  "toxic_segments": [
+    {
+      "league": "Serie A",
+      "best_bet_type": "1X2",
+      "best_bet_outcome": "Draw",
+      "bet_rating": "Strong",
+      "bets": 6,
+      "profit": -6.0,
+      "wins": 0,
+      "roi": -1.0,
+      "hit_rate": 0.0
+    },
+    {
+      "league": "La Liga",
+      "best_bet_type": "TOTAL",
+      "best_bet_outcome": "Over2.5",
+      "bet_rating": "Strong",
+      "bets": 23,
+      "profit": -5.265,
+      "wins": 9,
+      "roi": -0.22891304347826086,
+      "hit_rate": 0.391304347826087
+    },
+    {
+      "league": "Ligue 1",
+      "best_bet_type": "TOTAL",
+      "best_bet_outcome": "Under2.5",
+      "bet_rating": "Strong",
+      "bets": 6,
+      "profit": -0.5639999999999996,
+      "wins": 3,
+      "roi": -0.09399999999999993,
+      "hit_rate": 0.5
+    },
+    {
+      "league": "Ligue 1",
+      "best_bet_type": "TOTAL",
+      "best_bet_outcome": "Over2.5",
+      "bet_rating": "Medium",
+      "bets": 16,
+      "profit": -1.447999999999999,
+      "wins": 8,
+      "roi": -0.09049999999999994,
+      "hit_rate": 0.5
+    },
+    {
+      "league": "Premier League",
+      "best_bet_type": "TOTAL",
+      "best_bet_outcome": "Under2.5",
+      "bet_rating": "Strong",
+      "bets": 7,
+      "profit": -0.512,
+      "wins": 3,
+      "roi": -0.07314285714285715,
+      "hit_rate": 0.42857142857142855
+    },
+    {
+      "league": "Bundesliga",
+      "best_bet_type": "1X2",
+      "best_bet_outcome": "Away",
+      "bet_rating": "Strong",
+      "bets": 5,
+      "profit": -0.1519999999999997,
+      "wins": 2,
+      "roi": -0.030399999999999937,
+      "hit_rate": 0.4
+    }
+  ],
+  "outcome_confidence_bins": [
+    {
+      "bin": "(-0.001, 0.35]",
+      "n": 17,
+      "avg_p": 0.34297075229042717,
+      "hit_rate": 0.23529411764705882,
+      "bias": -0.10767663464336835
+    },
+    {
+      "bin": "(0.35, 0.4]",
+      "n": 203,
+      "avg_p": 0.3808995987154772,
+      "hit_rate": 0.35960591133004927,
+      "bias": -0.021293687385427917
+    },
+    {
+      "bin": "(0.4, 0.45]",
+      "n": 270,
+      "avg_p": 0.42326827007422363,
+      "hit_rate": 0.4185185185185185,
+      "bias": -0.004749751555705117
+    },
+    {
+      "bin": "(0.45, 0.5]",
+      "n": 264,
+      "avg_p": 0.4738108520471089,
+      "hit_rate": 0.4810606060606061,
+      "bias": 0.0072497540134972005
+    },
+    {
+      "bin": "(0.5, 0.55]",
+      "n": 258,
+      "avg_p": 0.5249018707492437,
+      "hit_rate": 0.5348837209302325,
+      "bias": 0.00998185018098885
+    },
+    {
+      "bin": "(0.55, 0.6]",
+      "n": 166,
+      "avg_p": 0.5751323527065542,
+      "hit_rate": 0.6204819277108434,
+      "bias": 0.045349575004289266
+    },
+    {
+      "bin": "(0.6, 0.65]",
+      "n": 144,
+      "avg_p": 0.6230143463420798,
+      "hit_rate": 0.6319444444444444,
+      "bias": 0.00893009810236467
+    },
+    {
+      "bin": "(0.65, 0.7]",
+      "n": 86,
+      "avg_p": 0.6721335195995425,
+      "hit_rate": 0.6627906976744186,
+      "bias": -0.009342821925123923
+    },
+    {
+      "bin": "(0.7, 1.01]",
+      "n": 80,
+      "avg_p": 0.7319861352584641,
+      "hit_rate": 0.7875,
+      "bias": 0.05551386474153586
+    }
+  ],
+  "totals_confidence_bins": [
+    {
+      "bin": "(0.5, 0.55]",
+      "n": 434,
+      "avg_p": 0.5271679754770608,
+      "hit_rate": 0.5092165898617511,
+      "bias": -0.017951385615309734
+    },
+    {
+      "bin": "(0.55, 0.6]",
+      "n": 417,
+      "avg_p": 0.5834842839638783,
+      "hit_rate": 0.5251798561151079,
+      "bias": -0.058304427848770435
+    },
+    {
+      "bin": "(0.6, 0.65]",
+      "n": 281,
+      "avg_p": 0.6219622853809141,
+      "hit_rate": 0.5302491103202847,
+      "bias": -0.09171317506062948
+    },
+    {
+      "bin": "(0.65, 0.7]",
+      "n": 231,
+      "avg_p": 0.6774413905279802,
+      "hit_rate": 0.658008658008658,
+      "bias": -0.019432732519322204
+    },
+    {
+      "bin": "(0.7, 0.75]",
+      "n": 42,
+      "avg_p": 0.7195237594651605,
+      "hit_rate": 0.9285714285714286,
+      "bias": 0.20904766910626815
+    },
+    {
+      "bin": "(0.75, 0.8]",
+      "n": 31,
+      "avg_p": 0.7786419985591568,
+      "hit_rate": 0.6451612903225806,
+      "bias": -0.1334807082365762
+    },
+    {
+      "bin": "(0.8, 1.01]",
+      "n": 51,
+      "avg_p": 0.9074255984467252,
+      "hit_rate": 0.7647058823529411,
+      "bias": -0.1427197160937841
+    }
+  ]
+}

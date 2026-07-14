@@ -1,20 +1,25 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const MatchModalLazy = lazy(() =>
   import("@/pages/MatchSchedulePage").then((mod) => ({ default: mod.MatchModal }))
 );
 
-const MONTHS_RU = ["янв","фев","мар","апр","мая","июн","июл","авг","сент","окт","ноя","дек"];
 const FALLBACK =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#eee"/></svg>`);
 
-const fmtDate = (iso) => {
+const fmtDate = (iso, language) => {
   if (!iso) return "—";
   const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2,"0")} ${MONTHS_RU[d.getMonth()]} · ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  return d.toLocaleString(language === "ru" ? "ru-RU" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).replace(",", " ·");
 };
 
 function useImg(src) {
@@ -34,7 +39,7 @@ function Logo({ id, alt }) {
   );
 }
 
-function MatchRow({ m, onOpen }) {
+function MatchRow({ m, onOpen, language }) {
   return (
     <button
       onClick={() => onOpen(m)}
@@ -47,7 +52,7 @@ function MatchRow({ m, onOpen }) {
         <span className="truncate text-white/90 text-[14px]">{m.home_team}</span>
       </div>
 
-      <span className="text-white/30 text-[12px] font-light">vs</span>
+      <span className="text-white/30 text-[12px] font-light">{language === "ru" ? "vs" : "vs"}</span>
 
       <div className="flex items-center gap-2 min-w-0 justify-end">
         <span className="truncate text-white/90 text-[14px] text-right">
@@ -59,13 +64,14 @@ function MatchRow({ m, onOpen }) {
       <div className="ml-4 px-3 py-1 rounded-full bg-violet-500/15
                       border border-violet-500/30 text-violet-200
                       text-[12px] tabular-nums shadow-inner">
-        {fmtDate(m.kickoff)}
+        {fmtDate(m.kickoff, language)}
       </div>
     </button>
   );
 }
 
 export default function TopEloMatchesCard({ league, leagueId, season, top = 3 }) {
+  const { language } = useLanguage();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalMatch, setModalMatch] = useState(null);
@@ -104,10 +110,12 @@ export default function TopEloMatchesCard({ league, leagueId, season, top = 3 })
 
         <div>
           <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-            Матчи тура по Elo
+            {language === "ru" ? "Матчи тура по Elo" : "Elo matchday games"}
           </div>
           <div className="text-sm text-white/85">
-            Игры с наибольшим уровнем силы по рейтингу EdgeScore Elo.
+            {language === "ru"
+              ? "Игры с наибольшим уровнем силы по рейтингу EdgeScore Elo."
+              : "Matches with the highest strength level by EdgeScore Elo rating."}
           </div>
         </div>
 
@@ -120,7 +128,7 @@ export default function TopEloMatchesCard({ league, leagueId, season, top = 3 })
         ) : (
           <div className="space-y-3">
             {rows.map((m) => (
-              <MatchRow key={m.fixture_id} m={m} onOpen={open} />
+              <MatchRow key={m.fixture_id} m={m} onOpen={open} language={language} />
             ))}
           </div>
         )}

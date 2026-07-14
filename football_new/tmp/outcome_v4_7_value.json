@@ -1,0 +1,119 @@
+{
+  "dataset": {
+    "rows": 6354,
+    "train": 5399,
+    "cal": 738,
+    "val": 217,
+    "cal_candidates": 21,
+    "val_candidates": 3
+  },
+  "overall": {
+    "base_probs": {
+      "label": "base_probs",
+      "n": 217,
+      "logloss": 1.018924,
+      "accuracy": 0.511521
+    }
+  },
+  "baseline_rule": {
+    "rule": {
+      "min_ev": 0.08,
+      "min_edge": 0.0,
+      "min_odds": 1.7,
+      "max_odds": 3.5
+    },
+    "cal": {
+      "bets": 21,
+      "wins": 8,
+      "hit_rate": 0.380952,
+      "avg_odds": 2.589333,
+      "avg_ev": 0.096683,
+      "profit": 1.096,
+      "roi": 0.05219
+    },
+    "val": {
+      "bets": 3,
+      "wins": 1,
+      "hit_rate": 0.333333,
+      "avg_odds": 2.552,
+      "avg_ev": 0.12075,
+      "profit": -1.2,
+      "roi": -0.4
+    },
+    "by_league": [
+      {
+        "league": "La Liga",
+        "bets": 1,
+        "wins": 1,
+        "hit_rate": 1.0,
+        "avg_odds": 1.8,
+        "avg_ev": 0.095326,
+        "profit": 0.8,
+        "roi": 0.8
+      },
+      {
+        "league": "Ligue 1",
+        "bets": 1,
+        "wins": 0,
+        "hit_rate": 0.0,
+        "avg_odds": 2.416,
+        "avg_ev": 0.111608,
+        "profit": -1.0,
+        "roi": -1.0
+      },
+      {
+        "league": "Serie A",
+        "bets": 1,
+        "wins": 0,
+        "hit_rate": 0.0,
+        "avg_odds": 3.44,
+        "avg_ev": 0.155315,
+        "profit": -1.0,
+        "roi": -1.0
+      }
+    ]
+  },
+  "value_layer": {
+    "threshold": 0.5,
+    "cal": {
+      "bets": 0,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 0.0,
+      "avg_ev": 0.0,
+      "profit": 0.0,
+      "roi": 0.0
+    },
+    "val": {
+      "bets": 2,
+      "wins": 1,
+      "hit_rate": 0.5,
+      "avg_odds": 2.62,
+      "avg_ev": 0.125321,
+      "profit": -0.2,
+      "roi": -0.1
+    },
+    "by_league": [
+      {
+        "league": "La Liga",
+        "bets": 1,
+        "wins": 1,
+        "hit_rate": 1.0,
+        "avg_odds": 1.8,
+        "avg_ev": 0.095326,
+        "profit": 0.8,
+        "roi": 0.8
+      },
+      {
+        "league": "Serie A",
+        "bets": 1,
+        "wins": 0,
+        "hit_rate": 0.0,
+        "avg_odds": 3.44,
+        "avg_ev": 0.155315,
+        "profit": -1.0,
+        "roi": -1.0
+      }
+    ]
+  }
+}

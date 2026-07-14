@@ -30,6 +30,10 @@ from config import (
     OUTCOME_XGB_PARAMS_BY_LEAGUE,
     OUTCOMES_USE_SELECTED_TEAM_POTENTIAL,
     OUTCOMES_TEAM_POTENTIAL_SELECTED_FEATURES,
+    USE_SELECTED_PLAYER_CONTRIBUTION,
+    PLAYER_CONTRIBUTION_SELECTED_FEATURES,
+    USE_SELECTED_LINEUP_STRENGTH,
+    LINEUP_STRENGTH_SELECTED_FEATURES,
 )
 
 
@@ -109,6 +113,12 @@ def _predict_with_draw_rule(
     return preds
 
 
+def _apply_league_prob_bias_scaled(P: np.ndarray, delta: np.ndarray, scale: float) -> np.ndarray:
+    if scale <= 0:
+        return sanitize_prob(P)
+    return sanitize_prob(P + (delta.reshape(1, -1) * float(scale)))
+
+
 # =========================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # =========================
@@ -131,6 +141,8 @@ MARKET_COLS_ALL = MARKET_COLS_1X2 + [
 ]
 
 TEAM_POTENTIAL_PREFIX = "tp_"
+PLAYER_CONTRIBUTION_PREFIXES = ("home_pl_", "away_pl_", "pl_")
+LINEUP_STRENGTH_PREFIXES = ("home_ls_", "away_ls_", "ls_")
 
 
 def build_safe_feature_list(df: pd.DataFrame) -> List[str]:
@@ -163,6 +175,8 @@ def build_safe_feature_list(df: pd.DataFrame) -> List[str]:
 
     safe = []
     selected_team_potential = set(OUTCOMES_TEAM_POTENTIAL_SELECTED_FEATURES)
+    selected_player_contribution = set(PLAYER_CONTRIBUTION_SELECTED_FEATURES)
+    selected_lineup_strength = set(LINEUP_STRENGTH_SELECTED_FEATURES)
     for c in num_cols:
         lc = c.lower()
         # выкидываем явные goal / score если не агрегаты
@@ -172,6 +186,10 @@ def build_safe_feature_list(df: pd.DataFrame) -> List[str]:
         ):
             continue
         if c.startswith(TEAM_POTENTIAL_PREFIX) and OUTCOMES_USE_SELECTED_TEAM_POTENTIAL and c not in selected_team_potential:
+            continue
+        if c.startswith(PLAYER_CONTRIBUTION_PREFIXES) and USE_SELECTED_PLAYER_CONTRIBUTION and c not in selected_player_contribution:
+            continue
+        if c.startswith(LINEUP_STRENGTH_PREFIXES) and USE_SELECTED_LINEUP_STRENGTH and c not in selected_lineup_strength:
             continue
         safe.append(c)
 
@@ -395,7 +413,11 @@ def _train_stage_models(
 # ОСНОВНОЙ ТРЕНЕР
 # =========================
 
-def _train_outcomes_single(df_full: pd.DataFrame, league_id: Optional[int] = None) -> Dict[str, Any]:
+def _train_outcomes_single(
+    df_full: pd.DataFrame,
+    league_id: Optional[int] = None,
+    feature_cols_override: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
     df_full — результат build_dataset(return_all=True) или аналогичный:
       - есть home_goals, away_goals
@@ -431,7 +453,7 @@ def _train_outcomes_single(df_full: pd.DataFrame, league_id: Optional[int] = Non
     print(f"[OUT] TR={len(tr)}  CAL={len(cal)}  VAL={len(val)}")
 
     # выбор фичей
-    feature_cols = build_safe_feature_list(train)
+    feature_cols = feature_cols_override or build_safe_feature_list(train)
     feature_priors = (
         train[feature_cols]
         .replace([np.inf, -np.inf], np.nan)
@@ -721,8 +743,20 @@ def _train_outcomes_single(df_full: pd.DataFrame, league_id: Optional[int] = Non
             delta = mean_actual - mean_pred
             if np.max(np.abs(delta)) < 0.01:
                 continue
-            league_prob_bias[int(lid)] = delta.tolist()
-            print(f"[OUT] league prob bias L{int(lid)} -> delta={delta}")
+            best_scale = 0.0
+            best_ll = log_loss(y_cal_3[mask.values], P_cal_final[mask.values], labels=[0, 1, 2])
+            for scale in np.linspace(0.0, 1.0, 9):
+                P_try = _apply_league_prob_bias_scaled(P_cal_final[mask.values], delta, float(scale))
+                ll_try = log_loss(y_cal_3[mask.values], P_try, labels=[0, 1, 2])
+                if ll_try < best_ll:
+                    best_ll = float(ll_try)
+                    best_scale = float(scale)
+            if best_scale > 0:
+                league_prob_bias[int(lid)] = (delta * best_scale).tolist()
+                print(
+                    f"[OUT] league prob bias L{int(lid)} -> delta={delta}, "
+                    f"scale={best_scale:.2f}, ll={best_ll:.4f}"
+                )
     else:
         print("[OUT] league_id missing in CAL -> skip league bias computation")
 
@@ -813,7 +847,11 @@ def _train_outcomes_single(df_full: pd.DataFrame, league_id: Optional[int] = Non
     }
 
 
-def train_outcomes(df_full: pd.DataFrame) -> Dict[str, Any]:
+def train_outcomes(
+    df_full: pd.DataFrame,
+    feature_cols_override: Optional[List[str]] = None,
+    save_path: Optional[str] = None,
+) -> Dict[str, Any]:
     league_models: Dict[int, Dict[str, Any]] = {}
     league_metrics: Dict[int, Any] = {}
 
@@ -829,7 +867,11 @@ def train_outcomes(df_full: pd.DataFrame) -> Dict[str, Any]:
             print(f"[OUT] L{lid}: нет матчей, пропуск")
             continue
         try:
-            res = _train_outcomes_single(subset, league_id=lid)
+            res = _train_outcomes_single(
+                subset,
+                league_id=lid,
+                feature_cols_override=feature_cols_override,
+            )
             league_models[lid] = {**res["bundle"], "league_id": lid}
             league_metrics[lid] = res["metrics"]
             print(f"[OUT] L{lid}: модель обучена")
@@ -839,8 +881,9 @@ def train_outcomes(df_full: pd.DataFrame) -> Dict[str, Any]:
     if not league_models:
         raise RuntimeError("train_outcomes(): не удалось обучить ни одной лиги")
 
-    joblib.dump(league_models, OUTCOME_MODEL_PATH)
-    print(f"[OUT] Outcome models saved -> {OUTCOME_MODEL_PATH}")
+    target_path = save_path or OUTCOME_MODEL_PATH
+    joblib.dump(league_models, target_path)
+    print(f"[OUT] Outcome models saved -> {target_path}")
     return league_metrics
 
 

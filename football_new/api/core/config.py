@@ -57,7 +57,7 @@ class Settings:
     SMTP_LOGIN: str = os.getenv("SMTP_LOGIN", "")
     SMTP_PASS: str = os.getenv("SMTP_PASS", os.getenv("YANDEX_APP_PASSWORD", ""))
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    CORS_ALLOW_ORIGINS: list[str] = [
+    _raw_cors_origins = [
         origin.strip()
         for origin in os.getenv(
             "CORS_ALLOW_ORIGINS",
@@ -65,6 +65,13 @@ class Settings:
         ).split(",")
         if origin.strip()
     ]
+    _native_cors_origins = [
+        "capacitor://localhost",
+        "ionic://localhost",
+        "http://localhost",
+        "https://localhost",
+    ]
+    CORS_ALLOW_ORIGINS: list[str] = list(dict.fromkeys(_raw_cors_origins + _native_cors_origins))
     YANDEX_APP_PASSWORD: str = os.getenv("YANDEX_APP_PASSWORD", os.getenv("SMTP_PASS", ""))
 
     TESTING: bool = os.getenv("TESTING", "False").lower() == "true"

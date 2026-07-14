@@ -1,0 +1,295 @@
+{
+  "good_segment_criteria": {
+    "status": "WATCH",
+    "min_n": 15,
+    "roi_gt": 0.0,
+    "abs_calibration_gap_lte": 0.06,
+    "model_minus_market_logloss_lte": 0.01
+  },
+  "kept_segments": [
+    {
+      "league": 39,
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.26-0.30",
+      "n": 46,
+      "roi": 0.2120652173913043,
+      "avg_ev": -0.0582009920814389,
+      "model_minus_market_logloss": 0.0044464997346955,
+      "calibration_gap": -0.0587909415538482
+    },
+    {
+      "league": 39,
+      "outcome": "Home",
+      "odds_bucket": "1.70-2.00",
+      "edge_bucket": "0.08-0.12",
+      "draw_risk_bucket": "0.26-0.30",
+      "n": 18,
+      "roi": 0.1153888888888888,
+      "avg_ev": 0.1315702333569161,
+      "model_minus_market_logloss": -0.007385096851367,
+      "calibration_gap": 0.017126680711333
+    },
+    {
+      "league": 39,
+      "outcome": "Home",
+      "odds_bucket": "2.00-2.40",
+      "edge_bucket": "0.08-0.12",
+      "draw_risk_bucket": "0.34+",
+      "n": 29,
+      "roi": 0.0650344827586206,
+      "avg_ev": 0.1800424016990336,
+      "model_minus_market_logloss": -0.0039452780672939,
+      "calibration_gap": 0.053868162340913
+    },
+    {
+      "league": 39,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.30-0.34",
+      "n": 84,
+      "roi": 0.0579404761904762,
+      "avg_ev": -0.0642189340913845,
+      "model_minus_market_logloss": -0.0025069295503457,
+      "calibration_gap": -0.0344397420252328
+    },
+    {
+      "league": 61,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.30-0.34",
+      "n": 42,
+      "roi": 0.0669047619047618,
+      "avg_ev": -0.0485617897817808,
+      "model_minus_market_logloss": 0.0023139051626827,
+      "calibration_gap": -0.0344133812478627
+    },
+    {
+      "league": 61,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.34+",
+      "n": 16,
+      "roi": 0.04225,
+      "avg_ev": -0.06316241061962,
+      "model_minus_market_logloss": 0.0065380932713422,
+      "calibration_gap": -0.0416491990978518
+    },
+    {
+      "league": 78,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.26-0.30",
+      "n": 23,
+      "roi": 0.1396521739130435,
+      "avg_ev": -0.0510696125895127,
+      "model_minus_market_logloss": -0.0029311172291363,
+      "calibration_gap": -0.0515101088852691
+    },
+    {
+      "league": 78,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "0.02-0.05",
+      "draw_risk_bucket": "0.34+",
+      "n": 41,
+      "roi": 0.0562439024390244,
+      "avg_ev": 0.0776354160537285,
+      "model_minus_market_logloss": 0.0007778918866748,
+      "calibration_gap": 0.0042557245010981
+    },
+    {
+      "league": 135,
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "edge_bucket": "0.02-0.05",
+      "draw_risk_bucket": "0.22-0.26",
+      "n": 19,
+      "roi": 0.3378947368421052,
+      "avg_ev": 0.1241808896283742,
+      "model_minus_market_logloss": -0.0102910376308427,
+      "calibration_gap": -0.0417584777250693
+    },
+    {
+      "league": 135,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "0.05-0.08",
+      "draw_risk_bucket": "0.34+",
+      "n": 23,
+      "roi": 0.3003478260869565,
+      "avg_ev": 0.1768056933522019,
+      "model_minus_market_logloss": -0.0222512117072206,
+      "calibration_gap": -0.0514088184854949
+    },
+    {
+      "league": 135,
+      "outcome": "Draw",
+      "odds_bucket": "2.40-3.20",
+      "edge_bucket": "0.02-0.05",
+      "draw_risk_bucket": "0.34+",
+      "n": 41,
+      "roi": 0.1937073170731708,
+      "avg_ev": 0.0573472194495889,
+      "model_minus_market_logloss": -0.0112506921557492,
+      "calibration_gap": -0.0428242012502993
+    },
+    {
+      "league": 135,
+      "outcome": "Away",
+      "odds_bucket": "2.40-3.20",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.34+",
+      "n": 28,
+      "roi": 0.0836428571428571,
+      "avg_ev": -0.0471493768371486,
+      "model_minus_market_logloss": -0.0062067039725218,
+      "calibration_gap": -0.0487462937660693
+    },
+    {
+      "league": 135,
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "edge_bucket": "0.02-0.05",
+      "draw_risk_bucket": "0.26-0.30",
+      "n": 17,
+      "roi": 0.0574117647058823,
+      "avg_ev": 0.0966964340753863,
+      "model_minus_market_logloss": -0.0018520316868203,
+      "calibration_gap": 0.023712218011726
+    },
+    {
+      "league": 135,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "0.02-0.05",
+      "draw_risk_bucket": "0.34+",
+      "n": 42,
+      "roi": 0.0544761904761905,
+      "avg_ev": 0.0783872199285022,
+      "model_minus_market_logloss": -0.004776016662532,
+      "calibration_gap": 0.0111106035783981
+    },
+    {
+      "league": 135,
+      "outcome": "Home",
+      "odds_bucket": "<1.55",
+      "edge_bucket": "0.05-0.08",
+      "draw_risk_bucket": "0.22-0.26",
+      "n": 15,
+      "roi": 0.0204,
+      "avg_ev": 0.0463502689770833,
+      "model_minus_market_logloss": -0.0029312593820972,
+      "calibration_gap": 0.0137339271958949
+    },
+    {
+      "league": 140,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "0.02-0.05",
+      "draw_risk_bucket": "0.30-0.34",
+      "n": 34,
+      "roi": 0.1069411764705881,
+      "avg_ev": 0.0651786574285313,
+      "model_minus_market_logloss": -0.0043697584390591,
+      "calibration_gap": -0.0152879601428058
+    },
+    {
+      "league": 140,
+      "outcome": "Draw",
+      "odds_bucket": "3.20-4.00",
+      "edge_bucket": "-0.02-0.02",
+      "draw_risk_bucket": "0.30-0.34",
+      "n": 34,
+      "roi": 0.013,
+      "avg_ev": -0.0315280383666444,
+      "model_minus_market_logloss": 0.0021510035463013,
+      "calibration_gap": -0.013996486734324
+    }
+  ],
+  "overall": {
+    "bets": 552,
+    "wins": 190,
+    "hit_rate": 0.3442028985507246,
+    "avg_odds": 3.397868961352657,
+    "avg_ev": 0.023022851400799158,
+    "roi": 0.10661050724637679,
+    "profit": 58.84899999999999,
+    "segments": 17
+  },
+  "by_league": [
+    {
+      "league": 135,
+      "bets": 185,
+      "wins": 69,
+      "hit_rate": 0.372972972972973,
+      "avg_odds": 3.3218702702702707,
+      "avg_ev": 0.0707479889025278,
+      "roi": 0.14692972972972973,
+      "profit": 27.182,
+      "markets": [
+        "Away",
+        "Draw",
+        "Home"
+      ]
+    },
+    {
+      "league": 39,
+      "bets": 177,
+      "wins": 63,
+      "hit_rate": 0.3559322033898305,
+      "avg_odds": 3.3305480225988706,
+      "avg_ev": -0.002723967512576394,
+      "roi": 0.10499999999999997,
+      "profit": 18.584999999999994,
+      "markets": [
+        "Draw",
+        "Home"
+      ]
+    },
+    {
+      "league": 78,
+      "bets": 64,
+      "wins": 19,
+      "hit_rate": 0.296875,
+      "avg_odds": 3.678375,
+      "avg_ev": 0.03138204638506367,
+      "roi": 0.08621875000000004,
+      "profit": 5.5180000000000025,
+      "markets": [
+        "Draw"
+      ]
+    },
+    {
+      "league": 61,
+      "bets": 58,
+      "wins": 18,
+      "hit_rate": 0.3103448275862069,
+      "avg_odds": 3.4611724137931033,
+      "avg_ev": -0.05258954725428821,
+      "roi": 0.06010344827586208,
+      "profit": 3.4860000000000007,
+      "markets": [
+        "Draw"
+      ]
+    },
+    {
+      "league": 140,
+      "bets": 68,
+      "wins": 21,
+      "hit_rate": 0.3088235294117647,
+      "avg_odds": 3.4618627450980393,
+      "avg_ev": 0.016825309530943452,
+      "roi": 0.05997058823529408,
+      "profit": 4.077999999999998,
+      "markets": [
+        "Draw"
+      ]
+    }
+  ]
+}

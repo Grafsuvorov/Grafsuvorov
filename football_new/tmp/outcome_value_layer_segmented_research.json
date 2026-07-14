@@ -1,0 +1,129 @@
+{
+  "base_weights": {
+    "catboost": 0.8,
+    "poisson": 0.1,
+    "market": 0.1
+  },
+  "baseline_rule": {
+    "label": "baseline_rule",
+    "bets": 332,
+    "wins": 132,
+    "profit": -22.372999999999998,
+    "roi": -0.06738855421686746,
+    "hit_rate": 0.39759036144578314
+  },
+  "segmented_meta_rule": {
+    "label": "segmented_meta_rule",
+    "bets": 384,
+    "wins": 152,
+    "profit": -13.807000000000004,
+    "roi": -0.03595572916666668,
+    "hit_rate": 0.3958333333333333
+  },
+  "league_config": {
+    "39": {
+      "active": true,
+      "thr_ev_meta": 0.14,
+      "thr_draw": 0.26,
+      "bets": 247,
+      "roi": 0.10510121457489878
+    },
+    "78": {
+      "active": true,
+      "thr_ev_meta": 0.04,
+      "thr_draw": 0.22,
+      "bets": 16,
+      "roi": 0.26625
+    },
+    "135": {
+      "active": true,
+      "thr_ev_meta": 0.14,
+      "thr_draw": 0.26,
+      "bets": 33,
+      "roi": 0.19424242424242424
+    },
+    "140": {
+      "active": true,
+      "thr_ev_meta": 0.14,
+      "thr_draw": 0.24,
+      "bets": 32,
+      "roi": 0.0953125
+    }
+  },
+  "baseline_by_league": [
+    {
+      "league_id": 39,
+      "bets": 88,
+      "wins": 34,
+      "profit": -11.222000000000001,
+      "roi": -0.1275227272727273,
+      "hit_rate": 0.38636363636363635
+    },
+    {
+      "league_id": 61,
+      "bets": 32,
+      "wins": 11,
+      "profit": -5.319333333333335,
+      "roi": -0.1662291666666667,
+      "hit_rate": 0.34375
+    },
+    {
+      "league_id": 78,
+      "bets": 97,
+      "wins": 41,
+      "profit": 2.0379999999999985,
+      "roi": 0.0210103092783505,
+      "hit_rate": 0.422680412371134
+    },
+    {
+      "league_id": 135,
+      "bets": 29,
+      "wins": 12,
+      "profit": -1.620000000000001,
+      "roi": -0.05586206896551728,
+      "hit_rate": 0.41379310344827586
+    },
+    {
+      "league_id": 140,
+      "bets": 86,
+      "wins": 34,
+      "profit": -6.2496666666666645,
+      "roi": -0.07267054263565889,
+      "hit_rate": 0.3953488372093023
+    }
+  ],
+  "segmented_by_league": [
+    {
+      "league_id": 39,
+      "bets": 303,
+      "wins": 117,
+      "profit": -8.719000000000005,
+      "roi": -0.02877557755775579,
+      "hit_rate": 0.38613861386138615
+    },
+    {
+      "league_id": 78,
+      "bets": 13,
+      "wins": 6,
+      "profit": -2.2279999999999998,
+      "roi": -0.17138461538461536,
+      "hit_rate": 0.46153846153846156
+    },
+    {
+      "league_id": 135,
+      "bets": 28,
+      "wins": 14,
+      "profit": 5.026,
+      "roi": 0.1795,
+      "hit_rate": 0.5
+    },
+    {
+      "league_id": 140,
+      "bets": 40,
+      "wins": 15,
+      "profit": -7.886000000000001,
+      "roi": -0.19715000000000002,
+      "hit_rate": 0.375
+    }
+  ]
+}

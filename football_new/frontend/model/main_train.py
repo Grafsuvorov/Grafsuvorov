@@ -12,6 +12,7 @@ from features.h2h import build_h2h_features
 from features.h2h_recent import build_h2h_recent_features
 from features.build_matrix import build_feature_matrix
 from features.league import build_league_context_features
+from features.match_context import build_match_context_features
 from features.draw_diff import add_draw_diff_features
 from features.outcome_script import build_result_script_features, add_outcome_scenario_features
 
@@ -44,6 +45,7 @@ def main():
         build_h2h_features(df_all, mode="train"),
         build_h2h_recent_features(df_all, window=5),
         build_league_context_features(df_all, window=60),
+        build_match_context_features(df_all, lookback=5),
     ]
     df_all = build_feature_matrix(schedule=df_all, feats_list=feats_list, target_df=None)
     df_all = add_draw_diff_features(df_all)

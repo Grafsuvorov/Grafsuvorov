@@ -121,6 +121,8 @@ with DAG(
         postgres_conn_id="dwh_postgres",
         api_variable_key="API_FOOTBALL_KEY",
         throttle_sec=0.5,
+        request_timeout_sec=12,
+        max_fixtures_per_run=80,
         retries=1,
         retry_delay=timedelta(minutes=2),
         pool=API_POOL,

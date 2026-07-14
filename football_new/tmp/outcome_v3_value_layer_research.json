@@ -1,0 +1,86 @@
+{
+  "candidate_rows": 6876,
+  "train_rows": 6276,
+  "val_rows": 600,
+  "best_rule": {
+    "min_ev": 0.08,
+    "min_edge": 0.0,
+    "min_score": 0.2,
+    "max_draw": 0.34,
+    "watch_only": true,
+    "bets": 32,
+    "roi": 0.416875,
+    "profit": 13.34
+  },
+  "baseline_rule": {
+    "label": "baseline_rule",
+    "bets": 9,
+    "profit": -0.7639999999999998,
+    "roi": -0.08488888888888886,
+    "hit_rate": 0.4444444444444444
+  },
+  "value_layer_rule": {
+    "label": "value_layer_rule",
+    "bets": 4,
+    "profit": -4.0,
+    "roi": -1.0,
+    "hit_rate": 0.0
+  },
+  "baseline_by_league": {
+    "135": {
+      "label": "135",
+      "bets": 1,
+      "profit": 0.752,
+      "roi": 0.752,
+      "hit_rate": 1.0
+    },
+    "140": {
+      "label": "140",
+      "bets": 2,
+      "profit": -0.10000000000000009,
+      "roi": -0.050000000000000044,
+      "hit_rate": 0.5
+    },
+    "39": {
+      "label": "39",
+      "bets": 3,
+      "profit": -3.0,
+      "roi": -1.0,
+      "hit_rate": 0.0
+    },
+    "78": {
+      "label": "78",
+      "bets": 3,
+      "profit": 1.584,
+      "roi": 0.528,
+      "hit_rate": 0.6666666666666666
+    }
+  },
+  "value_by_league": {
+    "135": {
+      "label": "135",
+      "bets": 2,
+      "profit": -2.0,
+      "roi": -1.0,
+      "hit_rate": 0.0
+    },
+    "39": {
+      "label": "39",
+      "bets": 1,
+      "profit": -1.0,
+      "roi": -1.0,
+      "hit_rate": 0.0
+    },
+    "78": {
+      "label": "78",
+      "bets": 1,
+      "profit": -1.0,
+      "roi": -1.0,
+      "hit_rate": 0.0
+    }
+  },
+  "value_score_summary": {
+    "train_mean": 0.4794778650350047,
+    "val_mean": 0.4841596973102341
+  }
+}

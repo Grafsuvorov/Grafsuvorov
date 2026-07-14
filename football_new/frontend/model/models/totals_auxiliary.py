@@ -14,11 +14,22 @@ from train_totals import select_totals_feature_cols
 
 POSITIVE_TOTALS_AUX_LEAGUES = {39, 61, 78}
 AUX_EXCLUDE_COLS = {"p_base_shadow", "target_btts", "target_open4"}
+TOTALS_AUX_MAX_DELTA = 0.18
+TOTALS_AUX_MIN_PROB = 0.08
+TOTALS_AUX_MAX_PROB = 0.92
+TOTALS_AUX_BLEND_META = 0.72
+TOTALS_AUX_BLEND_BASE = 0.18
+TOTALS_AUX_BLEND_MKT = 0.10
 
 
 def _safe_prob(p: np.ndarray) -> np.ndarray:
     arr = np.asarray(p, dtype=float)
     return np.clip(arr, 1e-6, 1.0 - 1e-6)
+
+
+def _bounded_prob(p: np.ndarray) -> np.ndarray:
+    arr = np.asarray(p, dtype=float)
+    return np.clip(arr, TOTALS_AUX_MIN_PROB, TOTALS_AUX_MAX_PROB)
 
 
 def _safe_logit(p: np.ndarray) -> np.ndarray:
@@ -155,11 +166,20 @@ def _tune_meta_weights(shadow_df: pd.DataFrame) -> Dict[str, float]:
                     + w_open * (p_open - 0.5)
                     + w_mkt * (p_mkt - 0.5)
                 )
-                p = _safe_prob(_sigmoid(z))
+                p_raw = _safe_prob(_sigmoid(z))
+                p = _regularize_meta_output(p_base, p_raw, p_mkt)
                 ll = log_loss(y, p, labels=[0, 1])
                 br = brier_score_loss(y, p)
                 over_share = float((p >= 0.5).mean())
-                key = (ll, br, abs(over_share - 0.5))
+                extreme_rate = float(((p <= 0.10) | (p >= 0.90)).mean())
+                drift = float(np.mean(np.abs(p - p_base)))
+                key = (
+                    ll + 0.08 * extreme_rate + 0.03 * drift,
+                    br,
+                    abs(over_share - 0.5),
+                    extreme_rate,
+                    drift,
+                )
                 if best is None or key < best["key"]:
                     best = {
                         "key": key,
@@ -172,6 +192,21 @@ def _tune_meta_weights(shadow_df: pd.DataFrame) -> Dict[str, float]:
     return best["weights"]
 
 
+def _regularize_meta_output(p_base: np.ndarray, p_meta: np.ndarray, p_mkt: np.ndarray) -> np.ndarray:
+    p_base = _safe_prob(p_base)
+    p_meta = _safe_prob(p_meta)
+    p_mkt = np.where(np.isfinite(p_mkt), p_mkt, p_base)
+    p_mkt = _safe_prob(p_mkt)
+
+    mixed = (
+        TOTALS_AUX_BLEND_META * p_meta
+        + TOTALS_AUX_BLEND_BASE * p_base
+        + TOTALS_AUX_BLEND_MKT * p_mkt
+    )
+    delta = np.clip(mixed - p_base, -TOTALS_AUX_MAX_DELTA, TOTALS_AUX_MAX_DELTA)
+    return _bounded_prob(p_base + delta)
+
+
 def _apply_meta(p_base: np.ndarray, p_btts: np.ndarray, p_open: np.ndarray, p_mkt: np.ndarray, weights: Dict[str, float]) -> np.ndarray:
     p_mkt = np.where(np.isfinite(p_mkt), p_mkt, p_base)
     z = (
@@ -180,7 +215,8 @@ def _apply_meta(p_base: np.ndarray, p_btts: np.ndarray, p_open: np.ndarray, p_mk
         + float(weights["w_open"]) * (_safe_prob(p_open) - 0.5)
         + float(weights["w_mkt"]) * (_safe_prob(p_mkt) - 0.5)
     )
-    return _safe_prob(_sigmoid(z))
+    p_raw = _safe_prob(_sigmoid(z))
+    return _regularize_meta_output(p_base, p_raw, p_mkt)
 
 
 def train_totals_auxiliary(df_train: pd.DataFrame, p_base_train: np.ndarray) -> Dict[str, object]:

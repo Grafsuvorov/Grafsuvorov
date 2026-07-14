@@ -1,0 +1,50 @@
+{
+  "summary": {
+    "matches": 235,
+    "v62_accuracy": 0.510638,
+    "market_accuracy": 0.519149,
+    "market_beats_v62_cases": 2,
+    "actual_outcome_counts": {
+      "Home": 2
+    },
+    "v62_pred_counts": {
+      "Draw": 2
+    },
+    "recovered_home_flag_counts": {
+      "0": 2
+    },
+    "avg_v62_conf": 0.43494,
+    "avg_market_conf": 0.362836,
+    "confidence_buckets": {
+      "<=0.35": 0,
+      "0.35-0.40": 1,
+      "0.40-0.45": 0,
+      "0.45-0.50": 1,
+      "0.50+": 0
+    }
+  },
+  "top_examples": [
+    {
+      "date_utc": "2025-11-09 16:15:00+00:00",
+      "match": "Angers - Auxerre",
+      "actual_outcome": "Home",
+      "v62_pred": "Draw",
+      "v62_conf": 0.4981622595632001,
+      "market_pred": "Home",
+      "market_conf": 0.3628374136848712,
+      "recovered_home_flag": 0,
+      "window": "2025-10-21__2025-11-20"
+    },
+    {
+      "date_utc": "2025-12-05 20:00:00+00:00",
+      "match": "Lille - Marseille",
+      "actual_outcome": "Home",
+      "v62_pred": "Draw",
+      "v62_conf": 0.371717733783271,
+      "market_pred": "Home",
+      "market_conf": 0.3628339742444449,
+      "recovered_home_flag": 0,
+      "window": "2025-11-20__2025-12-20"
+    }
+  ]
+}

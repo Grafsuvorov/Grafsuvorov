@@ -1,0 +1,539 @@
+
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Agro Report</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; margin: 24px; color: #1f2937; background: #f8fafc; }
+    h1, h2 { margin: 0 0 12px 0; }
+    p { margin: 6px 0 14px 0; color: #475569; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 24px; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
+    .metric { font-size: 28px; font-weight: 700; color: #0f172a; }
+    .label { font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 8px; }
+    .section { margin: 0 0 24px 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    th { color: #475569; font-weight: 600; background: #f8fafc; position: sticky; top: 0; }
+    .bar-row { display: grid; grid-template-columns: 240px 1fr 90px; gap: 12px; align-items: center; margin: 8px 0; }
+    .bar-label, .bar-value { font-size: 13px; }
+    .bar-track { height: 16px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; background: #16a34a; border-radius: 999px; }
+    .bar-fill.alt { background: #2563eb; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .small { font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <h1>Агроотчет по базе</h1>
+  <p>Сводка по trial-данным, продуктовым слоям и погоде. Источники: Syngenta, Agroplazma, Limagrain, Lidea, MAS Seeds, KWS, пользовательские Excel 2025, Open-Meteo, NASA POWER.</p>
+
+  <div class="grid">
+    
+    <div class="card">
+      <div class="label">sources</div>
+      <div class="metric">153</div>
+    </div>
+    
+    <div class="card">
+      <div class="label">varieties</div>
+      <div class="metric">508</div>
+    </div>
+    
+    <div class="card">
+      <div class="label">trait_snapshots</div>
+      <div class="metric">233</div>
+    </div>
+    
+    <div class="card">
+      <div class="label">trial_results</div>
+      <div class="metric">2354</div>
+    </div>
+    
+    <div class="card">
+      <div class="label">trial_geo_links</div>
+      <div class="metric">2185</div>
+    </div>
+    
+    <div class="card">
+      <div class="label">weather_rows</div>
+      <div class="metric">15740</div>
+    </div>
+    
+    <div class="card">
+      <div class="label">agronomy_rows</div>
+      <div class="metric">7870</div>
+    </div>
+    
+  </div>
+
+  <div class="section">
+    <h2>Executive Summary</h2>
+    <p>
+      В базе уже разделены два класса данных: <b>trial-results</b> с фактической урожайностью и <b>product-layer</b> с официальными характеристиками гибридов.
+      Самые свежие полевые массивы сейчас дают пользовательские Excel 2025, а по Agroplazma удалось добрать еще исторический слой из demo-страниц и карты урожайности за 2020-2023.
+    </p>
+    <table><thead><tr><th>provider</th><th>trial_rows</th><th>product_rows</th></tr></thead><tbody><tr><td>Syngenta</td><td>1468</td><td>25</td></tr><tr><td>User Upload</td><td>664</td><td>99</td></tr><tr><td>Agroplazma</td><td>222</td><td>42</td></tr><tr><td>Lidea</td><td>0</td><td>22</td></tr><tr><td>MAS Seeds</td><td>0</td><td>20</td></tr><tr><td>KWS</td><td>0</td><td>16</td></tr><tr><td>Limagrain</td><td>0</td><td>9</td></tr></tbody></table>
+  </div>
+
+  <div class="section">
+    <h2>Покрытие по годам</h2>
+    <table><thead><tr><th>provider</th><th>source_type</th><th>crop</th><th>year</th><th>rows</th><th>avg_yield</th></tr></thead><tbody><tr><td>Agroplazma</td><td>map_widget</td><td>sunflower</td><td>2020</td><td>11</td><td>22.38</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>corn</td><td>2021</td><td>29</td><td>77.59</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>sorghum</td><td>2021</td><td>3</td><td>44.67</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>sunflower</td><td>2021</td><td>67</td><td>23.50</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>corn</td><td>2022</td><td>9</td><td>280.32</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>sorghum</td><td>2022</td><td>3</td><td>54.37</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>sunflower</td><td>2022</td><td>19</td><td>29.54</td></tr><tr><td>Syngenta</td><td>trial_pdf</td><td>corn</td><td>2022</td><td>176</td><td>91.81</td></tr><tr><td>Syngenta</td><td>trial_pdf</td><td>sunflower</td><td>2022</td><td>101</td><td>32.82</td></tr><tr><td>Agroplazma</td><td>trial_page</td><td>corn</td><td>2023</td><td>21</td><td>81.62</td></tr><tr><td>Agroplazma</td><td>trial_page</td><td>sorghum</td><td>2023</td><td>5</td><td>40.54</td></tr><tr><td>Agroplazma</td><td>trial_page</td><td>sunflower</td><td>2023</td><td>55</td><td>27.79</td></tr><tr><td>Syngenta</td><td>trial_pdf</td><td>corn</td><td>2023</td><td>387</td><td>93.47</td></tr><tr><td>Syngenta</td><td>trial_pdf</td><td>sunflower</td><td>2023</td><td>372</td><td>33.30</td></tr><tr><td>Syngenta</td><td>trial_pdf</td><td>corn</td><td>2024</td><td>304</td><td>91.60</td></tr><tr><td>Syngenta</td><td>trial_pdf</td><td>sunflower</td><td>2024</td><td>128</td><td>36.03</td></tr><tr><td>User Upload</td><td>excel_upload</td><td>corn</td><td>2025</td><td>427</td><td>67.28</td></tr><tr><td>User Upload</td><td>excel_upload</td><td>sunflower</td><td>2025</td><td>237</td><td>23.13</td></tr></tbody></table>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Провайдеры product-layer</h2>
+      <p>Какие официальные слои гибридов уже собраны по провайдерам, культурам и сезонам.</p>
+      <table><thead><tr><th>provider</th><th>year</th><th>crop</th><th>products</th><th>fao_filled</th><th>maturity_filled</th><th>yield_filled</th><th>oil_filled</th></tr></thead><tbody><tr><td>Agroplazma</td><td>2 025.00</td><td>corn</td><td>14</td><td>14</td><td>0</td><td>14</td><td>0</td></tr><tr><td>Agroplazma</td><td>2 025.00</td><td>sunflower</td><td>28</td><td>0</td><td>28</td><td>28</td><td>28</td></tr><tr><td>KWS</td><td>2 026.00</td><td>corn</td><td>16</td><td>16</td><td>0</td><td>16</td><td>0</td></tr><tr><td>Lidea</td><td>2 024.00</td><td>soy</td><td>2</td><td>0</td><td>2</td><td>1</td><td>2</td></tr><tr><td>Lidea</td><td></td><td>corn</td><td>11</td><td>11</td><td>11</td><td>0</td><td>0</td></tr><tr><td>Lidea</td><td></td><td>soy</td><td>3</td><td>0</td><td>3</td><td>0</td><td>3</td></tr><tr><td>Lidea</td><td></td><td>sunflower</td><td>6</td><td>0</td><td>6</td><td>0</td><td>0</td></tr><tr><td>Limagrain</td><td>2 026.00</td><td>corn</td><td>7</td><td>7</td><td>7</td><td>0</td><td>0</td></tr><tr><td>Limagrain</td><td>2 026.00</td><td>sunflower</td><td>2</td><td>0</td><td>2</td><td>0</td><td>0</td></tr><tr><td>MAS Seeds</td><td>2 025.00</td><td>corn</td><td>10</td><td>10</td><td>10</td><td>0</td><td>0</td></tr><tr><td>MAS Seeds</td><td>2 025.00</td><td>sunflower</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr><tr><td>Syngenta</td><td>2 025.00</td><td>corn</td><td>14</td><td>14</td><td>2</td><td>0</td><td>0</td></tr><tr><td>Syngenta</td><td>2 025.00</td><td>sunflower</td><td>11</td><td>0</td><td>11</td><td>0</td><td>0</td></tr><tr><td>User Upload</td><td>2 025.00</td><td>sunflower</td><td>99</td><td>0</td><td>94</td><td>0</td><td>53</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Итоги по провайдерам</h2>
+      <table><thead><tr><th>provider</th><th>products</th><th>crops</th><th>min_year</th><th>max_year</th></tr></thead><tbody><tr><td>User Upload</td><td>99</td><td>1</td><td>2025</td><td>2025</td></tr><tr><td>Agroplazma</td><td>42</td><td>2</td><td>2025</td><td>2025</td></tr><tr><td>Syngenta</td><td>25</td><td>2</td><td>2025</td><td>2025</td></tr><tr><td>Lidea</td><td>22</td><td>3</td><td>2024</td><td>2024</td></tr><tr><td>MAS Seeds</td><td>20</td><td>2</td><td>2025</td><td>2025</td></tr><tr><td>KWS</td><td>16</td><td>1</td><td>2026</td><td>2026</td></tr><tr><td>Limagrain</td><td>9</td><td>2</td><td>2026</td><td>2026</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Trial Layer по провайдерам</h2>
+      <p>Только реальные полевые результаты: PDF, Excel, demo-страницы, карта урожайности.</p>
+      <table><thead><tr><th>provider</th><th>source_type</th><th>rows</th><th>years</th><th>crops</th><th>avg_yield</th></tr></thead><tbody><tr><td>Syngenta</td><td>trial_pdf</td><td>1468</td><td>3</td><td>2</td><td>68.45</td></tr><tr><td>User Upload</td><td>excel_upload</td><td>664</td><td>1</td><td>2</td><td>51.52</td></tr><tr><td>Agroplazma</td><td>map_widget</td><td>141</td><td>3</td><td>3</td><td>52.85</td></tr><tr><td>Agroplazma</td><td>trial_page</td><td>81</td><td>1</td><td>3</td><td>42.53</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Agroplazma Trial Layer</h2>
+      <p>Исторические данные из `map_widget` и табличные demo-результаты `trial_page`.</p>
+      <table><thead><tr><th>source_type</th><th>crop</th><th>year</th><th>rows</th><th>sites</th><th>avg_yield</th></tr></thead><tbody><tr><td>map_widget</td><td>sunflower</td><td>2020</td><td>11</td><td>3</td><td>22.38</td></tr><tr><td>map_widget</td><td>corn</td><td>2021</td><td>29</td><td>18</td><td>77.59</td></tr><tr><td>map_widget</td><td>sorghum</td><td>2021</td><td>3</td><td>1</td><td>44.67</td></tr><tr><td>map_widget</td><td>sunflower</td><td>2021</td><td>67</td><td>32</td><td>23.50</td></tr><tr><td>map_widget</td><td>corn</td><td>2022</td><td>9</td><td>6</td><td>280.32</td></tr><tr><td>map_widget</td><td>sorghum</td><td>2022</td><td>3</td><td>1</td><td>54.37</td></tr><tr><td>map_widget</td><td>sunflower</td><td>2022</td><td>19</td><td>12</td><td>29.54</td></tr><tr><td>trial_page</td><td>corn</td><td>2023</td><td>21</td><td>5</td><td>81.62</td></tr><tr><td>trial_page</td><td>sorghum</td><td>2023</td><td>5</td><td>1</td><td>40.54</td></tr><tr><td>trial_page</td><td>sunflower</td><td>2023</td><td>55</td><td>11</td><td>27.79</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Agroplazma: примеры точек карты</h2>
+    <p>Это сырые точки из карты урожайности: хозяйство, гибрид, урожайность, год и координаты.</p>
+    <table><thead><tr><th>year</th><th>crop</th><th>site_name</th><th>hybrid</th><th>yield_c_ha</th><th>oil_pct</th><th>coordinates</th></tr></thead><tbody><tr><td>2022</td><td>corn</td><td>КФХ Ляшенко Е.А.</td><td>Кукуруза</td><td>2 022.00</td><td></td><td>[41.34901944824136, 44.21712560439393]</td></tr><tr><td>2022</td><td>corn</td><td>КФХ Ляшенко Е.А.</td><td>СКАП 302СВ</td><td>110.00</td><td></td><td>[41.34901944824136, 44.21712560439393]</td></tr><tr><td>2022</td><td>corn</td><td>ОПХ Родина</td><td>СКАП 303</td><td>76.20</td><td></td><td>[41.034871, 45.573781]</td></tr><tr><td>2022</td><td>corn</td><td>ООО ЮГ Агротехника</td><td>СКАП 303</td><td>65.50</td><td></td><td>[39.392886, 46.320553]</td></tr><tr><td>2022</td><td>corn</td><td>ООО ЮГ Агротехника</td><td>Матильда</td><td>62.30</td><td></td><td>[39.392886, 46.320553]</td></tr><tr><td>2022</td><td>corn</td><td>КФХ Лемеш Н.В.</td><td>СКАП 303</td><td>55.00</td><td></td><td>[40.1575394804687, 45.930177371887616]</td></tr><tr><td>2022</td><td>corn</td><td>АГАТ 7</td><td>СКАП 303</td><td>49.30</td><td></td><td>[38.72260038085927, 45.7266955358451]</td></tr><tr><td>2022</td><td>corn</td><td>ООО Агросоюз</td><td>СКАП 303</td><td>41.80</td><td></td><td>[39.10376111620996, 46.36217231516507]</td></tr><tr><td>2022</td><td>corn</td><td>ООО Агросоюз</td><td>Матильда</td><td>40.80</td><td></td><td>[39.10376111620996, 46.36217231516507]</td></tr><tr><td>2022</td><td>sorghum</td><td>АО Рассвет</td><td>Самур 68</td><td>65.40</td><td></td><td>[39.78117556152309, 45.26701869316735]</td></tr><tr><td>2022</td><td>sorghum</td><td>АО Рассвет</td><td>Салам 66</td><td>53.10</td><td></td><td>[39.78117556152309, 45.26701869316735]</td></tr><tr><td>2022</td><td>sorghum</td><td>АО Рассвет</td><td>Командор</td><td>44.60</td><td></td><td>[39.78117556152309, 45.26701869316735]</td></tr><tr><td>2022</td><td>sunflower</td><td>ООО Агрохолдинг Красногвардейский</td><td>Экселент</td><td>41.80</td><td></td><td>[41.514437, 45.845056]</td></tr><tr><td>2022</td><td>sunflower</td><td>ООО Агрохолдинг Красногвардейский</td><td>Анюта КЛП</td><td>38.50</td><td></td><td>[41.514437, 45.845056]</td></tr><tr><td>2022</td><td>sunflower</td><td>ООО Агрохолдинг Красногвардейский</td><td>Вулкан КЛП</td><td>36.90</td><td></td><td>[41.514437, 45.845056]</td></tr><tr><td>2022</td><td>sunflower</td><td>ООО Агрохолдинг Красногвардейский</td><td>Светлана КЛП</td><td>36.20</td><td></td><td>[41.514437, 45.845056]</td></tr><tr><td>2022</td><td>sunflower</td><td>ОАО САФ Русь</td><td>Ипполит</td><td>35.20</td><td></td><td>[38.807472, 45.620163]</td></tr><tr><td>2022</td><td>sunflower</td><td>ОАО САФ Русь</td><td>Светлана ОР</td><td>31.90</td><td></td><td>[38.807472, 45.620163]</td></tr><tr><td>2022</td><td>sunflower</td><td>ООО Родина</td><td>Ипполит</td><td>31.40</td><td></td><td>[39.389104, 45.391637]</td></tr><tr><td>2022</td><td>sunflower</td><td>КФХ Титоренко С.А.</td><td>Светлана</td><td>30.00</td><td></td><td>[40.62274181201143, 44.73055412244261]</td></tr></tbody></table>
+  </div>
+
+  <div class="section">
+    <h2>Кукуруза 2025 по регионам</h2>
+    <p>Показатель: средняя урожайность на зерно при 14% влажности, ц/га.</p>
+    
+            <div class="bar-row">
+              <div class="bar-label">Тульская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100.00%"></div></div>
+              <div class="bar-value">132.00 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Московская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:83.33%"></div></div>
+              <div class="bar-value">110.00 ц/га</div>
+            </div>
+
+
+            
+            <div class="bar-row">
+              <div class="bar-label">Липецкая область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:71.04%"></div></div>
+              <div class="bar-value">93.77 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Тамбовская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:61.14%"></div></div>
+              <div class="bar-value">80.70 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Курская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:60.59%"></div></div>
+              <div class="bar-value">79.98 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Республика Мордовия</div>
+              <div class="bar-track"><div class="bar-fill" style="width:54.77%"></div></div>
+              <div class="bar-value">72.29 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Пензенская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:54.73%"></div></div>
+              <div class="bar-value">72.25 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Белгородская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:52.05%"></div></div>
+              <div class="bar-value">68.71 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Нижегородская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:50.35%"></div></div>
+              <div class="bar-value">66.46 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Самарская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:43.58%"></div></div>
+              <div class="bar-value">57.53 ц/га</div>
+            </div>
+            
+    <div style="margin-top:16px;"><table><thead><tr><th>region</th><th>trials</th><th>avg_yield</th><th>min_yield</th><th>max_yield</th></tr></thead><tbody><tr><td>Тульская область</td><td>1</td><td>132.00</td><td>132.00</td><td>132.00</td></tr><tr><td>Московская область</td><td>3</td><td>110.00</td><td>110.00</td><td>110.00</td></tr><tr><td>Липецкая область</td><td>3</td><td>93.77</td><td>88.30</td><td>99.60</td></tr><tr><td>Тамбовская область</td><td>2</td><td>80.70</td><td>75.40</td><td>86.00</td></tr><tr><td>Курская область</td><td>88</td><td>79.98</td><td>38.88</td><td>108.53</td></tr><tr><td>Республика Мордовия</td><td>4</td><td>72.29</td><td>65.64</td><td>78.69</td></tr><tr><td>Пензенская область</td><td>54</td><td>72.25</td><td>42.65</td><td>100.00</td></tr><tr><td>Белгородская область</td><td>103</td><td>68.71</td><td>3.66</td><td>94.57</td></tr><tr><td>Нижегородская область</td><td>8</td><td>66.46</td><td>52.74</td><td>79.79</td></tr><tr><td>Самарская область</td><td>27</td><td>57.53</td><td>29.40</td><td>74.30</td></tr><tr><td>Краснодарский край</td><td>112</td><td>56.11</td><td>30.80</td><td>99.24</td></tr><tr><td>Саратовская область</td><td>8</td><td>53.26</td><td>27.40</td><td>77.50</td></tr><tr><td>Республика Татарстан</td><td>11</td><td>52.58</td><td>45.60</td><td>59.00</td></tr><tr><td>Оренбургская область</td><td>3</td><td>47.83</td><td>28.30</td><td>86.00</td></tr></tbody></table></div>
+  </div>
+
+  <div class="section">
+    <h2>Лучшие районы 2025</h2>
+    <table><thead><tr><th>region</th><th>district</th><th>trials</th><th>avg_yield</th></tr></thead><tbody><tr><td>Курская область</td><td>Мантуровский</td><td>4</td><td>87.33</td></tr><tr><td>Краснодарский край</td><td>Тихорецкий</td><td>9</td><td>83.99</td></tr><tr><td>Курская область</td><td>Обоянский</td><td>84</td><td>79.63</td></tr><tr><td>Пензенская область</td><td>Бековский</td><td>22</td><td>75.63</td></tr><tr><td>Нижегородская область</td><td>Дальнеконстантиновский</td><td>4</td><td>72.71</td></tr><tr><td>Республика Мордовия</td><td>Атяшевский</td><td>4</td><td>72.29</td></tr><tr><td>Саратовская область</td><td>Балашовский</td><td>3</td><td>71.80</td></tr><tr><td>Краснодарский край</td><td>Армавир</td><td>14</td><td>69.12</td></tr><tr><td>Пензенская область</td><td>Колышлейский</td><td>31</td><td>68.96</td></tr><tr><td>Белгородская область</td><td>Корочанский</td><td>103</td><td>68.71</td></tr><tr><td>Нижегородская область</td><td>Починковский</td><td>4</td><td>60.21</td></tr><tr><td>Краснодарский край</td><td>Лабинский</td><td>26</td><td>57.92</td></tr><tr><td>Самарская область</td><td>Кинельский</td><td>27</td><td>57.53</td></tr><tr><td>Республика Татарстан</td><td>Муслюмовский</td><td>4</td><td>56.15</td></tr><tr><td>Краснодарский край</td><td>Выселковский</td><td>33</td><td>52.15</td></tr><tr><td>Республика Татарстан</td><td>Балтасинский</td><td>3</td><td>50.67</td></tr><tr><td>Республика Татарстан</td><td>Сармановский</td><td>4</td><td>50.45</td></tr><tr><td>Краснодарский край</td><td>Новокубанский</td><td>30</td><td>44.46</td></tr><tr><td>Саратовская область</td><td>Самойловский</td><td>4</td><td>33.30</td></tr></tbody></table>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Топ гибридов 2025</h2>
+      
+            <div class="bar-row">
+              <div class="bar-label">СИ Чоринтос</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100.00%"></div></div>
+              <div class="bar-value">83.15 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">СИ Импульс</div>
+              <div class="bar-track"><div class="bar-fill" style="width:98.97%"></div></div>
+              <div class="bar-value">82.29 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">СИ Дипломат</div>
+              <div class="bar-track"><div class="bar-fill" style="width:97.81%"></div></div>
+              <div class="bar-value">81.33 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Жаклин</div>
+              <div class="bar-track"><div class="bar-fill" style="width:97.75%"></div></div>
+              <div class="bar-value">81.28 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">ЛГ 30189</div>
+              <div class="bar-track"><div class="bar-fill" style="width:92.84%"></div></div>
+              <div class="bar-value">77.20 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">ЛГ 30215</div>
+              <div class="bar-track"><div class="bar-fill" style="width:92.22%"></div></div>
+              <div class="bar-value">76.68 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">ЛГ 30179</div>
+              <div class="bar-track"><div class="bar-fill" style="width:90.80%"></div></div>
+              <div class="bar-value">75.50 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">СИ Озон</div>
+              <div class="bar-track"><div class="bar-fill" style="width:90.17%"></div></div>
+              <div class="bar-value">74.98 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Агура</div>
+              <div class="bar-track"><div class="bar-fill" style="width:89.40%"></div></div>
+              <div class="bar-value">74.34 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">СИ Скорпиус</div>
+              <div class="bar-track"><div class="bar-fill" style="width:88.37%"></div></div>
+              <div class="bar-value">73.48 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">КСС 3360</div>
+              <div class="bar-track"><div class="bar-fill" style="width:86.72%"></div></div>
+              <div class="bar-value">72.11 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">СИ Ротанго</div>
+              <div class="bar-track"><div class="bar-fill" style="width:86.39%"></div></div>
+              <div class="bar-value">71.83 ц/га</div>
+            </div>
+            
+    </div>
+    <div>
+      <h2>Производители 2025</h2>
+      
+            <div class="bar-row">
+              <div class="bar-label">Байер</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100.00%"></div></div>
+              <div class="bar-value">82.03 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Сатива</div>
+              <div class="bar-track"><div class="bar-fill" style="width:97.54%"></div></div>
+              <div class="bar-value">80.01 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Сингента</div>
+              <div class="bar-track"><div class="bar-fill" style="width:93.42%"></div></div>
+              <div class="bar-value">76.63 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">РАГТ</div>
+              <div class="bar-track"><div class="bar-fill" style="width:92.34%"></div></div>
+              <div class="bar-value">75.75 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Грин Лайф</div>
+              <div class="bar-track"><div class="bar-fill" style="width:92.25%"></div></div>
+              <div class="bar-value">75.67 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Лимагрен</div>
+              <div class="bar-track"><div class="bar-fill" style="width:89.75%"></div></div>
+              <div class="bar-value">73.62 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">КВС Рус</div>
+              <div class="bar-track"><div class="bar-fill" style="width:89.27%"></div></div>
+              <div class="bar-value">73.23 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">НС Семе</div>
+              <div class="bar-track"><div class="bar-fill" style="width:85.47%"></div></div>
+              <div class="bar-value">70.11 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Мираторг</div>
+              <div class="bar-track"><div class="bar-fill" style="width:81.98%"></div></div>
+              <div class="bar-value">67.25 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Майсадур</div>
+              <div class="bar-track"><div class="bar-fill" style="width:79.76%"></div></div>
+              <div class="bar-value">65.43 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Санбрид</div>
+              <div class="bar-track"><div class="bar-fill" style="width:79.57%"></div></div>
+              <div class="bar-value">65.27 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Золотой початок</div>
+              <div class="bar-track"><div class="bar-fill" style="width:78.80%"></div></div>
+              <div class="bar-value">64.64 ц/га</div>
+            </div>
+            
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Таблица гибридов</h2>
+      <table><thead><tr><th>hybrid</th><th>producer</th><th>trials</th><th>avg_yield</th><th>cv_pct</th></tr></thead><tbody><tr><td>СИ Чоринтос</td><td>Сингента</td><td>3</td><td>83.15</td><td>17.83</td></tr><tr><td>СИ Импульс</td><td>Сингента</td><td>3</td><td>82.29</td><td>11.83</td></tr><tr><td>СИ Дипломат</td><td>Сингента</td><td>3</td><td>81.33</td><td>15.57</td></tr><tr><td>Жаклин</td><td>Лимагрен</td><td>6</td><td>81.28</td><td>17.37</td></tr><tr><td>ЛГ 30189</td><td>Лимагрен</td><td>5</td><td>77.20</td><td>17.77</td></tr><tr><td>ЛГ 30215</td><td>Лимагрен</td><td>5</td><td>76.68</td><td>11.47</td></tr><tr><td>ЛГ 30179</td><td>Лимагрен</td><td>4</td><td>75.50</td><td>14.87</td></tr><tr><td>СИ Озон</td><td>Сингента</td><td>4</td><td>74.98</td><td>19.44</td></tr><tr><td>Агура</td><td>Санбрид</td><td>24</td><td>74.34</td><td>26.88</td></tr><tr><td>СИ Скорпиус</td><td>Сингента</td><td>4</td><td>73.48</td><td>18.58</td></tr><tr><td>КСС 3360</td><td>Росагротрейд</td><td>3</td><td>72.11</td><td>34.57</td></tr><tr><td>СИ Ротанго</td><td>Сингента</td><td>3</td><td>71.83</td><td>2.94</td></tr><tr><td>Росомак</td><td>Грин Лайф</td><td>8</td><td>71.50</td><td>33.46</td></tr><tr><td>МАС 25.Ф</td><td>Майсадур</td><td>6</td><td>70.28</td><td>15.54</td></tr><tr><td>РЖТ Галифакс</td><td>РАГТ</td><td>3</td><td>70.09</td><td>21.42</td></tr><tr><td>КСС 2290</td><td>Росагротрейд</td><td>3</td><td>69.72</td><td>15.77</td></tr><tr><td>ЛГ 31272</td><td>Лимагрен</td><td>4</td><td>69.57</td><td>19.38</td></tr><tr><td>МАС 10.А</td><td>Майсадур</td><td>4</td><td>68.86</td><td>15.82</td></tr><tr><td>ЗП 232 АМВ</td><td>Золотой початок</td><td>3</td><td>68.11</td><td>37.22</td></tr><tr><td>Инема</td><td>Санбрид</td><td>8</td><td>66.96</td><td>40.25</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Таблица производителей</h2>
+      <table><thead><tr><th>producer</th><th>trials</th><th>avg_yield</th><th>cv_pct</th></tr></thead><tbody><tr><td>Байер</td><td>11</td><td>82.03</td><td>22.86</td></tr><tr><td>Сатива</td><td>8</td><td>80.01</td><td>9.37</td></tr><tr><td>Сингента</td><td>41</td><td>76.63</td><td>16.73</td></tr><tr><td>РАГТ</td><td>15</td><td>75.75</td><td>18.98</td></tr><tr><td>Грин Лайф</td><td>10</td><td>75.67</td><td>30.58</td></tr><tr><td>Лимагрен</td><td>35</td><td>73.62</td><td>18.14</td></tr><tr><td>КВС Рус</td><td>5</td><td>73.23</td><td>12.58</td></tr><tr><td>НС Семе</td><td>7</td><td>70.11</td><td>19.66</td></tr><tr><td>Мираторг</td><td>29</td><td>67.25</td><td>24.27</td></tr><tr><td>Майсадур</td><td>32</td><td>65.43</td><td>20.84</td></tr><tr><td>Санбрид</td><td>91</td><td>65.27</td><td>29.38</td></tr><tr><td>Золотой початок</td><td>14</td><td>64.64</td><td>29.34</td></tr><tr><td>ВНИИК</td><td>25</td><td>62.52</td><td>18.98</td></tr><tr><td>Росагротрейд</td><td>20</td><td>62.18</td><td>35.00</td></tr><tr><td>Лидеа</td><td>15</td><td>59.71</td><td>21.77</td></tr><tr><td>НЦЗ</td><td>11</td><td>58.54</td><td>15.20</td></tr><tr><td>Ладожские</td><td>6</td><td>57.03</td><td>16.79</td></tr><tr><td>Фабрика семян</td><td>10</td><td>54.97</td><td>4.88</td></tr><tr><td>Агроплазма</td><td>13</td><td>54.78</td><td>37.80</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>FAO-группы 2025</h2>
+      
+            <div class="bar-row">
+              <div class="bar-label">200-299</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100.00%"></div></div>
+              <div class="bar-value">68.55 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">100-199</div>
+              <div class="bar-track"><div class="bar-fill" style="width:97.23%"></div></div>
+              <div class="bar-value">66.65 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">300-399</div>
+              <div class="bar-track"><div class="bar-fill" style="width:95.14%"></div></div>
+              <div class="bar-value">65.22 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">n/a</div>
+              <div class="bar-track"><div class="bar-fill" style="width:98.32%"></div></div>
+              <div class="bar-value">67.40 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">400+</div>
+              <div class="bar-track"><div class="bar-fill" style="width:96.43%"></div></div>
+              <div class="bar-value">66.10 ц/га</div>
+            </div>
+            
+    </div>
+    <div>
+      <h2>Подсолнечник 2025 по регионам</h2>
+      
+            <div class="bar-row">
+              <div class="bar-label">Тамбовская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100.00%"></div></div>
+              <div class="bar-value">31.72 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Курская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:94.26%"></div></div>
+              <div class="bar-value">29.90 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Самарская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:93.95%"></div></div>
+              <div class="bar-value">29.80 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Республика Башкортостан</div>
+              <div class="bar-track"><div class="bar-fill" style="width:92.37%"></div></div>
+              <div class="bar-value">29.30 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Алтайский край</div>
+              <div class="bar-track"><div class="bar-fill" style="width:83.54%"></div></div>
+              <div class="bar-value">26.50 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Волгоградская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:76.48%"></div></div>
+              <div class="bar-value">24.26 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Республика Мордовия</div>
+              <div class="bar-track"><div class="bar-fill" style="width:74.40%"></div></div>
+              <div class="bar-value">23.60 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Ростовская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:72.95%"></div></div>
+              <div class="bar-value">23.14 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Ульяновская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:68.57%"></div></div>
+              <div class="bar-value">21.75 ц/га</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Пензенская область</div>
+              <div class="bar-track"><div class="bar-fill" style="width:62.74%"></div></div>
+              <div class="bar-value">19.90 ц/га</div>
+            </div>
+            
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Подсолнечник 2025, регионы</h2>
+      <table><thead><tr><th>region</th><th>trials</th><th>avg_yield</th><th>avg_oil_pct</th></tr></thead><tbody><tr><td>Тамбовская область</td><td>44</td><td>31.72</td><td>46.91</td></tr><tr><td>Курская область</td><td>2</td><td>29.90</td><td></td></tr><tr><td>Самарская область</td><td>1</td><td>29.80</td><td></td></tr><tr><td>Республика Башкортостан</td><td>2</td><td>29.30</td><td></td></tr><tr><td>Алтайский край</td><td>5</td><td>26.50</td><td>48.10</td></tr><tr><td>Волгоградская область</td><td>108</td><td>24.26</td><td>47.49</td></tr><tr><td>Республика Мордовия</td><td>1</td><td>23.60</td><td></td></tr><tr><td>Ростовская область</td><td>11</td><td>23.14</td><td></td></tr><tr><td>Ульяновская область</td><td>2</td><td>21.75</td><td></td></tr><tr><td>Пензенская область</td><td>1</td><td>19.90</td><td></td></tr><tr><td>Саратовская область</td><td>18</td><td>19.77</td><td>47.49</td></tr><tr><td>Ставропольский край</td><td>2</td><td>17.60</td><td></td></tr><tr><td>Оренбургская область</td><td>9</td><td>15.98</td><td></td></tr><tr><td>Краснодарский край</td><td>31</td><td>9.96</td><td>47.06</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Подсолнечник 2025, гибриды</h2>
+      <table><thead><tr><th>hybrid</th><th>producer</th><th>trials</th><th>avg_yield</th><th>avg_oil_pct</th></tr></thead><tbody><tr><td>ЛГ 50455 КЛП</td><td>Лимагрен</td><td>3</td><td>32.18</td><td>46.64</td></tr><tr><td>Аксай</td><td>Санбрид</td><td>10</td><td>30.07</td><td>48.10</td></tr><tr><td>Деркун</td><td>Санбрид</td><td>3</td><td>30.02</td><td>48.39</td></tr><tr><td>Экселент</td><td>Агроплазма</td><td>3</td><td>28.85</td><td>46.97</td></tr><tr><td>Норма</td><td>Агроплазма</td><td>3</td><td>28.60</td><td>49.40</td></tr><tr><td>БДА 617</td><td>Санбрид</td><td>3</td><td>28.50</td><td>46.30</td></tr><tr><td>Новамис КЛ</td><td>Лидеа</td><td>3</td><td>26.95</td><td></td></tr><tr><td>Барсело</td><td>Санфлауэр</td><td>4</td><td>26.05</td><td></td></tr><tr><td>Светлана</td><td>Агроплазма</td><td>3</td><td>25.78</td><td>49.06</td></tr><tr><td>ЛГ 59580</td><td>Лимагрен</td><td>3</td><td>25.59</td><td>44.88</td></tr><tr><td>БДА 03</td><td>Санбрид</td><td>4</td><td>25.00</td><td></td></tr><tr><td>Паладин</td><td>Санфлауэр</td><td>4</td><td>24.78</td><td></td></tr><tr><td>Сурус</td><td>ВНИИМК</td><td>3</td><td>24.68</td><td>48.19</td></tr><tr><td>Ультро</td><td>Санфлауэр</td><td>4</td><td>24.13</td><td></td></tr><tr><td>Сафари</td><td>Новые технологии</td><td>3</td><td>23.93</td><td></td></tr><tr><td>Дельтасол</td><td>Санбрид</td><td>9</td><td>23.75</td><td></td></tr><tr><td>БДА 01</td><td>Санбрид</td><td>44</td><td>22.81</td><td></td></tr><tr><td>Радар</td><td>Сатива</td><td>5</td><td>22.58</td><td></td></tr><tr><td>Сапсан</td><td>Щелково Агрохим</td><td>3</td><td>22.57</td><td>47.00</td></tr><tr><td>Белфис КЛП</td><td>Лидеа</td><td>5</td><td>21.67</td><td>48.70</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Подсолнечник 2025, производители</h2>
+      <table><thead><tr><th>producer</th><th>trials</th><th>avg_yield</th><th>avg_oil_pct</th></tr></thead><tbody><tr><td>Майсадур</td><td>12</td><td>27.23</td><td>47.11</td></tr><tr><td>Новые технологии</td><td>4</td><td>25.18</td><td></td></tr><tr><td>Лимагрен</td><td>14</td><td>24.78</td><td>45.97</td></tr><tr><td>Щелково Агрохим</td><td>13</td><td>24.57</td><td>47.20</td></tr><tr><td>Санфлауэр</td><td>16</td><td>24.07</td><td></td></tr><tr><td>ВНИИМК</td><td>12</td><td>24.07</td><td>47.33</td></tr><tr><td>Санбрид</td><td>83</td><td>24.06</td><td>47.44</td></tr><tr><td>Байер</td><td>6</td><td>24.05</td><td></td></tr><tr><td>Сатива</td><td>7</td><td>23.77</td><td></td></tr><tr><td>Лидеа</td><td>17</td><td>23.62</td><td>48.44</td></tr><tr><td>Агроплазма</td><td>28</td><td>20.48</td><td>46.68</td></tr><tr><td>Ньюсид</td><td>6</td><td>10.98</td><td>47.85</td></tr><tr><td>Росагротрейд</td><td>3</td><td>4.80</td><td>46.83</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Погода 2025, апрель-сентябрь</h2>
+      
+            <div class="bar-row">
+              <div class="bar-label">Ейск</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100.00%"></div></div>
+              <div class="bar-value">713.70 мм</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Анапа</div>
+              <div class="bar-track"><div class="bar-fill" style="width:84.92%"></div></div>
+              <div class="bar-value">606.10 мм</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Краснодар</div>
+              <div class="bar-track"><div class="bar-fill" style="width:65.39%"></div></div>
+              <div class="bar-value">466.70 мм</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Армавир</div>
+              <div class="bar-track"><div class="bar-fill" style="width:64.49%"></div></div>
+              <div class="bar-value">460.30 мм</div>
+            </div>
+            
+            <div class="bar-row">
+              <div class="bar-label">Кропоткин</div>
+              <div class="bar-track"><div class="bar-fill" style="width:59.62%"></div></div>
+              <div class="bar-value">425.50 мм</div>
+            </div>
+            
+      <p class="small">Бар показывает величину дефицита влаги по модулю. Чем больше минус, тем сложнее сезон.</p>
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Погода 2025 по точкам</h2>
+      <table><thead><tr><th>location</th><th>avg_temp</th><th>precip_mm</th><th>et0_mm</th><th>moisture_balance</th><th>heat_days</th></tr></thead><tbody><tr><td>Ейск</td><td>20.24</td><td>195.00</td><td>908.70</td><td>-713.70</td><td>41</td></tr><tr><td>Анапа</td><td>19.82</td><td>255.50</td><td>861.60</td><td>-606.10</td><td>37</td></tr><tr><td>Краснодар</td><td>20.67</td><td>383.60</td><td>850.30</td><td>-466.70</td><td>58</td></tr><tr><td>Армавир</td><td>19.61</td><td>384.40</td><td>844.70</td><td>-460.30</td><td>51</td></tr><tr><td>Кропоткин</td><td>19.41</td><td>399.20</td><td>824.70</td><td>-425.50</td><td>50</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Сравнение 2025 vs 2024</h2>
+      <table><thead><tr><th>location</th><th>temp_2024</th><th>temp_2025</th><th>precip_2024</th><th>precip_2025</th><th>balance_2024</th><th>balance_2025</th><th>heat_2024</th><th>heat_2025</th></tr></thead><tbody><tr><td>Анапа</td><td>22.08</td><td>19.82</td><td>168.50</td><td>255.50</td><td>-827.60</td><td>-606.10</td><td>44</td><td>37</td></tr><tr><td>Армавир</td><td>22.24</td><td>19.61</td><td>200.70</td><td>384.40</td><td>-823.00</td><td>-460.30</td><td>82</td><td>51</td></tr><tr><td>Ейск</td><td>22.40</td><td>20.24</td><td>113.40</td><td>195.00</td><td>-957.30</td><td>-713.70</td><td>54</td><td>41</td></tr><tr><td>Краснодар</td><td>22.76</td><td>20.67</td><td>248.00</td><td>383.60</td><td>-771.20</td><td>-466.70</td><td>81</td><td>58</td></tr><tr><td>Кропоткин</td><td>22.15</td><td>19.41</td><td>162.70</td><td>399.20</td><td>-865.20</td><td>-425.50</td><td>79</td><td>50</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="section two-col">
+    <div>
+      <h2>Портфель Syngenta 2025</h2>
+      <table><thead><tr><th>crop</th><th>products</th><th>fao_filled</th><th>maturity_filled</th></tr></thead><tbody><tr><td>corn</td><td>14</td><td>14</td><td>2</td></tr><tr><td>sunflower</td><td>11</td><td>0</td><td>11</td></tr></tbody></table>
+    </div>
+    <div>
+      <h2>Портфель Limagrain 2026</h2>
+      <table><thead><tr><th>crop</th><th>products</th><th>fao_filled</th><th>maturity_filled</th></tr></thead><tbody><tr><td>corn</td><td>7</td><td>7</td><td>7</td></tr><tr><td>sunflower</td><td>2</td><td>0</td><td>2</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>KWS: зерно и силос</h2>
+    <p>Официальный product-layer KWS по кукурузе: потенциал зерна и зеленой массы, FAO и направление использования.</p>
+    <table><thead><tr><th>hybrid</th><th>fao</th><th>grain_potential_c_ha</th><th>silage_potential_c_ha</th><th>grain_type</th><th>moisture_release</th><th>direction_of_use</th></tr></thead><tbody><tr><td>КЛИФТОН</td><td>175</td><td>130.00</td><td>600.00</td><td>кремнистый</td><td>средняя</td><td>["для выращивания на зерно", "для выращивания на силос", "для производства круп", "для производства комбикормов"]</td></tr><tr><td>КВС КУРАСАО</td><td>180</td><td>140.00</td><td>650.00</td><td>кремнисто-зубовидный</td><td>средняя</td><td>["Для выращивания на зерно", "Для выращивания на силос"]</td></tr><tr><td>КВС ЛИОНЕЛЬ</td><td>180</td><td>120.00</td><td></td><td>кремнистый</td><td>средняя</td><td>["для выращивания на зерно", "для выращивания на силос"]</td></tr><tr><td>КВС НЕСТОР</td><td>190</td><td>130.00</td><td></td><td>кремнистый</td><td>средняя</td><td>["для выращивания на силос", "для выращивания на зерно", "для производства комбикормов", "для производства круп"]</td></tr><tr><td>ФРЕДЕРИКО КВС</td><td>190</td><td>140.00</td><td>700.00</td><td>кремнистый</td><td>средняя</td><td>["для выращивания на силос", "для выращивания на зерно", "для производства комбикормов"]</td></tr><tr><td>КВС ОДОРИКО</td><td>210</td><td>150.00</td><td>650.00</td><td>кремнистый</td><td>средняя</td><td>["Для выращивания на зерно", "Для выращивания на силос"]</td></tr><tr><td>КУБИТУС</td><td>210</td><td>130.00</td><td></td><td>кремнистый</td><td>быстрая</td><td>["для выращивания на зерно", "для выращивания на силос", "для производства комбикормов", "для производства круп"]</td></tr><tr><td>СИЛЬВИНИО</td><td>220</td><td>140.00</td><td></td><td>кремнистый</td><td>очень быстрая</td><td>["для выращивания на зерно", "для выращивания на силос", "для производства комбикормов", "для производства круп"]</td></tr><tr><td>АМАРОК</td><td>230</td><td>140.00</td><td>700.00</td><td>кремнистый</td><td>быстрая</td><td>["для выращивания на зерно", "для выращивания на силос", "для производства комбикормов"]</td></tr><tr><td>АГРО ЯНУС</td><td>240</td><td>140.00</td><td>700.00</td><td>кремнистый</td><td>средняя</td><td>["для выращивания на силос", "для выращивания на зерно"]</td></tr><tr><td>КВС АЛЛЕГРО</td><td>250</td><td>130.00</td><td></td><td>зубовидный</td><td>очень быстрая</td><td>["для выращивания на зерно", "для производства комбикормов"]</td></tr><tr><td>КВС КАВАЛЕР</td><td>260</td><td>140.00</td><td>700.00</td><td>зубовидный</td><td>быстрая</td><td>["для выращивания на зерно", "для производства комбикормов"]</td></tr><tr><td>КОМАНДОС</td><td>330</td><td>150.00</td><td>700.00</td><td>зубовидный</td><td>средняя</td><td>["для выращивания на зерно", "для выращивания на силос", "для производства комбикормов"]</td></tr><tr><td>КВС АКУСТИКА</td><td>340</td><td>140.00</td><td></td><td>зубовидный</td><td>зерном при созревании</td><td>["для выращивания на зерно", "для производства комбикормов"]</td></tr><tr><td>КВС 3381</td><td>350</td><td>130.00</td><td>800.00</td><td>зубовидный</td><td>средняя</td><td>["для выращивания на силос", "для выращивания на зерно", "для производства комбикормов"]</td></tr><tr><td>КВС КАШМИР</td><td>390</td><td>150.00</td><td></td><td>зубовидный</td><td>очень быстрая</td><td>["для выращивания на зерно", "для производства комбикормов"]</td></tr></tbody></table>
+  </div>
+</body>
+</html>
+        

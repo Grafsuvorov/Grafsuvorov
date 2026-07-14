@@ -1,0 +1,144 @@
+{
+  "market_only": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.5143884892086331,
+        "val_ll": 1.0027934434104162,
+        "val_n": 556
+      },
+      "61": {
+        "val_acc": 0.44356435643564357,
+        "val_ll": 1.0286649474967575,
+        "val_n": 505
+      },
+      "78": {
+        "val_acc": 0.5188470066518847,
+        "val_ll": 0.9857794181464036,
+        "val_n": 451
+      },
+      "135": {
+        "val_acc": 0.5467625899280576,
+        "val_ll": 0.9607553997558684,
+        "val_n": 556
+      },
+      "140": {
+        "val_acc": 0.5090579710144928,
+        "val_ll": 0.9714595591162718,
+        "val_n": 552
+      }
+    },
+    "weighted_val_acc": 0.5072519083969466,
+    "weighted_val_ll": 0.9893286830162317
+  },
+  "current_stack": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.5035971223021583,
+        "val_ll": 1.0222152372513957,
+        "val_n": 556
+      },
+      "61": {
+        "val_acc": 0.5207920792079208,
+        "val_ll": 0.9928651849681951,
+        "val_n": 505
+      },
+      "78": {
+        "val_acc": 0.5055432372505543,
+        "val_ll": 0.9981763156682958,
+        "val_n": 451
+      },
+      "135": {
+        "val_acc": 0.5449640287769785,
+        "val_ll": 0.9756354176602257,
+        "val_n": 556
+      },
+      "140": {
+        "val_acc": 0.5090579710144928,
+        "val_ll": 0.9992106705413918,
+        "val_n": 552
+      }
+    },
+    "weighted_val_acc": 0.517175572519084,
+    "weighted_val_ll": 0.9976884316965837
+  },
+  "outcome_v3": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.5,
+        "val_ll": 1.0306268151005347,
+        "val_n": 556,
+        "blend_weights": {
+          "catboost": 0.5,
+          "poisson": 0.1,
+          "market": 0.25,
+          "draw_side": 0.15
+        },
+        "cal_ll_best": 0.967015561054446,
+        "epl_anchor_alpha": 0.049999999999999996,
+        "epl_anchor_cal_ll": 0.9625622056363824
+      },
+      "61": {
+        "val_acc": 0.5386138613861386,
+        "val_ll": 0.9847982426673942,
+        "val_n": 505,
+        "blend_weights": {
+          "catboost": 0.6000000000000001,
+          "poisson": 0.1,
+          "market": 0.15,
+          "draw_side": 0.15
+        },
+        "cal_ll_best": 1.019548370443057,
+        "epl_anchor_alpha": 0.0,
+        "epl_anchor_cal_ll": null
+      },
+      "78": {
+        "val_acc": 0.5210643015521065,
+        "val_ll": 1.0025193941092885,
+        "val_n": 451,
+        "blend_weights": {
+          "catboost": 0.5,
+          "poisson": 0.25,
+          "market": 0.25,
+          "draw_side": 0.0
+        },
+        "cal_ll_best": 0.9740339080795046,
+        "epl_anchor_alpha": 0.0,
+        "epl_anchor_cal_ll": null
+      },
+      "135": {
+        "val_acc": 0.5467625899280576,
+        "val_ll": 0.9648286515568499,
+        "val_n": 556,
+        "blend_weights": {
+          "catboost": 0.65,
+          "poisson": 0.1,
+          "market": 0.25,
+          "draw_side": 0.0
+        },
+        "cal_ll_best": 0.9948044546761252,
+        "epl_anchor_alpha": 0.0,
+        "epl_anchor_cal_ll": null
+      },
+      "140": {
+        "val_acc": 0.5289855072463768,
+        "val_ll": 0.9896312924428391,
+        "val_n": 552,
+        "blend_weights": {
+          "catboost": 0.6000000000000001,
+          "poisson": 0.1,
+          "market": 0.15,
+          "draw_side": 0.15
+        },
+        "cal_ll_best": 0.980724669375491,
+        "epl_anchor_alpha": 0.0,
+        "epl_anchor_cal_ll": null
+      }
+    },
+    "weighted_val_acc": 0.5270992366412214,
+    "weighted_val_ll": 0.9943546077023955
+  },
+  "delta": {
+    "v3_vs_current_val_ll": -0.0033338239941882453,
+    "v3_vs_market_val_ll": 0.005025924686163807
+  }
+}

@@ -1,0 +1,280 @@
+{
+  "dataset": {
+    "rows": 6354,
+    "train": 5399,
+    "cal": 738,
+    "val": 217
+  },
+  "league_blend": {
+    "weights": {
+      "Bundesliga": 1.0,
+      "La Liga": 0.15000000000000002,
+      "Ligue 1": 0.30000000000000004,
+      "Premier League": 0.7000000000000001,
+      "Serie A": 0.0
+    },
+    "cal_metrics": {
+      "Bundesliga": {
+        "label": "blend_1.00",
+        "n": 134,
+        "logloss": 0.939462,
+        "accuracy": 0.567164
+      },
+      "La Liga": {
+        "label": "blend_0.15",
+        "n": 141,
+        "logloss": 0.981742,
+        "accuracy": 0.51773
+      },
+      "Ligue 1": {
+        "label": "blend_0.30",
+        "n": 123,
+        "logloss": 0.987744,
+        "accuracy": 0.544715
+      },
+      "Premier League": {
+        "label": "blend_0.70",
+        "n": 162,
+        "logloss": 1.065394,
+        "accuracy": 0.450617
+      },
+      "Serie A": {
+        "label": "blend_0.00",
+        "n": 178,
+        "logloss": 0.938089,
+        "accuracy": 0.58427
+      }
+    }
+  },
+  "overall": {
+    "market": {
+      "label": "market",
+      "n": 217,
+      "logloss": 1.024226,
+      "accuracy": 0.506912
+    },
+    "catboost_v41": {
+      "label": "catboost_v41",
+      "n": 217,
+      "logloss": 1.018924,
+      "accuracy": 0.511521
+    },
+    "catboost_leagueblend_v42": {
+      "label": "catboost_leagueblend_v42",
+      "n": 217,
+      "logloss": 1.019473,
+      "accuracy": 0.516129
+    }
+  },
+  "by_league": {
+    "market": [
+      {
+        "league": "Bundesliga",
+        "label": "market",
+        "n": 36,
+        "logloss": 1.035331,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "market",
+        "n": 60,
+        "logloss": 0.994921,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "market",
+        "n": 40,
+        "logloss": 1.095913,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "market",
+        "n": 41,
+        "logloss": 0.949189,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "market",
+        "n": 40,
+        "logloss": 1.063416,
+        "accuracy": 0.475
+      }
+    ],
+    "catboost_v41": [
+      {
+        "league": "Bundesliga",
+        "label": "catboost_v41",
+        "n": 36,
+        "logloss": 1.008991,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "catboost_v41",
+        "n": 60,
+        "logloss": 0.979298,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "catboost_v41",
+        "n": 40,
+        "logloss": 1.09922,
+        "accuracy": 0.475
+      },
+      {
+        "league": "Premier League",
+        "label": "catboost_v41",
+        "n": 41,
+        "logloss": 0.9536,
+        "accuracy": 0.536585
+      },
+      {
+        "league": "Serie A",
+        "label": "catboost_v41",
+        "n": 40,
+        "logloss": 1.073965,
+        "accuracy": 0.5
+      }
+    ],
+    "catboost_leagueblend_v42": [
+      {
+        "league": "Bundesliga",
+        "label": "catboost_leagueblend_v42",
+        "n": 36,
+        "logloss": 1.008991,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "catboost_leagueblend_v42",
+        "n": 60,
+        "logloss": 0.992192,
+        "accuracy": 0.55
+      },
+      {
+        "league": "Ligue 1",
+        "label": "catboost_leagueblend_v42",
+        "n": 40,
+        "logloss": 1.095515,
+        "accuracy": 0.475
+      },
+      {
+        "league": "Premier League",
+        "label": "catboost_leagueblend_v42",
+        "n": 41,
+        "logloss": 0.951544,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "catboost_leagueblend_v42",
+        "n": 40,
+        "logloss": 1.063416,
+        "accuracy": 0.475
+      }
+    ]
+  },
+  "roi": {
+    "catboost_v41": {
+      "rule": {
+        "min_ev": 0.08,
+        "min_edge": 0.0,
+        "min_odds": 1.7,
+        "max_odds": 3.5
+      },
+      "cal": {
+        "bets": 21,
+        "wins": 8,
+        "hit_rate": 0.380952,
+        "avg_odds": 2.589333,
+        "avg_ev": 0.096683,
+        "profit": 1.096,
+        "roi": 0.05219
+      },
+      "val": {
+        "bets": 3,
+        "wins": 1,
+        "hit_rate": 0.333333,
+        "avg_odds": 2.552,
+        "avg_ev": 0.12075,
+        "profit": -1.2,
+        "roi": -0.4
+      },
+      "by_league": [
+        {
+          "league": "La Liga",
+          "bets": 1,
+          "wins": 1,
+          "hit_rate": 1.0,
+          "avg_odds": 1.8,
+          "avg_ev": 0.095326,
+          "profit": 0.8,
+          "roi": 0.8
+        },
+        {
+          "league": "Ligue 1",
+          "bets": 1,
+          "wins": 0,
+          "hit_rate": 0.0,
+          "avg_odds": 2.416,
+          "avg_ev": 0.111608,
+          "profit": -1.0,
+          "roi": -1.0
+        },
+        {
+          "league": "Serie A",
+          "bets": 1,
+          "wins": 0,
+          "hit_rate": 0.0,
+          "avg_odds": 3.44,
+          "avg_ev": 0.155315,
+          "profit": -1.0,
+          "roi": -1.0
+        }
+      ]
+    },
+    "catboost_leagueblend_v42": {
+      "rule": {
+        "min_ev": 0.03,
+        "min_edge": 0.0,
+        "min_odds": 1.7,
+        "max_odds": 3.5
+      },
+      "cal": {
+        "bets": 22,
+        "wins": 9,
+        "hit_rate": 0.409091,
+        "avg_odds": 2.767455,
+        "avg_ev": 0.050703,
+        "profit": 6.004,
+        "roi": 0.272909
+      },
+      "val": {
+        "bets": 3,
+        "wins": 3,
+        "hit_rate": 1.0,
+        "avg_odds": 2.115111,
+        "avg_ev": 0.0455,
+        "profit": 3.345333,
+        "roi": 1.115111
+      },
+      "by_league": [
+        {
+          "league": "Bundesliga",
+          "bets": 3,
+          "wins": 3,
+          "hit_rate": 1.0,
+          "avg_odds": 2.115111,
+          "avg_ev": 0.0455,
+          "profit": 3.345333,
+          "roi": 1.115111
+        }
+      ]
+    }
+  }
+}

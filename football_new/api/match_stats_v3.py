@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text, bindparam
 import pandas as pd
 import math
 import logging
+from datetime import date, timedelta
 from api.core.config import settings
 # === IMPORTS НУЖНЫ ВВЕРХУ ФАЙЛА ===
 from typing import Optional
@@ -69,6 +70,16 @@ def get_matches_v3(
         default=False,
         description="Добавить understat xG и лидеров по xG игроков (дороже по времени).",
     ),
+    limit: int = Query(
+        default=500,
+        ge=1,
+        le=1000,
+        description="Максимум матчей в ответе. Защищает публичный API от слишком больших ответов.",
+    ),
+    slim: bool = Query(
+        default=False,
+        description="Облегчённый ответ без тяжёлых match stats joins для списочных страниц.",
+    ),
 ):
     """
     Матчи за период + прогнозы/рынок/сигналы (если уже в ml_predictions) + полная мат.статистика (home_/away_).
@@ -94,6 +105,13 @@ def get_matches_v3(
                 ).scalar()
                 if fixture_date is not None:
                     fixture_date_iso = fixture_date.isoformat()
+
+            if not computed_from or not computed_to:
+                has_scope = any([league, season, fixture_id])
+                if not has_scope:
+                    today = date.today()
+                    computed_from = computed_from or (today - timedelta(days=14)).isoformat()
+                    computed_to = computed_to or (today + timedelta(days=30)).isoformat()
 
             if not computed_from or not computed_to:
                 params = {"league": league, "season": season, "fixture_id": fixture_id}
@@ -285,15 +303,116 @@ def get_matches_v3(
         WHERE (
             :fixture_id IS NOT NULL
             OR :include_upcoming
+            OR UPPER(COALESCE(b.status_short, b.status, '')) IN ('1H','2H','HT','ET','BT','P','LIVE')
+            OR UPPER(COALESCE(b.status, '')) IN ('FIRST HALF','SECOND HALF','HALF TIME','HALFTIME','BREAK TIME','EXTRA TIME','PENALTY','PENALTIES','LIVE')
             OR b.status IN ('Match Finished','FT','FT_PEN','AET','PEN','AWARDED','Awarded','Abandoned','Canceled')
+            OR (
+                COALESCE(b.home_goals, b.score_fulltime_home) IS NOT NULL
+                AND COALESCE(b.away_goals, b.score_fulltime_away) IS NOT NULL
+                AND b.kickoff_at <= (CURRENT_TIMESTAMP - INTERVAL '2 hours')
+            )
             OR p.fixture_id IS NOT NULL
         )
-        ORDER BY b.date DESC, b.league, b.home_team;
+        ORDER BY b.date DESC, b.league, b.home_team
+        LIMIT :limit;
+        """
+
+        q_slim = """
+        WITH base AS (
+          SELECT
+            s.fixture_id,
+            (s.date + interval '3 hours')::date AS date,
+            (s.date + interval '3 hours') AS kickoff_at,
+            s.league_name AS league,
+            s.season::text AS season,
+            s.venue_name AS venue,
+            s.round AS round_label,
+            NULLIF(REGEXP_REPLACE(COALESCE(s.round,''), '[^0-9]', '', 'g'), '')::int AS week,
+            to_char(s.date + interval '3 hours', 'DD.MM HH24:MI') AS datetime,
+            s.home_team, s.away_team,
+            s.home_team_id, s.away_team_id,
+            s.home_goals,
+            s.away_goals,
+            s.score_fulltime_home, s.score_fulltime_away,
+            COALESCE(s.status,'') AS status,
+            COALESCE(s.status_short, s.status, '') AS status_short,
+            s.elapsed
+          FROM football.api_football_schedule s
+          WHERE s.date::date BETWEEN :from_date AND :to_date
+            AND (:league IS NULL OR s.league_name = :league)
+            AND (:season IS NULL OR s.season::text = :season)
+        ),
+        live_evt AS (
+          SELECT DISTINCT ON (e.fixture_id)
+            e.fixture_id,
+            e.elapsed,
+            e.extra
+          FROM football.api_football_match_events e
+          JOIN base b
+            ON b.fixture_id = e.fixture_id
+          WHERE e.elapsed IS NOT NULL
+          ORDER BY e.fixture_id, e.elapsed DESC, COALESCE(e.extra, 0) DESC
+        )
+        SELECT
+          b.fixture_id, b.date, b.kickoff_at, b.league, b.season,
+          b.round_label,
+          b.week,
+          b.datetime,
+          b.round_label AS round,
+          b.home_team, b.away_team,
+          b.home_team_id, b.away_team_id,
+          b.status,
+          b.status_short,
+          COALESCE(b.elapsed, live_evt.elapsed) AS elapsed,
+          live_evt.extra,
+          venue,
+          COALESCE(b.home_goals, b.score_fulltime_home) AS home_goals,
+          COALESCE(b.away_goals, b.score_fulltime_away) AS away_goals,
+          CASE 
+            WHEN COALESCE(b.home_goals, b.score_fulltime_home) IS NULL OR COALESCE(b.away_goals, b.score_fulltime_away) IS NULL THEN NULL
+            ELSE CONCAT(COALESCE(b.home_goals, b.score_fulltime_home)::text, '-', COALESCE(b.away_goals, b.score_fulltime_away)::text)
+          END AS score,
+          CASE 
+            WHEN COALESCE(b.home_goals, b.score_fulltime_home) IS NULL OR COALESCE(b.away_goals, b.score_fulltime_away) IS NULL THEN NULL
+            WHEN COALESCE(b.home_goals, b.score_fulltime_home) >  COALESCE(b.away_goals, b.score_fulltime_away) THEN 1
+            WHEN COALESCE(b.home_goals, b.score_fulltime_home) <  COALESCE(b.away_goals, b.score_fulltime_away) THEN -1
+            ELSE 0
+          END AS result,
+          p.p_home, p.p_draw, p.p_away,
+          p.p_over25, p.p_under25,
+          p.n_bookmakers,
+          p.avg_odds_home, p.avg_odds_draw, p.avg_odds_away,
+          p.avg_odds_over25, p.avg_odds_under25,
+          p.ev_home, p.ev_draw, p.ev_away, p.ev_over, p.ev_under,
+          p.edge_home, p.edge_draw, p.edge_away, p.edge_over, p.edge_under,
+          p.kelly_home, p.kelly_draw, p.kelly_away, p.kelly_over, p.kelly_under,
+          p.best_bet_type, p.best_bet_outcome, p.best_bet_odds, p.best_bet_ev, p.best_bet_edge,
+          p.bet_rating, p.bet_reason
+        FROM base b
+        LEFT JOIN live_evt
+               ON live_evt.fixture_id = b.fixture_id
+        LEFT JOIN football.ml_predictions p
+               ON p.fixture_id = b.fixture_id
+        WHERE (
+            :fixture_id IS NOT NULL
+            OR :include_upcoming
+            OR UPPER(COALESCE(b.status_short, b.status, '')) IN ('1H','2H','HT','ET','BT','P','LIVE')
+            OR UPPER(COALESCE(b.status, '')) IN ('FIRST HALF','SECOND HALF','HALF TIME','HALFTIME','BREAK TIME','EXTRA TIME','PENALTY','PENALTIES','LIVE')
+            OR b.status IN ('Match Finished','FT','FT_PEN','AET','PEN','AWARDED','Awarded','Abandoned','Canceled')
+            OR (
+                COALESCE(b.home_goals, b.score_fulltime_home) IS NOT NULL
+                AND COALESCE(b.away_goals, b.score_fulltime_away) IS NOT NULL
+                AND b.kickoff_at <= (CURRENT_TIMESTAMP - INTERVAL '2 hours')
+            )
+            OR p.fixture_id IS NOT NULL
+        )
+        ORDER BY b.date DESC, b.league, b.home_team
+        LIMIT :limit;
         """
 
         with engine.connect() as conn:
             df = pd.read_sql(
-                text(q), conn,
+                text(q_slim if slim else q), conn,
                 params={
                     "from_date": from_date,
                     "to_date": to_date,
@@ -301,6 +420,7 @@ def get_matches_v3(
                     "season": season,
                     "fixture_id": fixture_id,
                     "include_upcoming": include_upcoming,
+                    "limit": limit,
                 }
             )
 

@@ -1,0 +1,160 @@
+{
+  "overall_rows": 10753,
+  "feature_count": 218,
+  "non_null_rate_overall": {
+    "home_ls_xi_rating_long": 0.30289221612573236,
+    "home_ls_weakest_starter_long": 0.30289221612573236,
+    "home_ls_rating_std_long": 0.30289221612573236,
+    "home_ls_gk_rating_long": 0.30289221612573236,
+    "home_ls_def_rating_long": 0.30289221612573236,
+    "home_ls_mid_rating_long": 0.30289221612573236,
+    "home_ls_att_rating_long": 0.30289221612573236,
+    "home_ls_line_balance_long": 0.30289221612573236,
+    "home_ls_known_starters_long": 0.30289221612573236,
+    "home_ls_xi_rating_all_5": 0.3085650516135032,
+    "home_ls_weakest_starter_all_5": 0.3085650516135032,
+    "home_ls_rating_std_all_5": 0.3085650516135032,
+    "home_ls_gk_rating_all_5": 0.3085650516135032,
+    "home_ls_def_rating_all_5": 0.3085650516135032,
+    "home_ls_mid_rating_all_5": 0.3085650516135032,
+    "home_ls_att_rating_all_5": 0.3085650516135032,
+    "home_ls_line_balance_all_5": 0.3085650516135032,
+    "home_ls_known_starters_all_5": 0.3085650516135032,
+    "home_ls_xi_rating_all_10": 0.3085650516135032,
+    "home_ls_weakest_starter_all_10": 0.3085650516135032,
+    "home_ls_rating_std_all_10": 0.3085650516135032,
+    "home_ls_gk_rating_all_10": 0.3085650516135032,
+    "home_ls_def_rating_all_10": 0.3085650516135032,
+    "home_ls_mid_rating_all_10": 0.3085650516135032,
+    "home_ls_att_rating_all_10": 0.3085650516135032,
+    "home_ls_line_balance_all_10": 0.3085650516135032,
+    "home_ls_known_starters_all_10": 0.3085650516135032,
+    "home_ls_xi_rating_all_15": 0.3085650516135032,
+    "home_ls_weakest_starter_all_15": 0.3085650516135032,
+    "home_ls_rating_std_all_15": 0.3085650516135032,
+    "home_ls_gk_rating_all_15": 0.3085650516135032,
+    "home_ls_def_rating_all_15": 0.3085650516135032,
+    "home_ls_mid_rating_all_15": 0.3085650516135032,
+    "home_ls_att_rating_all_15": 0.3085650516135032,
+    "home_ls_line_balance_all_15": 0.3085650516135032,
+    "home_ls_known_starters_all_15": 0.3085650516135032,
+    "home_ls_xi_rating_home_5": 0.06258718497163582,
+    "home_ls_weakest_starter_home_5": 0.06258718497163582,
+    "home_ls_rating_std_home_5": 0.06258718497163582,
+    "home_ls_gk_rating_home_5": 0.06258718497163582
+  },
+  "season_coverage": {
+    "2020": {
+      "home_ls_xi_rating_long": 0.0,
+      "away_ls_xi_rating_long": 0.0,
+      "home_ls_xi_rating_all_5": 0.0,
+      "away_ls_xi_rating_all_5": 0.0,
+      "home_ls_xi_rating_home_10": 0.0,
+      "away_ls_xi_rating_away_10": 0.0,
+      "ls_xi_rating_all_10_diff": 0.0,
+      "ls_matchup_venue_xi_edge_10": 0.0
+    },
+    "2021": {
+      "home_ls_xi_rating_long": 0.0,
+      "away_ls_xi_rating_long": 0.0,
+      "home_ls_xi_rating_all_5": 0.0,
+      "away_ls_xi_rating_all_5": 0.0,
+      "home_ls_xi_rating_home_10": 0.0,
+      "away_ls_xi_rating_away_10": 0.0,
+      "ls_xi_rating_all_10_diff": 0.0,
+      "ls_matchup_venue_xi_edge_10": 0.0
+    },
+    "2022": {
+      "home_ls_xi_rating_long": 0.0,
+      "away_ls_xi_rating_long": 0.0,
+      "home_ls_xi_rating_all_5": 0.0,
+      "away_ls_xi_rating_all_5": 0.0,
+      "home_ls_xi_rating_home_10": 0.0,
+      "away_ls_xi_rating_away_10": 0.0,
+      "ls_xi_rating_all_10_diff": 0.0,
+      "ls_matchup_venue_xi_edge_10": 0.0
+    },
+    "2023": {
+      "home_ls_xi_rating_long": 0.0,
+      "away_ls_xi_rating_long": 0.0,
+      "home_ls_xi_rating_all_5": 0.0,
+      "away_ls_xi_rating_all_5": 0.0,
+      "home_ls_xi_rating_home_10": 0.0,
+      "away_ls_xi_rating_away_10": 0.0,
+      "ls_xi_rating_all_10_diff": 0.0,
+      "ls_matchup_venue_xi_edge_10": 0.0
+    },
+    "2024": {
+      "home_ls_xi_rating_long": 0.8712984054669703,
+      "away_ls_xi_rating_long": 0.8707289293849658,
+      "home_ls_xi_rating_all_5": 0.9037585421412301,
+      "away_ls_xi_rating_all_5": 0.9020501138952164,
+      "home_ls_xi_rating_home_10": 0.16913439635535307,
+      "away_ls_xi_rating_away_10": 0.17084282460136674,
+      "ls_xi_rating_all_10_diff": 0.892369020501139,
+      "ls_matchup_venue_xi_edge_10": 0.048405466970387244
+    },
+    "2025": {
+      "home_ls_xi_rating_long": 0.985730593607306,
+      "away_ls_xi_rating_long": 0.9828767123287672,
+      "home_ls_xi_rating_all_5": 0.988013698630137,
+      "away_ls_xi_rating_all_5": 0.9885844748858448,
+      "home_ls_xi_rating_home_10": 0.2146118721461187,
+      "away_ls_xi_rating_away_10": 0.20034246575342465,
+      "ls_xi_rating_all_10_diff": 0.978310502283105,
+      "ls_matchup_venue_xi_edge_10": 0.07420091324200913
+    }
+  },
+  "league_coverage": {
+    "39": {
+      "home_ls_xi_rating_long": 0.3131578947368421,
+      "away_ls_xi_rating_long": 0.3131578947368421,
+      "home_ls_xi_rating_all_5": 0.31798245614035087,
+      "away_ls_xi_rating_all_5": 0.31842105263157894,
+      "home_ls_xi_rating_home_10": 0.06754385964912281,
+      "away_ls_xi_rating_away_10": 0.06359649122807018,
+      "ls_xi_rating_all_10_diff": 0.31666666666666665,
+      "ls_matchup_venue_xi_edge_10": 0.03464912280701754
+    },
+    "61": {
+      "home_ls_xi_rating_long": 0.2744433688286544,
+      "away_ls_xi_rating_long": 0.27299128751210067,
+      "home_ls_xi_rating_all_5": 0.28025169409486933,
+      "away_ls_xi_rating_all_5": 0.2787996127783156,
+      "home_ls_xi_rating_home_10": 0.06292352371732816,
+      "away_ls_xi_rating_away_10": 0.05517909002904162,
+      "ls_xi_rating_all_10_diff": 0.2758954501452081,
+      "ls_matchup_venue_xi_edge_10": 0.014036786060019362
+    },
+    "78": {
+      "home_ls_xi_rating_long": 0.30606717226435537,
+      "away_ls_xi_rating_long": 0.3055254604550379,
+      "home_ls_xi_rating_all_5": 0.31365113759479957,
+      "away_ls_xi_rating_all_5": 0.3114842903575298,
+      "home_ls_xi_rating_home_10": 0.047670639219934995,
+      "away_ls_xi_rating_away_10": 0.048212351029252434,
+      "ls_xi_rating_all_10_diff": 0.30823401950162516,
+      "ls_matchup_venue_xi_edge_10": 0.016251354279523293
+    },
+    "135": {
+      "home_ls_xi_rating_long": 0.30819815870232353,
+      "away_ls_xi_rating_long": 0.30644454186760195,
+      "home_ls_xi_rating_all_5": 0.31214379658044716,
+      "away_ls_xi_rating_all_5": 0.3134590092064884,
+      "home_ls_xi_rating_home_10": 0.06137658921525647,
+      "away_ls_xi_rating_away_10": 0.06269180184129768,
+      "ls_xi_rating_all_10_diff": 0.3077597544936431,
+      "ls_matchup_venue_xi_edge_10": 0.014905743095133712
+    },
+    "140": {
+      "home_ls_xi_rating_long": 0.3105263157894737,
+      "away_ls_xi_rating_long": 0.31140350877192985,
+      "home_ls_xi_rating_all_5": 0.3171052631578947,
+      "away_ls_xi_rating_all_5": 0.3175438596491228,
+      "home_ls_xi_rating_home_10": 0.0706140350877193,
+      "away_ls_xi_rating_away_10": 0.07017543859649122,
+      "ls_xi_rating_all_10_diff": 0.31491228070175437,
+      "ls_matchup_venue_xi_edge_10": 0.018859649122807017
+    }
+  }
+}

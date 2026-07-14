@@ -4,8 +4,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { http } from "@/lib/http.js";
 import SafeImg from "@/components/SafeImg";
 import { loadFavorites, saveFavorites } from "@/lib/favoritesStorage.js";
+import {
+  loadFavoriteLeagues,
+  saveFavoriteLeagues,
+} from "@/lib/favoriteLeaguesStorage.js";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import { hasPilotFullAccess, shouldHideMonetization } from "@/lib/pilotAccess.js";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const teamLogo = (id) => `/icons/team_logos/${id}.png`;
 const playerPhoto = (id) => `/icons/player_photos/${id}.png`;
@@ -16,11 +21,24 @@ const emitFavUpdate = () => {
   } catch {}
 };
 
-const formatDate = (value) => {
+const formatDateForLocale = (value, language) => {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(+d)) return "—";
-  return d.toLocaleDateString("ru-RU");
+  return d.toLocaleDateString(language === "ru" ? "ru-RU" : "en-GB");
+};
+const formatSeasonLabel = (season, language) =>
+  season ? `${language === "ru" ? "сезон" : "season"} ${season}` : "—";
+
+const formatPlanLabel = (code, language) => {
+  const normalized = String(code || "").toUpperCase();
+  if (!normalized) return language === "ru" ? "нет подписки" : "no subscription";
+  const labels = {
+    START: "Start",
+    PRO: "Pro",
+    ELITE: "Elite",
+  };
+  return labels[normalized] || normalized;
 };
 const formatBalance = (value) => {
   const n = Number(String(value ?? "").replace(",", "."));
@@ -28,9 +46,11 @@ const formatBalance = (value) => {
   return String(Math.round(n));
 };
 
-function FavoriteCard({ type, item, onOpen, onRemove }) {
-  const title = item?.name || item?.title || "Без названия";
-  const subtitle = item?.league ? `${item.league} · ${item.season || ""}` : item?.team || "";
+function FavoriteCard({ type, item, onOpen, onRemove, t, language = "ru" }) {
+  const title = item?.name || item?.title || t("unnamed");
+  const subtitle = item?.league
+    ? `${item.league}${item?.season ? ` · ${formatSeasonLabel(item.season, language)}` : ""}`
+    : item?.team || "";
 
   return (
     <div className="glass-card p-4">
@@ -49,15 +69,15 @@ function FavoriteCard({ type, item, onOpen, onRemove }) {
       </div>
       <div className="mt-3 flex items-center gap-3">
         <button onClick={onOpen} className="text-sm font-medium text-violet-300 transition hover:text-violet-200">
-          Перейти в карточку
+          {t("openCard")}
         </button>
         <button
           onClick={() => {
-            if (window.confirm("Удалить из избранного?")) onRemove();
+            if (window.confirm(t("removeFromFavoritesConfirm"))) onRemove();
           }}
           className="text-sm font-medium text-slate-400 transition hover:text-white"
         >
-          Удалить
+          {t("remove")}
         </button>
       </div>
     </div>
@@ -66,6 +86,7 @@ function FavoriteCard({ type, item, onOpen, onRemove }) {
 
 export default function ProfilePagePremium() {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const hideMonetization = shouldHideMonetization();
   const pilotFullAccess = hasPilotFullAccess(user);
@@ -88,6 +109,8 @@ export default function ProfilePagePremium() {
   const planRefs = useRef(new Map());
 
   const [favTeams, setFavTeams] = useState(() => loadFavorites("favorites_teams"));
+  const [favLeagues, setFavLeagues] = useState(() => loadFavoriteLeagues());
+  const [favMatches, setFavMatches] = useState(() => loadFavorites("favorites_matches"));
   const [favPlayers, setFavPlayers] = useState(() => loadFavorites("favorites_players"));
 
   useEffect(() => {
@@ -109,6 +132,8 @@ export default function ProfilePagePremium() {
   useEffect(() => {
     const sync = () => {
       setFavTeams(loadFavorites("favorites_teams"));
+      setFavLeagues(loadFavoriteLeagues());
+      setFavMatches(loadFavorites("favorites_matches"));
       setFavPlayers(loadFavorites("favorites_players"));
     };
     window.addEventListener("storage", sync);
@@ -129,6 +154,8 @@ export default function ProfilePagePremium() {
   useEffect(() => {
     if (activeTab === "favorites") {
       setFavTeams(loadFavorites("favorites_teams"));
+      setFavLeagues(loadFavoriteLeagues());
+      setFavMatches(loadFavorites("favorites_matches"));
       setFavPlayers(loadFavorites("favorites_players"));
     }
   }, [activeTab]);
@@ -200,13 +227,18 @@ export default function ProfilePagePremium() {
       if (err?.status === 402) {
         setAddFundsOpen(true);
         setAddFundsError(
-          err?.data?.detail || "Недостаточно средств. Пополните баланс."
+          err?.data?.detail ||
+            (language === "ru"
+              ? "Недостаточно средств. Пополните баланс."
+              : "Insufficient funds. Add balance first.")
         );
       }
       const msg =
         err?.data?.detail ||
         err?.message ||
-        "Не удалось оформить подписку.";
+        (language === "ru"
+          ? "Не удалось оформить подписку."
+          : "Could not activate the subscription.");
       setPurchaseErrors((m) => ({ ...m, [plan.id]: msg }));
     } finally {
       setPurchaseLoading((m) => ({ ...m, [plan.id]: false }));
@@ -215,13 +247,14 @@ export default function ProfilePagePremium() {
 
   const stats = useMemo(
     () => [
-      { label: "Избранные команды", value: favTeams.length },
-      { label: "Избранные игроки", value: favPlayers.length },
+      { label: language === "ru" ? "Избранные команды" : "Favorite teams", value: favTeams.length },
+      { label: language === "ru" ? "Избранные лиги" : "Favorite leagues", value: favLeagues.length },
+      { label: language === "ru" ? "Избранные игроки" : "Favorite players", value: favPlayers.length },
       ...(!hideMonetization
-        ? [{ label: "Активных подписок", value: userSubscriptions.length }]
+        ? [{ label: language === "ru" ? "Активных подписок" : "Active subscriptions", value: userSubscriptions.length }]
         : []),
     ],
-    [favTeams.length, favPlayers.length, hideMonetization, userSubscriptions.length]
+    [favTeams.length, favLeagues.length, favPlayers.length, hideMonetization, language, userSubscriptions.length]
   );
 
   const nextEndAt = useMemo(() => {
@@ -256,9 +289,11 @@ export default function ProfilePagePremium() {
   const hasActiveSubscription = hideMonetization ? pilotFullAccess : !!activeSub;
   const isStartPlan = activeCode === "START";
   const hasPremium = useMemo(() => hasActiveSubscription, [hasActiveSubscription]);
+  const isRu = language === "ru";
+  const activePlanLabel = formatPlanLabel(activeCode, language);
   const statusLine = hideMonetization
-    ? `${favTeams.length} команды · ${favPlayers.length} игрока в избранном`
-    : `Статус: ${hasActiveSubscription ? activeCode : "Без подписки"} · ${favTeams.length} команды · ${favPlayers.length} игрока`;
+    ? `${favTeams.length} ${t("teamsCountLabel")} · ${favLeagues.length} ${t("favoriteLeagues").toLowerCase()} · ${favMatches.length} ${t("matchesCountLabel")} · ${favPlayers.length} ${t("playersCountLabel")} ${t("favoritesSectionEyebrow").toLowerCase()}`
+    : `${isRu ? "Статус" : "Status"}: ${hasActiveSubscription ? activePlanLabel : t("noSubscription")} · ${favTeams.length} ${t("teamsCountLabel")} · ${favLeagues.length} ${t("favoriteLeagues").toLowerCase()} · ${favMatches.length} ${t("matchesCountLabel")} · ${favPlayers.length} ${t("playersCountLabel")}`;
 
   const activeByCode = useMemo(() => {
     const map = new Map();
@@ -278,11 +313,11 @@ export default function ProfilePagePremium() {
   );
   const renderOverview = () => (
     <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <div className="rounded-3xl border border-glass bg-surface-2/70 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur">
+      <div className="rounded-3xl border border-glass bg-surface-2/68 p-5 shadow-[0_16px_42px_rgba(0,0,0,0.36)] backdrop-blur sm:p-6">
         <div className="flex items-center gap-4">
           <div
-            className={`h-[88px] w-[88px] rounded-3xl border border-glass bg-surface-2/80 grid place-items-center text-3xl font-bold text-white shadow-sm ${
-              user?.is_verified ? "shadow-[0_0_24px_rgba(16,185,129,0.25)]" : ""
+            className={`grid h-[82px] w-[82px] place-items-center rounded-3xl border border-glass bg-surface-2/78 text-3xl font-bold text-white shadow-sm ${
+              user?.is_verified ? "shadow-[0_0_18px_rgba(16,185,129,0.18)]" : ""
             }`}
           >
             {user?.username?.charAt(0).toUpperCase()}
@@ -294,14 +329,14 @@ export default function ProfilePagePremium() {
               {user?.is_verified ? (
                 <span
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-violet-400/40 bg-violet-400/10 text-violet-200"
-                  title="Email подтверждён"
+                  title={t("verifiedEmail")}
                 >
                   ✓
                 </span>
               ) : (
                 <span
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-cyan-400/40 bg-cyan-400/10 text-cyan-200"
-                  title="Нужно подтвердить email"
+                  title={t("verifyEmailNeeded")}
                 >
                   !
                 </span>
@@ -314,36 +349,36 @@ export default function ProfilePagePremium() {
         <div className="mt-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="glass-card p-4">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Избранное</div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{t("favoritesTotal")}</div>
               <div className="mt-3 text-3xl font-semibold text-white">
-                {favTeams.length + favPlayers.length}
+                {favTeams.length + favLeagues.length + favMatches.length + favPlayers.length}
               </div>
               <div className="mt-1 text-sm text-slate-400">
-                {favTeams.length} команды · {favPlayers.length} игрока
+                {favTeams.length} {t("teamsCountLabel")} · {favLeagues.length} {t("favoriteLeagues").toLowerCase()} · {favMatches.length} {t("matchesCountLabel")} · {favPlayers.length} {t("playersCountLabel")}
               </div>
               <button
                 onClick={() => setActiveTab("favorites")}
                 className="mt-3 text-sm font-medium text-violet-300 transition hover:text-violet-200"
               >
-                Перейти в избранное
+                {t("goToFavorites")}
               </button>
             </div>
 
             {hideMonetization ? (
               <div className="glass-card p-4">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Активность</div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{t("activity")}</div>
                 <div className="mt-3 text-3xl font-semibold text-white">
-                  {user?.created_at ? new Date(user.created_at).toLocaleDateString("ru-RU") : "—"}
+                  {user?.created_at ? formatDateForLocale(user.created_at, language) : "—"}
                 </div>
-                <div className="mt-1 text-sm text-slate-400">Дата регистрации в EdgeScore.</div>
+                <div className="mt-1 text-sm text-slate-400">{t("registrationDateLead")}</div>
               </div>
             ) : (
               <div className="glass-card p-4">
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                  Баланс счёта
+                  {language === "ru" ? "Баланс счёта" : "Account balance"}
                   <span
                     className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-glass text-[10px] text-slate-400"
-                    title="Используется для оплаты подписок"
+                    title={language === "ru" ? "Используется для оплаты подписок" : "Used to pay for subscriptions"}
                   >
                     i
                   </span>
@@ -353,9 +388,9 @@ export default function ProfilePagePremium() {
                 </div>
                 <button
                   onClick={() => setAddFundsOpen(true)}
-                  className="mt-3 inline-flex items-center rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] px-4 py-2 text-xs font-semibold text-white shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:brightness-110"
+                  className="mt-3 inline-flex items-center rounded-2xl border border-violet-400/24 bg-[linear-gradient(135deg,rgba(124,58,237,0.82),rgba(99,102,241,0.76))] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_24px_rgba(124,58,237,0.16),inset_0_1px_0_rgba(255,255,255,0.14)] transition hover:brightness-105"
                 >
-                  Пополнить
+                  {language === "ru" ? "Пополнить" : "Add funds"}
                 </button>
               </div>
             )}
@@ -365,60 +400,60 @@ export default function ProfilePagePremium() {
       </div>
 
       <div className="space-y-4">
-        <div className="relative overflow-hidden rounded-3xl border border-glass bg-surface-2/80 p-6 shadow-[0_14px_45px_rgba(0,0,0,0.4)]">
+        <div className="relative overflow-hidden rounded-3xl border border-glass bg-surface-2/76 p-5 shadow-[0_14px_34px_rgba(0,0,0,0.3)] sm:p-6">
           <div className="pointer-events-none absolute -right-20 -top-16 h-48 w-48 rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="text-base font-semibold text-white">Инсайты EdgeScore</div>
+          <div className="text-base font-semibold text-white">{t("edgeScoreInsights")}</div>
           <div className="mt-2 text-sm leading-6 text-slate-300">
-            Получайте объяснения прогнозов и факторов.
+            {t("edgeScoreInsightsLead")}
           </div>
           <button
             onClick={() => navigate("/insights")}
-            className="mt-4 rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] px-4 py-2 text-xs font-semibold text-white shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:brightness-110"
+            className="mt-4 rounded-2xl border border-violet-400/24 bg-[linear-gradient(135deg,rgba(124,58,237,0.82),rgba(99,102,241,0.76))] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_24px_rgba(124,58,237,0.16),inset_0_1px_0_rgba(255,255,255,0.14)] transition hover:brightness-105"
           >
-            Открыть инсайты
+            {t("openInsights")}
           </button>
         </div>
 
-      <div className="rounded-3xl border border-glass bg-surface-2/70 p-6">
-        <div className="text-base font-semibold text-white">Быстрые переходы</div>
+      <div className="rounded-3xl border border-glass bg-surface-2/68 p-5 sm:p-6">
+        <div className="text-base font-semibold text-white">{t("quickLinks")}</div>
         <div className="mt-4 grid gap-3">
             <button
               onClick={() => navigate("/matches-v3")}
-              className="group flex items-center justify-between rounded-2xl border border-glass bg-surface-2/70 px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_26px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.12)] transition hover:border-white/25 hover:bg-surface-2"
+              className="group flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_20px_rgba(0,0,0,0.16)] transition hover:bg-white/[0.06]"
             >
               <span className="flex items-center gap-2">
                 <span className="text-lg text-slate-400">🏁</span>
-                Результаты матчей
+                {t("matchResults")}
               </span>
               <span className="text-slate-500 group-hover:text-slate-200">→</span>
             </button>
-            <button
-              onClick={() => navigate("/schedule")}
-              className="group flex items-center justify-between rounded-2xl border border-glass bg-surface-2/70 px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_26px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.12)] transition hover:border-white/25 hover:bg-surface-2"
+              <button
+                onClick={() => navigate("/schedule")}
+              className="group flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_20px_rgba(0,0,0,0.16)] transition hover:bg-white/[0.06]"
             >
               <span className="flex items-center gap-2">
                 <span className="text-lg text-slate-400">🗓️</span>
-                Календарь и прогнозы
+                {t("scheduleAndPredictions")}
               </span>
               <span className="text-slate-500 group-hover:text-slate-200">→</span>
             </button>
               <button
                 onClick={() => navigate("/best-picks")}
-                className="group flex items-center justify-between rounded-2xl border border-glass bg-surface-2/70 px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_26px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.12)] transition hover:border-white/25 hover:bg-surface-2"
+                className="group flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_20px_rgba(0,0,0,0.16)] transition hover:bg-white/[0.06]"
               >
                 <span className="flex items-center gap-2">
                   <span className="text-lg text-slate-400">✨</span>
-                  Подборки и лучшие ставки
+                  {t("picksAndBestBets")}
                 </span>
                 <span className="text-slate-500 group-hover:text-slate-200">→</span>
               </button>
               <button
                 onClick={() => navigate("/about")}
-                className="group flex items-center justify-between rounded-2xl border border-glass bg-surface-2/70 px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_26px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.12)] transition hover:border-white/25 hover:bg-surface-2"
+                className="group flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.04] px-4 py-3 text-left text-sm text-slate-200 shadow-[0_10px_20px_rgba(0,0,0,0.16)] transition hover:bg-white/[0.06]"
               >
                 <span className="flex items-center gap-2">
                   <span className="text-lg text-slate-400">ℹ️</span>
-                  О проекте и контакты
+                  {t("aboutAndContacts")}
                 </span>
                 <span className="text-slate-500 group-hover:text-slate-200">→</span>
               </button>
@@ -434,34 +469,36 @@ export default function ProfilePagePremium() {
       <div className="rounded-3xl border border-glass bg-surface-1/80 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Избранное</div>
-            <div className="mt-2 text-xl font-semibold text-white">Команды и игроки</div>
-            <div className="mt-1 text-sm leading-6 text-slate-400">Команды и игроки, которые всегда под рукой.</div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{t("favoritesSectionEyebrow")}</div>
+            <div className="mt-2 text-xl font-semibold text-white">{t("teamsAndPlayers")}</div>
+            <div className="mt-1 text-sm leading-6 text-slate-400">{t("favoritesAlwaysReady")}</div>
           </div>
           <div className="flex gap-2">
             <button onClick={() => navigate("/schedule")} className="btn-glass text-xs">
-              Календарь избранных
+              {t("favoriteSchedule")}
             </button>
             <button onClick={() => navigate("/matches-v3")} className="btn-glass text-xs">
-              Результаты избранных
+              {t("favoriteResults")}
             </button>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-4">
         <div className="space-y-4">
-          <div className="text-sm font-semibold text-white">Команды</div>
+          <div className="text-sm font-semibold text-white">{t("teamsLabel")}</div>
           {favTeams.length ? (
             <div className="grid gap-3">
-              {favTeams.map((t) => (
+              {favTeams.map((team) => (
                 <FavoriteCard
-                  key={`team-${t.id}`}
+                  key={`team-${team.id}`}
                   type="team"
-                  item={t}
-                  onOpen={() => navigate(`/team/${t.id}?league=${encodeURIComponent(t.league || "Premier League")}&season=${t.season || "2025"}`)}
+                  item={team}
+                  t={t}
+                  language={language}
+                  onOpen={() => navigate(`/team/${team.id}?league=${encodeURIComponent(team.league || "Premier League")}&season=${team.season || "2025"}`)}
                   onRemove={() => {
-                    const next = favTeams.filter((x) => x.id !== t.id);
+                    const next = favTeams.filter((x) => x.id !== team.id);
                     setFavTeams(next);
                     saveFavorites("favorites_teams", next);
                     emitFavUpdate();
@@ -471,24 +508,107 @@ export default function ProfilePagePremium() {
             </div>
           ) : (
             <div className="rounded-2xl border border-glass bg-surface-1/70 p-6 text-sm text-slate-400">
-              Вы ещё не добавили команды в избранное.
-              Добавляйте команды и следите за их формой и результатами.
+              {t("noFavoriteTeamsBody")}
             </div>
           )}
         </div>
 
         <div className="space-y-4">
-          <div className="text-sm font-semibold text-white">Игроки</div>
+          <div className="text-sm font-semibold text-white">{t("favoriteLeagues")}</div>
+          {favLeagues.length ? (
+            <div className="grid gap-3">
+              {favLeagues.map((item) => (
+                <div key={`league-${item.name}`} className="glass-card p-4">
+                  <div className="text-sm font-semibold text-white leading-tight break-words">
+                    {item.name}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400 truncate">
+                    {formatSeasonLabel(item.season, language)}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={() => navigate(`/table?league=${encodeURIComponent(item.name)}&season=${item.season || "2025"}`)}
+                      className="text-sm font-medium text-violet-300 transition hover:text-violet-200"
+                    >
+                      {t("openCard")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const next = favLeagues.filter((x) => String(x.name).toLowerCase() !== String(item.name).toLowerCase());
+                        setFavLeagues(next);
+                        saveFavoriteLeagues(next);
+                        emitFavUpdate();
+                      }}
+                      className="text-sm font-medium text-slate-400 transition hover:text-white"
+                    >
+                      {t("remove")}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-glass bg-surface-1/70 p-6 text-sm text-slate-400">
+              {t("noFavoriteLeagues")}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="text-sm font-semibold text-white">{t("matchesLabel")}</div>
+          {favMatches.length ? (
+            <div className="grid gap-3">
+              {favMatches.map((match) => (
+                <div key={`match-${match.fixture_id}`} className="glass-card p-4">
+                  <div className="text-sm font-semibold text-white leading-tight break-words">
+                    {match.home_team} vs {match.away_team}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400 truncate">
+                    {match.league ? `${match.league}${match?.season ? ` · ${formatSeasonLabel(match.season, language)}` : ""}` : "—"}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={() => navigate(`/match/${match.fixture_id}?league=${encodeURIComponent(match.league || "Premier League")}&season=${match.season || "2025"}`)}
+                      className="text-sm font-medium text-violet-300 transition hover:text-violet-200"
+                    >
+                      {t("openCard")}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const next = favMatches.filter((x) => String(x.fixture_id) !== String(match.fixture_id));
+                        setFavMatches(next);
+                        saveFavorites("favorites_matches", next);
+                        emitFavUpdate();
+                      }}
+                      className="text-sm font-medium text-slate-400 transition hover:text-white"
+                    >
+                      {t("remove")}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-glass bg-surface-1/70 p-6 text-sm text-slate-400">
+              {t("noFavoriteMatchesBody")}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="text-sm font-semibold text-white">{t("playersLabel")}</div>
           {favPlayers.length ? (
             <div className="grid gap-3">
-              {favPlayers.map((p) => (
+              {favPlayers.map((player) => (
                 <FavoriteCard
-                  key={`player-${p.id}`}
+                  key={`player-${player.id}`}
                   type="player"
-                  item={p}
-                  onOpen={() => navigate(`/player/${p.id}?league=${encodeURIComponent(p.league || "Premier League")}&season=${p.season || "2025"}`)}
+                  item={player}
+                  t={t}
+                  language={language}
+                  onOpen={() => navigate(`/player/${player.id}?league=${encodeURIComponent(player.league || "Premier League")}&season=${player.season || "2025"}`)}
                   onRemove={() => {
-                    const next = favPlayers.filter((x) => x.id !== p.id);
+                    const next = favPlayers.filter((x) => x.id !== player.id);
                     setFavPlayers(next);
                     saveFavorites("favorites_players", next);
                     emitFavUpdate();
@@ -498,8 +618,7 @@ export default function ProfilePagePremium() {
             </div>
           ) : (
             <div className="rounded-2xl border border-glass bg-surface-1/70 p-6 text-sm text-slate-400">
-              Вы ещё не добавили игроков в избранное.
-              Добавляйте игроков и следите за их формой и результатами.
+              {t("noFavoritePlayersBody")}
             </div>
           )}
         </div>
@@ -510,16 +629,16 @@ export default function ProfilePagePremium() {
   const renderSubscriptions = () => (
     <div className="space-y-6">
       <div className="rounded-3xl border border-glass bg-surface-2/80 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Подписки</div>
-        <div className="mt-2 text-xl font-semibold text-white">Управление доступом</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{language === "ru" ? "Подписки" : "Subscriptions"}</div>
+        <div className="mt-2 text-xl font-semibold text-white">{language === "ru" ? "Управление доступом" : "Access management"}</div>
         <div className="mt-1 text-sm leading-6 text-slate-300">
-          Доступ к аналитике матчей, оценке value и расширенным метрикам.
+          {language === "ru" ? "Доступ к аналитике матчей, оценке value и расширенным метрикам." : "Access to match analytics, value evaluation, and extended metrics."}
         </div>
       </div>
 
       {subscriptionsLoading ? (
         <div className="rounded-3xl border border-glass bg-surface-1/70 p-10 text-center text-slate-400">
-          Загрузка подписок…
+          {language === "ru" ? "Загрузка подписок…" : "Loading subscriptions…"}
         </div>
       ) : userSubscriptions.length > 0 ? (
         <div className="grid gap-4">
@@ -528,30 +647,30 @@ export default function ProfilePagePremium() {
               {(() => {
                 const end = sub?.end_at ? new Date(sub.end_at) : null;
                 const now = new Date();
-                let status = "активна";
-                if (!end || Number.isNaN(+end)) status = "активна";
-                else if (end < now) status = "истекла";
-                else if ((end - now) / 86400000 <= 7) status = "истекает";
+                let status = language === "ru" ? "активна" : "active";
+                if (!end || Number.isNaN(+end)) status = language === "ru" ? "активна" : "active";
+                else if (end < now) status = language === "ru" ? "истекла" : "expired";
+                else if ((end - now) / 86400000 <= 7) status = language === "ru" ? "истекает" : "expiring";
                 return (
                   <div className="mb-3 text-xs uppercase tracking-[0.2em] text-slate-400">
-                    Статус: {status}
+                    {language === "ru" ? "Статус" : "Status"}: {status}
                   </div>
                 );
               })()}
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="text-lg font-semibold text-white">{sub.plan_name}</div>
-                  <div className="text-sm text-slate-400">Код: {sub.plan_code}</div>
+                  <div className="text-sm text-slate-400">{language === "ru" ? "Код" : "Code"}: {sub.plan_code}</div>
                   <div className="mt-2 text-xs text-slate-400">
-                    Цена при покупке: {sub.price_at_purchase ?? "—"} ₽
+                    {language === "ru" ? "Цена при покупке" : "Purchase price"}: {sub.price_at_purchase ?? "—"} ₽
                   </div>
                   <div className="mt-3 text-sm text-slate-300">
                     {plans.find((p) => String(p.code || "").toUpperCase() === String(sub.plan_code || "").toUpperCase())?.description ||
-                      "Доступ к аналитике матчей, оценке value и расширенным метрикам."}
+                      (language === "ru" ? "Доступ к аналитике матчей, оценке value и расширенным метрикам." : "Access to match analytics, value evaluation, and extended metrics.")}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-glass bg-surface-2/70 px-4 py-3 text-sm text-slate-200">
-                  Активна до {formatDate(sub.end_at)}
+                  {language === "ru" ? "Активна до" : "Active until"} {formatDateForLocale(sub.end_at, language)}
                 </div>
               </div>
             </div>
@@ -559,17 +678,17 @@ export default function ProfilePagePremium() {
         </div>
       ) : (
         <div className="rounded-3xl border border-glass bg-surface-1/70 p-8 text-center">
-          <div className="text-lg font-semibold text-white">Подписок пока нет</div>
-          <div className="mt-2 text-sm text-slate-400">Оформи план, чтобы получить продвинутые инсайты.</div>
+          <div className="text-lg font-semibold text-white">{language === "ru" ? "Подписок пока нет" : "No subscriptions yet"}</div>
+          <div className="mt-2 text-sm text-slate-400">{language === "ru" ? "Оформи план, чтобы получить продвинутые инсайты." : "Choose a plan to unlock advanced insights."}</div>
           <button onClick={() => scrollToPlans()} className="mt-4 rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:brightness-110">
-            Перейти к планам
+            {language === "ru" ? "Перейти к планам" : "View plans"}
           </button>
         </div>
       )}
 
       {plansLoading ? (
         <div className="rounded-3xl border border-glass bg-surface-1/70 p-8 text-center text-slate-400">
-          Загрузка планов…
+          {language === "ru" ? "Загрузка планов…" : "Loading plans…"}
         </div>
       ) : (
         <div ref={plansRef} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -591,18 +710,18 @@ export default function ProfilePagePremium() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                      Тариф
+                      {language === "ru" ? "Тариф" : "Plan"}
                     </div>
                     <div className="mt-1 text-xl font-semibold text-white">
                       {plan.name}
                     </div>
                     <div className="mt-2 text-sm text-slate-300 min-h-[48px]">
-                      {plan.description || "Расширенный доступ к аналитике."}
+                      {plan.description || (language === "ru" ? "Расширенный доступ к аналитике." : "Extended access to analytics.")}
                     </div>
                   </div>
                   {active && (
                     <span className="inline-flex rounded-full border border-violet-400/40 bg-violet-500/20 px-2.5 py-1 text-[11px] text-white">
-                      Активна
+                      {language === "ru" ? "Активна" : "Active"}
                     </span>
                   )}
                 </div>
@@ -610,17 +729,17 @@ export default function ProfilePagePremium() {
                   <div className="mt-4 px-1 py-2 text-center">
                     <div className="text-2xl font-semibold text-white">
                       {Number(plan.price) === 0
-                        ? "Бесплатно"
+                        ? (language === "ru" ? "Бесплатно" : "Free")
                       : `${Number(plan.price).toLocaleString("ru-RU")} ₽`}
                   </div>
                   <div className="text-xs text-slate-400">
-                    {Number(plan.price) === 0 ? "доступ ограничен" : `на ${plan.duration_days} дней`}
+                    {Number(plan.price) === 0 ? (language === "ru" ? "доступ ограничен" : "limited access") : language === "ru" ? `на ${plan.duration_days} дней` : `for ${plan.duration_days} days`}
                   </div>
                 </div>
 
                 <div className="mt-4 grid gap-2 text-xs text-slate-400">
-                  <div>Отчётов в месяц: {plan.limit_reports_per_month ?? "—"}</div>
-                  <div>Уведомлений в день: {plan.limit_alerts_per_day ?? "—"}</div>
+                  <div>{language === "ru" ? "Отчётов в месяц" : "Reports per month"}: {plan.limit_reports_per_month ?? "—"}</div>
+                  <div>{language === "ru" ? "Уведомлений в день" : "Alerts per day"}: {plan.limit_alerts_per_day ?? "—"}</div>
                 </div>
 
                 <div className="mt-4 mt-auto">
@@ -633,7 +752,7 @@ export default function ProfilePagePremium() {
                         : "border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] hover:brightness-110"
                     }`}
                   >
-                    {active ? "Уже подключено" : buying ? "Оформление…" : "Подключить"}
+                    {active ? (language === "ru" ? "Уже подключено" : "Already active") : buying ? (language === "ru" ? "Оформление…" : "Activating…") : (language === "ru" ? "Подключить" : "Activate")}
                   </button>
                   {err && (
                     <div className="mt-2 rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-100">
@@ -653,10 +772,10 @@ export default function ProfilePagePremium() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 text-slate-200">
         <div className="rounded-3xl border border-glass bg-surface-1/80 p-10 text-center">
-          <div className="text-2xl font-semibold text-white">Доступ закрыт</div>
-          <div className="mt-2 text-sm text-slate-400">Войдите, чтобы открыть личный кабинет.</div>
+          <div className="text-2xl font-semibold text-white">{t("accountClosed")}</div>
+          <div className="mt-2 text-sm text-slate-400">{t("accountClosedBody")}</div>
           <button onClick={() => navigate("/login")} className="mt-4 rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:brightness-110">
-            Войти
+            {t("signInAction")}
           </button>
         </div>
       </div>
@@ -674,15 +793,15 @@ export default function ProfilePagePremium() {
       <div className="type-page max-w-6xl mx-auto px-5 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="type-title-block">
-            <div className="type-eyebrow">EdgeScore • Account</div>
-            <h1 className="type-page-title text-slate-100">Личный кабинет</h1>
+            <div className="type-eyebrow">EdgeScore • {t("account")}</div>
+            <h1 className="type-page-title text-slate-100">{t("account")}</h1>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/")}
               className="rounded-full border border-glass bg-surface-2/70 px-4 py-2 text-xs text-slate-300 hover:text-white hover:bg-surface-2"
             >
-              ← На главную
+              ← {t("backHomeShort")}
             </button>
           </div>
         </div>
@@ -690,9 +809,9 @@ export default function ProfilePagePremium() {
         <SegmentedTabs
           className="mt-6"
           items={[
-            { key: "overview", label: "Обзор" },
-            { key: "favorites", label: "Избранное" },
-            ...(!hideMonetization ? [{ key: "subscriptions", label: "Подписки" }] : []),
+            { key: "overview", label: t("accountOverview") },
+            { key: "favorites", label: t("favoritesTab") },
+            ...(!hideMonetization ? [{ key: "subscriptions", label: t("subscriptionsTab") }] : []),
           ]}
           value={activeTab}
           onChange={(key) => goTab(key)}
@@ -710,6 +829,7 @@ export default function ProfilePagePremium() {
 
       {!hideMonetization && addFundsOpen && (
         <AddFundsModal
+          language={language}
           errorText={addFundsError}
           onClose={() => {
             setAddFundsOpen(false);
@@ -727,7 +847,7 @@ export default function ProfilePagePremium() {
   );
 }
 
-function AddFundsModal({ onClose, onAdded, errorText }) {
+function AddFundsModal({ onClose, onAdded, errorText, language = "ru" }) {
   const [amount, setAmount] = useState("100");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(errorText || "");
@@ -735,7 +855,7 @@ function AddFundsModal({ onClose, onAdded, errorText }) {
   async function submit() {
     const val = Number(amount);
     if (!Number.isFinite(val) || val <= 0)
-      return setErr("Введите корректную сумму.");
+      return setErr(language === "ru" ? "Введите корректную сумму." : "Enter a valid amount.");
     setErr("");
     setLoading(true);
     try {
@@ -746,7 +866,12 @@ function AddFundsModal({ onClose, onAdded, errorText }) {
       onAdded?.(val);
       onClose?.();
     } catch (e) {
-      setErr(e?.data?.detail || "Не удалось пополнить баланс.");
+      setErr(
+        e?.data?.detail ||
+          (language === "ru"
+            ? "Не удалось пополнить баланс."
+            : "Could not add funds.")
+      );
     } finally {
       setLoading(false);
     }
@@ -764,19 +889,19 @@ function AddFundsModal({ onClose, onAdded, errorText }) {
       <div className="absolute left-1/2 top-20 w-[min(420px,92vw)] -translate-x-1/2 rounded-2xl border border-glass bg-surface-1/95 p-5 shadow-2xl">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-lg font-bold text-slate-100">
-            Пополнить баланс
+            {language === "ru" ? "Пополнить баланс" : "Add funds"}
           </div>
           <button
             onClick={onClose}
             className="h-8 w-8 rounded-full border border-glass bg-surface-2 text-slate-200 hover:bg-surface-1/80"
-            title="Закрыть"
+            title={language === "ru" ? "Закрыть" : "Close"}
           >
             ×
           </button>
         </div>
 
         <label className="mb-1 block text-sm text-slate-400">
-          Сумма, ₽
+          {language === "ru" ? "Сумма, ₽" : "Amount, ₽"}
         </label>
         <input
           value={amount}
@@ -797,14 +922,14 @@ function AddFundsModal({ onClose, onAdded, errorText }) {
             onClick={onClose}
             className="h-10 rounded-xl border border-glass px-4 text-sm text-slate-100 hover:bg-surface-2/80"
           >
-            Отмена
+            {language === "ru" ? "Отмена" : "Cancel"}
           </button>
           <button
             onClick={submit}
             disabled={loading}
             className="h-10 rounded-xl border border-primary/40 bg-primary/80 px-4 text-sm font-semibold text-white hover:bg-primary disabled:opacity-50"
           >
-            {loading ? "Обработка…" : "Пополнить"}
+            {loading ? (language === "ru" ? "Обработка…" : "Processing…") : (language === "ru" ? "Пополнить" : "Add funds")}
           </button>
         </div>
       </div>

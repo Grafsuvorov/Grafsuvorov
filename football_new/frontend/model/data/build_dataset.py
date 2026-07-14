@@ -8,6 +8,12 @@ from sqlalchemy import create_engine, text
 from typing import List
 
 from config import DB_URL, LEAGUE_ID_TO_UNDERSTAT, UNDERSTAT_MIN_SEASON
+from features.injuries import compute_injury_features
+from features.lineup_strength import build_lineup_strength_features
+from features.player_contribution import (
+    add_player_contribution_system_features,
+    build_player_contribution_features,
+)
 LEAGUE_IDS = [39, 61, 78, 135, 140]
 STAT_COLS = [
     "tackles",
@@ -134,6 +140,21 @@ def load_odds(engine, fixture_ids: List[int]):
         df["p_over_mkt"] = np.where(overround > 0, imp_over / overround, np.nan)
 
     return df
+
+
+def load_injuries(engine):
+    try:
+        return pd.read_sql(
+            text(
+                """
+                SELECT *
+                FROM football.api_football_injuries
+                """
+            ),
+            engine,
+        )
+    except Exception:
+        return pd.DataFrame()
 
 
 def load_understat_team_history(engine, min_season: int = UNDERSTAT_MIN_SEASON):
@@ -363,71 +384,76 @@ def build_understat_features(
     one_home = np.where(hist["h_a"].eq("h"), 1.0, np.nan)
     one_away = np.where(hist["h_a"].eq("a"), 1.0, np.nan)
 
+    grouped_team = hist.groupby("team_id")
+    home_mask = hist["h_a"].eq("h")
+    away_mask = hist["h_a"].eq("a")
+    home_series = pd.Series(one_home, index=hist.index)
+    away_series = pd.Series(one_away, index=hist.index)
+    new_cols = {}
+
     for window in windows:
-        hist[f"us_hist_matches_all_{window}"] = (
+        new_cols[f"us_hist_matches_all_{window}"] = (
             one_all.groupby(hist["team_id"])
             .transform(lambda s: s.shift(1).rolling(window, min_periods=1).sum())
         )
-        hist[f"us_hist_matches_home_{window}"] = (
-            pd.Series(one_home, index=hist.index)
-            .groupby(hist["team_id"])
+        new_cols[f"us_hist_matches_home_{window}"] = (
+            home_series.groupby(hist["team_id"])
             .transform(lambda s: s.shift(1).rolling(window, min_periods=1).sum())
         )
-        hist[f"us_hist_matches_away_{window}"] = (
-            pd.Series(one_away, index=hist.index)
-            .groupby(hist["team_id"])
+        new_cols[f"us_hist_matches_away_{window}"] = (
+            away_series.groupby(hist["team_id"])
             .transform(lambda s: s.shift(1).rolling(window, min_periods=1).sum())
         )
+
         for metric in UNDERSTAT_METRICS:
-            hist[f"us_{metric}_all_{window}"] = (
-                hist.groupby("team_id")[metric]
+            metric_series = hist[metric]
+            new_cols[f"us_{metric}_all_{window}"] = (
+                grouped_team[metric]
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
             )
-            hist[f"us_{metric}_home_{window}"] = (
-                hist[metric]
-                .where(hist["h_a"].eq("h"))
+            new_cols[f"us_{metric}_home_{window}"] = (
+                metric_series.where(home_mask)
                 .groupby(hist["team_id"])
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
             )
-            hist[f"us_{metric}_away_{window}"] = (
-                hist[metric]
-                .where(hist["h_a"].eq("a"))
+            new_cols[f"us_{metric}_away_{window}"] = (
+                metric_series.where(away_mask)
                 .groupby(hist["team_id"])
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
             )
+
         for metric in UNDERSTAT_OVERPERF_METRICS:
-            hist[f"us_{metric}_all_{window}"] = (
-                hist.groupby("team_id")[metric]
+            metric_series = hist[metric]
+            new_cols[f"us_{metric}_all_{window}"] = (
+                grouped_team[metric]
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
             )
-            hist[f"us_{metric}_home_{window}"] = (
-                hist[metric]
-                .where(hist["h_a"].eq("h"))
-                .groupby(hist["team_id"])
-                .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
-            )
-            hist[f"us_{metric}_away_{window}"] = (
-                hist[metric]
-                .where(hist["h_a"].eq("a"))
+            new_cols[f"us_{metric}_home_{window}"] = (
+                metric_series.where(home_mask)
                 .groupby(hist["team_id"])
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
             )
-            hist[f"us_{metric}_std_all_{window}"] = (
-                hist.groupby("team_id")[metric]
+            new_cols[f"us_{metric}_away_{window}"] = (
+                metric_series.where(away_mask)
+                .groupby(hist["team_id"])
+                .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
+            )
+            new_cols[f"us_{metric}_std_all_{window}"] = (
+                grouped_team[metric]
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=2).std())
             )
-            hist[f"us_{metric}_std_home_{window}"] = (
-                hist[metric]
-                .where(hist["h_a"].eq("h"))
+            new_cols[f"us_{metric}_std_home_{window}"] = (
+                metric_series.where(home_mask)
                 .groupby(hist["team_id"])
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=2).std())
             )
-            hist[f"us_{metric}_std_away_{window}"] = (
-                hist[metric]
-                .where(hist["h_a"].eq("a"))
+            new_cols[f"us_{metric}_std_away_{window}"] = (
+                metric_series.where(away_mask)
                 .groupby(hist["team_id"])
                 .transform(lambda s: s.shift(1).rolling(window, min_periods=2).std())
             )
+
+    hist = pd.concat([hist, pd.DataFrame(new_cols, index=hist.index)], axis=1)
 
     hist_feature_cols = [
         c
@@ -469,18 +495,19 @@ def build_understat_features(
 
 def add_understat_system_features(df_all: pd.DataFrame) -> pd.DataFrame:
     df = df_all.copy()
+    new_cols = {}
 
     def _num(col: str) -> pd.Series:
         return pd.to_numeric(df[col], errors="coerce")
 
     def _diff(out_col: str, left: str, right: str):
         if left in df.columns and right in df.columns:
-            df[out_col] = _num(left) - _num(right)
+            new_cols[out_col] = _num(left) - _num(right)
 
     def _ratio(out_col: str, num_col: str, den_col: str):
         if num_col in df.columns and den_col in df.columns:
             den = _num(den_col).replace(0, np.nan)
-            df[out_col] = _num(num_col) / den
+            new_cols[out_col] = _num(num_col) / den
 
     matchup_specs = {
         "usys_home_npxg_matchup_3": ("home_us_npxg_all_3", "away_us_npxga_all_3"),
@@ -548,6 +575,8 @@ def add_understat_system_features(df_all: pd.DataFrame) -> pd.DataFrame:
     _diff("usys_home_regression_edge_5", "home_us_goal_minus_npxg_all_5", "away_us_goal_against_minus_npxga_all_5")
     _diff("usys_away_regression_edge_5", "away_us_goal_minus_npxg_all_5", "home_us_goal_against_minus_npxga_all_5")
 
+    if new_cols:
+        df = pd.concat([df, pd.DataFrame(new_cols, index=df.index)], axis=1)
     return df
 
 
@@ -564,6 +593,18 @@ def build_dataset(return_all=True):
     form = build_team_form(sched, window=5)
     match_stats = build_match_stats_features(sched, engine)
     understat = build_understat_features(sched, engine)
+    player_contrib = build_player_contribution_features(
+        sched,
+        engine,
+        min_season=UNDERSTAT_MIN_SEASON,
+    )
+    lineup_strength = build_lineup_strength_features(
+        sched,
+        engine,
+        min_season=UNDERSTAT_MIN_SEASON,
+    )
+    injuries_raw = load_injuries(engine)
+    injuries = compute_injury_features(sched, injuries_raw) if not injuries_raw.empty else pd.DataFrame({"fixture_id": sched["fixture_id"]})
     odds = load_odds(engine, sched["fixture_id"].tolist())
 
     df = (
@@ -571,10 +612,14 @@ def build_dataset(return_all=True):
         .merge(form, on="fixture_id", how="left")
         .merge(match_stats, on="fixture_id", how="left")
         .merge(understat, on="fixture_id", how="left")
+        .merge(player_contrib, on="fixture_id", how="left")
+        .merge(lineup_strength, on="fixture_id", how="left")
+        .merge(injuries, on="fixture_id", how="left")
         .merge(odds, on="fixture_id", how="left")
         .sort_values("date_utc")
         .reset_index(drop=True)
     )
     df = add_understat_system_features(df)
+    df = add_player_contribution_system_features(df)
 
     return df if return_all else df[df["has_result"]]

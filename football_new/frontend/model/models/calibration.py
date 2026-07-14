@@ -23,7 +23,7 @@ def fit_multinomial_lr_calibrator(P_cal: np.ndarray, y_cal_3: np.ndarray):
     y = np.asarray(y_cal_3, dtype=int)
 
     X = np.log(P_cal / (1 - P_cal))
-    lr = LogisticRegression(max_iter=200, multi_class="multinomial")
+    lr = LogisticRegression(max_iter=200, solver="lbfgs")
     lr.fit(X, y)
     return lr
 
@@ -43,7 +43,7 @@ def per_league_lr(
     leagues = pd.to_numeric(leagues, errors="coerce").values
 
     X = np.log(P_cal / (1 - P_cal))
-    global_lr = LogisticRegression(max_iter=200, multi_class="multinomial")
+    global_lr = LogisticRegression(max_iter=200, solver="lbfgs")
     global_lr.fit(X, y)
 
     per_league = {}
@@ -51,7 +51,7 @@ def per_league_lr(
         mask = leagues == lid
         if mask.sum() < min_per_league:
             continue
-        lr = LogisticRegression(max_iter=200, multi_class="multinomial")
+        lr = LogisticRegression(max_iter=200, solver="lbfgs")
         lr.fit(X[mask], y[mask])
         per_league[int(lid)] = lr
 

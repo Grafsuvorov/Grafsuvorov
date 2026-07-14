@@ -1,0 +1,243 @@
+{
+  "dataset": {
+    "rows": 6354,
+    "train": 5399,
+    "cal": 738,
+    "val": 217
+  },
+  "blend_choice": {
+    "poisson_market_weight": 0.0,
+    "poisson_market_cal": {
+      "label": "pois_mkt_0.00",
+      "n": 738,
+      "logloss": 0.984219,
+      "accuracy": 0.528455
+    },
+    "cat_market_weight": 0.5,
+    "cat_market_cal": {
+      "label": "cat_mkt_0.50",
+      "n": 738,
+      "logloss": 0.983472,
+      "accuracy": 0.533875
+    }
+  },
+  "overall": {
+    "market": {
+      "label": "market",
+      "n": 217,
+      "logloss": 1.024226,
+      "accuracy": 0.506912
+    },
+    "poisson_v4": {
+      "label": "poisson_v4",
+      "n": 217,
+      "logloss": 1.046782,
+      "accuracy": 0.470046
+    },
+    "poisson_market_v4": {
+      "label": "poisson_market_v4",
+      "n": 217,
+      "logloss": 1.024226,
+      "accuracy": 0.506912
+    },
+    "catboost_v41": {
+      "label": "catboost_v41",
+      "n": 217,
+      "logloss": 1.026523,
+      "accuracy": 0.493088
+    },
+    "catboost_market_v41": {
+      "label": "catboost_market_v41",
+      "n": 217,
+      "logloss": 1.024471,
+      "accuracy": 0.502304
+    }
+  },
+  "by_league": {
+    "market": [
+      {
+        "league": "Bundesliga",
+        "label": "market",
+        "n": 36,
+        "logloss": 1.035331,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "market",
+        "n": 60,
+        "logloss": 0.994921,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "market",
+        "n": 40,
+        "logloss": 1.095913,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "market",
+        "n": 41,
+        "logloss": 0.949189,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "market",
+        "n": 40,
+        "logloss": 1.063416,
+        "accuracy": 0.475
+      }
+    ],
+    "poisson_v4": [
+      {
+        "league": "Bundesliga",
+        "label": "poisson_v4",
+        "n": 36,
+        "logloss": 1.034982,
+        "accuracy": 0.527778
+      },
+      {
+        "league": "La Liga",
+        "label": "poisson_v4",
+        "n": 60,
+        "logloss": 1.028515,
+        "accuracy": 0.5
+      },
+      {
+        "league": "Ligue 1",
+        "label": "poisson_v4",
+        "n": 40,
+        "logloss": 1.103223,
+        "accuracy": 0.375
+      },
+      {
+        "league": "Premier League",
+        "label": "poisson_v4",
+        "n": 41,
+        "logloss": 1.022886,
+        "accuracy": 0.439024
+      },
+      {
+        "league": "Serie A",
+        "label": "poisson_v4",
+        "n": 40,
+        "logloss": 1.052854,
+        "accuracy": 0.5
+      }
+    ],
+    "poisson_market_v4": [
+      {
+        "league": "Bundesliga",
+        "label": "poisson_market_v4",
+        "n": 36,
+        "logloss": 1.035331,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "poisson_market_v4",
+        "n": 60,
+        "logloss": 0.994921,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "poisson_market_v4",
+        "n": 40,
+        "logloss": 1.095913,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "poisson_market_v4",
+        "n": 41,
+        "logloss": 0.949189,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "poisson_market_v4",
+        "n": 40,
+        "logloss": 1.063416,
+        "accuracy": 0.475
+      }
+    ],
+    "catboost_v41": [
+      {
+        "league": "Bundesliga",
+        "label": "catboost_v41",
+        "n": 36,
+        "logloss": 1.024943,
+        "accuracy": 0.472222
+      },
+      {
+        "league": "La Liga",
+        "label": "catboost_v41",
+        "n": 60,
+        "logloss": 0.994589,
+        "accuracy": 0.5
+      },
+      {
+        "league": "Ligue 1",
+        "label": "catboost_v41",
+        "n": 40,
+        "logloss": 1.094925,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "catboost_v41",
+        "n": 41,
+        "logloss": 0.954814,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "catboost_v41",
+        "n": 40,
+        "logloss": 1.080948,
+        "accuracy": 0.475
+      }
+    ],
+    "catboost_market_v41": [
+      {
+        "league": "Bundesliga",
+        "label": "catboost_market_v41",
+        "n": 36,
+        "logloss": 1.028754,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "catboost_market_v41",
+        "n": 60,
+        "logloss": 0.994158,
+        "accuracy": 0.516667
+      },
+      {
+        "league": "Ligue 1",
+        "label": "catboost_market_v41",
+        "n": 40,
+        "logloss": 1.094172,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "catboost_market_v41",
+        "n": 41,
+        "logloss": 0.95129,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "catboost_market_v41",
+        "n": 40,
+        "logloss": 1.071393,
+        "accuracy": 0.475
+      }
+    ]
+  }
+}

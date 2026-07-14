@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dance with me | Танцы для девушек</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="#top" class="brand" aria-label="Dance with me">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span class="brand-copy">
+            <span class="brand-title">Dance with me</span>
+            <span class="brand-subtitle">танцы для девушек</span>
+          </span>
+        </a>
+        <nav class="desktop-nav">
+          <a href="#directions">Направления</a>
+          <a href="#schedule">Расписание</a>
+          <a href="#cabinet">Кабинет</a>
+          <a href="#poster">Афиша</a>
+          <a href="#prices">Цены</a>
+          <a href="#about">Обо мне</a>
+          <a href="#reviews">Отзывы</a>
+          <a href="#faq">FAQ</a>
+          <a href="#contacts">Контакты</a>
+        </nav>
+        <div class="header-actions">
+          <button id="account-button" class="primary-button" type="button" data-open-account="true">Войти / регистрация</button>
+          <button id="menu-button" class="menu-button" type="button" aria-expanded="false" aria-controls="mobile-menu">Меню</button>
+        </div>
+      </div>
+      <nav id="mobile-menu" class="mobile-menu" aria-hidden="true">
+        <div class="mobile-menu-shell">
+          <div class="mobile-menu-grip" aria-hidden="true"></div>
+          <div class="mobile-menu-topline">
+            <a href="#top" class="mobile-menu-brand" aria-label="На главную">
+              <span class="mobile-menu-brand-title">DANCE WITH ME</span>
+              <span class="mobile-menu-brand-copy">танцы для девушек</span>
+            </a>
+            <button id="mobile-menu-close" class="mobile-menu-close" type="button" aria-label="Закрыть меню">✕</button>
+          </div>
+
+          <div class="mobile-menu-links">
+            <a href="#directions">Направления</a>
+            <a href="#schedule">Расписание</a>
+            <a href="#poster">Афиша</a>
+            <a href="#prices">Цены</a>
+            <a href="#about">Обо мне</a>
+            <a href="#reviews">Отзывы</a>
+            <a href="#faq">FAQ</a>
+            <a href="#contacts">Контакты</a>
+          </div>
+
+          <div class="mobile-menu-actions">
+            <button class="primary-button mobile-menu-primary" type="button" data-open-booking="true">Записаться</button>
+            <button id="mobile-account-button" class="glass-button mobile-menu-secondary" type="button" data-open-account="true">Личный кабинет</button>
+          </div>
+        </div>
+      </nav>
+      <div id="mobile-menu-gesture-zone" class="mobile-menu-gesture-zone" aria-hidden="true"></div>
+    </header>
+
+    <main id="top">
+      <section class="hero" data-reveal="hero">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <p class="hero-kicker">Танцы для девушек</p>
+          <h1>Раскрой себя через танец</h1>
+          <p class="hero-subtitle">
+            Frame Up • Strip • Twerk
+          </p>
+          <p class="hero-copy">
+            Танцы в Краснодаре для тех, кто хочет двигаться красиво, увереннее и в своём темпе. Можно прийти даже с нуля.
+          </p>
+          <div class="hero-benefits" aria-label="Преимущества">
+            <span><i>✓</i> Без осуждения</span>
+            <span><i>✓</i> Для новичков</span>
+            <span><i>✓</i> Индивидуальный подход</span>
+          </div>
+          <div class="hero-buttons">
+            <button class="primary-button glow-button" type="button" data-open-booking="true">Записаться на занятие</button>
+            <a class="glass-button" href="#schedule">Посмотреть расписание</a>
+          </div>
+          <div class="script-note">let’s dance!</div>
+        </div>
+      </section>
+
+      <button id="sticky-booking-button" class="sticky-booking-button primary-button glow-button" type="button" data-open-booking="true">
+        Записаться
+      </button>
+
+      <section id="directions" class="section light-section" data-reveal="true">
+        <div class="section-head">
+          <p class="section-kicker">Направления</p>
+          <h2>Выбери свой ритм</h2>
+        </div>
+        <div id="directions-track" class="directions-slider">
+          <article class="direction-card direction-card-frameup">
+            <img src="/assets/frameup-indiv-card.jpg" alt="Frame Up" />
+            <div class="direction-copy">
+              <p class="direction-label">Frame Up / Strip</p>
+              <h3>Линия, мягкость и подача</h3>
+              <p>Пластика, контроль и выразительное движение без зажатости.</p>
+              <button class="direction-link" type="button" data-open-booking="true">Записаться</button>
+            </div>
+          </article>
+          <article class="direction-card direction-card-twerk">
+            <img src="/assets/twerk2-card.jpg" alt="Twerk" />
+            <div class="direction-copy">
+              <p class="direction-label">Twerk</p>
+              <h3>Ритм, энергия, дерзость</h3>
+              <p>Динамика, уверенность и сильная подача в каждом движении.</p>
+              <button class="direction-link" type="button" data-open-booking="true">Записаться</button>
+            </div>
+          </article>
+          <article class="direction-card direction-card-individual">
+            <img src="/assets/indiv2-card.jpg" alt="Индивидуальные занятия" />
+            <div class="direction-copy">
+              <p class="direction-label">Индивидуально</p>
+              <h3>Твой темп, твой результат</h3>
+              <p>Личный фокус, быстрый прогресс и работа под твою задачу.</p>
+              <button class="direction-link" type="button" data-open-booking="true">Записаться</button>
+            </div>
+          </article>
+        </div>
+        <div id="directions-dots" class="slider-dots" aria-label="Переключатель направлений"></div>
+      </section>
+
+      <section id="schedule" class="section schedule-section" data-reveal="true">
+        <div class="section-head">
+          <p class="section-kicker">Расписание</p>
+          <h2>Расписание занятий</h2>
+          <p class="section-subtitle">Выбери удобный день и запишись на тренировку.</p>
+        </div>
+        <div class="schedule-shell">
+          <div class="schedule-table-head">
+            <span>День</span>
+            <span>Время</span>
+            <span>Направление</span>
+            <span>Уровень</span>
+            <span>Места</span>
+            <span></span>
+          </div>
+          <div id="schedule-list" class="schedule-list"></div>
+        </div>
+      </section>
+
+      <section id="cabinet" class="section light-section cabinet-section" data-reveal="true">
+        <div class="section-head">
+          <p class="section-kicker">Кабинет</p>
+          <h2>Личный кабинет</h2>
+          <p class="section-subtitle">Здесь видно твои записи, остаток занятий и все важное по расписанию.</p>
+        </div>
+        <div id="cabinet-guest" class="cabinet-guest">
+          <div class="cabinet-guest-copy">
+            <h3>Войди или зарегистрируйся</h3>
+            <p>Войди или зарегистрируйся, чтобы записи, расписание и остаток занятий всегда были под рукой.</p>
+          </div>
+          <button id="cabinet-auth-button" class="primary-button" type="button">Открыть кабинет</button>
+        </div>
+        <div id="cabinet-user" class="cabinet-shell hidden">
+          <div class="cabinet-profile-card">
+            <div>
+              <p class="section-kicker">Профиль</p>
+              <h3 id="cabinet-user-name">Гость</h3>
+              <p id="cabinet-user-email" class="cabinet-user-meta"></p>
+              <p id="cabinet-user-phone" class="cabinet-user-meta"></p>
+            </div>
+            <button id="cabinet-logout" class="glass-button dark-glass-button" type="button">Выйти</button>
+          </div>
+          <div class="cabinet-stats">
+            <article class="cabinet-stat-card">
+              <span>Записей сейчас</span>
+              <strong id="cabinet-bookings-count">0</strong>
+            </article>
+            <article class="cabinet-stat-card accent">
+              <span>Осталось занятий</span>
+              <strong id="cabinet-lesson-balance">0</strong>
+            </article>
+          </div>
+          <div class="cabinet-bookings-card">
+            <div class="cabinet-block-head">
+              <div>
+                <p class="section-kicker">Мои занятия</p>
+                <h3>Куда ты уже записана</h3>
+              </div>
+            </div>
+            <div id="cabinet-bookings-list" class="cabinet-bookings-list"></div>
+            <div id="cabinet-bookings-empty" class="admin-booking-item hidden">Пока записей нет. Можно выбрать занятие в расписании выше.</div>
+          </div>
+          <section id="admin-zone" class="admin-zone hidden">
+            <div class="cabinet-block-head">
+              <div>
+                <p class="section-kicker">Админ</p>
+                <h3>Управление студией</h3>
+              </div>
+            </div>
+            <div class="admin-stats-grid">
+              <article class="admin-stat-card">
+                <span>Учениц</span>
+                <strong id="admin-total-students">0</strong>
+              </article>
+              <article class="admin-stat-card">
+                <span>Записей</span>
+                <strong id="admin-total-bookings">0</strong>
+              </article>
+              <article class="admin-stat-card">
+                <span>Ближайших занятий</span>
+                <strong id="admin-total-lessons">0</strong>
+              </article>
+            </div>
+            <div class="admin-grid">
+              <form id="lesson-form" class="dialog-form compact admin-card-block">
+                <h4>Добавить занятие</h4>
+                <label>
+                  Дата
+                  <input name="lessonDate" type="date" required />
+                </label>
+                <label>
+                  Время
+                  <input name="startTime" type="time" required />
+                </label>
+                <label>
+                  Длительность, минут
+                  <input name="durationMinutes" type="number" value="90" required />
+                </label>
+                <label>
+                  Название
+                  <input name="title" type="text" value="Frame Up Strip" required />
+                </label>
+                <label>
+                  Описание
+                  <textarea name="description" rows="2"></textarea>
+                </label>
+                <label>
+                  Мест
+                  <input name="capacity" type="number" value="10" required />
+                </label>
+                <button class="primary-button" type="submit">Сохранить занятие</button>
+              </form>
+              <form id="event-form" class="dialog-form compact admin-card-block">
+                <h4>Добавить событие в афишу</h4>
+                <label>
+                  Название
+                  <input name="title" type="text" required />
+                </label>
+                <label>
+                  Короткая дата
+                  <input name="dateLabel" type="text" placeholder="27–28 июня" required />
+                </label>
+                <label>
+                  Время
+                  <input name="timeLabel" type="text" placeholder="19:00" />
+                </label>
+                <label>
+                  Формат
+                  <input name="formatLabel" type="text" placeholder="Strip · 2 дня" />
+                </label>
+                <label>
+                  Цена
+                  <input name="priceLabel" type="text" placeholder="от 3500 ₽" />
+                </label>
+                <label>
+                  Осталось мест
+                  <input name="spotsLabel" type="text" placeholder="6 мест" />
+                </label>
+                <label>
+                  Описание
+                  <textarea name="description" rows="3"></textarea>
+                </label>
+                <label>
+                  Начало события
+                  <input name="startsAt" type="datetime-local" />
+                </label>
+                <label>
+                  Конец события
+                  <input name="endsAt" type="datetime-local" />
+                </label>
+                <label>
+                  Фото
+                  <input id="event-image-input" name="image" type="file" accept="image/png,image/jpeg,image/webp" />
+                </label>
+                <button class="primary-button" type="submit">Добавить в афишу</button>
+              </form>
+            </div>
+            <div class="admin-grid lower">
+              <div class="admin-card-block">
+                <div class="cabinet-block-head">
+                  <div>
+                    <p class="section-kicker">Ученицы</p>
+                    <h4>Баланс и аккаунты</h4>
+                  </div>
+                </div>
+                <div id="admin-users-list" class="admin-users-list"></div>
+              </div>
+              <div class="admin-card-block">
+                <div class="cabinet-block-head">
+                  <div>
+                    <p class="section-kicker">Записи</p>
+                    <h4>Кто записан на занятия</h4>
+                  </div>
+                </div>
+                <div id="admin-bookings-list" class="admin-bookings-list"></div>
+              </div>
+            </div>
+            <div class="admin-card-block">
+              <div class="cabinet-block-head">
+                <div>
+                  <p class="section-kicker">Афиша</p>
+                  <h4>Текущие события</h4>
+                </div>
+              </div>
+              <div id="admin-events-list" class="admin-events-list"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="poster" class="section light-section" data-reveal="true">
+        <div class="section-head">
+          <p class="section-kicker">Афиша</p>
+          <h2>Ближайшее событие</h2>
+          <p class="section-subtitle">Открытые уроки, интенсивы и специальные события.</p>
+        </div>
+        <div id="poster-current-list" class="poster-grid poster-grid-single">
+          <article class="poster-card featured" data-event-end="2026-06-28T23:59:59">
+            <img src="/assets/head-desktop.jpg" alt="Аквакурс" />
+            <div class="poster-badge">27–28 июня</div>
+            <div class="poster-copy">
+              <h3>Аквакурс</h3>
+              <p>Strip choreography за 2 дня: в первый день учим хореографию, во второй день снимаем в студии с во�

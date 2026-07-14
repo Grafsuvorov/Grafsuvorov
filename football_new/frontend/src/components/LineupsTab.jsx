@@ -1,5 +1,6 @@
 ﻿import React, { useEffect } from "react";
 import FootballPitchPro from "@/components/FootballPitchPro";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 import {
   normalizeLineups,
   autoLayout,
@@ -152,6 +153,7 @@ function PlayerListRow({ player, onPlayer, align = "left" }) {
    MAIN
 =============================== */
 export default function LineupsTab({ data, loading, match, onPlayer }) {
+  const { t } = useLanguage();
   const norm = normalizeLineups(data, match);
   const metaMaps = buildMetaMaps(norm?.events || []);
 
@@ -177,7 +179,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
     ric(() => photos.forEach(prefetchImage));
   }, [norm]);
 
-  if (loading) return <div className="py-6 text-muted">Загружаем составы…</div>;
+  if (loading) return <div className="py-6 text-muted">{t("lineupsLoading")}</div>;
 
   const homeSubs = (norm?.home?.bench || []).map((p) => ({
     ...p,
@@ -195,20 +197,20 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
   );
 
   return (
-    <div className="w-full space-y-8 bg-surface-2/40 border border-glass rounded-3xl p-5 shadow-[0_0_35px_rgba(0,0,0,0.35)]">
+    <div className="w-full min-w-0 space-y-6 overflow-hidden rounded-3xl border border-glass bg-surface-2/40 p-3 shadow-[0_0_35px_rgba(0,0,0,0.35)] sm:space-y-8 sm:p-5">
 
       {/* Header */}
-      <div className="flex justify-between items-center px-2">
-        <div className="text-slate-200 text-sm">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 sm:px-2">
+        <div className="min-w-0 text-xs text-slate-200 sm:text-sm">
           <span className="font-semibold text-white">{norm?.home?.team_name}</span>
           <span className="text-slate-400"> • {norm?.home?.formation}</span>
         </div>
 
-        <div className="text-accent text-[11px] uppercase tracking-[0.15em]">
-          Стартовые составы
+        <div className="max-w-[92px] text-center text-[9px] uppercase tracking-[0.12em] text-accent sm:max-w-none sm:text-[11px] sm:tracking-[0.15em]">
+          {t("startingLineups")}
         </div>
 
-        <div className="text-slate-200 text-sm text-right">
+        <div className="min-w-0 text-right text-xs text-slate-200 sm:text-sm">
           <span className="font-semibold text-white">{norm?.away?.team_name}</span>
           <span className="text-slate-400"> • {norm?.away?.formation}</span>
         </div>
@@ -227,7 +229,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <div className="text-xs uppercase text-slate-400 mb-2">
-            Запас • {norm?.home?.team_name}
+            {t("bench")} • {norm?.home?.team_name}
           </div>
 
           <div className="space-y-1">
@@ -241,7 +243,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
 
         <div className="space-y-2">
           <div className="text-xs uppercase text-slate-400 mb-2 text-right pr-1">
-            Запас • {norm?.away?.team_name}
+            {t("bench")} • {norm?.away?.team_name}
           </div>
 
           <div className="space-y-1">
@@ -257,7 +259,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
       {/* Shared events */}
       <div className="space-y-2">
         <div className="text-xs uppercase text-slate-400 mb-1">
-          События матча
+          {t("matchEvents")}
         </div>
         {mergedEvents.length ? (
           <div className="space-y-2">
@@ -265,18 +267,18 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
               const kind = eventKind(e);
               const teamSide =
                 e.team_id === norm?.home?.team_id
-                  ? "Дома"
+                  ? t("homeSide")
                   : e.team_id === norm?.away?.team_id
-                    ? "Гости"
+                    ? t("awaySide")
                     : "";
               const isHomeEvent = e.team_id === norm?.home?.team_id;
               return (
                 <div
                   key={`ev-${i}`}
-                  className={`grid items-start gap-3 rounded-2xl px-3 py-3 text-sm transition hover:bg-white/[0.04] ${
+                  className={`grid min-w-0 items-start gap-2 rounded-2xl px-2 py-3 text-xs transition hover:bg-white/[0.04] sm:gap-3 sm:px-3 sm:text-sm ${
                     isHomeEvent
-                      ? "grid-cols-[56px_28px_minmax(0,1fr)]"
-                      : "grid-cols-[minmax(0,1fr)_28px_56px]"
+                      ? "grid-cols-[42px_22px_minmax(0,1fr)] sm:grid-cols-[56px_28px_minmax(0,1fr)]"
+                      : "grid-cols-[minmax(0,1fr)_22px_42px] sm:grid-cols-[minmax(0,1fr)_28px_56px]"
                   }`}
                 >
                   {isHomeEvent ? (
@@ -299,7 +301,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
                             player={e}
                           />
                           {e.assist_name ? (
-                            <span className="text-white/50"> (ассист {e.assist_name})</span>
+                            <span className="text-white/50"> ({t("assist")} {e.assist_name})</span>
                           ) : null}
                         </div>
                       </div>
@@ -327,7 +329,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
                             player={e}
                           />
                           {e.assist_name ? (
-                            <span className="text-white/50"> (ассист {e.assist_name})</span>
+                            <span className="text-white/50"> ({t("assist")} {e.assist_name})</span>
                           ) : null}
                         </div>
                       </div>

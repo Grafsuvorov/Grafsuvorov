@@ -28,8 +28,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      DB_URL: postgresql+psycopg2://postgres:0506@host.docker.internal:5432/dwh
-      PGHOST: host.docker.internal
+      DB_URL: postgresql+psycopg2://postgres:0506@edgescore-db-shared:5432/dwh
+      PGHOST: edgescore-db-shared
       PGPORT: "5432"
       PGDATABASE: dwh
       PGUSER: postgres
@@ -49,6 +49,9 @@ services:
       - ./plugins:/opt/airflow/plugins
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/scripts:/opt/airflow/scripts
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/frontend/model:/opt/airflow/model
+    networks:
+      - default
+      - shared_db
     restart: unless-stopped
 
   airflow-scheduler:
@@ -64,8 +67,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      DB_URL: postgresql+psycopg2://postgres:0506@host.docker.internal:5432/dwh
-      PGHOST: host.docker.internal
+      DB_URL: postgresql+psycopg2://postgres:0506@edgescore-db-shared:5432/dwh
+      PGHOST: edgescore-db-shared
       PGPORT: "5432"
       PGDATABASE: dwh
       PGUSER: postgres
@@ -81,6 +84,9 @@ services:
       - ./plugins:/opt/airflow/plugins
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/scripts:/opt/airflow/scripts
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/frontend/model:/opt/airflow/model
+    networks:
+      - default
+      - shared_db
     restart: unless-stopped
 
   airflow-worker:
@@ -94,8 +100,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      DB_URL: postgresql+psycopg2://postgres:0506@host.docker.internal:5432/dwh
-      PGHOST: host.docker.internal
+      DB_URL: postgresql+psycopg2://postgres:0506@edgescore-db-shared:5432/dwh
+      PGHOST: edgescore-db-shared
       PGPORT: "5432"
       PGDATABASE: dwh
       PGUSER: postgres
@@ -111,6 +117,9 @@ services:
       - ./plugins:/opt/airflow/plugins
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/scripts:/opt/airflow/scripts
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/frontend/model:/opt/airflow/model
+    networks:
+      - default
+      - shared_db
     restart: unless-stopped
 
   airflow-triggerer:
@@ -124,8 +133,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
       AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
-      DB_URL: postgresql+psycopg2://postgres:0506@host.docker.internal:5432/dwh
-      PGHOST: host.docker.internal
+      DB_URL: postgresql+psycopg2://postgres:0506@edgescore-db-shared:5432/dwh
+      PGHOST: edgescore-db-shared
       PGPORT: "5432"
       PGDATABASE: dwh
       PGUSER: postgres
@@ -141,6 +150,9 @@ services:
       - ./plugins:/opt/airflow/plugins
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/scripts:/opt/airflow/scripts
       - /Users/nikitasuvorov/Projects/Grafsuvorov/football_new/frontend/model:/opt/airflow/model
+    networks:
+      - default
+      - shared_db
     restart: unless-stopped
 
   airflow-init:
@@ -178,3 +190,7 @@ services:
 
 volumes:
   postgres-db-volume:
+
+networks:
+  shared_db:
+    external: true

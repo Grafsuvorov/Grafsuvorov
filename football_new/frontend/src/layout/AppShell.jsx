@@ -1,17 +1,12 @@
 ﻿// src/layout/AppShell.jsx
 import {
-  lazy,
-  Suspense,
-  useCallback,
   useEffect,
-  useState,
 } from "react";
 import {
   useLocation,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import LeagueTabsHeader, {
@@ -29,15 +24,6 @@ function forceDarkTheme() {
   html.classList.remove("light", "pink");
   html.classList.add("dark");
 }
-
-/* ===========================================
-   LAZY MODAL
-=========================================== */
-const MatchModalLazy = lazy(() =>
-  import("@/pages/MatchSchedulePage").then((mod) => ({
-    default: mod.MatchModal,
-  }))
-);
 
 /* ===========================================
    RECENT LEAGUES
@@ -110,6 +96,24 @@ function injectAuroraStyles() {
   document.head.appendChild(style);
 }
 
+const TIGHT_CONTENT_PREFIXES = [
+  "/dashboard",
+  "/about",
+  "/table",
+  "/matches-v3",
+  "/schedule",
+  "/match/",
+  "/team/",
+  "/player/",
+  "/insights",
+  "/roi-admin",
+  "/best-picks",
+  "/graf",
+];
+
+const usesTightContent = (pathname) =>
+  TIGHT_CONTENT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
 /* ===========================================
    MAIN APP SHELL
 =========================================== */
@@ -132,20 +136,8 @@ export default function AppShell({ children }) {
   const league = leagueParam || fallbackLeague;
   const season = seasonParam || "2025";
 
-  const [modalMatch, setModalMatch] = useState(null);
   const hideLeftRail = false;
-  const tightContent =
-    location.pathname.startsWith("/table") ||
-    location.pathname.startsWith("/matches-v3") ||
-    location.pathname.startsWith("/schedule") ||
-    location.pathname.startsWith("/match/") ||
-    location.pathname.startsWith("/team/") ||
-    location.pathname.startsWith("/player/") ||
-    location.pathname.startsWith("/insights") ||
-    location.pathname.startsWith("/roi-admin") ||
-    location.pathname.startsWith("/best-picks") ||
-    location.pathname.startsWith("/graf-picks");
-
+  const tightContent = usesTightContent(location.pathname);
   /* auto populate params */
   useEffect(() => {
     if (!leagueParam) {
@@ -169,23 +161,16 @@ export default function AppShell({ children }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const goToTeam = useCallback(
-    (teamId) => {
-      if (!teamId) return;
-      navigate(`/team/${teamId}?league=${encodeURIComponent(league)}&season=${season}`);
-    },
-    [navigate, league, season]
-  );
-
   /* ===========================================
      CLEAN HEADER — ONLY LeagueTabsHeader
   ============================================ */
   return (
     <div
-      className="min-h-screen relative text-white overflow-hidden"
+      className="min-h-screen relative text-white overflow-x-hidden"
       style={{
         background:
           "radial-gradient(circle at 10% 0%, #141927 0%, #080a14 45%, #04050d 100%)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
       {/* BACKGROUND */}
@@ -197,9 +182,12 @@ export default function AppShell({ children }) {
       </div>
 
       {/* HEADER — только выбор лиги/сезона, БЕЗ вкладок */}
-      <header className="sticky top-0 z-50 border-b border-white/5 bg-black/10 backdrop-blur-2xl">
-        <div className="w-full px-6 pt-3 pb-3">
-          <div className="mx-auto max-w-[1440px] grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_280px] gap-8">
+      <header
+        className="relative z-50 bg-[#040712] shadow-[0_16px_38px_rgba(0,0,0,0.58)]"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        <div className="w-full px-3 py-2 sm:px-4 lg:px-6 lg:pt-3 lg:pb-3">
+          <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:gap-8">
             <div className="xl:col-span-3">
               <LeagueTabsHeader
                 league={league}
@@ -212,11 +200,11 @@ export default function AppShell({ children }) {
       </header>
 
       {/* GRID */}
-      <div className="w-full pb-10 mt-6">
-        <div className="mx-auto max-w-[1440px] px-6 grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_280px] gap-8 items-start">
+      <div className="mt-3 w-full pb-8 lg:mt-5 lg:pb-10">
+        <div className="mx-auto grid max-w-[1440px] grid-cols-1 items-start gap-4 px-3 sm:px-4 lg:px-6 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:gap-8">
           <aside className={clsx("hidden xl:block", hideLeftRail && "xl:hidden")}>
-            <div className="sticky top-8 mt-8 space-y-5">
-              <div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_8px_35px_rgba(0,0,0,0.55)] p-4">
+            <div className="sticky top-24 mt-8 space-y-5">
+              <div className="rounded-3xl bg-white/[0.032] p-4 shadow-[0_8px_35px_rgba(0,0,0,0.55)] backdrop-blur-xl ring-1 ring-white/[0.04]">
                 <LeagueQuickNavCard
                   activeLeague={league}
                   onSelectLeague={handleChangeLeague}
@@ -227,32 +215,19 @@ export default function AppShell({ children }) {
 
           <main
             className={clsx(
-              "app-typography type-page space-y-6 min-w-0",
-              tightContent && "w-full xl:col-span-2 xl:pl-4",
+              "app-typography type-page min-w-0 overflow-x-hidden",
+              tightContent && "w-full xl:col-span-2",
               hideLeftRail && "xl:col-span-3 xl:pl-0"
             )}
           >
             {children}
           </main>
 
-          {!tightContent && !hideLeftRail && <div className="hidden xl:block" aria-hidden="true" />}
+          {!tightContent && !hideLeftRail && (
+            <div className="hidden xl:block" aria-hidden="true" />
+          )}
         </div>
       </div>
-
-      {modalMatch &&
-        createPortal(
-          <Suspense fallback={null}>
-            <MatchModalLazy
-              initialMatch={modalMatch}
-              league={league}
-              season={season}
-              onClose={() => setModalMatch(null)}
-              onGoTeam={goToTeam}
-            />
-          </Suspense>,
-          document.body
-        )}
-
     </div>
   );
 }

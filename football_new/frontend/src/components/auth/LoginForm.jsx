@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "@/auth/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -9,6 +10,7 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -20,7 +22,7 @@ export default function LoginForm() {
       await login(email, password);
       navigate("/profile");
     } catch (err) {
-      setError(err.message || "Ошибка входа");
+      setError(err.message || t("loginFailed"));
     } finally {
       setIsLoading(false);
     }
@@ -32,23 +34,18 @@ export default function LoginForm() {
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.25 }}
-        className="
-          w-full max-w-md
-          rounded-3xl
-          border border-glass
-          bg-surface-2/75
-          backdrop-blur-2xl
-          shadow-[0_22px_70px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)]
-          p-8
-        "
+        className="surface-hero w-full max-w-md p-8"
       >
         {/* HEADER */}
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            Вход в аккаунт
+            {t("loginCardTitle")}
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            EdgeScore • Football Analytics
+            EdgeScore • {t("footballAnalytics")}
+          </p>
+          <p className="mt-3 text-sm text-slate-400">
+            {t("loginLead")}
           </p>
         </div>
 
@@ -64,7 +61,7 @@ export default function LoginForm() {
           {/* EMAIL */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1.5 uppercase tracking-wider">
-              Email
+              {t("email")}
             </label>
             <input
               type="email"
@@ -80,14 +77,14 @@ export default function LoginForm() {
                 focus:border-white/20 focus:ring-2 focus:ring-violet-400/20
                 outline-none
               "
-              placeholder="Введите email"
+              placeholder={t("emailPlaceholder")}
             />
           </div>
 
           {/* PASSWORD */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1.5 uppercase tracking-wider">
-              Пароль
+              {t("password")}
             </label>
             <input
               type="password"
@@ -103,7 +100,7 @@ export default function LoginForm() {
                 focus:border-white/20 focus:ring-2 focus:ring-violet-400/20
                 outline-none
               "
-              placeholder="Введите пароль"
+              placeholder={t("passwordPlaceholder")}
             />
           </div>
 
@@ -111,34 +108,21 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={isLoading}
-            className="
-              w-full mt-2
-              rounded-2xl
-              py-3
-              text-sm font-semibold
-              tracking-wide
-              text-white
-              border border-violet-400/35
-              bg-[linear-gradient(135deg,rgba(168,85,247,0.95),rgba(139,92,246,0.92),rgba(99,102,241,0.9))]
-              shadow-[0_16px_35px_rgba(139,92,246,0.34),inset_0_1px_0_rgba(255,255,255,0.18)]
-              hover:shadow-[0_20px_45px_rgba(139,92,246,0.42),inset_0_1px_0_rgba(255,255,255,0.22)]
-              transition
-              disabled:opacity-50 disabled:cursor-not-allowed
-            "
+            className="w-full mt-2 rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(168,85,247,0.95),rgba(139,92,246,0.92),rgba(99,102,241,0.9))] py-3 text-sm font-semibold tracking-wide text-white shadow-[0_16px_35px_rgba(139,92,246,0.34),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:shadow-[0_20px_45px_rgba(139,92,246,0.42),inset_0_1px_0_rgba(255,255,255,0.22)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isLoading ? "Вход..." : "Войти"}
+            {isLoading ? t("loginSubmitting") : t("loginSubmit")}
           </button>
         </form>
 
         {/* REGISTER LINK */}
         <div className="mt-6 text-center">
           <p className="text-sm text-slate-400">
-            Нет аккаунта?{" "}
+            {t("noAccount")}{" "}
             <button
               className="font-medium text-violet-300 transition hover:text-violet-200"
               onClick={() => navigate("/register")}
             >
-              Регистрация
+              {t("signUp")}
             </button>
           </p>
         </div>

@@ -1,0 +1,259 @@
+{
+  "all_draw": {
+    "bets": 96,
+    "wins": 26,
+    "hit_rate": 0.270833,
+    "avg_odds": 3.449437,
+    "avg_ev": 0.157896,
+    "profit": -8.694,
+    "roi": -0.090563
+  },
+  "by_votes": [
+    {
+      "bets": 7,
+      "wins": 1,
+      "hit_rate": 0.142857,
+      "avg_odds": 3.719429,
+      "avg_ev": 0.135834,
+      "profit": -3.382,
+      "roi": -0.483143,
+      "votes": 0
+    },
+    {
+      "bets": 8,
+      "wins": 4,
+      "hit_rate": 0.5,
+      "avg_odds": 3.378,
+      "avg_ev": 0.123795,
+      "profit": 6.038,
+      "roi": 0.75475,
+      "votes": 1
+    },
+    {
+      "bets": 18,
+      "wins": 5,
+      "hit_rate": 0.277778,
+      "avg_odds": 3.566778,
+      "avg_ev": 0.135002,
+      "profit": -0.958,
+      "roi": -0.053222,
+      "votes": 2
+    },
+    {
+      "bets": 26,
+      "wins": 5,
+      "hit_rate": 0.192308,
+      "avg_odds": 3.481692,
+      "avg_ev": 0.166535,
+      "profit": -9.288,
+      "roi": -0.357231,
+      "votes": 3
+    },
+    {
+      "bets": 16,
+      "wins": 5,
+      "hit_rate": 0.3125,
+      "avg_odds": 3.46275,
+      "avg_ev": 0.191681,
+      "profit": 0.81,
+      "roi": 0.050625,
+      "votes": 4
+    },
+    {
+      "bets": 15,
+      "wins": 5,
+      "hit_rate": 0.333333,
+      "avg_odds": 3.263733,
+      "avg_ev": 0.17627,
+      "profit": 0.706,
+      "roi": 0.047067,
+      "votes": 5
+    },
+    {
+      "bets": 3,
+      "wins": 1,
+      "hit_rate": 0.333333,
+      "avg_odds": 3.22,
+      "avg_ev": 0.149577,
+      "profit": 0.38,
+      "roi": 0.126667,
+      "votes": 6
+    },
+    {
+      "bets": 3,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 3.113333,
+      "avg_ev": 0.099063,
+      "profit": -3.0,
+      "roi": -1.0,
+      "votes": 7
+    }
+  ],
+  "by_draw_risk": [
+    {
+      "bets": 13,
+      "wins": 2,
+      "hit_rate": 0.153846,
+      "avg_odds": 3.741538,
+      "avg_ev": 0.190479,
+      "profit": -5.9,
+      "roi": -0.453846,
+      "draw_risk_bucket": "<=0.24"
+    },
+    {
+      "bets": 61,
+      "wins": 17,
+      "hit_rate": 0.278689,
+      "avg_odds": 3.488131,
+      "avg_ev": 0.146638,
+      "profit": -3.172,
+      "roi": -0.052,
+      "draw_risk_bucket": "0.24-0.28"
+    },
+    {
+      "bets": 22,
+      "wins": 7,
+      "hit_rate": 0.318182,
+      "avg_odds": 3.169545,
+      "avg_ev": 0.169858,
+      "profit": 0.378,
+      "roi": 0.017182,
+      "draw_risk_bucket": "0.28-0.32"
+    }
+  ],
+  "best_configs": [
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.3,
+      "bets": 4,
+      "wins": 2,
+      "hit_rate": 0.5,
+      "avg_odds": 3.044,
+      "avg_ev": 0.139723,
+      "profit": 2.212,
+      "roi": 0.553
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.28,
+      "bets": 14,
+      "wins": 5,
+      "hit_rate": 0.357143,
+      "avg_odds": 3.141714,
+      "avg_ev": 0.154578,
+      "profit": 1.89,
+      "roi": 0.135
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.26,
+      "bets": 26,
+      "wins": 9,
+      "hit_rate": 0.346154,
+      "avg_odds": 3.216692,
+      "avg_ev": 0.156261,
+      "profit": 3.116,
+      "roi": 0.119846
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.26,
+      "bets": 18,
+      "wins": 6,
+      "hit_rate": 0.333333,
+      "avg_odds": 3.177,
+      "avg_ev": 0.160006,
+      "profit": 1.086,
+      "roi": 0.060333
+    },
+    {
+      "min_votes": 4,
+      "min_draw_risk": 0.24,
+      "bets": 31,
+      "wins": 10,
+      "hit_rate": 0.322581,
+      "avg_odds": 3.257613,
+      "avg_ev": 0.162652,
+      "profit": 1.414,
+      "roi": 0.045613
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.3,
+      "bets": 3,
+      "wins": 1,
+      "hit_rate": 0.333333,
+      "avg_odds": 2.982,
+      "avg_ev": 0.111521,
+      "profit": -0.018,
+      "roi": -0.006
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.24,
+      "bets": 20,
+      "wins": 6,
+      "hit_rate": 0.3,
+      "avg_odds": 3.2044,
+      "avg_ev": 0.16161,
+      "profit": -0.914,
+      "roi": -0.0457
+    },
+    {
+      "min_votes": 5,
+      "min_draw_risk": 0.28,
+      "bets": 11,
+      "wins": 3,
+      "hit_rate": 0.272727,
+      "avg_odds": 3.095636,
+      "avg_ev": 0.148144,
+      "profit": -1.84,
+      "roi": -0.167273
+    },
+    {
+      "min_votes": 6,
+      "min_draw_risk": 0.26,
+      "bets": 5,
+      "wins": 1,
+      "hit_rate": 0.2,
+      "avg_odds": 3.1248,
+      "avg_ev": 0.123613,
+      "profit": -1.62,
+      "roi": -0.324
+    },
+    {
+      "min_votes": 6,
+      "min_draw_risk": 0.24,
+      "bets": 6,
+      "wins": 1,
+      "hit_rate": 0.166667,
+      "avg_odds": 3.166667,
+      "avg_ev": 0.12432,
+      "profit": -2.62,
+      "roi": -0.436667
+    },
+    {
+      "min_votes": 6,
+      "min_draw_risk": 0.28,
+      "bets": 3,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 3.004667,
+      "avg_ev": 0.104391,
+      "profit": -3.0,
+      "roi": -1.0
+    },
+    {
+      "min_votes": 6,
+      "min_draw_risk": 0.3,
+      "bets": 2,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 2.982,
+      "avg_ev": 0.084667,
+      "profit": -2.0,
+      "roi": -1.0
+    }
+  ]
+}

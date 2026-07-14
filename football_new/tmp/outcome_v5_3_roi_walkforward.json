@@ -1,0 +1,568 @@
+{
+  "windows": [
+    {
+      "window": "2026-04-19__2026-05-19",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.0,
+          "min_odds": 1.8,
+          "max_odds": 3.2
+        },
+        "cal": {
+          "bets": 37,
+          "wins": 18,
+          "hit_rate": 0.486486,
+          "avg_odds": 2.338541,
+          "avg_ev": 0.151722,
+          "profit": 5.812,
+          "roi": 0.157081
+        },
+        "val": {
+          "bets": 10,
+          "wins": 5,
+          "hit_rate": 0.5,
+          "avg_odds": 2.3254,
+          "avg_ev": 0.147072,
+          "profit": 1.733333,
+          "roi": 0.173333
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.03,
+          "min_edge": 0.0,
+          "min_odds": 1.55,
+          "max_odds": 4.0
+        },
+        "cal": {
+          "bets": 336,
+          "wins": 135,
+          "hit_rate": 0.401786,
+          "avg_odds": 2.7735,
+          "avg_ev": 0.111792,
+          "profit": 16.414,
+          "roi": 0.048851
+        },
+        "val": {
+          "bets": 93,
+          "wins": 32,
+          "hit_rate": 0.344086,
+          "avg_odds": 2.757315,
+          "avg_ev": 0.124297,
+          "profit": -12.276,
+          "roi": -0.132
+        }
+      }
+    },
+    {
+      "window": "2026-03-20__2026-04-19",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.08,
+          "min_edge": 0.0,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 168,
+          "wins": 75,
+          "hit_rate": 0.446429,
+          "avg_odds": 2.676167,
+          "avg_ev": 0.145974,
+          "profit": 28.818,
+          "roi": 0.171536
+        },
+        "val": {
+          "bets": 40,
+          "wins": 17,
+          "hit_rate": 0.425,
+          "avg_odds": 2.66725,
+          "avg_ev": 0.142801,
+          "profit": 2.768,
+          "roi": 0.0692
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.03,
+          "min_edge": 0.05,
+          "min_odds": 1.8,
+          "max_odds": 3.2
+        },
+        "cal": {
+          "bets": 101,
+          "wins": 48,
+          "hit_rate": 0.475248,
+          "avg_odds": 2.260792,
+          "avg_ev": 0.11614,
+          "profit": 5.528,
+          "roi": 0.054733
+        },
+        "val": {
+          "bets": 25,
+          "wins": 13,
+          "hit_rate": 0.52,
+          "avg_odds": 2.28136,
+          "avg_ev": 0.146885,
+          "profit": 4.062,
+          "roi": 0.16248
+        }
+      }
+    },
+    {
+      "window": "2026-02-18__2026-03-20",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.0,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 147,
+          "wins": 71,
+          "hit_rate": 0.482993,
+          "avg_odds": 2.658272,
+          "avg_ev": 0.167893,
+          "profit": 40.286,
+          "roi": 0.274054
+        },
+        "val": {
+          "bets": 35,
+          "wins": 11,
+          "hit_rate": 0.314286,
+          "avg_odds": 2.6968,
+          "avg_ev": 0.155076,
+          "profit": -8.496,
+          "roi": -0.242743
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.0,
+          "min_odds": 1.8,
+          "max_odds": 3.2
+        },
+        "cal": {
+          "bets": 89,
+          "wins": 40,
+          "hit_rate": 0.449438,
+          "avg_odds": 2.429978,
+          "avg_ev": 0.188851,
+          "profit": 6.92,
+          "roi": 0.077753
+        },
+        "val": {
+          "bets": 31,
+          "wins": 13,
+          "hit_rate": 0.419355,
+          "avg_odds": 2.435226,
+          "avg_ev": 0.195823,
+          "profit": -0.79,
+          "roi": -0.025484
+        }
+      }
+    },
+    {
+      "window": "2026-01-19__2026-02-18",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.05,
+          "min_edge": 0.0,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 190,
+          "wins": 89,
+          "hit_rate": 0.468421,
+          "avg_odds": 2.537723,
+          "avg_ev": 0.119227,
+          "profit": 31.668,
+          "roi": 0.166674
+        },
+        "val": {
+          "bets": 50,
+          "wins": 21,
+          "hit_rate": 0.42,
+          "avg_odds": 2.50876,
+          "avg_ev": 0.126206,
+          "profit": 1.928,
+          "roi": 0.03856
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.05,
+          "min_edge": 0.03,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 156,
+          "wins": 69,
+          "hit_rate": 0.442308,
+          "avg_odds": 2.440085,
+          "avg_ev": 0.12385,
+          "profit": 11.144667,
+          "roi": 0.07144
+        },
+        "val": {
+          "bets": 53,
+          "wins": 24,
+          "hit_rate": 0.45283,
+          "avg_odds": 2.39117,
+          "avg_ev": 0.147847,
+          "profit": 3.586,
+          "roi": 0.06766
+        }
+      }
+    },
+    {
+      "window": "2025-12-20__2026-01-19",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.05,
+          "min_edge": 0.0,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 201,
+          "wins": 74,
+          "hit_rate": 0.368159,
+          "avg_odds": 2.737167,
+          "avg_ev": 0.132299,
+          "profit": -6.134,
+          "roi": -0.030517
+        },
+        "val": {
+          "bets": 51,
+          "wins": 15,
+          "hit_rate": 0.294118,
+          "avg_odds": 2.759647,
+          "avg_ev": 0.119419,
+          "profit": -8.814,
+          "roi": -0.172824
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.05,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 137,
+          "wins": 57,
+          "hit_rate": 0.416058,
+          "avg_odds": 2.584681,
+          "avg_ev": 0.186577,
+          "profit": 4.372,
+          "roi": 0.031912
+        },
+        "val": {
+          "bets": 49,
+          "wins": 21,
+          "hit_rate": 0.428571,
+          "avg_odds": 2.471878,
+          "avg_ev": 0.196288,
+          "profit": 4.252,
+          "roi": 0.086776
+        }
+      }
+    },
+    {
+      "window": "2025-11-20__2025-12-20",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.08,
+          "min_edge": 0.05,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 160,
+          "wins": 55,
+          "hit_rate": 0.34375,
+          "avg_odds": 2.672878,
+          "avg_ev": 0.18009,
+          "profit": -17.458,
+          "roi": -0.109112
+        },
+        "val": {
+          "bets": 66,
+          "wins": 27,
+          "hit_rate": 0.409091,
+          "avg_odds": 2.481545,
+          "avg_ev": 0.187568,
+          "profit": -1.668,
+          "roi": -0.025273
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.0,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 138,
+          "wins": 54,
+          "hit_rate": 0.391304,
+          "avg_odds": 2.900662,
+          "avg_ev": 0.165795,
+          "profit": 17.552,
+          "roi": 0.127188
+        },
+        "val": {
+          "bets": 62,
+          "wins": 28,
+          "hit_rate": 0.451613,
+          "avg_odds": 2.504742,
+          "avg_ev": 0.181075,
+          "profit": 6.528,
+          "roi": 0.10529
+        }
+      }
+    },
+    {
+      "window": "2025-10-21__2025-11-20",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.05,
+          "min_odds": 1.7,
+          "max_odds": 3.5
+        },
+        "cal": {
+          "bets": 57,
+          "wins": 24,
+          "hit_rate": 0.421053,
+          "avg_odds": 2.627285,
+          "avg_ev": 0.160736,
+          "profit": 7.22,
+          "roi": 0.126667
+        },
+        "val": {
+          "bets": 20,
+          "wins": 5,
+          "hit_rate": 0.25,
+          "avg_odds": 2.6511,
+          "avg_ev": 0.177419,
+          "profit": -6.764,
+          "roi": -0.3382
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.0,
+          "min_odds": 1.55,
+          "max_odds": 4.0
+        },
+        "cal": {
+          "bets": 140,
+          "wins": 57,
+          "hit_rate": 0.407143,
+          "avg_odds": 3.347994,
+          "avg_ev": 0.191281,
+          "profit": 46.656,
+          "roi": 0.333257
+        },
+        "val": {
+          "bets": 62,
+          "wins": 12,
+          "hit_rate": 0.193548,
+          "avg_odds": 3.215387,
+          "avg_ev": 0.19468,
+          "profit": -24.688,
+          "roi": -0.398194
+        }
+      }
+    },
+    {
+      "window": "2024-04-29__2024-05-29",
+      "v5_0": {
+        "rule": {
+          "min_ev": 0.1,
+          "min_edge": 0.0,
+          "min_odds": 1.55,
+          "max_odds": 4.0
+        },
+        "cal": {
+          "bets": 41,
+          "wins": 15,
+          "hit_rate": 0.365854,
+          "avg_odds": 2.841463,
+          "avg_ev": 0.154202,
+          "profit": 0.35,
+          "roi": 0.008537
+        },
+        "val": {
+          "bets": 14,
+          "wins": 3,
+          "hit_rate": 0.214286,
+          "avg_odds": 3.021429,
+          "avg_ev": 0.164008,
+          "profit": -2.9,
+          "roi": -0.207143
+        }
+      },
+      "v5_3": {
+        "rule": {
+          "min_ev": 0.05,
+          "min_edge": 0.0,
+          "min_odds": 1.55,
+          "max_odds": 4.0
+        },
+        "cal": {
+          "bets": 87,
+          "wins": 34,
+          "hit_rate": 0.390805,
+          "avg_odds": 2.511034,
+          "avg_ev": 0.106521,
+          "profit": -3.71,
+          "roi": -0.042644
+        },
+        "val": {
+          "bets": 23,
+          "wins": 5,
+          "hit_rate": 0.217391,
+          "avg_odds": 2.92087,
+          "avg_ev": 0.117473,
+          "profit": -9.62,
+          "roi": -0.418261
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "v5_0": {
+      "bets": 286,
+      "wins": 104,
+      "hit_rate": 0.363636,
+      "avg_odds": 2.621035,
+      "avg_ev": 0.151171,
+      "profit": -22.212667,
+      "roi": -0.077667
+    },
+    "v5_3": {
+      "bets": 398,
+      "wins": 148,
+      "hit_rate": 0.371859,
+      "avg_odds": 2.659895,
+      "avg_ev": 0.162701,
+      "profit": -28.946,
+      "roi": -0.072729
+    },
+    "v5_0_by_league": [
+      {
+        "league": "Bundesliga",
+        "bets": 53,
+        "wins": 20,
+        "hit_rate": 0.377358,
+        "avg_odds": 2.587509,
+        "avg_ev": 0.172572,
+        "profit": -1.160667,
+        "roi": -0.021899
+      },
+      {
+        "league": "La Liga",
+        "bets": 55,
+        "wins": 19,
+        "hit_rate": 0.345455,
+        "avg_odds": 2.621491,
+        "avg_ev": 0.146366,
+        "profit": -5.87,
+        "roi": -0.106727
+      },
+      {
+        "league": "Ligue 1",
+        "bets": 44,
+        "wins": 17,
+        "hit_rate": 0.386364,
+        "avg_odds": 2.615091,
+        "avg_ev": 0.152826,
+        "profit": -2.078,
+        "roi": -0.047227
+      },
+      {
+        "league": "Premier League",
+        "bets": 59,
+        "wins": 26,
+        "hit_rate": 0.440678,
+        "avg_odds": 2.39878,
+        "avg_ev": 0.150456,
+        "profit": 1.248,
+        "roi": 0.021153
+      },
+      {
+        "league": "Serie A",
+        "bets": 75,
+        "wins": 22,
+        "hit_rate": 0.293333,
+        "avg_odds": 2.82272,
+        "avg_ev": 0.139165,
+        "profit": -14.352,
+        "roi": -0.19136
+      }
+    ],
+    "v5_3_by_league": [
+      {
+        "league": "Bundesliga",
+        "bets": 71,
+        "wins": 31,
+        "hit_rate": 0.43662,
+        "avg_odds": 2.543272,
+        "avg_ev": 0.182836,
+        "profit": 5.55,
+        "roi": 0.078169
+      },
+      {
+        "league": "La Liga",
+        "bets": 93,
+        "wins": 25,
+        "hit_rate": 0.268817,
+        "avg_odds": 2.869441,
+        "avg_ev": 0.161991,
+        "profit": -24.254,
+        "roi": -0.260796
+      },
+      {
+        "league": "Ligue 1",
+        "bets": 64,
+        "wins": 21,
+        "hit_rate": 0.328125,
+        "avg_odds": 2.653812,
+        "avg_ev": 0.147475,
+        "profit": -12.92,
+        "roi": -0.201875
+      },
+      {
+        "league": "Premier League",
+        "bets": 78,
+        "wins": 28,
+        "hit_rate": 0.358974,
+        "avg_odds": 2.52641,
+        "avg_ev": 0.171531,
+        "profit": -14.564,
+        "roi": -0.186718
+      },
+      {
+        "league": "Serie A",
+        "bets": 92,
+        "wins": 43,
+        "hit_rate": 0.467391,
+        "avg_odds": 2.655478,
+        "avg_ev": 0.150985,
+        "profit": 17.242,
+        "roi": 0.187413
+      }
+    ]
+  }
+}

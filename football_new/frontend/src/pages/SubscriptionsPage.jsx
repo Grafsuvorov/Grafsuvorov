@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { http } from "../lib/http.js";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* ===================== COPY / ТЕКСТЫ ===================== */
 const COPY = {
@@ -62,10 +63,33 @@ const VALUE_PILLARS = [
   },
 ];
 
+const VALUE_PILLARS_EN = {
+  reports: {
+    title: "Deep reports",
+    description: "Expanded analysis across 20+ leagues: trends, form, xG/xPTS, and round dynamics.",
+  },
+  alerts: {
+    title: "Live insights",
+    description: "Fast prompts on matches and markets when the situation changes.",
+  },
+  community: {
+    title: "PRO community",
+    description: "Case reviews, focus matches of the week, and regular analytics calls.",
+  },
+};
+
+const ACCESS_STATUS_COPY = {
+  active: { ru: "Активен", en: "Active" },
+  guest: { ru: "Гость", en: "Guest" },
+  updated: { ru: "Обновлено", en: "Updated" },
+  features: { ru: "ВОЗМОЖНОСТИ", en: "FEATURES" },
+};
+
 /* ===================== Вспомогательные компоненты ===================== */
 /* ===================== Основной компонент ===================== */
 function SubscriptionsPage() {
   const { isAuthenticated } = useAuth();
+  const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const leagueTitle = searchParams.get("league") || "Bundesliga";
   const seasonTitle = searchParams.get("season") || "2025";
@@ -87,10 +111,11 @@ function SubscriptionsPage() {
   const planRefs = useRef(new Map());
   const [highlightPlan, setHighlightPlan] = useState("");
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const isRu = language === "ru";
 
   const num = (v) => Number(v ?? 0);
   const fmtPrice = (p) =>
-    num(p) === 0 ? "Бесплатно" : `${num(p).toLocaleString("ru-RU")} ₽`;
+    num(p) === 0 ? (isRu ? "Бесплатно" : "Free") : `${num(p).toLocaleString("ru-RU")} ₽`;
 
   useEffect(() => {
     fetchPlans();
@@ -122,7 +147,9 @@ function SubscriptionsPage() {
       setLastUpdated(new Date());
     } catch {
       setError(
-        "Не удалось загрузить планы подписок. Попробуйте ещё раз чуть позже."
+        isRu
+          ? "Не удалось загрузить планы подписок. Попробуйте ещё раз чуть позже."
+          : "Could not load subscription plans. Please try again a bit later."
       );
     } finally {
       setLoading(false);
@@ -161,13 +188,13 @@ function SubscriptionsPage() {
 
   async function handlePurchase(plan) {
     if (!isAuthenticated) {
-      setError("Для оформления подписки войдите в систему.");
-      setPurchaseErrors((m) => ({ ...m, [plan.id]: "Нужно войти в систему." }));
+      setError(isRu ? "Для оформления подписки войдите в систему." : "Sign in to purchase a subscription.");
+      setPurchaseErrors((m) => ({ ...m, [plan.id]: isRu ? "Нужно войти в систему." : "You need to sign in." }));
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     if (activeByCode.has(plan.code))
-      return setError("У вас уже активна эта подписка.");
+      return setError(isRu ? "У вас уже активна эта подписка." : "You already have this subscription active.");
 
     setPurchaseLoading((m) => ({ ...m, [plan.id]: true }));
     setPurchaseErrors((m) => ({ ...m, [plan.id]: "" }));
@@ -179,7 +206,11 @@ function SubscriptionsPage() {
         "/api/subscriptions/purchase",
         { plan_code: plan.code }
       );
-      setSuccess(`Подписка «${plan.name}» успешно оформлена.`);
+      setSuccess(
+        isRu
+          ? `Подписка «${plan.name}» успешно оформлена.`
+          : `Subscription "${plan.name}" was activated successfully.`
+      );
       setPurchaseErrors((m) => ({ ...m, [plan.id]: "" }));
       await Promise.all([fetchMe(), fetchPlans()]);
       setTimeout(() => setSuccess(""), 3500);
@@ -188,7 +219,7 @@ function SubscriptionsPage() {
       const msg =
         e?.data?.detail ||
         e?.message ||
-        "Ошибка при оформлении подписки.";
+        (isRu ? "Ошибка при оформлении подписки." : "Subscription purchase failed.");
       if (status === 402) setAddFundsOpen(true);
       if (status === 401) window.location.href = "/login";
       setPurchaseErrors((m) => ({ ...m, [plan.id]: msg }));
@@ -241,9 +272,9 @@ function SubscriptionsPage() {
     <div
       id={id}
       ref={innerRef}
-      className={`relative flex h-full flex-col rounded-2xl border border-glass bg-surface-2/80 shadow-[0_12px_30px_rgba(0,0,0,0.35)] ${
+      className={`glass-card relative flex h-full flex-col ${
         highlight || accent
-          ? "ring-1 ring-violet-400/40 shadow-[0_0_24px_rgba(124,58,237,0.25)]"
+          ? "ring-1 ring-violet-400/28 shadow-[0_0_18px_rgba(124,58,237,0.14)]"
           : ""
       }`}
     >
@@ -268,18 +299,18 @@ function SubscriptionsPage() {
     const durationDays = Number(plan.duration_days || 0);
     const durationLabel =
       durationDays >= 365
-        ? "Годовой доступ"
+        ? (isRu ? "Годовой доступ" : "Annual access")
         : durationDays >= 180
-        ? "Доступ на полгода"
+        ? (isRu ? "Доступ на полгода" : "6-month access")
         : durationDays >= 90
-        ? "Доступ на 3 месяца"
+        ? (isRu ? "Доступ на 3 месяца" : "3-month access")
         : durationDays >= 30
-        ? "Доступ на месяц"
-        : `Доступ на ${durationDays} дней`;
+        ? (isRu ? "Доступ на месяц" : "1-month access")
+        : isRu ? `Доступ на ${durationDays} дней` : `${durationDays}-day access`;
     const monthlyPrice =
       durationDays > 0 ? Math.round((num(plan.price) / durationDays) * 30) : null;
     const accentLabel =
-      durationDays >= 180 ? "Лучшая цена" : durationDays >= 90 ? "Выгоднее месяца" : null;
+      durationDays >= 180 ? (isRu ? "Лучшая цена" : "Best value") : durationDays >= 90 ? (isRu ? "Выгоднее месяца" : "Better than monthly") : null;
 
     return (
       <CardShell
@@ -290,11 +321,11 @@ function SubscriptionsPage() {
         highlight={highlight}
         accent={accent}
       >
-          <div className="flex h-full flex-col gap-5 p-6">
+          <div className="flex h-full flex-col gap-5 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">
-                {COPY.planHeader}
+                {isRu ? COPY.planHeader : "Plan"}
               </p>
               <h3 className="truncate text-2xl font-black tracking-tight text-slate-50">
                 {plan.name}
@@ -305,7 +336,7 @@ function SubscriptionsPage() {
             </div>
             <div className="flex flex-col items-end gap-1">
               {accentLabel && <Badge tone="gray">{accentLabel}</Badge>}
-              {active && <Badge tone="green">{COPY.planBadges.active}</Badge>}
+              {active && <Badge tone="green">{isRu ? COPY.planBadges.active : "Active"}</Badge>}
             </div>
           </div>
 
@@ -318,20 +349,20 @@ function SubscriptionsPage() {
             </div>
             {monthlyPrice ? (
               <div className="mt-2 text-xs text-slate-400">
-                Около {monthlyPrice.toLocaleString("ru-RU")} ₽ в месяц
+                {isRu ? "Около" : "About"} {monthlyPrice.toLocaleString("ru-RU")} ₽ {isRu ? "в месяц" : "per month"}
               </div>
             ) : null}
           </div>
 
           <div className="grid gap-2 text-[13px]">
-            <Feature>Все премиальные инсайты и аналитика</Feature>
-            <Feature>Подборки и расширенные карточки матчей</Feature>
-            <Feature>Один и тот же функционал на любом платном сроке</Feature>
+            <Feature>{isRu ? "Все премиальные инсайты и аналитика" : "All premium insights and analytics"}</Feature>
+            <Feature>{isRu ? "Подборки и расширенные карточки матчей" : "Best picks and extended match cards"}</Feature>
+            <Feature>{isRu ? "Один и тот же функционал на любом платном сроке" : "The same feature set on every paid plan"}</Feature>
             {active?.end_at && (
               <div className="mt-1 rounded-xl border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-100">
-                Активна до:{" "}
+                {isRu ? "Активна до" : "Active until"}:{" "}
                 <span>
-                  {new Date(active.end_at).toLocaleDateString("ru-RU")}
+                  {new Date(active.end_at).toLocaleDateString(isRu ? "ru-RU" : "en-GB")}
                 </span>
               </div>
             )}
@@ -344,24 +375,24 @@ function SubscriptionsPage() {
               className={`h-11 w-full rounded-2xl text-sm font-semibold text-white transition
                 ${
                   active || buying
-                    ? "bg-slate-600 cursor-not-allowed"
-                    : "border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] hover:brightness-110"
+                    ? "bg-slate-600/70 cursor-not-allowed"
+                    : "border border-violet-400/24 bg-[linear-gradient(135deg,rgba(124,58,237,0.82),rgba(99,102,241,0.76))] shadow-[0_12px_24px_rgba(124,58,237,0.16),inset_0_1px_0_rgba(255,255,255,0.14)] hover:brightness-105"
                 }`}
             >
               {active
                 ? isFree
-                  ? COPY.planBtn.connected
-                  : COPY.planBtn.purchased
+                  ? (isRu ? COPY.planBtn.connected : "Already connected")
+                  : (isRu ? COPY.planBtn.purchased : "Already purchased")
                 : buying
                 ? isFree
-                  ? "Подключаем…"
-                  : "Оформление…"
+                  ? (isRu ? "Подключаем…" : "Connecting…")
+                  : (isRu ? "Оформление…" : "Purchasing…")
                 : isFree
-                ? COPY.planBtn.connect
-                : COPY.planBtn.purchase}
+                ? (isRu ? COPY.planBtn.connect : "Connect")
+                : (isRu ? COPY.planBtn.purchase : "Purchase")}
             </button>
             {purchaseErr && !active && (
-              <div className="mt-2 rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-100">
+              <div className="surface-error mt-2 px-3 py-2 text-[12px]">
                 {purchaseErr}
               </div>
             )}
@@ -376,12 +407,12 @@ function SubscriptionsPage() {
     return (
       <div className="min-h-screen bg-surface-1 text-slate-50">
         <div className="mx-auto max-w-[1428px] w-full px-4 py-8 space-y-8">
-          <div className="h-[120px] animate-pulse rounded-[18px] bg-surface-2/90 border border-white/10" />
+          <div className="surface-hero h-[120px] animate-pulse" />
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="h-[320px] animate-pulse rounded-2xl border border-white/10 bg-surface-2/80"
+                className="glass-card h-[320px] animate-pulse"
               />
             ))}
           </div>
@@ -404,62 +435,62 @@ function SubscriptionsPage() {
   /* ===== RENDER ===== */
   return (
     <div className="min-h-screen bg-surface-1 text-slate-50">
-      <div className="mx-auto max-w-[1240px] w-full px-4 py-8 space-y-8">
+      <div className="mx-auto max-w-[1240px] w-full px-3 py-6 space-y-7 sm:px-4 sm:py-8 sm:space-y-8">
         {/* HEADER */}
-        <section className="px-2 md:px-4">
+        <section className="px-1 sm:px-2 md:px-4">
           <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
-            <div className="panel rounded-2xl border border-glass px-6 py-6 bg-[radial-gradient(120%_120%_at_10%_0%,rgba(124,58,237,0.18),transparent_60%),radial-gradient(120%_120%_at_100%_0%,rgba(14,165,233,0.16),transparent_60%),rgba(15,18,26,0.65)]">
+            <div className="panel rounded-3xl border border-glass bg-[radial-gradient(120%_120%_at_10%_0%,rgba(124,58,237,0.14),transparent_58%),radial-gradient(120%_120%_at_100%_0%,rgba(14,165,233,0.12),transparent_58%),rgba(15,18,26,0.62)] px-5 py-5 sm:px-6 sm:py-6">
               <div className="type-title-block">
               <div className="type-eyebrow">
                 {COPY.heroBadge}
               </div>
               <h1 className="type-page-title">
-                {COPY.heroTitle}
+                {isRu ? COPY.heroTitle : "EdgeScore subscriptions"}
               </h1>
               <p className="type-body max-w-[620px]">
-                {COPY.heroSubtitle}
+                {isRu ? COPY.heroSubtitle : "One premium layer for analytics, insights, and picks. Only the duration and price change."}
               </p>
               <p className="type-caption">
-                {leagueTitle} · сезон {seasonTitle}
+                {leagueTitle} · {isRu ? "сезон" : "season"} {seasonTitle}
               </p>
               <p className="mt-3 text-sm text-slate-300">
-                После регистрации доступен пробный период 7 дней.
+                {isRu ? "После регистрации доступен пробный период 7 дней." : "A 7-day trial is available after registration."}
               </p>
               </div>
-              <div className="mt-4 flex items-center gap-3">
+              <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button
                   onClick={scrollToPlans}
-                  className="h-10 rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.92),rgba(99,102,241,0.88))] px-5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:brightness-110"
+                  className="h-10 rounded-2xl border border-violet-400/24 bg-[linear-gradient(135deg,rgba(124,58,237,0.82),rgba(99,102,241,0.76))] px-5 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(124,58,237,0.16),inset_0_1px_0_rgba(255,255,255,0.14)] transition hover:brightness-105"
                 >
-                  Выбрать тариф
+                  {isRu ? "Выбрать тариф" : "Choose a plan"}
                 </button>
                 <button
                   onClick={() => setCompareOpen(true)}
-                  className="h-10 rounded-2xl border border-glass bg-surface-2/80 px-5 text-sm font-semibold text-white/90 shadow-[0_10px_26px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.12)] transition hover:bg-surface-2"
+                  className="surface-button h-10 rounded-2xl px-5 text-sm font-semibold text-white/90 shadow-[0_10px_22px_rgba(0,0,0,0.18)]"
                 >
-                  Сравнить
+                  {isRu ? "Сравнить" : "Compare"}
                 </button>
               </div>
             </div>
-            <div className="panel bg-surface-2/70 rounded-2xl border border-glass px-5 py-5">
+            <div className="panel rounded-3xl bg-surface-2/68 px-5 py-5">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
-                Статус доступа
+                {isRu ? "Статус доступа" : "Access status"}
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <div className="text-lg font-semibold text-white">
-                  {isAuthenticated ? "Активен" : "Гость"}
+                  {isAuthenticated ? (isRu ? ACCESS_STATUS_COPY.active.ru : ACCESS_STATUS_COPY.active.en) : (isRu ? ACCESS_STATUS_COPY.guest.ru : ACCESS_STATUS_COPY.guest.en)}
                 </div>
                 <span className="text-xs text-slate-400">
-                  {COPY.updated} {lastUpdated.toLocaleDateString("ru-RU")}
+                  {isRu ? ACCESS_STATUS_COPY.updated.ru : ACCESS_STATUS_COPY.updated.en} {lastUpdated.toLocaleDateString(isRu ? "ru-RU" : "en-GB")}
                 </span>
               </div>
               <div className="mt-3 text-sm text-slate-400 leading-relaxed">
                 {isAuthenticated
-                  ? "Доступ к расширенным функциям зависит от выбранного тарифа."
-                  : "Войдите, чтобы оформить подписку и открыть функции."}
+                  ? (isRu ? "Доступ к расширенным функциям зависит от выбранного тарифа." : "Access to advanced features depends on your selected plan.")
+                  : (isRu ? "Войдите, чтобы оформить подписку и открыть функции." : "Sign in to purchase a subscription and unlock features.")}
               </div>
               <div className="mt-4 text-sm text-slate-300">
-                Пробный период на 7 дней активируется после регистрации.
+                {isRu ? "Пробный период на 7 дней активируется после регистрации." : "The 7-day trial activates after registration."}
               </div>
             </div>
           </div>
@@ -467,25 +498,25 @@ function SubscriptionsPage() {
 
         {/* Баланс */}
         {isAuthenticated && (
-        <section className="px-2 md:px-4">
-          <div className="panel bg-surface-2/70 rounded-2xl border border-glass p-6">
+        <section className="px-1 sm:px-2 md:px-4">
+          <div className="panel rounded-3xl bg-surface-2/68 p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="text-xs uppercase tracking-wide text-slate-400">
-                  {COPY.balanceTitle}
+                  {isRu ? COPY.balanceTitle : "Your balance"}
                 </div>
                 <div className="text-2xl font-bold text-slate-50">
                   {balance.toLocaleString("ru-RU")} ₽
                 </div>
                 <div className="text-sm text-slate-400">
-                  {COPY.balanceHint}
+                  {isRu ? COPY.balanceHint : "Add balance before purchase to activate access immediately."}
                 </div>
               </div>
               <button
                 onClick={() => setAddFundsOpen(true)}
-                className="h-10 rounded-2xl border border-violet-400/35 bg-[linear-gradient(135deg,rgba(124,58,237,0.9),rgba(99,102,241,0.82))] px-6 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(124,58,237,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] transition hover:brightness-110"
+                className="h-10 rounded-2xl border border-violet-400/24 bg-[linear-gradient(135deg,rgba(124,58,237,0.82),rgba(99,102,241,0.76))] px-6 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(124,58,237,0.16),inset_0_1px_0_rgba(255,255,255,0.14)] transition hover:brightness-105"
               >
-                {COPY.balanceBtn}
+                {isRu ? COPY.balanceBtn : "Add funds"}
               </button>
             </div>
           </div>
@@ -493,36 +524,38 @@ function SubscriptionsPage() {
         )}
 
         {success && (
-          <div className="rounded-3xl border border-emerald-400/50 bg-emerald-500/15 px-6 py-4 text-sm font-semibold text-emerald-100 shadow-[0_0_22px_rgba(16,185,129,0.35)]">
+          <div className="surface-success px-6 py-4 font-semibold">
             {success}
           </div>
         )}
         {error && (
-          <div className="rounded-3xl border border-rose-400/50 bg-rose-500/15 px-6 py-4 text-sm font-semibold text-rose-100 shadow-[0_0_22px_rgba(244,63,94,0.35)]">
+          <div className="surface-error px-6 py-4 font-semibold">
             {error}
           </div>
         )}
 
         {/* Что входит */}
         <section className="space-y-4">
-          <div className="px-2 md:px-4">
+          <div className="px-1 sm:px-2 md:px-4">
             <div className="type-eyebrow">
-              ВОЗМОЖНОСТИ
+              {isRu ? ACCESS_STATUS_COPY.features.ru : ACCESS_STATUS_COPY.features.en}
             </div>
             <div className="type-section-title">
-              Что входит в подписку
+              {isRu ? "Что входит в подписку" : "What is included"}
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {VALUE_PILLARS.map((p) => (
               <div
                 key={p.id}
-                className="panel bg-surface-2/70 rounded-2xl border border-glass p-6"
+                className="panel rounded-3xl bg-surface-2/68 p-5 sm:p-6"
               >
                 <div className="text-xl text-slate-300">{p.icon}</div>
-                <div className="mt-4 type-card-title">{p.title}</div>
+                <div className="mt-4 type-card-title">
+                  {isRu ? p.title : VALUE_PILLARS_EN[p.id]?.title || p.title}
+                </div>
                 <p className="mt-2 type-body text-slate-200/80">
-                  {p.description}
+                  {isRu ? p.description : VALUE_PILLARS_EN[p.id]?.description || p.description}
                 </p>
               </div>
             ))}
@@ -534,16 +567,16 @@ function SubscriptionsPage() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="type-section-title text-slate-50">
-                {COPY.plansTitle}
+                {isRu ? COPY.plansTitle : "Access plans"}
               </h2>
               <p className="type-caption">
-                {COPY.plansSubtitle}
+                {isRu ? COPY.plansSubtitle : "The feature set is the same. Only the access duration and value change."}
               </p>
             </div>
             {!!plans.length && (
               <div className="flex items-center gap-3 text-sm text-slate-400">
                 <span className="inline-flex h-2 w-2 rounded-full bg-violet-400/80" />
-                Обновлено {lastUpdated.toLocaleDateString("ru-RU")}
+                {isRu ? ACCESS_STATUS_COPY.updated.ru : ACCESS_STATUS_COPY.updated.en} {lastUpdated.toLocaleDateString(isRu ? "ru-RU" : "en-GB")}
               </div>
             )}
           </div>
@@ -562,14 +595,14 @@ function SubscriptionsPage() {
           )}
 
           {!paid.length && (
-            <div className="rounded-2xl border border-white/10 bg-surface-2/90 p-10 text-center text-slate-200">
-              Планы подписок не найдены.
+            <div className="surface-empty p-10 text-slate-200">
+              {isRu ? "Планы подписок не найдены." : "No subscription plans found."}
               <div className="mt-4">
                 <button
                   onClick={fetchPlans}
-                  className="rounded-2xl border border-white/10 bg-surface-2/90 px-4 py-2 text-sm font-semibold text-white hover:bg-surface-2"
+                  className="surface-button h-auto rounded-2xl px-4 py-2 text-sm font-semibold text-white hover:bg-surface-2"
                 >
-                  Попробовать снова
+                  {isRu ? "Попробовать снова" : "Try again"}
                 </button>
               </div>
             </div>
@@ -584,15 +617,17 @@ function SubscriptionsPage() {
           onClose={() => setAddFundsOpen(false)}
           onAdded={(amount) => {
             setBalance((b) => b + Number(amount || 0));
-            setSuccess("Баланс пополнен.");
+            setSuccess(isRu ? "Баланс пополнен." : "Balance added.");
             setTimeout(() => setSuccess(""), 2500);
           }}
+          language={language}
         />
       )}
 
       {compareOpen && (
         <ComparePlansModal
           plans={plans}
+          language={language}
           onClose={() => setCompareOpen(false)}
         />
       )}
@@ -603,7 +638,8 @@ function SubscriptionsPage() {
 export default SubscriptionsPage;
 
 /* ===================== Add Funds Modal ===================== */
-function AddFundsModal({ onClose, onAdded }) {
+function AddFundsModal({ onClose, onAdded, language = "ru" }) {
+  const isRu = language === "ru";
   const [amount, setAmount] = useState("100");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -611,7 +647,7 @@ function AddFundsModal({ onClose, onAdded }) {
   async function submit() {
     const val = Number(amount);
     if (!Number.isFinite(val) || val <= 0)
-      return setErr("Введите корректную сумму.");
+      return setErr(isRu ? "Введите корректную сумму." : "Enter a valid amount.");
     setErr("");
     setLoading(true);
     try {
@@ -622,7 +658,7 @@ function AddFundsModal({ onClose, onAdded }) {
       onAdded?.(val);
       onClose?.();
     } catch (e) {
-      setErr(e?.data?.detail || "Не удалось пополнить баланс.");
+      setErr(e?.data?.detail || (isRu ? "Не удалось пополнить баланс." : "Could not add funds."));
     } finally {
       setLoading(false);
     }
@@ -637,33 +673,33 @@ function AddFundsModal({ onClose, onAdded }) {
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/45" onClick={onClose} />
-      <div className="absolute left-1/2 top-20 w-[min(420px,92vw)] -translate-x-1/2 rounded-2xl border border-glass bg-surface-1/95 p-5 shadow-2xl">
+      <div className="surface-toolbar absolute left-1/2 top-20 w-[min(420px,92vw)] -translate-x-1/2 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-lg font-bold text-slate-100">
-            Пополнить баланс
+            {isRu ? "Пополнить баланс" : "Add funds"}
           </div>
           <button
             onClick={onClose}
-            className="h-8 w-8 rounded-full border border-glass bg-surface-2 text-slate-200 hover:bg-surface-1/80"
-            title="Закрыть"
+            className="surface-button h-8 w-8 justify-center px-0 text-slate-200"
+            title={isRu ? "Закрыть" : "Close"}
           >
             ×
           </button>
         </div>
 
         <label className="mb-1 block text-sm text-slate-400">
-          Сумма, ₽
+          {isRu ? "Сумма, ₽" : "Amount, ₽"}
         </label>
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           inputMode="numeric"
-          className="w-full rounded-xl border border-glass bg-surface-2 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          className="surface-input w-full rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
           placeholder="100"
         />
 
         {err && (
-          <div className="mt-3 rounded-md border border-rose-400/50 bg-rose-500/15 px-3 py-2 text-sm text-rose-100">
+          <div className="surface-error mt-3 px-3 py-2">
             {err}
           </div>
         )}
@@ -671,16 +707,16 @@ function AddFundsModal({ onClose, onAdded }) {
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
             onClick={onClose}
-            className="h-10 rounded-xl border border-glass px-4 text-sm text-slate-100 hover:bg-surface-2/80"
+            className="surface-button h-10 rounded-xl px-4 text-sm text-slate-100"
           >
-            Отмена
+            {isRu ? "Отмена" : "Cancel"}
           </button>
           <button
             onClick={submit}
             disabled={loading}
-            className="h-10 rounded-xl border border-primary/40 bg-primary/80 px-4 text-sm font-semibold text-white hover:bg-primary disabled:opacity-50"
+            className="h-10 rounded-xl border border-violet-400/24 bg-[linear-gradient(135deg,rgba(124,58,237,0.82),rgba(99,102,241,0.76))] px-4 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(124,58,237,0.16)] hover:brightness-105 disabled:opacity-50"
           >
-            {loading ? "Обработка…" : "Пополнить"}
+            {loading ? (isRu ? "Обработка…" : "Processing…") : (isRu ? "Пополнить" : "Add funds")}
           </button>
         </div>
       </div>
@@ -689,7 +725,8 @@ function AddFundsModal({ onClose, onAdded }) {
 }
 
 /* ===================== Compare Plans Modal ===================== */
-function ComparePlansModal({ plans, onClose }) {
+function ComparePlansModal({ plans, onClose, language = "ru" }) {
+  const isRu = language === "ru";
   const paid = plans
     .filter((p) => Number(p.price) > 0)
     .sort((a, b) => Number(a.price) - Number(b.price));
@@ -698,13 +735,13 @@ function ComparePlansModal({ plans, onClose }) {
   const rows = [
     {
       key: "price",
-      label: COPY.tableParams[0],
+      label: isRu ? COPY.tableParams[0] : "Price",
       fmt: (p) => `${Number(p).toLocaleString("ru-RU")} ₽`,
     },
     {
       key: "duration_days",
-      label: COPY.tableParams[1],
-      fmt: (v) => `${v} дней`,
+      label: isRu ? COPY.tableParams[1] : "Duration",
+      fmt: (v) => isRu ? `${v} дней` : `${v} days`,
     },
   ];
 
@@ -719,27 +756,27 @@ function ComparePlansModal({ plans, onClose }) {
   return (
     <div className="fixed inset-0 z-[60]">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="absolute left-1/2 top-16 w-[min(980px,96vw)] -translate-x-1/2 rounded-2xl border border-glass bg-surface-1/95 shadow-2xl">
+      <div className="surface-toolbar absolute left-1/2 top-16 w-[min(980px,96vw)] -translate-x-1/2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
         <div className="flex items-center justify-between p-4">
           <div className="text-lg font-bold text-slate-100">
-            {COPY.compareTitle}
+            {isRu ? COPY.compareTitle : "Compare plans"}
           </div>
           <button
             onClick={onClose}
-            className="h-9 rounded-xl border border-glass bg-surface-2 px-3 text-sm text-slate-200 hover:bg-surface-1/80"
+            className="surface-button h-9 rounded-xl px-3 text-sm text-slate-200"
           >
-            {COPY.compareClose}
+            {isRu ? COPY.compareClose : "Close"}
           </button>
         </div>
         <div className="px-4 -mt-1 pb-2 text-xs text-slate-400">
-          Сравнение планов: лимиты, доступные функции и частота обновлений.
+          {isRu ? "Сравнение планов: лимиты, доступные функции и частота обновлений." : "Plan comparison: limits, available features, and update frequency."}
         </div>
         <div className="overflow-auto px-4 pb-5">
           <table className="w-full border-separate border-spacing-y-2">
             <thead>
               <tr>
                 <th className="w-44 rounded-l-lg bg-surface-2/80 p-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-300">
-                  Параметр
+                  {isRu ? "Параметр" : "Parameter"}
                 </th>
                 {cols.map((c) => (
                   <th

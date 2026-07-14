@@ -3,11 +3,11 @@ import React, {
   useState,
   useEffect,
   useMemo,
+  useRef,
   lazy,
   Suspense,
 } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { authFetch } from "@/lib/authFetch";
 import TeamLogoLink from "@/components/TeamLogoLink";
 import { format } from "date-fns";
 import clsx from "clsx";
@@ -17,6 +17,19 @@ import PlayerCard from "@/components/PlayerCard";
 import FootballPitchPro from "@/components/FootballPitchPro";
 import { teamLogoMap } from "@/constants/teamLogoMap";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
+import { useLanguage } from "@/context/LanguageContext.jsx";
+import { loadLineupsCached, prefetchLineupsForFixtures } from "@/lib/lineupsApi";
+import { fetchMatchesV3, isInternationalLongCycleLeague } from "@/lib/matchesApi";
+import {
+  CANCELLED_STATUS_HINTS,
+  FINISHED_STATUSES,
+  LIVE_STATUS_HINTS,
+  POSTPONED_STATUS_HINTS,
+  estimateLiveElapsed,
+  isLiveMatch,
+  isStaleLiveStatus,
+  liveMinuteLabel,
+} from "@/lib/matchStatus";
 import {
   normalizeLineups,
   autoLayout,
@@ -38,16 +51,14 @@ function extractRoundNumber(round) {
   return m ? Number(m[1]) : 0;
 }
 
-function humanRoundLabel(round) {
+function humanRoundLabel(round, language = "ru") {
   const n = extractRoundNumber(round);
-  return n ? `Тур ${n}` : String(round || "Тур");
+  return n ? `${language === "ru" ? "Тур" : "Round"} ${n}` : String(round || (language === "ru" ? "Тур" : "Round"));
 }
 
 /* ================================
    PERF HELPERS
 ================================ */
-const lineupsCache = new Map();
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const ric =
   typeof window !== "undefined" && window.requestIdleCallback
     ? window.requestIdleCallback
@@ -56,6 +67,12 @@ const ric =
           () => cb({ didTimeout: false, timeRemaining: () => 0 }),
           200
         );
+const RESULTS_INITIAL_ROUNDS = 4;
+const RESULTS_ROUND_STEP = 3;
+const RESULTS_LOOKBACK_DAYS = 75;
+const RESULTS_CACHE_TTL = 2 * 60 * 1000;
+const RESULTS_REFRESH_INTERVAL = 60 * 1000;
+const resultsCache = new Map();
 
 function prefetchImage(src) {
   if (!src) return;
@@ -63,33 +80,6 @@ function prefetchImage(src) {
   i.decoding = "async";
   i.loading = "eager";
   i.src = src;
-}
-
-async function fetchLineupsCached(fixture_id, signal) {
-  if (!fixture_id) return null;
-  if (lineupsCache.has(fixture_id)) return lineupsCache.get(fixture_id);
-
-  const endpoints = [
-    `${API_BASE}/api/lineups-events?fixture_id=${fixture_id}`,
-    `${API_BASE}/api/match/lineups-events?fixture_id=${fixture_id}`,
-  ];
-
-  for (let i = 0; i < endpoints.length; i++) {
-    try {
-      const r = await fetch(endpoints[i], { signal });
-      if (!r.ok) {
-        if (i === endpoints.length - 1 || r.status >= 500) break;
-        continue;
-      }
-      const p = await r.json();
-      lineupsCache.set(fixture_id, p);
-      return p;
-    } catch (e) {
-      if (i === endpoints.length - 1) console.error("lineups error:", e);
-    }
-  }
-  lineupsCache.set(fixture_id, null);
-  return null;
 }
 
 function usePrefetchTeamLogos(matches) {
@@ -106,15 +96,6 @@ function usePrefetchTeamLogos(matches) {
       prefetchImage(a);
     });
   }, [matches]);
-}
-
-function prefetchLineupsForFixtures(list) {
-  const ac = new AbortController();
-  list.forEach((m) => {
-    if (!m?.fixture_id || lineupsCache.has(m.fixture_id)) return;
-    fetchLineupsCached(m.fixture_id, ac.signal).catch(() => {});
-  });
-  return () => ac.abort();
 }
 
 /* ================================
@@ -150,141 +131,12 @@ const pct = (v) =>
 
 const lower = (v) => (v == null ? "" : String(v).toLowerCase());
 
-const FINISHED_STATUSES = new Set([
-  "FT",
-  "AET",
-  "PEN",
-  "FT_PEN",
-  "AET_PEN",
-  "CANC",
-  "ABD",
-  "AWD",
-  "WO",
-  "FINISHED",
-  "MATCH FINISHED",
-]);
-
-const LIVE_STATUS_HINTS = [
-  "1H",
-  "2H",
-  "ET",
-  "P",
-  "LIVE",
-  "FIRST HALF",
-  "SECOND HALF",
-  "EXTRA TIME",
-  "HALF TIME",
-  "HALFTIME",
-  "BREAK TIME",
-  "PEN",
-  "PENALTY",
-];
-
-const POSTPONED_STATUS_HINTS = [
-  "MATCH POSTPONED",
-  "POSTPONED",
-  "PST",
-];
-
-const CANCELLED_STATUS_HINTS = [
-  "CANCELED",
-  "CANCELLED",
-  "MATCH CANCELLED",
-  "MATCH CANCELED",
-];
-
-function isStaleLiveStatus(m) {
-  const kickoffRaw = m?.kickoff_at;
-  if (!kickoffRaw) return false;
-  const kickoff = new Date(String(kickoffRaw).replace(" ", "T"));
-  if (Number.isNaN(kickoff.getTime())) return false;
-
-  const status = String(m?.status_short || m?.status || "").trim().toUpperCase();
-  const elapsed = Number(m?.elapsed);
-  const diffMinutes = Math.floor((Date.now() - kickoff.getTime()) / 60000);
-  if (!Number.isFinite(diffMinutes) || diffMinutes <= 0) return false;
-
-  if (status === "1H" || status.includes("FIRST HALF")) {
-    return diffMinutes > 65 || (Number.isFinite(elapsed) && elapsed <= 45 && diffMinutes > 60);
-  }
-  if (status === "HT" || status === "HALF TIME" || status === "HALFTIME" || status.includes("BREAK TIME")) {
-    return diffMinutes > 80;
-  }
-  if (status === "2H" || status.includes("SECOND HALF")) {
-    return diffMinutes > 125;
-  }
-  if (status === "ET" || status.includes("EXTRA TIME") || status === "PEN" || status.includes("PENALTY")) {
-    return diffMinutes > 170;
-  }
-  return diffMinutes > 140;
-}
-
-function isLiveMatch(m) {
-  const statusRaw = m?.status_short || m?.status || "";
-  const status = String(statusRaw).trim().toUpperCase();
-  if (!status || FINISHED_STATUSES.has(status) || isStaleLiveStatus(m)) return false;
-  return LIVE_STATUS_HINTS.some((hint) =>
-    hint.length <= 3 ? status === hint : status.includes(hint)
-  );
-}
-
-function liveMinuteLabel(m) {
-  const elapsed = Number(m?.elapsed);
-  const extra = Number(m?.extra);
-  const statusRaw = String(m?.status_short || m?.status || "").trim().toUpperCase();
-  const isHalfTime =
-    statusRaw === "HT" ||
-    statusRaw === "HALF TIME" ||
-    statusRaw === "HALFTIME" ||
-    statusRaw.includes("BREAK TIME");
-  const estimatedElapsed = estimateLiveElapsed(m);
-  const effectiveElapsed =
-    Number.isFinite(elapsed) && elapsed > 0
-      ? elapsed
-      : estimatedElapsed;
-
-  if (Number.isFinite(effectiveElapsed) && effectiveElapsed > 0) {
-    const minute = Number.isFinite(extra) && extra > 0 ? `${effectiveElapsed}+${extra}'` : `${effectiveElapsed}'`;
-    if (isHalfTime) return `${minute} · перерыв`;
-    return minute;
-  }
-  if (isHalfTime) return "Перерыв";
-  if (statusRaw.includes("PEN")) return "PEN";
-  return "";
-}
-
-function estimateLiveElapsed(m) {
-  const kickoffRaw = m?.kickoff_at;
-  if (!kickoffRaw) return null;
-  const kickoff = new Date(String(kickoffRaw).replace(" ", "T"));
-  if (Number.isNaN(kickoff.getTime())) return null;
-
-  const now = new Date();
-  const diffMinutes = Math.floor((now.getTime() - kickoff.getTime()) / 60000);
-  if (!Number.isFinite(diffMinutes) || diffMinutes <= 0) return null;
-
-  const statusRaw = String(m?.status_short || m?.status || "").trim().toUpperCase();
-  if (statusRaw === "1H" || statusRaw.includes("FIRST HALF")) {
-    return Math.min(diffMinutes, 45);
-  }
-  if (statusRaw === "HT" || statusRaw === "HALF TIME" || statusRaw === "HALFTIME" || statusRaw.includes("BREAK TIME")) {
-    return 45;
-  }
-  if (statusRaw === "2H" || statusRaw.includes("SECOND HALF")) {
-    return Math.min(Math.max(diffMinutes - 15, 46), 90);
-  }
-  if (statusRaw === "ET" || statusRaw.includes("EXTRA TIME")) {
-    return Math.min(Math.max(diffMinutes - 15, 91), 120);
-  }
-  return null;
-}
-
 function getMatchStateBadge(m) {
   if (isLiveMatch(m)) {
     return {
       kind: "live",
       label: "Live",
-      sublabel: liveMinuteLabel(m) || "В игре",
+      sublabel: liveMinuteLabel(m, "ru") || "В игре",
       pillClass:
         "border-rose-400/30 bg-gradient-to-r from-rose-500/20 to-orange-400/15 text-rose-100 shadow-[0_0_14px_rgba(244,63,94,0.18)]",
       sublabelClass: "text-white/80",
@@ -375,7 +227,7 @@ function resultContextTag(homeGoals, awayGoals) {
 
 function buildMatchSummary(m) {
   if (isLiveMatch(m)) {
-    const minute = liveMinuteLabel(m);
+    const minute = liveMinuteLabel(m, "ru");
     return minute
       ? `Матч в лайве: ${minute}. Детали и статистика обновляются по ходу игры.`
       : "Матч в лайве. Детали и статистика обновляются по ходу игры.";
@@ -651,14 +503,6 @@ function LineupsSection({
   metaMaps,
   setOpenCard,
 }) {
-  if (!lineupsData) {
-    return (
-      <div className="mt-4 text-sm text-muted">
-        {loadingLineups ? "Загружаем составы…" : "Нет данных по составам."}
-      </div>
-    );
-  }
-
   const homePins = useMemo(() => {
     const starters = norm?.home?.starters || [];
     if (!starters.length) return [];
@@ -722,6 +566,14 @@ function LineupsSection({
     candidates.sort((a, b) => b.rating - a.rating);
     return candidates[0].id;
   }, [homePins, awayPins, metaMaps, homeId, awayId]);
+
+  if (!lineupsData) {
+    return (
+      <div className="mt-4 text-sm text-muted">
+        {loadingLineups ? "Загружаем составы…" : "Нет данных по составам."}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 space-y-4">
@@ -991,29 +843,27 @@ function MatchRowCompact({ m, highlight, onOpen }) {
         onOpen?.();
       }}
       className={clsx(
-        "w-full px-4 py-2.5 transition-all duration-200 ease-in-out relative rounded-xl cursor-pointer",
-        "bg-transparent",
-        "hover:bg-white/5",
-        "grid grid-cols-[1fr_auto_1fr] items-center gap-4"
+        "relative grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[22px] px-3 py-3 text-left transition-all duration-200 ease-in-out sm:gap-4 sm:px-4 sm:py-3.5",
+        "bg-white/[0.022] hover:bg-white/[0.04]"
       )}
     >
       {highlight && (
         <span className="pointer-events-none absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[linear-gradient(180deg,#8b5cf6,#6d28d9)] shadow-[0_0_10px_rgba(123,92,255,0.35)]" />
       )}
       {/* LEFT — HOME */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 sm:gap-3">
         <TeamLogoLink teamId={m.home_team_id} stopPropagation className="block">
           <SafeImg
             src={teamLogo(m.home_team, m.home_team_id)}
-            className="h-8 w-8 rounded-lg border border-glass bg-surface-2 object-contain"
+            className="h-8 w-8 rounded-xl bg-surface-2 object-contain sm:h-9 sm:w-9"
             fallbackSrc={teamLogoFallback(m.home_team_id)}
           />
         </TeamLogoLink>
         <div className="min-w-0 text-left">
-          <div className={clsx("text-sm text-white truncate", homeWin ? "font-semibold" : "font-medium")}>
+          <div className={clsx("truncate text-[13px] text-white sm:text-sm", homeWin ? "font-semibold" : "font-medium")}>
             {m.home_team}
           </div>
-          <div className="text-[11px] text-muted truncate">
+          <div className="truncate pt-0.5 text-[10px] text-muted sm:text-[11px]">
             {badge ? (
               <span className="inline-flex items-center gap-2">
                 <span className={`inline-flex h-5 items-center rounded-full border px-2 text-[9px] font-semibold uppercase tracking-[0.12em] ${badge.pillClass}`}>
@@ -1034,12 +884,11 @@ function MatchRowCompact({ m, highlight, onOpen }) {
 
       {/* CENTER — SCORE (fixed width) */}
       <div
-        className="text-center flex flex-col items-center justify-center"
-        style={{ width: "110px" }}
+        className="flex w-[82px] items-center justify-center text-center sm:w-[94px]"
       >
         <div
           className={clsx(
-            "text-[22px] font-semibold tracking-[0.02em] text-white tabular-nums leading-none",
+            "flex items-center justify-center text-[18px] font-semibold tracking-[0.01em] text-white tabular-nums leading-none sm:text-[20px]",
             semanticScoreClass
           )}
         >
@@ -1050,7 +899,7 @@ function MatchRowCompact({ m, highlight, onOpen }) {
               <span className={homeWin ? "text-white" : awayWin ? "text-white/40" : "text-white"}>
                 {home}
               </span>
-              <span className="px-1 text-white/80">–</span>
+              <span className="px-1.5 text-white/38">:</span>
               <span className={awayWin ? "text-white" : homeWin ? "text-white/40" : "text-white"}>
                 {away}
               </span>
@@ -1060,16 +909,19 @@ function MatchRowCompact({ m, highlight, onOpen }) {
       </div>
 
       {/* RIGHT — AWAY */}
-      <div className="flex items-center gap-3 min-w-0 justify-end">
+      <div className="flex items-center gap-2 min-w-0 justify-end sm:gap-3">
         <div className="text-right min-w-0">
-          <div className={clsx("text-sm text-white truncate", awayWin ? "font-semibold" : "font-medium")}>
+          <div className={clsx("truncate text-[13px] text-white sm:text-sm", awayWin ? "font-semibold" : "font-medium")}>
             {m.away_team}
+          </div>
+          <div className="truncate pt-0.5 text-[10px] text-white/38 sm:text-[11px]">
+            {safeDateFormat(m.date)}
           </div>
         </div>
         <TeamLogoLink teamId={m.away_team_id} stopPropagation className="block">
           <SafeImg
             src={teamLogo(m.away_team, m.away_team_id)}
-            className="h-8 w-8 rounded-lg border border-glass bg-surface-2 object-contain"
+            className="h-8 w-8 rounded-xl bg-surface-2 object-contain sm:h-9 sm:w-9"
             fallbackSrc={teamLogoFallback(m.away_team_id)}
           />
         </TeamLogoLink>
@@ -1103,8 +955,8 @@ function MatchExpanded({ m }) {
     setLoadingLineups(true);
     const ac = new AbortController();
     try {
-      const j = await fetchLineupsCached(m.fixture_id, ac.signal);
-      setLineupsData(j);
+      const res = await loadLineupsCached(m.fixture_id, ac.signal);
+      setLineupsData(res?.data || null);
     } finally {
       setLoadingLineups(false);
     }
@@ -1176,25 +1028,16 @@ function MatchCard({ m, highlight, onOpen }) {
 /* ================================
    FETCH JSON SAFE
 ================================ */
-async function fetchJsonSafe(url, signal) {
-  const r = await authFetch(url, { signal });
-  if (r.status === 401 || r.status === 403) return null;
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const txt = await r.text();
-  try {
-    return JSON.parse(txt);
-  } catch {
-    const fixed = txt
-      .replace(/\bNaN\b/g, "null")
-      .replace(/\b-?Infinity\b/g, "null");
-    return JSON.parse(fixed);
-  }
+function seasonDateRangeGlobal(seasonStr) {
+  const y = Number(seasonStr) || 2025;
+  return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
 }
 
 /* ================================
    MAIN PAGE
 ================================ */
 export default function MatchesPageV3() {
+  const { t, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -1209,9 +1052,12 @@ export default function MatchesPageV3() {
   );
 
   const [matches, setMatches] = useState([]);
+  const [visibleRoundCount, setVisibleRoundCount] = useState(RESULTS_INITIAL_ROUNDS);
+  const loadMoreRoundsRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [highlightId, setHighlightId] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [showHint, setShowHint] = useState(() => {
     try {
       return localStorage.getItem("results_hint_seen") !== "1";
@@ -1236,53 +1082,50 @@ export default function MatchesPageV3() {
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [league, season]);
+  }, [league, season, refreshTick]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRefreshTick((tick) => tick + 1);
+    }, RESULTS_REFRESH_INTERVAL);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const seasonDateRange = (seasonStr) => {
-    const y = Number(seasonStr) || Number(DEFAULT_SEASON);
-    return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
-  };
-
-  const isInternationalLongCycleLeague = (leagueName) => {
-    const value = String(leagueName || "").toLowerCase();
-    return (
-      value.includes("world cup") ||
-      value.includes("euro championship") ||
-      value.includes("nations league") ||
-      value.includes("copa america") ||
-      value.includes("gold cup")
-    );
+    return seasonDateRangeGlobal(seasonStr || DEFAULT_SEASON);
   };
 
   // Load matches
   useEffect(() => {
     const ac = new AbortController();
+    const key = `${league}|${season}`;
+    const cached = resultsCache.get(key);
+    const freshCached =
+      cached && Date.now() - cached.t < RESULTS_CACHE_TTL ? cached.v : null;
+
+    if (freshCached) {
+      setMatches(freshCached);
+      setLoading(false);
+    }
+
     (async () => {
       try {
-        setLoading(true);
+        setLoading(!freshCached);
         setError("");
-        setMatches([]);
+        if (!freshCached) setMatches([]);
 
-        const q = new URLSearchParams({
+        const list = await fetchMatchesV3({
           league,
           season,
-        });
-        if (!isInternationalLongCycleLeague(league)) {
-          const { from, to } = seasonDateRange(season);
-          q.set("from_date", from);
-          q.set("to_date", to);
-        }
-
-        const data = await fetchJsonSafe(
-          `/api/matches_v3?${q.toString()}`,
-          ac.signal
-        );
-
-        const list = Array.isArray(data) ? data : [];
+          limit: 240,
+          lookbackDays: isInternationalLongCycleLeague(league) ? 0 : RESULTS_LOOKBACK_DAYS,
+        }, ac.signal);
         const played = list.filter((m) => isPlayedMatch(m));
         const sorted = [...played].sort(
           (a, b) => matchTimestamp(b) - matchTimestamp(a)
         );
+        resultsCache.set(key, { t: Date.now(), v: sorted });
         setMatches(sorted);
       } catch (e) {
         if (e.name !== "AbortError") setError(e.message || String(e));
@@ -1292,6 +1135,10 @@ export default function MatchesPageV3() {
     })();
 
     return () => ac.abort();
+  }, [league, season]);
+
+  useEffect(() => {
+    setVisibleRoundCount(RESULTS_INITIAL_ROUNDS);
   }, [league, season]);
 
   // Prefetch
@@ -1363,30 +1210,53 @@ useEffect(() => {
     });
   }, [matches]);
 
+  const visibleGroups = useMemo(
+    () => grouped.slice(0, visibleRoundCount),
+    [grouped, visibleRoundCount]
+  );
+
+  useEffect(() => {
+    const el = loadMoreRoundsRef.current;
+    if (!el || visibleRoundCount >= grouped.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setVisibleRoundCount((count) =>
+              Math.min(count + RESULTS_ROUND_STEP, grouped.length)
+            );
+          }
+        });
+      },
+      { rootMargin: "700px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [grouped.length, visibleRoundCount]);
+
   return (
-    <div className="w-full px-4 py-8 space-y-8">
+    <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
       {/* HEADER */}
       <div>
-        <div className="panel rounded-3xl p-6 md:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
-                МАТЧИ ТУРНИРА
+        <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+            <div className="min-w-0 space-y-1.5">
+              <div className="type-eyebrow">
+                {t("tournamentMatches")}
               </div>
 
-              <div className="text-xl sm:text-2xl font-semibold text-white">
-                Результаты · {league}
+              <div className="type-page-title break-words text-xl sm:text-2xl">
+                {t("resultsTitle")} · {league}
               </div>
 
-              <p className="text-sm text-slate-400 max-w-[640px] leading-relaxed">
-                Результаты сыгранных матчей. Нажмите на матч, чтобы открыть
-                Match Center.
+              <p className="type-subtitle max-w-[640px]">
+                {t("resultsLead")}
               </p>
             </div>
 
-            <div className="flex flex-col items-end">
+            <div className="flex w-full min-w-0 flex-col sm:w-auto sm:items-end">
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted mb-1">
-                СЕЗОН
+                {t("seasonUpper")}
               </span>
               <span className="text-sm text-white/85">
                 {season}
@@ -1398,42 +1268,42 @@ useEffect(() => {
 
       {/* STATES */}
       {loading && (
-        <div className="panel bg-surface-2/70 rounded-2xl p-4 border border-glass text-center text-sm text-muted">
-          Загружаем матчи…
+        <div className="surface-loading">
+          {t("loadingMatches")}
         </div>
       )}
 
       {!loading && error && (
-        <div className="panel bg-[rgba(127,29,29,0.25)] rounded-2xl p-4 border border-rose-500/40 text-rose-100 text-center text-sm">
-          Ошибка: {error}
+        <div className="surface-error">
+          {t("errorPrefix")}: {error}
         </div>
       )}
 
       {!loading && !error && matches.length === 0 && (
-        <div className="panel bg-surface-2/70 rounded-2xl p-4 border border-glass text-center text-sm text-muted">
-          Нет матчей для выбранных фильтров.
+        <div className="surface-empty">
+          {t("noMatches")}
         </div>
       )}
 
       {!loading && !error && matches.length > 0 && showHint && (
         <div className="text-xs text-slate-400">
-          Нажми на матч, чтобы открыть Match Center.
+          {t("openMatchHint")}
         </div>
       )}
 
       {/* GROUPED BY ROUND */}
       {!loading &&
         !error &&
-        grouped.map((g, idx) => (
+        visibleGroups.map((g, idx) => (
           <section key={g.label} className={clsx("space-y-3", idx > 0 && "mt-8")}>
             {/* header */}
             <div className="px-4 md:px-6 pt-5 border-t border-white/5">
               <div className="flex items-center justify-between">
                 <div className="text-[13px] uppercase tracking-[0.15em] text-white/60 whitespace-nowrap">
-                  {humanRoundLabel(g.label)}
+                  {humanRoundLabel(g.label, language)}
                 </div>
                 <span className="text-[11px] text-white/60 bg-white/5 px-3 py-1 rounded-full">
-                  {g.items.length} матчей
+                  {g.items.length} {t("matchesCount")}
                 </span>
               </div>
             </div>
@@ -1463,6 +1333,12 @@ useEffect(() => {
             </div>
           </section>
         ))}
+
+      {!loading && !error && visibleRoundCount < grouped.length && (
+        <div ref={loadMoreRoundsRef} className="py-6 text-center text-xs text-slate-500">
+          {t("loadingMoreRounds")}
+        </div>
+      )}
 
       {/* END grouped */}
 </div>

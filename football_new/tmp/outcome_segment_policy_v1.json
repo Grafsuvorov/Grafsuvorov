@@ -1,0 +1,256 @@
+{
+  "allowed_segments_v1": [
+    {
+      "league": "Premier League",
+      "outcome": "Home",
+      "odds_bucket": "2.00-2.40",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 3,
+      "positive_window_share": 1.0,
+      "avg_roi": 0.43551851851851847,
+      "total_bets": 33
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Home",
+      "odds_bucket": "1.55-1.70",
+      "draw_risk_bin": "0.26-0.30",
+      "windows": 4,
+      "positive_window_share": 1.0,
+      "avg_roi": 0.22561805555555559,
+      "total_bets": 33
+    },
+    {
+      "league": "La Liga",
+      "outcome": "Home",
+      "odds_bucket": "<1.55",
+      "draw_risk_bin": "<=0.22",
+      "windows": 7,
+      "positive_window_share": 1.0,
+      "avg_roi": 0.20658374958374953,
+      "total_bets": 74
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Away",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.26-0.30",
+      "windows": 8,
+      "positive_window_share": 0.875,
+      "avg_roi": 0.30553484162274924,
+      "total_bets": 148
+    },
+    {
+      "league": "Ligue 1",
+      "outcome": "Home",
+      "odds_bucket": "2.40-3.20",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 6,
+      "positive_window_share": 0.8333333333333334,
+      "avg_roi": 0.3098041278166278,
+      "total_bets": 72
+    },
+    {
+      "league": "Ligue 1",
+      "outcome": "Home",
+      "odds_bucket": "2.00-2.40",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 5,
+      "positive_window_share": 0.8,
+      "avg_roi": 0.22492,
+      "total_bets": 51
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Away",
+      "odds_bucket": "2.40-3.20",
+      "draw_risk_bin": "0.30-0.34",
+      "windows": 4,
+      "positive_window_share": 0.75,
+      "avg_roi": 0.15651573426573426,
+      "total_bets": 43
+    }
+  ],
+  "blocked_segments_v1": [
+    {
+      "league": "La Liga",
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "<=0.22",
+      "windows": 7,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.8268507936507936,
+      "total_bets": 80
+    },
+    {
+      "league": "Ligue 1",
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 8,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.5851396645021645,
+      "total_bets": 94
+    },
+    {
+      "league": "Premier League",
+      "outcome": "Home",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 4,
+      "positive_window_share": 0.25,
+      "avg_roi": -0.5720208333333333,
+      "total_bets": 52
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Draw",
+      "odds_bucket": "2.40-3.20",
+      "draw_risk_bin": "0.34+",
+      "windows": 5,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.4885830769230769,
+      "total_bets": 62
+    },
+    {
+      "league": "Bundesliga",
+      "outcome": "Away",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 8,
+      "positive_window_share": 0.125,
+      "avg_roi": -0.47703454633601694,
+      "total_bets": 104
+    },
+    {
+      "league": "Ligue 1",
+      "outcome": "Away",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 8,
+      "positive_window_share": 0.25,
+      "avg_roi": -0.4432794905462185,
+      "total_bets": 133
+    },
+    {
+      "league": "Ligue 1",
+      "outcome": "Away",
+      "odds_bucket": "2.40-3.20",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 7,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.43445384615384613,
+      "total_bets": 82
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Home",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.26-0.30",
+      "windows": 8,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.39580276745313514,
+      "total_bets": 99
+    },
+    {
+      "league": "Premier League",
+      "outcome": "Home",
+      "odds_bucket": "1.70-2.00",
+      "draw_risk_bin": "<=0.22",
+      "windows": 3,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.34724848484848486,
+      "total_bets": 36
+    },
+    {
+      "league": "La Liga",
+      "outcome": "Away",
+      "odds_bucket": "2.40-3.20",
+      "draw_risk_bin": "0.26-0.30",
+      "windows": 8,
+      "positive_window_share": 0.125,
+      "avg_roi": -0.32888623737373734,
+      "total_bets": 90
+    },
+    {
+      "league": "Bundesliga",
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 8,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.2939537247474748,
+      "total_bets": 127
+    },
+    {
+      "league": "Ligue 1",
+      "outcome": "Home",
+      "odds_bucket": "1.70-2.00",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 7,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.2530527463732746,
+      "total_bets": 90
+    },
+    {
+      "league": "Bundesliga",
+      "outcome": "Home",
+      "odds_bucket": "2.40-3.20",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 4,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.2293434343434344,
+      "total_bets": 36
+    },
+    {
+      "league": "Premier League",
+      "outcome": "Away",
+      "odds_bucket": "2.00-2.40",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 5,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.22802333333333338,
+      "total_bets": 45
+    },
+    {
+      "league": "Premier League",
+      "outcome": "Away",
+      "odds_bucket": "1.70-2.00",
+      "draw_risk_bin": "0.22-0.26",
+      "windows": 4,
+      "positive_window_share": 0.25,
+      "avg_roi": -0.20298453282828288,
+      "total_bets": 47
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Home",
+      "odds_bucket": "2.00-2.40",
+      "draw_risk_bin": "0.34+",
+      "windows": 4,
+      "positive_window_share": 0.25,
+      "avg_roi": -0.1979097222222222,
+      "total_bets": 34
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Draw",
+      "odds_bucket": "4.00+",
+      "draw_risk_bin": "0.26-0.30",
+      "windows": 8,
+      "positive_window_share": 0.25,
+      "avg_roi": -0.16386132756132765,
+      "total_bets": 106
+    },
+    {
+      "league": "Serie A",
+      "outcome": "Home",
+      "odds_bucket": "<1.55",
+      "draw_risk_bin": "0.26-0.30",
+      "windows": 6,
+      "positive_window_share": 0.0,
+      "avg_roi": -0.1511841168091168,
+      "total_bets": 61
+    }
+  ]
+}

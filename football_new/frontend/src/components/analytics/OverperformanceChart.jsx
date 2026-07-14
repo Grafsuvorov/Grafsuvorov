@@ -1,4 +1,5 @@
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const logoByTeamId = (id) =>
   id ? `https://media.api-sports.io/football/teams/${id}.png` : "/icons/default_league.png";
@@ -44,20 +45,24 @@ function TeamLogoDot({ cx, cy, payload }) {
 }
 
 function OverTooltip({ active, payload }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const delta = p.goals - p.xg;
   return (
     <div className="rounded-lg border border-white/10 bg-[rgba(10,10,20,0.9)] px-3 py-2 text-xs text-[#e6e9ef] shadow-[0_0_12px_rgba(124,140,255,0.18)]">
       <div className="mb-1 text-sm font-semibold text-white">{p.name}</div>
-      <div>Голы: {fmtAxis(p.goals)}</div>
+      <div>{isRu ? "Голы" : "Goals"}: {fmtAxis(p.goals)}</div>
       <div>xG: {fmtAxis(p.xg)}</div>
-      <div>Оверперформанс: {delta >= 0 ? "+" : ""}{fmtAxis(delta)}</div>
+      <div>{isRu ? "Оверперформанс" : "Overperformance"}: {delta >= 0 ? "+" : ""}{fmtAxis(delta)}</div>
     </div>
   );
 }
 
 export default function OverperformanceChart({ teams = [], highlightedTeam = null, onTeamHover = null }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const data = teams
     .filter((t) => t.xg != null && t.goals != null)
     .map((t) => ({
@@ -75,7 +80,7 @@ export default function OverperformanceChart({ teams = [], highlightedTeam = nul
 
   return (
     <div className="glass-card p-6">
-      <div className="text-sm font-semibold text-white mb-3">Реализация моментов</div>
+      <div className="text-sm font-semibold text-white mb-3">{isRu ? "Реализация моментов" : "Chance finishing"}</div>
       <div className="h-[480px]">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 22, right: 22, bottom: 12, left: 12 }}>
@@ -110,7 +115,9 @@ export default function OverperformanceChart({ teams = [], highlightedTeam = nul
           </ScatterChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 text-xs text-[#9aa3b2]">Выше диагонали: реализуют лучше ожидаемого</div>
+      <div className="mt-2 text-xs text-[#9aa3b2]">
+        {isRu ? "Выше диагонали: реализуют лучше ожидаемого" : "Above the diagonal: finishing above expectation"}
+      </div>
     </div>
   );
 }

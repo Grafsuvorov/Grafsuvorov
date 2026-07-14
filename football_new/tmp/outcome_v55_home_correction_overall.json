@@ -1,0 +1,10 @@
+{
+  "matches": 1478,
+  "base_accuracy": 0.528417,
+  "corrected_accuracy": 0.530447,
+  "market_accuracy": 0.535859,
+  "chosen_counts": {
+    "(0.0, 0.45, 0.42, 0.02)": 7,
+    "(0.0, 0.45, 0.45, 0.02)": 1
+  }
+}

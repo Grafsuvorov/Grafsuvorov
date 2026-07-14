@@ -1,0 +1,166 @@
+{
+  "feature_counts": {
+    "catboost_plain_numeric": 744,
+    "catboost_market_numeric": 752,
+    "categorical": 3
+  },
+  "market_only": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.5143884892086331,
+        "val_ll": 1.0027934434104162,
+        "val_n": 556
+      },
+      "61": {
+        "val_acc": 0.44356435643564357,
+        "val_ll": 1.0286649474967575,
+        "val_n": 505
+      },
+      "78": {
+        "val_acc": 0.5188470066518847,
+        "val_ll": 0.9857794181464036,
+        "val_n": 451
+      },
+      "135": {
+        "val_acc": 0.5467625899280576,
+        "val_ll": 0.9607553997558684,
+        "val_n": 556
+      },
+      "140": {
+        "val_acc": 0.5090579710144928,
+        "val_ll": 0.9714595591162718,
+        "val_n": 552
+      }
+    },
+    "weighted_val_acc": 0.5072519083969466,
+    "weighted_val_ll": 0.9893286830162317
+  },
+  "current_stack": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.49640287769784175,
+        "val_ll": 1.029354272693008,
+        "val_n": 556
+      },
+      "61": {
+        "val_acc": 0.5287128712871287,
+        "val_ll": 0.9928156255563702,
+        "val_n": 505
+      },
+      "78": {
+        "val_acc": 0.49445676274944567,
+        "val_ll": 0.9970526412120934,
+        "val_n": 451
+      },
+      "135": {
+        "val_acc": 0.5377697841726619,
+        "val_ll": 0.9778221868011937,
+        "val_n": 556
+      },
+      "140": {
+        "val_acc": 0.5181159420289855,
+        "val_ll": 0.9942771041935228,
+        "val_n": 552
+      }
+    },
+    "weighted_val_acc": 0.5156488549618321,
+    "weighted_val_ll": 0.998425078277184
+  },
+  "catboost_plain": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.4910071942446043,
+        "val_ll": 1.0380727584125098,
+        "val_n": 556,
+        "tau_market": 0.0,
+        "n_numeric_features": 744,
+        "n_categorical_features": 3
+      },
+      "61": {
+        "val_acc": 0.5267326732673268,
+        "val_ll": 0.9855928257471874,
+        "val_n": 505,
+        "tau_market": 0.0,
+        "n_numeric_features": 744,
+        "n_categorical_features": 3
+      },
+      "78": {
+        "val_acc": 0.5011086474501109,
+        "val_ll": 1.008375385399296,
+        "val_n": 451,
+        "tau_market": 0.0,
+        "n_numeric_features": 744,
+        "n_categorical_features": 3
+      },
+      "135": {
+        "val_acc": 0.5359712230215827,
+        "val_ll": 0.9776621513281861,
+        "val_n": 556,
+        "tau_market": 0.0,
+        "n_numeric_features": 744,
+        "n_categorical_features": 3
+      },
+      "140": {
+        "val_acc": 0.519927536231884,
+        "val_ll": 0.9950781840182702,
+        "val_n": 552,
+        "tau_market": 0.0,
+        "n_numeric_features": 744,
+        "n_categorical_features": 3
+      }
+    },
+    "weighted_val_acc": 0.5152671755725191,
+    "weighted_val_ll": 1.0009669630577573
+  },
+  "catboost_market": {
+    "by_league": {
+      "39": {
+        "val_acc": 0.5035971223021583,
+        "val_ll": 1.0268637419982292,
+        "val_n": 556,
+        "tau_market": 0.19999999999999998,
+        "n_numeric_features": 752,
+        "n_categorical_features": 3
+      },
+      "61": {
+        "val_acc": 0.5267326732673268,
+        "val_ll": 0.9855928257471874,
+        "val_n": 505,
+        "tau_market": 0.0,
+        "n_numeric_features": 752,
+        "n_categorical_features": 3
+      },
+      "78": {
+        "val_acc": 0.5277161862527716,
+        "val_ll": 0.9934969853188611,
+        "val_n": 451,
+        "tau_market": 0.09999999999999999,
+        "n_numeric_features": 752,
+        "n_categorical_features": 3
+      },
+      "135": {
+        "val_acc": 0.539568345323741,
+        "val_ll": 0.9692106045833173,
+        "val_n": 556,
+        "tau_market": 0.19999999999999998,
+        "n_numeric_features": 752,
+        "n_categorical_features": 3
+      },
+      "140": {
+        "val_acc": 0.5362318840579711,
+        "val_ll": 0.9953204386577551,
+        "val_n": 552,
+        "tau_market": 0.0,
+        "n_numeric_features": 752,
+        "n_categorical_features": 3
+      }
+    },
+    "weighted_val_acc": 0.5267175572519084,
+    "weighted_val_ll": 0.994284632144869
+  },
+  "delta_vs_current": {
+    "market_only_val_ll": -0.009096395260952295,
+    "catboost_plain_val_ll": 0.002541884780573378,
+    "catboost_market_val_ll": -0.004140446132315012
+  }
+}

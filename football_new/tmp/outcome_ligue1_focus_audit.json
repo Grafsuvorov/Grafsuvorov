@@ -1,0 +1,113 @@
+{
+  "summary": {
+    "cases": 7,
+    "actual_outcome_counts": {
+      "Home": 7
+    },
+    "v55_pred_counts": {
+      "Draw": 4,
+      "Away": 3
+    },
+    "market_pred_counts": {
+      "Home": 7
+    },
+    "avg_v55_conf": 0.374161,
+    "avg_market_conf": 0.382938,
+    "confidence_buckets": {
+      "<=0.35": 2,
+      "0.35-0.40": 4,
+      "0.40-0.45": 0,
+      "0.45-0.50": 1,
+      "0.50+": 0
+    }
+  },
+  "top_examples": [
+    {
+      "date_utc": "2025-11-09 16:15:00+00:00",
+      "match": "Angers - Auxerre",
+      "actual_outcome": "Home",
+      "v55_pred": "Draw",
+      "v55_conf": 0.4981622595632001,
+      "market_pred": "Home",
+      "market_conf": 0.3628374136848712,
+      "window": "2025-10-21__2025-11-20"
+    },
+    {
+      "date_utc": "2025-12-05 20:00:00+00:00",
+      "match": "Lille - Marseille",
+      "actual_outcome": "Home",
+      "v55_pred": "Draw",
+      "v55_conf": 0.371717733783271,
+      "market_pred": "Home",
+      "market_conf": 0.3628339742444449,
+      "window": "2025-11-20__2025-12-20"
+    },
+    {
+      "date_utc": "2025-12-12 19:45:00+00:00",
+      "match": "Angers - Nantes",
+      "actual_outcome": "Home",
+      "v55_pred": "Draw",
+      "v55_conf": 0.3569324447807426,
+      "market_pred": "Home",
+      "market_conf": 0.4059002105180631,
+      "window": "2025-11-20__2025-12-20"
+    },
+    {
+      "date_utc": "2025-11-30 16:15:00+00:00",
+      "match": "Lorient - Nice",
+      "actual_outcome": "Home",
+      "v55_pred": "Draw",
+      "v55_conf": 0.3528012689095771,
+      "market_pred": "Home",
+      "market_conf": 0.3784292092164007,
+      "window": "2025-11-20__2025-12-20"
+    },
+    {
+      "date_utc": "2026-03-01 14:00:00+00:00",
+      "match": "Paris FC - Nice",
+      "actual_outcome": "Home",
+      "v55_pred": "Away",
+      "v55_conf": 0.3520326780006511,
+      "market_pred": "Home",
+      "market_conf": 0.3971631205673758,
+      "window": "2026-02-18__2026-03-20"
+    },
+    {
+      "date_utc": "2026-05-10 19:00:00+00:00",
+      "match": "Auxerre - Nice",
+      "actual_outcome": "Home",
+      "v55_pred": "Away",
+      "v55_conf": 0.3445335087631817,
+      "market_pred": "Home",
+      "market_conf": 0.3921043498222303,
+      "window": "2026-04-19__2026-05-19"
+    },
+    {
+      "date_utc": "2025-11-22 18:00:00+00:00",
+      "match": "Rennes - Monaco",
+      "actual_outcome": "Home",
+      "v55_pred": "Away",
+      "v55_conf": 0.34294442551942,
+      "market_pred": "Home",
+      "market_conf": 0.3813007972977674,
+      "window": "2025-11-20__2025-12-20"
+    }
+  ],
+  "team_frequencies": {
+    "home_team_counts": {
+      "Angers": 2,
+      "Lille": 1,
+      "Lorient": 1,
+      "Paris FC": 1,
+      "Auxerre": 1,
+      "Rennes": 1
+    },
+    "away_team_counts": {
+      "Nice": 3,
+      "Auxerre": 1,
+      "Marseille": 1,
+      "Nantes": 1,
+      "Monaco": 1
+    }
+  }
+}

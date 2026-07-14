@@ -1,29 +1,34 @@
 import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const logoByTeamId = (id) =>
   id ? `https://media.api-sports.io/football/teams/${id}.png` : "/icons/default_league.png";
 
-const formatDate = (val) => {
+const formatDate = (val, language) => {
   if (!val) return "—";
   const d = new Date(val);
   if (Number.isNaN(d.getTime())) return String(val);
-  return d.toLocaleDateString("ru-RU");
+  return d.toLocaleDateString(language === "ru" ? "ru-RU" : "en-GB");
 };
 
 function TrendTooltip({ active, payload }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
     <div className="rounded-[10px] border border-white/10 bg-[rgba(15,23,42,0.96)] px-3 py-2.5 text-[12px] text-white shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-      <div className="mb-1 text-sm font-semibold text-white">{p.team || "Команда"}</div>
-      <div>Дата: {formatDate(p.date)}</div>
+      <div className="mb-1 text-sm font-semibold text-white">{p.team || (isRu ? "Команда" : "Team")}</div>
+      <div>{isRu ? "Дата" : "Date"}: {formatDate(p.date, language)}</div>
       <div>xG: {p.xg != null ? Number(p.xg).toFixed(2) : "—"}</div>
-      <div>Соперник: {p.opponent || "—"}</div>
+      <div>{isRu ? "Соперник" : "Opponent"}: {p.opponent || "—"}</div>
     </div>
   );
 }
 
 export default function TeamFormGrid({ trends = [], teams = [], trendWindow = 10, highlightedTeam = null, onTeamHover = null }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const items = trends.slice(0, 8);
   const teamIdByName = new Map((teams || []).map((t) => [t.team, t.team_id]));
   const trendColor = (series) => {
@@ -37,7 +42,7 @@ export default function TeamFormGrid({ trends = [], teams = [], trendWindow = 10
 
   return (
     <div className="glass-card p-6">
-      <div className="mb-4 text-base font-semibold text-white">Форма команд</div>
+      <div className="mb-4 text-base font-semibold text-white">{isRu ? "Форма команд" : "Team form"}</div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {items.map((t) => (
           <div
@@ -70,7 +75,7 @@ export default function TeamFormGrid({ trends = [], teams = [], trendWindow = 10
           </div>
         ))}
         {items.length === 0 && (
-          <div className="text-sm text-white/45">Недостаточно данных</div>
+          <div className="surface-empty">{isRu ? "Недостаточно данных" : "Not enough data"}</div>
         )}
       </div>
     </div>

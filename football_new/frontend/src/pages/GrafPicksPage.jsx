@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TeamLogoLink from "@/components/TeamLogoLink";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 import { HOME_URL } from "../routes/home";
 
 /* ===== utils ===== */
@@ -90,7 +91,8 @@ function getH2H(h2hDict, homeId, awayId) {
 }
 
 /* ===== Single card (сглаженная палитра) ===== */
-function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter = false }) {
+function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter = false, language = "ru" }) {
+  const isRu = language === "ru";
   const implied = impliedFromOdds(card.odds);
   const kelly = kellyFraction(card.p, card.odds) ?? 0;
   const kRec = Math.max(0, kelly * kellyCoef);
@@ -109,7 +111,7 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
       <div className="relative flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-indigo-600/90 via-violet-600/85 to-sky-600/90 text-white shadow-sm">
         <div className="flex items-center gap-2">
           <Badge color="whiteSoft">{card.label}</Badge>
-          {card.agreement === "contrarian" && <Badge color="whiteSoft">против модели</Badge>}
+          {card.agreement === "contrarian" && <Badge color="whiteSoft">{isRu ? "против модели" : "against model"}</Badge>}
           {card.agreement === "top2" && <Badge color="whiteSoft">top-2</Badge>}
         </div>
         <div className="text-xs/5 opacity-90">🗓 {card.date}</div>
@@ -135,9 +137,9 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
           </div>
 
           <div className="grid grid-cols-3 gap-4 py-2">
-            <StatBox label="Коэфф." value={<span className="text-2xl">{fmtNum(card.odds, 2)}</span>} />
+            <StatBox label={isRu ? "Коэфф." : "Odds"} value={<span className="text-2xl">{fmtNum(card.odds, 2)}</span>} />
             <StatBox
-              label="Вероятность / имплайд"
+              label={isRu ? "Вероятность / имплайд" : "Probability / implied"}
               value={
                 <span className="font-mono">
                   {fmtPct(card.p, 1)} <span className="text-slate-400">/</span> {fmtPct(implied, 1)}
@@ -149,10 +151,10 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
 
           <div className="grid grid-cols-3 gap-4 mt-4">
             <StatBox label="Kelly (full)" value={fmtPct(kelly, 1)} />
-            <StatBox label={`Реком. доля (×${Math.round(kellyCoef * 100)}%)`} value={fmtPct(kRec, 1)} />
+            <StatBox label={isRu ? `Реком. доля (×${Math.round(kellyCoef * 100)}%)` : `Recommended stake (×${Math.round(kellyCoef * 100)}%)`} value={fmtPct(kRec, 1)} />
             <StatBox
-              label="Согласование"
-              value={{ aligned: "по модели", top2: "top-2", contrarian: "контра", neutral: "нейтр." }[card.agreement || "neutral"]}
+              label={isRu ? "Согласование" : "Alignment"}
+              value={{ aligned: isRu ? "по модели" : "aligned", top2: "top-2", contrarian: isRu ? "контра" : "contra", neutral: isRu ? "нейтр." : "neutral" }[card.agreement || "neutral"]}
             />
           </div>
 
@@ -160,19 +162,19 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
             <div className="mt-5 grid gap-3">
               {!overrideBanter && card.banter && (
                 <div className="border-l border-indigo-400/40 pl-4 text-sm text-slate-100">
-                  <div className="font-semibold mb-1">👑 Прогноз от Графа Суворова</div>
+                  <div className="font-semibold mb-1">{isRu ? "👑 Прогноз от Графа Суворова" : "👑 Graf Suvorov pick"}</div>
                   <div>{card.banter}</div>
-                  <div className="text-xs text-slate-400 mt-2">Не является фин. советом. Развлекательный контент.</div>
+                  <div className="text-xs text-slate-400 mt-2">{isRu ? "Не является фин. советом. Развлекательный контент." : "Not financial advice. Entertainment content."}</div>
                 </div>
               )}
               {customNote && (
                 <div className="border-l border-amber-400/40 pl-4 text-sm text-slate-200">
-                  <div className="font-semibold mb-1">✍️ От редактора</div>
+                  <div className="font-semibold mb-1">{isRu ? "✍️ От редактора" : "✍️ Editor note"}</div>
                   <div>{customNote}</div>
                 </div>
               )}
               {overrideBanter && !customNote && (
-                <div className="text-xs text-slate-400">* Включена опция «заменять текст модели», но поле пустое.</div>
+                <div className="text-xs text-slate-400">{isRu ? "* Включена опция «заменять текст модели», но поле пустое." : "* The “replace model text” option is enabled, but the field is empty."}</div>
               )}
             </div>
           )}
@@ -180,17 +182,17 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
 
         {/* Evidence */}
         <div className="lg:border-l lg:border-white/8 lg:pl-6">
-          <div className="text-sm font-semibold text-slate-100 mb-3">📈 Доказуха (последние 5)</div>
+          <div className="text-sm font-semibold text-slate-100 mb-3">{isRu ? "📈 Доказуха (последние 5)" : "📈 Evidence (last 5)"}</div>
           <div className="flex flex-col gap-0 divide-y divide-white/8">
             <div className="py-3">
               <div className="text-xs text-slate-400 mb-1">{card.home_team}</div>
               {formHome ? (
                 <div className="flex items-center justify-between">
                   <Badge color="green">{formHome.w}-{formHome.d}-{formHome.l}</Badge>
-                  <div className="text-xs text-slate-300">Голы: {formHome.gf}:{formHome.ga}</div>
+                  <div className="text-xs text-slate-300">{isRu ? "Голы" : "Goals"}: {formHome.gf}:{formHome.ga}</div>
                 </div>
               ) : (
-                <div className="text-xs text-slate-400">Нет данных</div>
+                <div className="text-xs text-slate-400">{isRu ? "Нет данных" : "No data"}</div>
               )}
             </div>
             <div className="py-3">
@@ -198,23 +200,23 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
               {formAway ? (
                 <div className="flex items-center justify-between">
                   <Badge color="green">{formAway.w}-{formAway.d}-{formAway.l}</Badge>
-                  <div className="text-xs text-slate-300">Голы: {formAway.gf}:{formAway.ga}</div>
+                  <div className="text-xs text-slate-300">{isRu ? "Голы" : "Goals"}: {formAway.gf}:{formAway.ga}</div>
                 </div>
               ) : (
-                <div className="text-xs text-slate-400">Нет данных</div>
+                <div className="text-xs text-slate-400">{isRu ? "Нет данных" : "No data"}</div>
               )}
             </div>
             <div className="py-3">
-              <div className="text-xs text-slate-400 mb-1">Личные встречи</div>
+              <div className="text-xs text-slate-400 mb-1">{isRu ? "Личные встречи" : "Head-to-head"}</div>
               {h2h ? (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                  <Badge color="blue">матчей {h2h.m5 ?? "—"}</Badge>
-                  <Badge color="green">дом: {h2h.hW ?? "—"}</Badge>
-                  <Badge color="amber">ничьи: {h2h.d5 ?? "—"}</Badge>
-                  <Badge color="red">гости: {h2h.aW ?? "—"}</Badge>
+                  <Badge color="blue">{isRu ? "матчей" : "matches"} {h2h.m5 ?? "—"}</Badge>
+                  <Badge color="green">{isRu ? "дом" : "home"}: {h2h.hW ?? "—"}</Badge>
+                  <Badge color="amber">{isRu ? "ничьи" : "draws"}: {h2h.d5 ?? "—"}</Badge>
+                  <Badge color="red">{isRu ? "гости" : "away"}: {h2h.aW ?? "—"}</Badge>
                 </div>
               ) : (
-                <div className="text-xs text-slate-400">Нет данных</div>
+                <div className="text-xs text-slate-400">{isRu ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -225,7 +227,8 @@ function SingleCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
 }
 
 /* ===== Parlay card (сглаженная палитра) ===== */
-function ParlayCard({ card, evidence, kellyCoef, customNote = "", overrideBanter = false }) {
+function ParlayCard({ card, evidence, kellyCoef, customNote = "", overrideBanter = false, language = "ru" }) {
+  const isRu = language === "ru";
   const agg = card.parlay_metrics || {};
   const kRec = Math.max(0, (agg.kelly ?? 0) * kellyCoef);
 
@@ -236,7 +239,7 @@ function ParlayCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
 
       <div className="relative flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-rose-600/90 via-orange-600/85 to-amber-600/90 text-white shadow-sm">
         <div className="flex items-center gap-2">
-          <Badge color="whiteSoft">Экспресс</Badge>
+          <Badge color="whiteSoft">{isRu ? "Экспресс" : "Parlay"}</Badge>
         </div>
         <div className="text-xs/5 opacity-90">⚡ {card.title}</div>
       </div>
@@ -257,29 +260,29 @@ function ParlayCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <StatBox label="Совм. p" value={<span className="font-mono">{fmtPct(agg.p, 2)}</span>} />
-          <StatBox label="Коэфф." value={<span className="text-2xl">{fmtNum(agg.odds, 2)}</span>} />
+          <StatBox label={isRu ? "Совм. p" : "Combined p"} value={<span className="font-mono">{fmtPct(agg.p, 2)}</span>} />
+          <StatBox label={isRu ? "Коэфф." : "Odds"} value={<span className="text-2xl">{fmtNum(agg.odds, 2)}</span>} />
           <StatBox label="EV" value={<span className="font-mono">{fmtPct(agg.ev, 1)}</span>} />
-          <StatBox label={`Реком. доля (×${Math.round(kellyCoef * 100)}%)`} value={fmtPct(kRec, 1)} />
+          <StatBox label={isRu ? `Реком. доля (×${Math.round(kellyCoef * 100)}%)` : `Recommended stake (×${Math.round(kellyCoef * 100)}%)`} value={fmtPct(kRec, 1)} />
         </div>
 
         {(card.banter || customNote) && (
           <div className="mt-5 grid gap-3">
             {!overrideBanter && card.banter && (
               <div className="border-l border-rose-400/40 pl-4 text-sm text-slate-100">
-                <div className="font-semibold mb-1">👑 Прогноз от Графа Суворова</div>
+                <div className="font-semibold mb-1">{isRu ? "👑 Прогноз от Графа Суворова" : "👑 Graf Suvorov pick"}</div>
                 <div>{card.banter}</div>
-                <div className="text-xs text-slate-400 mt-2">Не является фин. советом. Развлекательный контент.</div>
+                <div className="text-xs text-slate-400 mt-2">{isRu ? "Не является фин. советом. Развлекательный контент." : "Not financial advice. Entertainment content."}</div>
               </div>
             )}
             {customNote && (
               <div className="border-l border-amber-400/40 pl-4 text-sm text-slate-200">
-                <div className="font-semibold mb-1">✍️ От редактора</div>
+                <div className="font-semibold mb-1">{isRu ? "✍️ От редактора" : "✍️ Editor note"}</div>
                 <div>{customNote}</div>
               </div>
             )}
             {overrideBanter && !customNote && (
-              <div className="text-xs text-slate-400">* Включена опция «заменять текст модели», но поле пустое.</div>
+              <div className="text-xs text-slate-400">{isRu ? "* Включена опция «заменять текст модели», но поле пустое." : "* The “replace model text” option is enabled, but the field is empty."}</div>
             )}
           </div>
         )}
@@ -291,6 +294,8 @@ function ParlayCard({ card, evidence, kellyCoef, customNote = "", overrideBanter
 /* ===== Page ===== */
 export default function GrafPicksPage() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [cards, setCards] = useState([]);
@@ -339,16 +344,18 @@ export default function GrafPicksPage() {
             onClick={() => navigate(HOME_URL)}
             className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-slate-100"
           >
-            <span>←</span> <span>На главную</span>
+            <span>←</span> <span>{isRu ? "На главную" : "Back home"}</span>
           </button>
         </div>
 
         {/* hero */}
         <div className="type-title-block glass-card relative overflow-hidden p-7 mb-8 text-white">
           <div className="absolute right-0 top-0 bottom-0 w-64 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.16),transparent)]" />
-          <h1 className="type-page-title">Прогнозы от Графа Суворова</h1>
+          <h1 className="type-page-title">{isRu ? "Прогнозы от Графа Суворова" : "Graf Suvorov picks"}</h1>
           <p className="type-subtitle text-slate-200/90">
-            2–3 карточки на ближайшие 5 дней: ординары и/или двойники с умной фильтрацией рисков.
+            {isRu
+              ? "2–3 карточки на ближайшие 5 дней: ординары и/или двойники с умной фильтрацией рисков."
+              : "2–3 cards for the next 5 days: singles and/or doubles with smart risk filtering."}
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -368,18 +375,18 @@ export default function GrafPicksPage() {
               onClick={fetchData}
               className="ml-auto inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm hover:bg-white/15 border border-white/20"
             >
-              🔄 Обновить
+              🔄 {isRu ? "Обновить" : "Refresh"}
             </button>
           </div>
 
           {/* редактор комментария */}
           <div className="mt-5 grid gap-2">
-            <label className="text-sm text-slate-200/90">Ваш комментарий для карточек (опционально):</label>
+            <label className="text-sm text-slate-200/90">{isRu ? "Ваш комментарий для карточек (опционально):" : "Your note for the cards (optional):"}</label>
             <textarea
               value={customNote}
               onChange={(e) => setCustomNote(e.target.value)}
               rows={2}
-              placeholder="Например: «Беру осторожно пол-юнита. Жду рост линии к вечеру»"
+              placeholder={isRu ? "Например: «Беру осторожно пол-юнита. Жду рост линии к вечеру»" : 'For example: "Taking a cautious half-unit. Expecting the line to rise by evening"'}
               className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-slate-300"
             />
             <label className="flex items-center gap-2 text-sm text-slate-200/90">
@@ -388,20 +395,20 @@ export default function GrafPicksPage() {
                 checked={overrideBanter}
                 onChange={(e) => setOverrideBanter(e.target.checked)}
               />
-              Заменять текст модели моим комментарием
+              {isRu ? "Заменять текст модели моим комментарием" : "Replace model text with my note"}
             </label>
           </div>
         </div>
 
-        {loading && <div className="text-slate-400">Загружаем…</div>}
-        {err && <div className="text-rose-300">Ошибка: {err}</div>}
+        {loading && <div className="text-slate-400">{isRu ? "Загружаем…" : "Loading…"}</div>}
+        {err && <div className="text-rose-300">{isRu ? "Ошибка" : "Error"}: {err}</div>}
 
         {!loading && !err && (
           <>
             {/* singles */}
             {singles.length > 0 && (
               <div className="mb-8">
-                <h2 className="type-section-title mb-3">🔥 Ординары</h2>
+                <h2 className="type-section-title mb-3">{isRu ? "🔥 Ординары" : "🔥 Singles"}</h2>
                 <div className="grid grid-cols-1 gap-6">
                   {singles.map((c) => (
                     <SingleCard
@@ -411,6 +418,7 @@ export default function GrafPicksPage() {
                       kellyCoef={kellyCoef}
                       customNote={customNote}
                       overrideBanter={overrideBanter}
+                      language={language}
                     />
                   ))}
                 </div>
@@ -420,7 +428,7 @@ export default function GrafPicksPage() {
             {/* parlays */}
             {parlays.length > 0 && (
               <div className="mb-8">
-                <h2 className="type-section-title mb-3">⚡ Экспресс</h2>
+                <h2 className="type-section-title mb-3">{isRu ? "⚡ Экспресс" : "⚡ Parlay"}</h2>
                 <div className="grid grid-cols-1 gap-6">
                   {parlays.map((c, idx) => (
                     <ParlayCard
@@ -430,6 +438,7 @@ export default function GrafPicksPage() {
                       kellyCoef={kellyCoef}
                       customNote={customNote}
                       overrideBanter={overrideBanter}
+                      language={language}
                     />
                   ))}
                 </div>
@@ -439,34 +448,37 @@ export default function GrafPicksPage() {
             {cards.length === 0 && (
               <div className="rounded-3xl border border-glass bg-surface-2/70 p-6 text-slate-300">
                 <div className="type-card-title">
-                  Сейчас нет ставок с ценностью
+                  {isRu ? "Сейчас нет ставок с ценностью" : "There are no value bets right now"}
                 </div>
                 <div className="mt-2 type-body">
-                  Мы не показываем ставки ради активности.
-                  Подборки появляются только когда модель и рынок расходятся.
+                  {isRu
+                    ? "Мы не показываем ставки ради активности. Подборки появляются только когда модель и рынок расходятся."
+                    : "We do not show bets just for activity. Cards appear only when the model and the market diverge."}
                 </div>
                 <div className="mt-2 text-xs text-slate-500">
-                  Попробуй изменить лигу, сезон или порог EV.
+                  {isRu ? "Попробуй изменить лигу, сезон или порог EV." : "Try changing the league, season, or EV threshold."}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                     className="rounded-full border border-glass bg-surface-1/80 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-surface-2"
                   >
-                    Изменить фильтры
+                    {isRu ? "Изменить фильтры" : "Adjust filters"}
                   </button>
                   <button
                     onClick={() => navigate("/matches-v3")}
                     className="rounded-full border border-glass bg-surface-1/80 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-surface-2"
                   >
-                    Смотреть результаты
+                    {isRu ? "Смотреть результаты" : "View results"}
                   </button>
                 </div>
               </div>
             )}
 
             <div className="mt-10 text-xs text-slate-500">
-              Развлекательный контент. Вероятности и коэффициенты могут меняться. Проверяй актуальные котировки.
+              {isRu
+                ? "Развлекательный контент. Вероятности и коэффициенты могут меняться. Проверяй актуальные котировки."
+                : "Entertainment content. Probabilities and odds may change. Check the latest prices before placing a bet."}
             </div>
           </>
         )}

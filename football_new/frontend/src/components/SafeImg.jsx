@@ -9,10 +9,43 @@ const FALLBACK_SVG =
      </svg>`
   );
 
-export default function SafeImg({ src, alt = "", className = "", fallbackSrc = null }) {
+export default function SafeImg({
+  src,
+  alt = "",
+  className = "",
+  fallbackSrc = null,
+  loading = "lazy",
+  decoding = "async",
+  fetchPriority,
+}) {
+  const resolveProxyFallback = (value) => {
+    if (!value) return null;
+
+    const teamMatch = String(value).match(
+      /^https:\/\/media\.api-sports\.io\/football\/teams\/(\d+)\.png$/i
+    );
+    if (teamMatch) return `/api/team-logo/${teamMatch[1]}`;
+
+    const playerMatch = String(value).match(
+      /^https:\/\/media\.api-sports\.io\/football\/players\/(\d+)\.png$/i
+    );
+    if (playerMatch) return `/api/player-photo/${playerMatch[1]}`;
+
+    return value;
+  };
+
   const handleError = (e) => {
+    const proxiedFallback = resolveProxyFallback(fallbackSrc);
+    const alreadyTriedFallback = e.currentTarget.dataset.fallbackApplied === "1";
+
+    if (!alreadyTriedFallback && proxiedFallback && e.currentTarget.src !== proxiedFallback) {
+      e.currentTarget.dataset.fallbackApplied = "1";
+      e.currentTarget.src = proxiedFallback;
+      return;
+    }
+
     e.currentTarget.onerror = null;
-    e.currentTarget.src = fallbackSrc || FALLBACK_SVG;
+    e.currentTarget.src = FALLBACK_SVG;
   };
 
   return (
@@ -21,8 +54,9 @@ export default function SafeImg({ src, alt = "", className = "", fallbackSrc = n
       alt={alt}
       className={className}
       onError={handleError}
-      loading="lazy"
-      decoding="async"
+      loading={loading}
+      decoding={decoding}
+      fetchPriority={fetchPriority}
       draggable={false}
     />
   );

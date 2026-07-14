@@ -199,6 +199,62 @@ OUTCOMES_TEAM_POTENTIAL_SELECTED_FEATURES = [
     "tp_matchup_quality_diff",
 ]
 
+USE_SELECTED_PLAYER_CONTRIBUTION = True
+PLAYER_CONTRIBUTION_SELECTED_FEATURES = [
+    "home_pl_attack_core_load_5",
+    "away_pl_attack_core_load_5",
+    "home_pl_xg_contributors_5",
+    "away_pl_xg_contributors_5",
+    "home_pl_xa_creators_5",
+    "away_pl_xa_creators_5",
+    "pl_attack_core_load_diff_5",
+    "pl_top1_xa_share_diff_5",
+    "pl_top1_xg_share_diff_5",
+    "pl_top3_xa_share_diff_5",
+    "pl_top3_xg_share_diff_5",
+    "pl_usage_top3_share_diff_5",
+    "pl_xa_creators_diff_5",
+    "pl_xg_contributors_diff_5",
+]
+
+USE_SELECTED_LINEUP_STRENGTH = True
+LINEUP_STRENGTH_SELECTED_FEATURES = [
+    "home_ls_xi_rating_long",
+    "away_ls_xi_rating_long",
+    "home_ls_def_rating_long",
+    "away_ls_def_rating_long",
+    "home_ls_mid_rating_long",
+    "away_ls_mid_rating_long",
+    "home_ls_att_rating_long",
+    "away_ls_att_rating_long",
+    "home_ls_xi_rating_all_5",
+    "away_ls_xi_rating_all_5",
+    "home_ls_xi_rating_all_10",
+    "away_ls_xi_rating_all_10",
+    "home_ls_xi_rating_home_10",
+    "away_ls_xi_rating_away_10",
+    "home_ls_att_rating_all_10",
+    "away_ls_att_rating_all_10",
+    "home_ls_def_rating_all_10",
+    "away_ls_def_rating_all_10",
+    "ls_xi_rating_long_diff",
+    "ls_xi_rating_all_5_diff",
+    "ls_xi_rating_all_10_diff",
+    "ls_def_rating_all_10_diff",
+    "ls_mid_rating_all_10_diff",
+    "ls_att_rating_all_10_diff",
+    "home_ls_xi_rating_trend_5v15",
+    "away_ls_xi_rating_trend_5v15",
+    "home_ls_att_rating_trend_5v15",
+    "away_ls_att_rating_trend_5v15",
+    "home_ls_def_rating_trend_5v15",
+    "away_ls_def_rating_trend_5v15",
+    "ls_matchup_home_attack_vs_away_def_10",
+    "ls_matchup_away_attack_vs_home_def_10",
+    "ls_matchup_home_mid_vs_away_mid_10",
+    "ls_matchup_venue_xi_edge_10",
+]
+
 # =========================
 # RANDOM / REPRODUCIBILITY
 # =========================

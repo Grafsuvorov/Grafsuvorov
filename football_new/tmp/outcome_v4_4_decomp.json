@@ -1,0 +1,293 @@
+{
+  "dataset": {
+    "rows": 6354,
+    "train": 5399,
+    "cal": 738,
+    "val": 217
+  },
+  "blend_choice": {
+    "multiclass_market_weight": 0.4,
+    "multiclass_market_cal": {
+      "label": "blend_0.40",
+      "n": 738,
+      "logloss": 0.983653,
+      "accuracy": 0.531165
+    },
+    "decomp_market_weight": 0.75,
+    "decomp_market_cal": {
+      "label": "blend_0.75",
+      "n": 738,
+      "logloss": 0.981179,
+      "accuracy": 0.52439
+    }
+  },
+  "overall": {
+    "market": {
+      "label": "market",
+      "n": 217,
+      "logloss": 1.024226,
+      "accuracy": 0.506912
+    },
+    "catboost_v41": {
+      "label": "catboost_v41",
+      "n": 217,
+      "logloss": 1.018924,
+      "accuracy": 0.511521
+    },
+    "catboost_market_v41": {
+      "label": "catboost_market_v41",
+      "n": 217,
+      "logloss": 1.021077,
+      "accuracy": 0.511521
+    },
+    "decomp_v44": {
+      "label": "decomp_v44",
+      "n": 217,
+      "logloss": 1.019784,
+      "accuracy": 0.506912
+    },
+    "decomp_market_v44": {
+      "label": "decomp_market_v44",
+      "n": 217,
+      "logloss": 1.019798,
+      "accuracy": 0.506912
+    }
+  },
+  "by_league": {
+    "market": [
+      {
+        "league": "Bundesliga",
+        "label": "market",
+        "n": 36,
+        "logloss": 1.035331,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "market",
+        "n": 60,
+        "logloss": 0.994921,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "market",
+        "n": 40,
+        "logloss": 1.095913,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "market",
+        "n": 41,
+        "logloss": 0.949189,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "market",
+        "n": 40,
+        "logloss": 1.063416,
+        "accuracy": 0.475
+      }
+    ],
+    "catboost_v41": [
+      {
+        "league": "Bundesliga",
+        "label": "catboost_v41",
+        "n": 36,
+        "logloss": 1.008991,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "catboost_v41",
+        "n": 60,
+        "logloss": 0.979298,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "catboost_v41",
+        "n": 40,
+        "logloss": 1.09922,
+        "accuracy": 0.475
+      },
+      {
+        "league": "Premier League",
+        "label": "catboost_v41",
+        "n": 41,
+        "logloss": 0.9536,
+        "accuracy": 0.536585
+      },
+      {
+        "league": "Serie A",
+        "label": "catboost_v41",
+        "n": 40,
+        "logloss": 1.073965,
+        "accuracy": 0.5
+      }
+    ],
+    "decomp_v44": [
+      {
+        "league": "Bundesliga",
+        "label": "decomp_v44",
+        "n": 36,
+        "logloss": 1.018088,
+        "accuracy": 0.5
+      },
+      {
+        "league": "La Liga",
+        "label": "decomp_v44",
+        "n": 60,
+        "logloss": 0.983654,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "decomp_v44",
+        "n": 40,
+        "logloss": 1.086084,
+        "accuracy": 0.45
+      },
+      {
+        "league": "Premier League",
+        "label": "decomp_v44",
+        "n": 41,
+        "logloss": 0.956871,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "decomp_v44",
+        "n": 40,
+        "logloss": 1.073692,
+        "accuracy": 0.475
+      }
+    ],
+    "decomp_market_v44": [
+      {
+        "league": "Bundesliga",
+        "label": "decomp_market_v44",
+        "n": 36,
+        "logloss": 1.020505,
+        "accuracy": 0.472222
+      },
+      {
+        "league": "La Liga",
+        "label": "decomp_market_v44",
+        "n": 60,
+        "logloss": 0.985693,
+        "accuracy": 0.533333
+      },
+      {
+        "league": "Ligue 1",
+        "label": "decomp_market_v44",
+        "n": 40,
+        "logloss": 1.087337,
+        "accuracy": 0.475
+      },
+      {
+        "league": "Premier League",
+        "label": "decomp_market_v44",
+        "n": 41,
+        "logloss": 0.954441,
+        "accuracy": 0.560976
+      },
+      {
+        "league": "Serie A",
+        "label": "decomp_market_v44",
+        "n": 40,
+        "logloss": 1.069769,
+        "accuracy": 0.475
+      }
+    ]
+  },
+  "roi": {
+    "catboost_market_v41": {
+      "rule": {
+        "min_ev": 0.05,
+        "min_edge": 0.03,
+        "min_odds": 1.6,
+        "max_odds": 4.0
+      },
+      "cal": {
+        "bets": 0,
+        "wins": 0,
+        "hit_rate": 0.0,
+        "avg_odds": 0.0,
+        "avg_ev": 0.0,
+        "profit": 0.0,
+        "roi": 0.0
+      },
+      "val": {
+        "bets": 0,
+        "wins": 0,
+        "hit_rate": 0.0,
+        "avg_odds": 0.0,
+        "avg_ev": 0.0,
+        "profit": 0.0,
+        "roi": 0.0
+      },
+      "by_league": []
+    },
+    "decomp_market_v44": {
+      "rule": {
+        "min_ev": 0.1,
+        "min_edge": 0.0,
+        "min_odds": 1.55,
+        "max_odds": 4.0
+      },
+      "cal": {
+        "bets": 20,
+        "wins": 9,
+        "hit_rate": 0.45,
+        "avg_odds": 2.9624,
+        "avg_ev": 0.122313,
+        "profit": 6.998,
+        "roi": 0.3499
+      },
+      "val": {
+        "bets": 6,
+        "wins": 2,
+        "hit_rate": 0.333333,
+        "avg_odds": 3.321,
+        "avg_ev": 0.134089,
+        "profit": -0.226,
+        "roi": -0.037667
+      },
+      "by_league": [
+        {
+          "league": "Bundesliga",
+          "bets": 1,
+          "wins": 1,
+          "hit_rate": 1.0,
+          "avg_odds": 2.292,
+          "avg_ev": 0.108012,
+          "profit": 1.292,
+          "roi": 1.292
+        },
+        {
+          "league": "La Liga",
+          "bets": 2,
+          "wins": 1,
+          "hit_rate": 0.5,
+          "avg_odds": 3.677,
+          "avg_ev": 0.131439,
+          "profit": 1.482,
+          "roi": 0.741
+        },
+        {
+          "league": "Serie A",
+          "bets": 3,
+          "wins": 0,
+          "hit_rate": 0.0,
+          "avg_odds": 3.426667,
+          "avg_ev": 0.144548,
+          "profit": -3.0,
+          "roi": -1.0
+        }
+      ]
+    }
+  }
+}

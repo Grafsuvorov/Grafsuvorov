@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 import numpy as np
 import traceback
 from api.core.config import settings
+from api.prod_portfolio_v6 import build_prod_auto_offers, choose_primary_offer
 
 router = APIRouter(
     prefix="/api",
@@ -74,6 +75,195 @@ BET_DECISION_DISPLAY = {
     "close_gap": float(os.getenv("BET_CLOSE_GAP", 0.08)),
     "close_draw_prob": float(os.getenv("BET_CLOSE_DRAW_PROB", 0.30)),
 }
+
+# Conservative live policy derived from the latest settled production season
+# on the server (season 2025). The goal is not max coverage, but better hit
+# rate / ROI in production.
+RESEARCH_POLICY = {
+    "only_strong_1x2": True,
+    "only_strong_totals": True,
+    "blocked_total_leagues": {"La Liga"},
+    "medium_total_leagues": {"Premier League", "Bundesliga", "Serie A"},
+    "blocked_home_1x2_leagues": {"La Liga", "Ligue 1"},
+    "min_away_1x2_ev": 0.10,
+    "prefer_1x2_home_min_ev": 0.10,
+    "prefer_1x2_home_min_odds": 1.75,
+    "prefer_1x2_home_max_odds": 2.25,
+    "prefer_1x2_score_gap": 0.12,
+    "prefer_1x2_ev_gap": 0.16,
+}
+
+# Whitelist of empirically positive segments for the live portfolio.
+# Outcome keys:
+#   (league, outcome, odds_bucket, edge_bucket, draw_risk_bucket)
+# Totals keys:
+#   (league, outcome, odds_bucket, edge_bucket, prob_bucket)
+GOOD_OUTCOME_SEGMENTS = {
+    ("Premier League", "Draw", "4.00+", "-0.02-0.02", "0.26-0.30"),
+    ("Premier League", "Home", "1.70-2.00", "0.08-0.12", "0.26-0.30"),
+    ("Premier League", "Home", "2.00-2.40", "0.08-0.12", "0.34+"),
+    ("Premier League", "Draw", "3.20-4.00", "-0.02-0.02", "0.30-0.34"),
+    ("Ligue 1", "Draw", "3.20-4.00", "-0.02-0.02", "0.30-0.34"),
+    ("Ligue 1", "Draw", "3.20-4.00", "-0.02-0.02", "0.34+"),
+    ("Bundesliga", "Draw", "3.20-4.00", "-0.02-0.02", "0.26-0.30"),
+    ("Bundesliga", "Draw", "3.20-4.00", "0.02-0.05", "0.34+"),
+    ("Serie A", "Draw", "4.00+", "0.02-0.05", "0.22-0.26"),
+    ("Serie A", "Draw", "3.20-4.00", "0.05-0.08", "0.34+"),
+    ("Serie A", "Draw", "2.40-3.20", "0.02-0.05", "0.34+"),
+    ("Serie A", "Away", "2.40-3.20", "-0.02-0.02", "0.34+"),
+    ("Serie A", "Draw", "4.00+", "0.02-0.05", "0.26-0.30"),
+    ("Serie A", "Draw", "3.20-4.00", "0.02-0.05", "0.34+"),
+    ("Serie A", "Home", "<1.55", "0.05-0.08", "0.22-0.26"),
+    ("La Liga", "Draw", "3.20-4.00", "0.02-0.05", "0.30-0.34"),
+    ("La Liga", "Draw", "3.20-4.00", "-0.02-0.02", "0.30-0.34"),
+}
+
+GOOD_TOTAL_SEGMENTS = {
+    ("Premier League", "Over2.5", "1.70-2.00", "0.12+", "0.65+"),
+    ("Premier League", "Under2.5", "2.00-2.40", "0.12+", "0.56-0.60"),
+    ("Premier League", "Over2.5", "<1.55", "0.12+", "0.65+"),
+    ("Premier League", "Under2.5", "1.70-2.00", "0.05-0.08", "0.56-0.60"),
+    ("Premier League", "Under2.5", "2.00-2.40", "0.08-0.12", "0.56-0.60"),
+    ("Serie A", "Under2.5", "1.55-1.70", "0.08-0.12", "0.65+"),
+}
+
+
+def _bucket_odds(odds: Optional[float]) -> Optional[str]:
+    odds = _safe_float(odds)
+    if odds is None:
+        return None
+    if odds < 1.55:
+        return "<1.55"
+    if odds < 1.70:
+        return "1.55-1.70"
+    if odds < 2.00:
+        return "1.70-2.00"
+    if odds < 2.40:
+        return "2.00-2.40"
+    if odds < 3.20:
+        return "2.40-3.20"
+    if odds < 4.00:
+        return "3.20-4.00"
+    return "4.00+"
+
+
+def _bucket_outcome_edge(edge: Optional[float]) -> Optional[str]:
+    edge = _safe_float(edge)
+    if edge is None:
+        return None
+    if edge < -0.02:
+        return "<-0.02"
+    if edge < 0.02:
+        return "-0.02-0.02"
+    if edge < 0.05:
+        return "0.02-0.05"
+    if edge < 0.08:
+        return "0.05-0.08"
+    if edge < 0.12:
+        return "0.08-0.12"
+    return "0.12+"
+
+
+def _bucket_total_edge(edge: Optional[float]) -> Optional[str]:
+    edge = _safe_float(edge)
+    if edge is None:
+        return None
+    if edge < 0.02:
+        return "<0.02"
+    if edge < 0.05:
+        return "0.02-0.05"
+    if edge < 0.08:
+        return "0.05-0.08"
+    if edge < 0.12:
+        return "0.08-0.12"
+    return "0.12+"
+
+
+def _bucket_draw_risk(p_draw: Optional[float]) -> Optional[str]:
+    p_draw = _safe_float(p_draw)
+    if p_draw is None:
+        return None
+    if p_draw <= 0.22:
+        return "<=0.22"
+    if p_draw <= 0.26:
+        return "0.22-0.26"
+    if p_draw <= 0.30:
+        return "0.26-0.30"
+    if p_draw <= 0.34:
+        return "0.30-0.34"
+    return "0.34+"
+
+
+def _bucket_total_prob(p_model: Optional[float]) -> Optional[str]:
+    p_model = _safe_float(p_model)
+    if p_model is None:
+        return None
+    if p_model < 0.52:
+        return "0.50-0.52"
+    if p_model < 0.56:
+        return "0.52-0.56"
+    if p_model < 0.60:
+        return "0.56-0.60"
+    if p_model < 0.65:
+        return "0.60-0.65"
+    return "0.65+"
+
+
+def _portfolio_segment_key(offer: Dict[str, Any], row: pd.Series) -> Optional[tuple]:
+    league = str(row.get("league") or "").strip()
+    market = str(offer.get("market") or "").upper()
+    outcome = str(offer.get("outcome") or "").lower()
+    odds_bucket = _bucket_odds(offer.get("odds"))
+    if market == "1X2":
+        key = (
+            league,
+            outcome.capitalize(),
+            odds_bucket,
+            _bucket_outcome_edge(offer.get("edge")),
+            _bucket_draw_risk(row.get("p_draw")),
+        )
+        return key if None not in key else None
+    if market == "OU25":
+        total_outcome = "Over2.5" if outcome == "over" else "Under2.5" if outcome == "under" else None
+        key = (
+            league,
+            total_outcome,
+            odds_bucket,
+            _bucket_total_edge(offer.get("edge")),
+            _bucket_total_prob(offer.get("p")),
+        )
+        return key if None not in key else None
+    return None
+
+
+def _passes_portfolio_whitelist(offer: Dict[str, Any], row: pd.Series) -> bool:
+    key = _portfolio_segment_key(offer, row)
+    if key is None:
+        return False
+    market = str(offer.get("market") or "").upper()
+    if market == "1X2":
+        allowed = key in GOOD_OUTCOME_SEGMENTS
+    elif market == "OU25":
+        allowed = key in GOOD_TOTAL_SEGMENTS
+    else:
+        allowed = False
+    # Late-season EPL anti-under guard:
+    # if market strongly leans to Over and Under is the longer contrarian side,
+    # we do not want mild 56-59% model unders to survive just because the
+    # segment looked good historically.
+    if allowed and market == "OU25" and key[0] == "Premier League" and key[1] == "Under2.5":
+        round_str = str(row.get("round") or "")
+        over_odds = _safe_float(row.get("avg_odds_over25"))
+        under_odds = _safe_float(offer.get("odds"))
+        is_late_round = any(tag in round_str for tag in ("Regular Season - 36", "Regular Season - 37", "Regular Season - 38"))
+        strong_market_over = over_odds is not None and over_odds <= 1.70
+        long_under = under_odds is not None and under_odds >= 2.20
+        mild_under_prob = (_safe_float(offer.get("p")) or 0.0) < 0.60
+        if is_late_round and strong_market_over and long_under and mild_under_prob:
+            return False
+    if allowed:
+        offer["portfolio_segment"] = list(key)
+    return allowed
 
 
 def _prediction_columns() -> set[str]:
@@ -231,6 +421,122 @@ def _decision_meta(notes_raw: Optional[str], p_home: Optional[float], p_away: Op
         "notes": notes if notes else None,
     }
 
+
+def _passes_research_policy(offer: Dict[str, Any], row: pd.Series) -> bool:
+    return _passes_portfolio_whitelist(offer, row)
+
+
+def _passes_watch_policy(offer: Dict[str, Any], row: pd.Series) -> bool:
+    if _passes_portfolio_whitelist(offer, row):
+        return False
+    market = str(offer.get("market") or "").upper()
+    outcome = str(offer.get("outcome") or "").lower()
+    odds = _safe_float(offer.get("odds"))
+    ev = _safe_float(offer.get("ev"))
+    p = _safe_float(offer.get("p"))
+    edge = _safe_float(offer.get("edge"))
+    if odds is None or ev is None or p is None:
+        return False
+    if ev <= 0:
+        return False
+    if p >= 0.90 or p <= 0.10:
+        return False
+    if market == "1X2":
+        if odds < 1.55 or odds > 4.00:
+            return False
+        if outcome == "draw":
+            if edge is None or edge < 0:
+                return False
+            if (_safe_float(row.get("p_draw")) or 0.0) < 0.26:
+                return False
+        else:
+            if edge is None or edge < 0.02:
+                return False
+            if str(offer.get("agreement") or "").lower() == "contrarian":
+                return False
+            if p < 0.48:
+                return False
+        return True
+    if market == "OU25":
+        if ev < 0.03 or p < 0.54:
+            return False
+        league = str(row.get("league") or "").strip()
+        if league == "Premier League" and outcome == "under":
+            over_odds = _safe_float(row.get("avg_odds_over25"))
+            if (over_odds is not None and over_odds <= 1.70) and odds >= 2.00:
+                return False
+        return True
+    return False
+
+
+def _watch_score(offer: Dict[str, Any], row: pd.Series) -> float:
+    market = str(offer.get("market") or "").upper()
+    outcome = str(offer.get("outcome") or "").lower()
+    ev = _safe_float(offer.get("ev")) or 0.0
+    edge = _safe_float(offer.get("edge")) or 0.0
+    p = _safe_float(offer.get("p")) or 0.0
+    odds = _safe_float(offer.get("odds")) or 0.0
+
+    if market == "1X2":
+        market_p = {
+            "home": _safe_float(offer.get("implied")),
+            "draw": _safe_float(offer.get("implied")),
+            "away": _safe_float(offer.get("implied")),
+        }.get(outcome)
+        disagreement = abs((p if p is not None else 0.0) - (market_p if market_p is not None else 0.0))
+        moderation_bonus = max(0.0, 0.16 - disagreement)
+        draw_bonus = 0.03 if outcome == "draw" and (_safe_float(row.get("p_draw")) or 0.0) >= 0.30 else 0.0
+        long_odds_penalty = max(0.0, odds - 3.4) * 0.015
+        return float(0.55 * ev + 0.22 * edge + 0.13 * moderation_bonus + 0.10 * min(p, 0.72) + draw_bonus - long_odds_penalty)
+
+    over_odds = _safe_float(row.get("avg_odds_over25"))
+    under_odds = _safe_float(row.get("avg_odds_under25"))
+    market_p = None
+    if outcome == "over" and over_odds and under_odds:
+        imp_over = 1.0 / over_odds
+        imp_under = 1.0 / under_odds
+        market_p = imp_over / (imp_over + imp_under)
+    elif outcome == "under" and over_odds and under_odds:
+        imp_over = 1.0 / over_odds
+        imp_under = 1.0 / under_odds
+        market_p = imp_under / (imp_over + imp_under)
+    disagreement = abs((p if p is not None else 0.0) - (market_p if market_p is not None else 0.0))
+    moderation_bonus = max(0.0, 0.14 - disagreement)
+    contrarian_penalty = 0.0
+    if str(row.get("league") or "").strip() == "Premier League" and outcome == "under" and over_odds is not None and over_odds <= 1.75:
+        contrarian_penalty = 0.05
+    long_odds_penalty = max(0.0, odds - 2.4) * 0.02
+    return float(0.52 * ev + 0.24 * edge + 0.14 * moderation_bonus + 0.10 * min(p, 0.68) - contrarian_penalty - long_odds_penalty)
+
+
+def _choose_best_offer(filtered: List[Dict[str, Any]]) -> Dict[str, Any]:
+    ranked = sorted(filtered, key=lambda x: (x["model_score"], x["ev"]), reverse=True)
+    best = ranked[0]
+
+    if best["market"] != "1X2":
+        best_1x2 = next(
+            (
+                o for o in ranked
+                if o["market"] == "1X2"
+                and str(o.get("outcome")).lower() == "home"
+                and str(o.get("model_class")).lower() == "strong"
+                and (o.get("ev") is not None and o["ev"] >= RESEARCH_POLICY["prefer_1x2_home_min_ev"])
+                and (o.get("odds") is not None and RESEARCH_POLICY["prefer_1x2_home_min_odds"] <= o["odds"] <= RESEARCH_POLICY["prefer_1x2_home_max_odds"])
+            ),
+            None,
+        )
+        if best_1x2 is not None:
+            score_gap = float(best["model_score"] - best_1x2["model_score"])
+            ev_gap = float(best["ev"] - best_1x2["ev"])
+            if score_gap <= RESEARCH_POLICY["prefer_1x2_score_gap"] and ev_gap <= RESEARCH_POLICY["prefer_1x2_ev_gap"]:
+                return best_1x2
+
+    return best
+
+
+def _choose_watch_offer(filtered: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return sorted(filtered, key=lambda x: (x.get("watch_score", -999.0), x["ev"], x["model_score"]), reverse=True)[0]
+
 # аккуратный «подрезатель» (мягче прежнего)
 def _prune_offers_simple(offers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
@@ -280,8 +586,8 @@ def best_picks(
 
     pre_match_only: bool = Query(default=True, description="Брать предикты только с ts_generated <= kickoff"),
     min_books: int = Query(default=3, ge=0, description="Мин. число букмекеров (0 = не фильтровать)"),
-    ev_min_1x2: float = Query(default=0.04, ge=0.0),
-    ev_min_ou: float  = Query(default=0.05, ge=0.0),
+    ev_min_1x2: float = Query(default=0.06, ge=0.0),
+    ev_min_ou: float  = Query(default=0.06, ge=0.0),
     top_n: int = Query(default=40, ge=1, le=200),
 
     return_fixtures: bool = Query(default=False, description="Вернуть все матчи с очищенными offers"),
@@ -450,33 +756,26 @@ def best_picks(
             }))
 
         rows: List[Dict[str, Any]] = []
+        watch_rows: List[Dict[str, Any]] = []
         for _, r in df.iterrows():
-            offers_raw = _collect_offers(r)
-            if not offers_raw:
-                continue
-
-            # мягкий server-side prune
-            offers = _prune_offers_simple(offers_raw)
-            if not offers:
-                continue
-
-            # базовые пороги + книги
             books = int(_safe_float(r.get("n_bookmakers")) or 0)
             if min_books and books < min_books:
                 continue
 
-            # фильтруем offers по порогам EV (разные для рынков)
-            filtered = []
-            for o in offers:
-                if o["market"] == "1X2" and (o.get("ev") is not None) and (o["ev"] >= ev_min_1x2):
-                    filtered.append(o)
-                elif o["market"] == "OU25" and (o.get("ev") is not None) and (o["ev"] >= ev_min_ou):
-                    filtered.append(o)
-            if not filtered:
+            auto_offers = []
+            for o in build_prod_auto_offers(r):
+                market_ev_min = ev_min_1x2 if o["market"] == "1X2" else ev_min_ou
+                if o.get("market") == "1X2" or ((o.get("ev") is not None) and (o["ev"] >= market_ev_min)):
+                    auto_offers.append(o)
+            watch_filtered: List[Dict[str, Any]] = []
+            if not auto_offers:
                 continue
 
-            # берём лучший среди прошедших пороги
-            best = sorted(filtered, key=lambda x: (x["model_score"], x["ev"]), reverse=True)[0]
+            best = choose_primary_offer(auto_offers)
+            if best is None:
+                continue
+            active_offers = auto_offers
+            portfolio_tier = "AUTO"
 
             decision_meta = _decision_meta(
                 r.get("bet_decision_notes"),
@@ -519,7 +818,7 @@ def best_picks(
             best_bet_ev_val = _safe_float(r.get("best_bet_ev"))
             best_bet_odds_val = _safe_float(r.get("best_bet_odds"))
 
-            rows.append({
+            row_payload = {
                 "fixture_id": int(r["fixture_id"]),
                 "date": str(pd.to_datetime(r["date"]).date()),
                 "league": r["league"],
@@ -544,8 +843,11 @@ def best_picks(
                 "bet_rating": (str(r.get("bet_rating")).lower().strip() if r.get("bet_rating") is not None else "none"),
                 "edge_prob": best.get("edge"),
                 "score": round(best["model_score"], 6),
+                "watch_score": best.get("watch_score"),
+                "portfolio_segment": best.get("portfolio_segment"),
+                "portfolio_tier": portfolio_tier,
                 "bet_reason": r.get("bet_reason"),
-                "offers": filtered,
+                "offers": active_offers,
                 "best_bet_type": (str(best_bet_type_val) if best_bet_type_val is not None else None),
                 "best_bet_outcome": (str(best_bet_outcome_val) if best_bet_outcome_val is not None else None),
                 "best_bet_ev": best_bet_ev_val,
@@ -556,28 +858,46 @@ def best_picks(
                 "decision_close_flag": decision_close_flag,
                 "decision_draw_switch": decision_draw_switch,
                 "decision_total_switch": decision_total_switch,
-            })
+            }
+            rows.append(row_payload)
 
-        if not rows:
+        if not rows and not watch_rows:
             return JSONResponse(content=jsonable_encoder({
                 "picks": [],
+                "watch_picks": [],
                 "fixtures": [] if return_fixtures else None,
                 "class_rules": CLASS_RULES
             }))
 
         picks_df = pd.DataFrame(rows).replace({np.nan: None})
-        picks_df = picks_df.sort_values(by=["score", "ev", "p", "pgap"], ascending=[False, False, False, True])
-        picks_df = picks_df.head(top_n).reset_index(drop=True)
-        picks_list = picks_df.to_dict(orient="records")
+        if not picks_df.empty:
+            picks_df = picks_df.sort_values(by=["score", "ev", "p", "pgap"], ascending=[False, False, False, True])
+            picks_df = picks_df.head(top_n).reset_index(drop=True)
+            picks_list = picks_df.to_dict(orient="records")
+        else:
+            picks_list = []
+
+        watch_df = pd.DataFrame(watch_rows).replace({np.nan: None})
+        if not watch_df.empty:
+            watch_df = watch_df.sort_values(by=["score", "ev", "p", "pgap"], ascending=[False, False, False, True])
+            watch_df = watch_df.head(top_n).reset_index(drop=True)
+            watch_list = watch_df.to_dict(orient="records")
+        else:
+            watch_list = []
 
         fixtures_payload = None
         if return_fixtures:
             fixtures_payload = []
             for _, r2 in df.iterrows():
-                off_raw = _collect_offers(r2)
-                if not off_raw: continue
-                off = _prune_offers_simple(off_raw)
-                if not off: continue
+                auto_off = []
+                for o in build_prod_auto_offers(r2):
+                    market_ev_min = ev_min_1x2 if o["market"] == "1X2" else ev_min_ou
+                    if o.get("market") == "1X2" or ((o.get("ev") is not None) and (o["ev"] >= market_ev_min)):
+                        auto_off.append(o)
+                watch_off: List[Dict[str, Any]] = []
+                if not auto_off:
+                    continue
+                off = auto_off
                 best_bet_type_val = r2.get("best_bet_type")
                 best_bet_outcome_val = r2.get("best_bet_outcome")
                 best_bet_ev_val = _safe_float(r2.get("best_bet_ev"))
@@ -625,6 +945,12 @@ def best_picks(
                     "away_team_id": int(r2["away_team_id"]) if r2.get("away_team_id") is not None else None,
                     "n_bookmakers": int(_safe_float(r2.get("n_bookmakers")) or 0),
                     "offers": off,
+                    "auto_offers": auto_off,
+                    "watch_offers": watch_off,
+                    "portfolio_mode": "AUTO",
+                    "watch_reason": None,
+                    "portfolio_segments": [o.get("portfolio_segment") for o in auto_off if o.get("portfolio_segment")],
+                    "watch_segments": [o.get("portfolio_segment") for o in watch_off if o.get("portfolio_segment")],
                     "best_bet_type": (str(best_bet_type_val) if best_bet_type_val is not None else None),
                     "best_bet_outcome": (str(best_bet_outcome_val) if best_bet_outcome_val is not None else None),
                     "best_bet_ev": best_bet_ev_val,
@@ -639,6 +965,7 @@ def best_picks(
 
         return JSONResponse(content=jsonable_encoder({
             "picks": picks_list,
+            "watch_picks": watch_list,
             "fixtures": fixtures_payload,
             "class_rules": CLASS_RULES
         }))

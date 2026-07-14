@@ -1,18 +1,21 @@
 import SafeImg from "@/components/SafeImg";
 import { useState } from "react";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const getTeamLogo = (id) =>
   id ? `https://media.api-sports.io/football/teams/${id}.png` : "/icons/default_league.png";
 
 export default function HistoricalLeaders({ leaders = [] }) {
   const [metric, setMetric] = useState("shots");
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const metricMap = {
     shots: {
       teamId: "shots_team_id",
       team: "shots_team",
       value: "shots_avg",
-      suffix: "ударов",
-      label: "Удары",
+      suffix: isRu ? "ударов" : "shots",
+      label: isRu ? "Удары" : "Shots",
     },
     xg: {
       teamId: "xg_team_id",
@@ -25,15 +28,15 @@ export default function HistoricalLeaders({ leaders = [] }) {
       teamId: "goals_team_id",
       team: "goals_team",
       value: "goals_avg",
-      suffix: "голов",
-      label: "Голы",
+      suffix: isRu ? "голов" : "goals",
+      label: isRu ? "Голы" : "Goals",
     },
   };
   const m = metricMap[metric];
 
   return (
-    <div className="rounded-[14px] border border-white/10 bg-[#121826] p-5 shadow-[0_0_18px_rgba(124,140,255,0.12)]">
-      <div className="text-sm font-semibold text-white mb-3">Лидеры лиги по сезонам</div>
+    <div className="glass-card p-5">
+      <div className="text-sm font-semibold text-white mb-3">{isRu ? "Лидеры лиги по сезонам" : "League leaders by season"}</div>
       <div className="mb-3 flex items-center gap-2 text-xs">
         {Object.keys(metricMap).map((k) => (
           <button
@@ -64,7 +67,7 @@ export default function HistoricalLeaders({ leaders = [] }) {
           </div>
         ))}
         {leaders.length === 0 && (
-          <div className="text-sm text-white/45">Недостаточно данных</div>
+          <div className="surface-empty">{isRu ? "Недостаточно данных" : "Not enough data"}</div>
         )}
       </div>
     </div>

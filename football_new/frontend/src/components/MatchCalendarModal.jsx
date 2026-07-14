@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import SafeImg from "@/components/SafeImg";
 import TeamLogoLink from "@/components/TeamLogoLink";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 import TeamAvgBlock from "@/components/ui/TeamAvgBlock";
 import H2HBlock from "@/components/ui/H2HBlock";
 import LastMatchesBlock from "@/components/ui/LastMatchesBlock";
 
 export default function MatchCalendarModal({ match, onClose, onOpenFull }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const [pack, setPack] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +44,7 @@ export default function MatchCalendarModal({ match, onClose, onOpenFull }) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* modal */}
-      <div className="relative rounded-2xl border border-glass bg-surface-1/95 shadow-2xl w-[min(900px,95vw)] max-h-[90vh] overflow-y-auto">
+      <div className="surface-toolbar relative w-[min(900px,95vw)] max-h-[90vh] overflow-y-auto shadow-2xl">
 
         {/* HEADER */}
         <div className="p-4 border-b border-glass bg-gradient-to-r from-rose-600/90 to-rose-500/80 text-white flex justify-between items-center">
@@ -61,7 +64,7 @@ export default function MatchCalendarModal({ match, onClose, onOpenFull }) {
 
           <button
             onClick={onClose}
-            className="h-8 w-8 bg-white/10 hover:bg-white/20 rounded-full grid place-items-center"
+            className="surface-button h-8 w-8 justify-center px-0 text-white"
           >
             ✕
           </button>
@@ -74,9 +77,9 @@ export default function MatchCalendarModal({ match, onClose, onOpenFull }) {
 
         {/* CONTENT */}
         {loading ? (
-          <div className="p-4 text-slate-400">Загружаем…</div>
+          <div className="surface-loading m-4">{isRu ? "Загружаем…" : "Loading…"}</div>
         ) : !pack ? (
-          <div className="p-4 text-rose-300">Ошибка загрузки</div>
+          <div className="surface-error m-4">{isRu ? "Ошибка загрузки" : "Loading error"}</div>
         ) : (
           <div className="p-4 space-y-6">
 
@@ -115,7 +118,7 @@ export default function MatchCalendarModal({ match, onClose, onOpenFull }) {
                 onClick={onOpenFull}
                 className="w-full py-2 rounded-xl bg-primary/90 text-white font-semibold hover:bg-primary transition"
               >
-                Полная статистика матча
+                {isRu ? "Полная статистика матча" : "Full match stats"}
               </button>
             </div>
 

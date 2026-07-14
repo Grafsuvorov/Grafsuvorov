@@ -12,13 +12,27 @@ import {
   decideOutcomeTier,
   decideTotalsTierByValues,
 } from "@/lib/policyDecision";
+import { fetchMatchesV3, isInternationalLongCycleLeague, seasonDateRange } from "@/lib/matchesApi";
+import {
+  CANCELLED_STATUS_HINTS,
+  FINISHED_STATUSES,
+  POSTPONED_STATUS_HINTS,
+  estimateLiveElapsed,
+  isLiveMatch,
+  isStaleLiveStatus,
+  liveMinuteLabel,
+} from "@/lib/matchStatus";
 import { teamLogoMap } from "@/constants/teamLogoMap";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* ===========================
    CONFIG / HELPERS
 =========================== */
 
 const API_BASE = "";
+const SCHEDULE_LOOKBACK_DAYS = 10;
+const SCHEDULE_LOOKAHEAD_DAYS = 35;
+const SCHEDULE_CACHE_TTL = 2 * 60 * 1000;
 
 // кэш расписаний по ключу league|season
 const scheduleCache = new Map();
@@ -42,22 +56,6 @@ async function fetchJsonSafe(url, signal) {
       .replace(/\b-?Infinity\b/g, "null");
     return JSON.parse(fixed);
   }
-}
-
-function seasonDateRange(seasonStr) {
-  const y = Number(seasonStr) || 2025;
-  return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
-}
-
-function isInternationalLongCycleLeague(leagueName) {
-  const league = String(leagueName || "").toLowerCase();
-  return (
-    league.includes("world cup") ||
-    league.includes("euro championship") ||
-    league.includes("nations league") ||
-    league.includes("copa america") ||
-    league.includes("gold cup")
-  );
 }
 
 // разбор "15.08 20:00" с привязкой к сезону
@@ -109,139 +107,12 @@ function scoreLabel(match) {
   return "—";
 }
 
-const FINISHED_STATUSES = new Set([
-  "FT",
-  "AET",
-  "PEN",
-  "FT_PEN",
-  "AET_PEN",
-  "CANC",
-  "ABD",
-  "AWD",
-  "WO",
-]);
-
-const POSTPONED_STATUS_HINTS = [
-  "MATCH POSTPONED",
-  "POSTPONED",
-  "PST",
-];
-
-const CANCELLED_STATUS_HINTS = [
-  "CANCELED",
-  "CANCELLED",
-  "MATCH CANCELLED",
-  "MATCH CANCELED",
-];
-
-const LIVE_STATUS_HINTS = [
-  "1H",
-  "2H",
-  "ET",
-  "P",
-  "LIVE",
-  "FIRST HALF",
-  "SECOND HALF",
-  "EXTRA TIME",
-  "HALF TIME",
-  "HALFTIME",
-  "BREAK TIME",
-  "PEN",
-  "PENALTY",
-];
-
-function isStaleLiveStatus(match) {
-  const kickoffRaw = match?.kickoff_at;
-  if (!kickoffRaw) return false;
-  const kickoff = new Date(String(kickoffRaw).replace(" ", "T"));
-  if (Number.isNaN(kickoff.getTime())) return false;
-
-  const status = String(match?.status_short || match?.status || "").trim().toUpperCase();
-  const elapsed = Number(match?.elapsed);
-  const diffMinutes = Math.floor((Date.now() - kickoff.getTime()) / 60000);
-  if (!Number.isFinite(diffMinutes) || diffMinutes <= 0) return false;
-
-  if (status === "1H" || status.includes("FIRST HALF")) {
-    return diffMinutes > 65 || (Number.isFinite(elapsed) && elapsed <= 45 && diffMinutes > 60);
-  }
-  if (status === "HT" || status === "HALF TIME" || status === "HALFTIME" || status.includes("BREAK TIME")) {
-    return diffMinutes > 80;
-  }
-  if (status === "2H" || status.includes("SECOND HALF")) {
-    return diffMinutes > 125;
-  }
-  if (status === "ET" || status.includes("EXTRA TIME") || status === "PEN" || status.includes("PENALTY")) {
-    return diffMinutes > 170;
-  }
-  return diffMinutes > 140;
-}
-
-function isLiveMatch(match) {
-  const statusRaw = match?.status_short || match?.status || "";
-  const status = String(statusRaw).trim().toUpperCase();
-  if (!status || FINISHED_STATUSES.has(status) || isStaleLiveStatus(match)) return false;
-  return LIVE_STATUS_HINTS.some((hint) =>
-    hint.length <= 3 ? status === hint : status.includes(hint)
-  );
-}
-
-function liveMinuteLabel(match) {
-  const elapsed = Number(match?.elapsed);
-  const extra = Number(match?.extra);
-  const statusRaw = String(match?.status_short || match?.status || "").trim().toUpperCase();
-  const isHalfTime =
-    statusRaw === "HT" ||
-    statusRaw === "HALF TIME" ||
-    statusRaw === "HALFTIME" ||
-    statusRaw.includes("BREAK TIME");
-  const estimatedElapsed = estimateLiveElapsed(match);
-  const effectiveElapsed =
-    Number.isFinite(elapsed) && elapsed > 0
-      ? elapsed
-      : estimatedElapsed;
-
-  if (Number.isFinite(effectiveElapsed) && effectiveElapsed > 0) {
-    const minute = Number.isFinite(extra) && extra > 0 ? `${effectiveElapsed}+${extra}'` : `${effectiveElapsed}'`;
-    if (isHalfTime) return `${minute} · перерыв`;
-    return minute;
-  }
-  if (isHalfTime) return "Перерыв";
-  if (statusRaw.includes("PEN")) return "PEN";
-  return "";
-}
-
-function estimateLiveElapsed(match) {
-  const kickoffRaw = match?.kickoff_at;
-  if (!kickoffRaw) return null;
-  const kickoff = new Date(String(kickoffRaw).replace(" ", "T"));
-  if (Number.isNaN(kickoff.getTime())) return null;
-
-  const now = new Date();
-  const diffMinutes = Math.floor((now.getTime() - kickoff.getTime()) / 60000);
-  if (!Number.isFinite(diffMinutes) || diffMinutes <= 0) return null;
-
-  const statusRaw = String(match?.status_short || match?.status || "").trim().toUpperCase();
-  if (statusRaw === "1H" || statusRaw.includes("FIRST HALF")) {
-    return Math.min(diffMinutes, 45);
-  }
-  if (statusRaw === "HT" || statusRaw === "HALF TIME" || statusRaw === "HALFTIME" || statusRaw.includes("BREAK TIME")) {
-    return 45;
-  }
-  if (statusRaw === "2H" || statusRaw.includes("SECOND HALF")) {
-    return Math.min(Math.max(diffMinutes - 15, 46), 90);
-  }
-  if (statusRaw === "ET" || statusRaw.includes("EXTRA TIME")) {
-    return Math.min(Math.max(diffMinutes - 15, 91), 120);
-  }
-  return null;
-}
-
-function getMatchStateBadge(match) {
+function getMatchStateBadge(match, language = "ru") {
   if (isLiveMatch(match)) {
     return {
       kind: "live",
       label: "Live",
-      sublabel: liveMinuteLabel(match) || "В игре",
+      sublabel: liveMinuteLabel(match, language) || (language === "ru" ? "В игре" : "Live"),
       pillClass:
         "border-rose-400/30 bg-gradient-to-r from-rose-500/20 to-orange-400/15 text-rose-100 shadow-[0_0_14px_rgba(244,63,94,0.18)]",
       sublabelClass: "text-white/90",
@@ -254,7 +125,7 @@ function getMatchStateBadge(match) {
   if (POSTPONED_STATUS_HINTS.some((hint) => statusRaw === hint || statusRaw.includes(hint))) {
     return {
       kind: "postponed",
-      label: "Перенесён",
+      label: language === "ru" ? "Перенесён" : "Postponed",
       sublabel: "",
       pillClass:
         "border-amber-400/35 bg-amber-500/15 text-amber-200",
@@ -265,7 +136,7 @@ function getMatchStateBadge(match) {
   if (CANCELLED_STATUS_HINTS.some((hint) => statusRaw === hint || statusRaw.includes(hint))) {
     return {
       kind: "cancelled",
-      label: "Отменён",
+      label: language === "ru" ? "Отменён" : "Cancelled",
       sublabel: "",
       pillClass:
         "border-white/15 bg-white/8 text-white/70",
@@ -322,11 +193,11 @@ function scheduleCardAccentClass(tier) {
   return "bg-white/18";
 }
 
-function roundTitle(matches) {
+function roundTitle(matches, language = "ru") {
   const sample = matches[0] || {};
   const week = sample.week;
-  if (week != null) return `Тур ${week}`;
-  return "Тур";
+  if (week != null) return `${language === "ru" ? "Тур" : "Round"} ${week}`;
+  return language === "ru" ? "Тур" : "Round";
 }
 
 const day = (s) => String(s || "").slice(0, 10);
@@ -484,11 +355,11 @@ function LogoBadge({ id, name, onClick }) {
       className="inline-flex items-center justify-center"
       aria-label={name || "team"}
     >
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.04] border border-white/10 overflow-hidden">
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] border border-white/10 overflow-hidden sm:h-8 sm:w-8">
         <SafeImg
           src={logoSrc(id, name)}
           alt={name || "team"}
-          className="h-6 w-6 object-contain"
+          className="h-5 w-5 object-contain sm:h-6 sm:w-6"
           fallbackSrc={logoFallbackSrc(id)}
         />
       </span>
@@ -500,19 +371,19 @@ function TeamLine({ name, teamId, onGoTeam, align = "left" }) {
   return (
     <div
       className={[
-        "flex items-center gap-3 min-w-0",
+        "flex items-center gap-2 min-w-0 sm:gap-3",
         align === "right" ? "justify-end" : "justify-start",
       ].join(" ")}
     >
       {align === "right" ? (
         <>
-          <span className="truncate text-[14px] text-white/90 text-right">{name}</span>
+          <span className="truncate text-xs text-white/90 text-right sm:text-[14px]">{name}</span>
           <LogoBadge id={teamId} name={name} onClick={() => onGoTeam?.(teamId)} />
         </>
       ) : (
         <>
           <LogoBadge id={teamId} name={name} onClick={() => onGoTeam?.(teamId)} />
-          <span className="truncate text-[14px] text-white/90">{name}</span>
+          <span className="truncate text-xs text-white/90 sm:text-[14px]">{name}</span>
         </>
       )}
     </div>
@@ -539,7 +410,7 @@ function StatsColumn({ team, teamId, avg, align = "left" }) {
   return (
     <div
       className={[
-        "flex flex-1 items-center gap-3 text-[14px] font-semibold text-white/88",
+        "flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-white/88 sm:gap-3 sm:text-[14px]",
         align === "right" ? "justify-end text-right" : "justify-start text-left",
       ].join(" ")}
     >
@@ -547,13 +418,13 @@ function StatsColumn({ team, teamId, avg, align = "left" }) {
         <>
           <span className="truncate">{team}</span>
           <span
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] border border-white/10"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] sm:h-10 sm:w-10"
             aria-hidden="true"
           >
             <SafeImg
               src={logoSrc(teamId, team)}
               alt={team || "team"}
-              className="h-6 w-6 object-contain opacity-95"
+              className="h-5 w-5 object-contain opacity-95 sm:h-6 sm:w-6"
               fallbackSrc={logoFallbackSrc(teamId)}
             />
           </span>
@@ -562,13 +433,13 @@ function StatsColumn({ team, teamId, avg, align = "left" }) {
       {align !== "right" ? (
         <>
           <span
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] border border-white/10"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] sm:h-10 sm:w-10"
             aria-hidden="true"
           >
             <SafeImg
               src={logoSrc(teamId, team)}
               alt={team || "team"}
-              className="h-6 w-6 object-contain opacity-95"
+              className="h-5 w-5 object-contain opacity-95 sm:h-6 sm:w-6"
               fallbackSrc={logoFallbackSrc(teamId)}
             />
           </span>
@@ -607,14 +478,14 @@ function ComparisonRow({ label, leftVal, rightVal, format, emphasis = "normal" }
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[1fr,auto,1fr] items-center">
-        <div className="text-left text-[15px] font-semibold text-white/85 tabular-nums">
+      <div className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center sm:grid-cols-[1fr_auto_1fr]">
+        <div className="text-left text-[13px] font-semibold text-white/85 tabular-nums sm:text-[15px]">
           {show(l)}
         </div>
-        <div className="px-3 text-[10px] font-medium text-white/84 text-center">
+        <div className="min-w-0 px-1 text-center text-[9px] font-medium text-white/84 sm:px-3 sm:text-[10px]">
           {label}
         </div>
-        <div className="text-right text-[15px] font-semibold text-white/85 tabular-nums">
+        <div className="text-right text-[13px] font-semibold text-white/85 tabular-nums sm:text-[15px]">
           {show(r)}
         </div>
       </div>
@@ -659,9 +530,9 @@ function AdvantageIndex({ home, away }) {
   return { side, value: abs };
 }
 
-function MatchRow({ match, season, onClick, onGoTeam, expanded }) {
+function MatchRow({ match, season, onClick, onGoTeam, expanded, language = "ru" }) {
   const { date, time } = formatDateTime(match, season);
-  const badge = getMatchStateBadge(match);
+  const badge = getMatchStateBadge(match, language);
   const centerLine = badge ? "" : time ? `${date} · ${time}` : date;
 
   return (
@@ -669,8 +540,8 @@ function MatchRow({ match, season, onClick, onGoTeam, expanded }) {
       type="button"
       onClick={() => onClick?.(match)}
       className={[
-        "w-full px-5 py-4 text-left transition-all duration-200 rounded-xl cursor-pointer",
-        "grid grid-cols-[1fr_auto_1fr] items-center gap-4",
+        "w-full px-3 py-3 text-left transition-all duration-200 rounded-xl cursor-pointer sm:px-5 sm:py-4",
+        "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4",
         expanded ? "bg-white/[0.03]" : "hover:bg-white/5",
       ].join(" ")}
     >
@@ -680,7 +551,7 @@ function MatchRow({ match, season, onClick, onGoTeam, expanded }) {
       </div>
 
       {/* CENTER */}
-      <div className="text-center text-[14px] text-white/70 tabular-nums">
+      <div className="w-[82px] text-center text-[12px] text-white/70 tabular-nums sm:w-auto sm:min-w-[118px] sm:text-[14px]">
         {badge ? (
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex h-6 items-center rounded-full border px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${badge.pillClass}`}>
@@ -788,9 +659,9 @@ function buildHumanReason(match) {
   return parts.join(" ");
 }
 
-function generateEdgeScoreText({ match, stats, locked, insight }) {
-  const home = match?.home_team || "Хозяева";
-  const away = match?.away_team || "Гости";
+function generateEdgeScoreText({ match, stats, locked, insight, language = "ru" }) {
+  const home = match?.home_team || (language === "ru" ? "Хозяева" : "Home");
+  const away = match?.away_team || (language === "ru" ? "Гости" : "Away");
   const leagueId =
     Number.isFinite(Number(match?.league_id))
       ? Number(match?.league_id)
@@ -902,10 +773,11 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
           : totalsTier);
 
   const outcomeTeam =
-    pick1x2?.code === "H" ? home : pick1x2?.code === "A" ? away : "ничья";
-  const seed = hashKey(`${home}-${away}`);
+    pick1x2?.code === "H" ? home : pick1x2?.code === "A" ? away : language === "ru" ? "ничья" : "draw";
   const hero = locked
-    ? "Модель EdgeScore оценивает матч через форму, xG и рыночную линию. Ниже — ключевые факторы и финальная оценка сценариев."
+    ? language === "ru"
+      ? "Модель EdgeScore оценивает матч через форму, xG и рыночную линию. Ниже — ключевые факторы и финальная оценка сценариев."
+      : "The EdgeScore model evaluates the match through form, xG and the market line. Below are the key factors and the final scenario view."
     : (() => {
         const h = stats?.home || {};
         const a = stats?.away || {};
@@ -935,12 +807,18 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
               : away;
 
         if (!statLeader) {
-          return "Силы команд выглядят сопоставимыми по ключевым метрикам. Основной сценарий формируется за счёт нюансов формы и рыночной оценки.";
+          return language === "ru"
+            ? "Силы команд выглядят сопоставимыми по ключевым метрикам. Основной сценарий формируется за счёт нюансов формы и рыночной оценки."
+            : "The teams look close on the key metrics. The main scenario is shaped by form details and market pricing.";
         }
-        if (pick1x2 && outcomeTeam !== "ничья" && statLeader !== outcomeTeam) {
-          return `${statLeader} выглядит активнее по статистике, но модель склоняется к сценарию в пользу ${outcomeTeam}. Ключевой фактор здесь — рыночное расхождение, а не чистое доминирование по цифрам.`;
+        if (pick1x2 && outcomeTeam !== (language === "ru" ? "ничья" : "draw") && statLeader !== outcomeTeam) {
+          return language === "ru"
+            ? `${statLeader} выглядит активнее по статистике, но модель склоняется к сценарию в пользу ${outcomeTeam}. Ключевой фактор здесь — рыночное расхождение, а не чистое доминирование по цифрам.`
+            : `${statLeader} looks stronger on the raw stats, but the model leans toward ${outcomeTeam}. The key factor is market mispricing rather than pure statistical dominance.`;
         }
-        return `Общая картина: по качеству игры и контролю темпа ${statLeader} выглядит предпочтительнее. Дальше важно понять, даёт ли текущая линия рынка рабочий запас.`;
+        return language === "ru"
+          ? `Общая картина: по качеству игры и контролю темпа ${statLeader} выглядит предпочтительнее. Дальше важно понять, даёт ли текущая линия рынка рабочий запас.`
+          : `Overall, ${statLeader} looks better in game quality and tempo control. The next question is whether the current market line still leaves a workable edge.`;
       })();
 
   const factors = [];
@@ -967,7 +845,7 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
       (v) => v.toFixed(2)
     );
     if (xg) {
-      factors.push(`По xG перевес у ${xg.leader}: ${xg.leadVal} против ${xg.trailVal}.`);
+      factors.push(language === "ru" ? `По xG перевес у ${xg.leader}: ${xg.leadVal} против ${xg.trailVal}.` : `xG edge for ${xg.leader}: ${xg.leadVal} vs ${xg.trailVal}.`);
     }
 
     const shots = mk(
@@ -978,7 +856,7 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
       (v) => v.toFixed(1)
     );
     if (shots) {
-      factors.push(`По ударам впереди ${shots.leader}: ${shots.leadVal} против ${shots.trailVal}.`);
+      factors.push(language === "ru" ? `По ударам впереди ${shots.leader}: ${shots.leadVal} против ${shots.trailVal}.` : `Shot edge for ${shots.leader}: ${shots.leadVal} vs ${shots.trailVal}.`);
     }
 
     const poss = mk(
@@ -989,7 +867,7 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
       (v) => `${v.toFixed(0)}%`
     );
     if (poss) {
-      factors.push(`По владению устойчивее ${poss.leader}: ${poss.leadVal} против ${poss.trailVal}.`);
+      factors.push(language === "ru" ? `По владению устойчивее ${poss.leader}: ${poss.leadVal} против ${poss.trailVal}.` : `Possession edge for ${poss.leader}: ${poss.leadVal} vs ${poss.trailVal}.`);
     }
 
     const corners = mk(
@@ -1000,31 +878,37 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
       (v) => v.toFixed(1)
     );
     if (corners) {
-      factors.push(`По угловым небольшой перевес у ${corners.leader}: ${corners.leadVal} против ${corners.trailVal}.`);
+      factors.push(language === "ru" ? `По угловым небольшой перевес у ${corners.leader}: ${corners.leadVal} против ${corners.trailVal}.` : `Small corners edge for ${corners.leader}: ${corners.leadVal} vs ${corners.trailVal}.`);
     }
   }
   if (!factors.length) {
     factors.push(
       locked
-        ? "Форма и качество моментов команд сопоставимы — модель не видит явного перекоса."
-        : "Статистика команд близка по ключевым метрикам — ярко выраженного перевеса по базе не видно."
+        ? (language === "ru" ? "Форма и качество моментов команд сопоставимы — модель не видит явного перекоса." : "Form and chance quality are close, so the model does not see a clear skew.")
+        : (language === "ru" ? "Статистика команд близка по ключевым метрикам — ярко выраженного перевеса по базе не видно." : "The teams are close on the main metrics, so the base numbers do not show a strong edge.")
     );
   }
   const prediction = [];
-  prediction.push("Вероятности 1X2 и тотала — это оценка нашей модели EdgeScore.");
+  prediction.push(language === "ru" ? "Вероятности 1X2 и тотала — это оценка нашей модели EdgeScore." : "1X2 and total probabilities are estimated by the EdgeScore model.");
   prediction.push(
     dominantTier === "A"
-      ? "Рынок сейчас: есть заметное расхождение между моделью и линией."
+      ? language === "ru"
+        ? "Рынок сейчас: есть заметное расхождение между моделью и линией."
+        : "Market read: there is a meaningful gap between the model and the line."
       : dominantTier === "B"
-        ? "Рынок сейчас: перевес есть, но запас ограничен."
-        : "Рынок сейчас: линия близка к справедливой, явного перекоса нет."
+        ? language === "ru"
+          ? "Рынок сейчас: перевес есть, но запас ограничен."
+          : "Market read: there is an edge, but the margin is limited."
+        : language === "ru"
+          ? "Рынок сейчас: линия близка к справедливой, явного перекоса нет."
+          : "Market read: the line looks close to fair with no obvious skew."
   );
   const explainByTier = (tier, value) => {
-    if (tier === "A") return "запас по value рабочий";
-    if (tier === "B") return "плюс есть, но без запаса";
-    if (isNum(value) && value > 0) return "плюс ниже рабочего порога";
-    if (!isNum(value)) return "коэффициенты недоступны, value не оценивается";
-    return "входа нет";
+    if (tier === "A") return language === "ru" ? "запас по value рабочий" : "the value margin is actionable";
+    if (tier === "B") return language === "ru" ? "плюс есть, но без запаса" : "there is an edge, but without enough margin";
+    if (isNum(value) && value > 0) return language === "ru" ? "плюс ниже рабочего порога" : "the edge is below the working threshold";
+    if (!isNum(value)) return language === "ru" ? "коэффициенты недоступны, value не оценивается" : "odds are unavailable, so value cannot be assessed";
+    return language === "ru" ? "входа нет" : "no entry";
   };
   if (!locked && pick1x2) {
     const pHome = items1x2.find((x) => x.code === "H");
@@ -1032,10 +916,14 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
     const pAway = items1x2.find((x) => x.code === "A");
     const valueText = isNum(val1) ? `${val1 >= 0 ? "+" : ""}${val1.toFixed(1)}%` : "—";
     prediction.push(
-      `1X2: П1 ${fmtPct(pHome?.prob)} · Х ${fmtPct(pDraw?.prob)} · П2 ${fmtPct(pAway?.prob)}.`
+      language === "ru"
+        ? `1X2: П1 ${fmtPct(pHome?.prob)} · Х ${fmtPct(pDraw?.prob)} · П2 ${fmtPct(pAway?.prob)}.`
+        : `1X2: 1 ${fmtPct(pHome?.prob)} · X ${fmtPct(pDraw?.prob)} · 2 ${fmtPct(pAway?.prob)}.`
     );
     prediction.push(
-      `По исходу: базовый сценарий ${pick1x2.label}. Value ${valueText} — ${explainByTier(outcomeTier, val1)}.`
+      language === "ru"
+        ? `По исходу: базовый сценарий ${pick1x2.label}. Value ${valueText} — ${explainByTier(outcomeTier, val1)}.`
+        : `Outcome: base scenario ${pick1x2.label}. Value ${valueText} — ${explainByTier(outcomeTier, val1)}.`
     );
   }
   if (!locked && pickO25) {
@@ -1043,24 +931,36 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
     const pUnder = itemsO25.find((x) => x.code === "U");
     const valueText = isNum(val2) ? `${val2 >= 0 ? "+" : ""}${val2.toFixed(1)}%` : "—";
     prediction.push(
-      `Тотал 2.5: ТБ ${fmtPct(pOver?.prob)} · ТМ ${fmtPct(pUnder?.prob)}.`
+      language === "ru"
+        ? `Тотал 2.5: ТБ ${fmtPct(pOver?.prob)} · ТМ ${fmtPct(pUnder?.prob)}.`
+        : `Total 2.5: Over ${fmtPct(pOver?.prob)} · Under ${fmtPct(pUnder?.prob)}.`
     );
     prediction.push(
-      `По тоталу: базовый сценарий ${pickO25.label}. Value ${valueText} — ${explainByTier(totalsTier, val2)}.`
+      language === "ru"
+        ? `По тоталу: базовый сценарий ${pickO25.label}. Value ${valueText} — ${explainByTier(totalsTier, val2)}.`
+        : `Total: base scenario ${pickO25.label}. Value ${valueText} — ${explainByTier(totalsTier, val2)}.`
     );
   }
   if (!prediction.length) {
     prediction.push(
-      "Прогноз построен на модели xG и форме команд, детали доступны по подписке."
+      language === "ru"
+        ? "Прогноз построен на модели xG и форме команд, детали доступны по подписке."
+        : "The forecast is based on xG and team form; full details are available with a subscription."
     );
   }
 
   const final =
     dominantTier === "A"
-      ? `Рабочий сценарий — ${pick1x2 ? pick1x2.label : "по модели"}. Есть устойчивый перевес относительно линии.`
+      ? language === "ru"
+        ? `Рабочий сценарий — ${pick1x2 ? pick1x2.label : "по модели"}. Есть устойчивый перевес относительно линии.`
+        : `The working scenario is ${pick1x2 ? pick1x2.label : "the model lean"}. There is a stable edge versus the line.`
       : dominantTier === "B"
-        ? `${pick1x2 ? pick1x2.label : "Основной сценарий"} выглядит разумно, но без запаса. Оптимально играть аккуратно.`
-        : "Заметного преимущества над линией нет. Лучшее решение — наблюдать и ждать движения рынка.";
+        ? language === "ru"
+          ? `${pick1x2 ? pick1x2.label : "Основной сценарий"} выглядит разумно, но без запаса. Оптимально играть аккуратно.`
+          : `${pick1x2 ? pick1x2.label : "The main scenario"} looks reasonable, but without enough margin. A cautious approach fits better.`
+        : language === "ru"
+          ? "Заметного преимущества над линией нет. Лучшее решение — наблюдать и ждать движения рынка."
+          : "There is no notable edge over the line. The best move is to watch and wait for the market to shift.";
 
   const confidence =
     isNum(probs.H) || isNum(probs.D) || isNum(probs.A)
@@ -1072,7 +972,7 @@ function generateEdgeScoreText({ match, stats, locked, insight }) {
     factors,
     prediction,
     final,
-    cta: "Открыть аналитику EdgeScore",
+    cta: language === "ru" ? "Открыть аналитику EdgeScore" : "Open EdgeScore analytics",
     probs: { p1: probs.H, px: probs.D, p2: probs.A },
     confidence,
   };
@@ -1250,7 +1150,7 @@ function PremiumAnalyticsBlock({ match, locked = false }) {
             const status = statusBadge();
             return (
               <>
-                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 h-7 text-[11px] text-white/70">
+                <span className="surface-chip h-7 px-3 py-0 text-[11px]">
                   {status.text}
                 </span>
                 <span className="text-[11px] text-white/50">{status.hint}</span>
@@ -1412,6 +1312,7 @@ function MatchInlineInsights({
   locked,
   onUnlock,
 }) {
+  const { language } = useLanguage();
   const [insight, setInsight] = useState(null);
   const homeId = match?.home_team_id;
   const awayId = match?.away_team_id;
@@ -1420,6 +1321,7 @@ function MatchInlineInsights({
     stats: { home: pack?.homeAvg, away: pack?.awayAvg },
     locked,
     insight,
+    language,
   });
   const renderEmphasizedText = (value) => {
     const text = String(value || "");
@@ -1491,29 +1393,29 @@ function MatchInlineInsights({
 
   if (pack.error) {
     return (
-      <div className="px-6 pb-6 text-sm text-rose-400">
-        Ошибка загрузки: {pack.error}
+      <div className="px-3 pb-6 text-sm text-rose-400 sm:px-6">
+        {language === "ru" ? "Ошибка загрузки" : "Loading error"}: {pack.error}
       </div>
     );
   }
 
   return (
-    <div className="px-6 pb-8">
-      <div className="mt-3 rounded-2xl bg-white/[0.03] p-6">
+    <div className="px-0 pb-8 sm:px-6">
+      <div className="glass-card mx-auto mt-3 w-full max-w-[920px] p-3 sm:p-6">
         {/* Средние показатели */}
         <section className="mt-1">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              <div className="text-[20px] font-semibold text-white text-left">
-                Сравнение команд
+              <div className="text-left text-base font-semibold text-white sm:text-[20px]">
+                {language === "ru" ? "Сравнение команд" : "Team comparison"}
               </div>
-              <div className="mt-1 text-[14px] text-white/62 text-left">
-                Средние показатели за последние 10 матчей
+              <div className="mt-1 text-left text-xs text-white/62 sm:text-[14px]">
+                {language === "ru" ? "Средние показатели за последние 10 матчей" : "Average metrics over the last 10 matches"}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-8">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 sm:gap-8">
             <StatsColumn team={match.home_team} teamId={homeId} avg={pack.homeAvg} />
             <StatsColumn
               team={match.away_team}
@@ -1532,21 +1434,21 @@ function MatchInlineInsights({
               emphasis="xg"
             />
             <ComparisonRow
-              label="Удары"
+              label={language === "ru" ? "Удары" : "Shots"}
               leftVal={pack.homeAvg?.shots}
               rightVal={pack.awayAvg?.shots}
               format={(v) => Number(v).toFixed(1)}
               emphasis="shots"
             />
             <ComparisonRow
-              label="Владение"
+              label={language === "ru" ? "Владение" : "Possession"}
               leftVal={pack.homeAvg?.possession}
               rightVal={pack.awayAvg?.possession}
               format={(v) => `${Number(v).toFixed(0)}%`}
               emphasis="possession"
             />
             <ComparisonRow
-              label="Угловые"
+              label={language === "ru" ? "Угловые" : "Corners"}
               leftVal={pack.homeAvg?.corners}
               rightVal={pack.awayAvg?.corners}
               format={(v) => Number(v).toFixed(1)}
@@ -1560,8 +1462,8 @@ function MatchInlineInsights({
             const leader =
               adv.side === "home" ? match.home_team : match.away_team;
             return (
-            <div className="mt-4 flex items-center justify-between text-[13px] text-white/62">
-              <span>Преимущество по средним показателям:</span>
+            <div className="mt-4 flex items-center justify-between gap-3 text-xs text-white/62 sm:text-[13px]">
+              <span>{language === "ru" ? "Преимущество по средним показателям:" : "Edge in average metrics:"}</span>
               <span className="text-white/80">
                 {leader} +{adv.value.toFixed(2)}
                 </span>
@@ -1577,9 +1479,17 @@ function MatchInlineInsights({
             const raw =
               analytics?.final ||
               analytics?.hero ||
-              "Рынок не даёт достаточного преимущества по линии.";
-            const parts = String(raw).split(".");
-            const headline = (parts.shift() || raw).trim();
+              (language === "ru"
+                ? "Рынок не даёт достаточного преимущества по линии."
+                : "The market does not offer enough edge at the current line.");
+            const normalizedRaw =
+              language === "ru"
+                ? raw
+                : String(raw).trim() === "Рынок не даёт достаточного преимущества по линии."
+                  ? "The market does not offer enough edge at the current line."
+                  : raw;
+            const parts = String(normalizedRaw).split(".");
+            const headline = (parts.shift() || normalizedRaw).trim();
             const rest = parts.join(".").trim();
             const toPctLabel = (v) => {
               if (v == null || !Number.isFinite(Number(v))) return "—";
@@ -1597,12 +1507,12 @@ function MatchInlineInsights({
                   ? Math.round(Math.max(Number(p1 || 0), Number(px || 0), Number(p2 || 0)) * 100)
                   : null;
             return (
-              <div className="relative overflow-hidden w-full rounded-2xl bg-white/[0.03] border border-white/10 px-6 py-5 transition hover:bg-white/[0.05]">
+              <div className="glass-card relative w-full overflow-hidden px-6 py-5 transition hover:bg-white/[0.05]">
                 <div className={`absolute left-0 top-4 bottom-4 w-[3px] rounded-full ${scheduleCardAccentClass(
                   confidence != null && confidence >= 60 ? "B" : "NO BET"
                 )}`} />
                 <div className="pl-2 text-[11px] uppercase tracking-[0.18em] text-white/55 mb-1">
-                  Вывод модели
+                  {language === "ru" ? "Вывод модели" : "Model conclusion"}
                 </div>
                 <div className="pl-2 text-[15px] font-semibold text-white">
                   {headline}
@@ -1613,10 +1523,12 @@ function MatchInlineInsights({
                   </div>
                 ) : null}
                 <div className="mt-3 pl-2 text-[12px] text-white/70">
-                  П1 {toPctLabel(p1)} · Х {toPctLabel(px)} · П2 {toPctLabel(p2)}
+                  {language === "ru"
+                    ? `П1 ${toPctLabel(p1)} · Х ${toPctLabel(px)} · П2 ${toPctLabel(p2)}`
+                    : `1 ${toPctLabel(p1)} · X ${toPctLabel(px)} · 2 ${toPctLabel(p2)}`}
                 </div>
                 <div className="mt-1 pl-2 text-[12px] text-white/60">
-                  Уверенность модели: {confidence != null ? `${confidence}%` : "—"}
+                  {language === "ru" ? "Уверенность модели" : "Model confidence"}: {confidence != null ? `${confidence}%` : "—"}
                 </div>
                 <div className="mt-3 pl-2">
                   <button
@@ -1627,7 +1539,7 @@ function MatchInlineInsights({
                     }}
                     className="inline-flex items-center text-[13px] font-medium text-white/90 underline decoration-white/30 underline-offset-4 hover:decoration-white transition"
                   >
-                    Расширенный анализ →
+                    {language === "ru" ? "Расширенный анализ" : "Extended analysis"} →
                   </button>
                 </div>
               </div>
@@ -1644,6 +1556,7 @@ function MatchInlineInsights({
 =========================== */
 
 export default function MatchSchedulePage() {
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [search] = useSearchParams();
   const navigate = useNavigate();
@@ -1769,37 +1682,28 @@ export default function MatchSchedulePage() {
     let cancelled = false;
     const key = `${league}|${season}`;
     const cached = scheduleCache.get(key);
+    const freshCached =
+      cached && Date.now() - cached.t < SCHEDULE_CACHE_TTL ? cached.v : null;
 
-    if (cached) {
-      setGroups(cached);
+    if (freshCached) {
+      setGroups(freshCached);
+      setLoading(false);
     }
 
     async function load() {
       try {
-        setLoading(!cached);
+        setLoading(!freshCached);
         setError("");
-        if (!cached) setGroups({});
+        if (!freshCached) setGroups({});
 
-        const qsParams = new URLSearchParams({
+        const arr = await fetchMatchesV3({
           league,
           season,
-          include_upcoming: "true",
+          includeUpcoming: true,
+          limit: 96,
+          lookbackDays: isInternationalLongCycleLeague(league) ? 0 : SCHEDULE_LOOKBACK_DAYS,
+          lookaheadDays: isInternationalLongCycleLeague(league) ? 0 : SCHEDULE_LOOKAHEAD_DAYS,
         });
-        if (!isInternationalLongCycleLeague(league)) {
-          const { from, to } = seasonDateRange(season);
-          qsParams.set("from_date", from);
-          qsParams.set("to_date", to);
-        }
-        const qs = qsParams.toString();
-
-        const rsp = await fetch(`${API_BASE}/api/matches_v3?${qs}`);
-        if (!rsp.ok) {
-          const txt = await rsp.text().catch(() => "");
-          throw new Error(`HTTP ${rsp.status}${txt ? `: ${txt}` : ""}`);
-        }
-
-        const raw = await rsp.json();
-        const arr = Array.isArray(raw) ? raw : [];
         const upcoming = arr.filter(isUnplayedMatch);
 
         const grouped = upcoming.reduce((acc, m) => {
@@ -1833,7 +1737,7 @@ export default function MatchSchedulePage() {
         });
 
         if (!cancelled) {
-          scheduleCache.set(key, grouped);
+          scheduleCache.set(key, { t: Date.now(), v: grouped });
           setGroups(grouped);
         }
       } catch (e) {
@@ -2000,35 +1904,35 @@ export default function MatchSchedulePage() {
 
   return (
     <>
-      <div className="w-full px-4 py-8 space-y-8">
+      <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
       {/* HEADER */}
       <div>
-        <div className="panel rounded-3xl p-6 md:p-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-                Календарь турнира
+        <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 space-y-1.5">
+              <div className="type-eyebrow">
+                {t("calendarEyebrow")}
               </div>
-              <div className="text-lg sm:text-xl font-semibold text-white">
-                Расписание матчей · {league}
+              <div className="type-page-title break-words text-xl sm:text-2xl">
+                {t("scheduleTitle")} · {league}
               </div>
-              <p className="text-[13px] text-white/55 max-w-xl">
-                Предстоящие матчи турнира. Нажмите на матч, чтобы открыть Match Center.
+              <p className="type-subtitle max-w-xl">
+                {t("scheduleLead")}
               </p>
             </div>
 
-            <div className="flex items-center gap-3 self-start sm:self-auto">
+            <div className="flex w-full min-w-0 items-center gap-3 self-start sm:w-auto sm:self-auto">
               <label
                 htmlFor="season-select"
-                className="text-[11px] uppercase tracking-[0.18em] text-white/40"
+                className="type-eyebrow"
               >
-                Сезон
+                {t("season")}
               </label>
               <select
                 id="season-select"
                 value={season}
                 onChange={handleSeasonChange}
-                className="h-8 rounded-full bg-white/5 border border-white/10 px-3 text-[13px] text-white/80 tabular-nums focus:outline-none focus:ring-1 focus:ring-white/20"
+                className="surface-select h-8 tabular-nums text-[13px] text-white/80"
               >
                 {seasonOptions.map((s) => (
                   <option key={s} value={s} className="bg-slate-900">
@@ -2044,19 +1948,19 @@ export default function MatchSchedulePage() {
       {/* STATE */}
       {loading && (
         <div className="text-center text-sm text-white/60 mt-6">
-          Загружаем расписание…
+          {t("loadingSchedule")}
         </div>
       )}
 
       {!loading && error && (
         <div className="text-center text-sm text-rose-400 mt-6">
-          Ошибка загрузки: {error}
+          {t("scheduleErrorPrefix")}: {error}
         </div>
       )}
 
       {!loading && !error && !hasData && (
         <div className="text-center text-sm text-white/60 mt-6">
-          Нет запланированных матчей для выбранного сезона.
+          {t("noScheduledMatches")}
         </div>
       )}
 
@@ -2072,7 +1976,7 @@ export default function MatchSchedulePage() {
             return String(a).localeCompare(String(b));
           })
           .map(([weekKey, matches]) => {
-            const title = roundTitle(matches);
+            const title = roundTitle(matches, language);
             const total = matches.length;
 
             return (
@@ -2082,7 +1986,7 @@ export default function MatchSchedulePage() {
                     {title}
                   </div>
                   <div className="bg-white/5 text-white/60 text-xs px-3 py-1 rounded-full">
-                    {total} матч{total === 1 ? "" : total < 5 ? "а" : "ей"}
+                    {total} {t("matchesCount")}
                   </div>
                 </div>
 
@@ -2103,12 +2007,13 @@ export default function MatchSchedulePage() {
                           onClick={handleRowClick}
                           onGoTeam={goToTeam}
                           expanded={isExpanded}
+                          language={language}
                         />
                         {isExpanded && (
                           <>
                             {details?.loading && (
                               <div className="px-6 pb-6 text-sm text-white/60">
-                                Загружаем аналитику по матчу…
+                                {t("loadingMatchAnalytics")}
                               </div>
                             )}
                             {!details?.loading && (
@@ -2143,10 +2048,10 @@ export default function MatchSchedulePage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-sm uppercase tracking-[0.18em] text-white/60">
-              🔒 Аналитика EdgeScore недоступна
+              {t("lockedAnalyticsTitle")}
             </div>
             <div className="mt-2 text-[13px] text-white/80">
-              Откройте прогнозы, вероятности и value-сигналы по рынку.
+              {t("lockedAnalyticsBody")}
             </div>
             <div className="mt-4 flex items-center justify-center gap-4">
               <button
@@ -2154,14 +2059,14 @@ export default function MatchSchedulePage() {
                 onClick={handleChoosePlan}
                 className="h-10 px-5 rounded-xl bg-gradient-to-r from-emerald-400/90 via-emerald-300/90 to-teal-300/90 text-slate-900 text-[13px] font-semibold shadow-[0_8px_18px_rgba(16,185,129,0.25)]"
               >
-                Перейти к тарифам
+                {t("goToPlans")}
               </button>
               <button
                 type="button"
                 onClick={handleClosePaywall}
                 className="text-[13px] text-white/60 hover:text-white/80 transition"
               >
-                Закрыть
+                {t("close")}
               </button>
             </div>
           </div>

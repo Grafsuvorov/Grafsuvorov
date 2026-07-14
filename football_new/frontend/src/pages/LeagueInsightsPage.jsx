@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import SafeImg from "@/components/SafeImg";
-import LeaguePerformanceMap from "@/components/analytics/LeaguePerformanceMap";
-import OverperformanceChart from "@/components/analytics/OverperformanceChart";
-import ShotEfficiencyChart from "@/components/analytics/ShotEfficiencyChart";
-import PlayerFinishingChart from "@/components/analytics/PlayerFinishingChart";
-import ChanceCreatorsChart from "@/components/analytics/ChanceCreatorsChart";
-import TeamFormGrid from "@/components/analytics/TeamFormGrid";
-import HistoricalLeaders from "@/components/analytics/HistoricalLeaders";
-import InsightsPanel from "@/components/analytics/InsightsPanel";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
+import { useLanguage } from "@/context/LanguageContext.jsx";
+
+const LeaguePerformanceMap = lazy(() => import("@/components/analytics/LeaguePerformanceMap"));
+const OverperformanceChart = lazy(() => import("@/components/analytics/OverperformanceChart"));
+const ShotEfficiencyChart = lazy(() => import("@/components/analytics/ShotEfficiencyChart"));
+const PlayerFinishingChart = lazy(() => import("@/components/analytics/PlayerFinishingChart"));
+const ChanceCreatorsChart = lazy(() => import("@/components/analytics/ChanceCreatorsChart"));
+const TeamFormGrid = lazy(() => import("@/components/analytics/TeamFormGrid"));
+const HistoricalLeaders = lazy(() => import("@/components/analytics/HistoricalLeaders"));
+const InsightsPanel = lazy(() => import("@/components/analytics/InsightsPanel"));
 
 const INTERNATIONAL_LEAGUES = new Set([
   "World Cup",
@@ -80,12 +82,12 @@ const fmt = (v) => {
   return Number(v).toFixed(2).replace(/\.00$/, "");
 };
 
-const periodLabel = (windowValue) => {
-  if (!windowValue || windowValue === "season") return "Сезон";
+const periodLabel = (windowValue, language = "ru") => {
+  if (!windowValue || windowValue === "season") return language === "ru" ? "Сезон" : "Season";
   const n = Number(windowValue);
-  if (!Number.isFinite(n)) return "Сезон";
-  if (n === 1) return "1 матч";
-  return `${n} матчей`;
+  if (!Number.isFinite(n)) return language === "ru" ? "Сезон" : "Season";
+  if (n === 1) return language === "ru" ? "1 матч" : "1 match";
+  return language === "ru" ? `${n} матчей` : `${n} matches`;
 };
 
 const cardMetricLabel = (field) => {
@@ -111,14 +113,50 @@ const cardMetricLabel = (field) => {
   }
 };
 
+const TEAM_BADGE_FALLBACK =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+       <rect width='40' height='40' rx='12' fill='#10182a'/>
+       <path d='M20 6 31 11v8c0 7.6-4.9 13.8-11 16-6.1-2.2-11-8.4-11-16v-8l11-5z' fill='#cbd5e1'/>
+     </svg>`
+  );
+const PLAYER_BADGE_FALLBACK =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+       <rect width='40' height='40' rx='20' fill='#10182a'/>
+       <circle cx='20' cy='15' r='6' fill='#cbd5e1'/>
+       <path d='M10 33c1.8-5.7 6-8.5 10-8.5S28.2 27.3 30 33' fill='#cbd5e1'/>
+     </svg>`
+  );
+
+const resolveTeamId = (...candidates) => {
+  for (const value of candidates) {
+    if (value == null || value === "") continue;
+    const normalized = Number(value);
+    if (Number.isFinite(normalized) && normalized > 0) return normalized;
+  }
+  return null;
+};
+
+const resolvePlayerId = (...candidates) => {
+  for (const value of candidates) {
+    if (value == null || value === "") continue;
+    const normalized = Number(value);
+    if (Number.isFinite(normalized) && normalized > 0) return normalized;
+  }
+  return null;
+};
+
 const getTeamLogo = (id) =>
-  id ? `/icons/team_logos/${id}.png` : "/icons/default_league.png";
+  id ? `/icons/team_logos/${id}.png` : TEAM_BADGE_FALLBACK;
 const getTeamLogoFallback = (id) =>
-  id ? `https://media.api-sports.io/football/teams/${id}.png` : "/icons/default_league.png";
+  id ? `https://media.api-sports.io/football/teams/${id}.png` : TEAM_BADGE_FALLBACK;
 const getPlayerPhoto = (id) =>
-  id ? `/icons/player_photos/${id}.png` : "/icons/player_photos/default.png";
+  id ? `/icons/player_photos/${id}.png` : PLAYER_BADGE_FALLBACK;
 const getPlayerPhotoFallback = (id) =>
-  id ? `https://media.api-sports.io/football/players/${id}.png` : "/icons/player_photos/default.png";
+  id ? `https://media.api-sports.io/football/players/${id}.png` : PLAYER_BADGE_FALLBACK;
 
 const COL_WIDTHS = {
   shots: 120,
@@ -148,7 +186,14 @@ const buildGridTemplate = (cols) => {
   return [...base, ...extra].join(" ");
 };
 
+const renderAnalyticsFallback = (language = "ru") => (
+  <div className="surface-loading p-6">
+    {language === "ru" ? "Загрузка аналитики..." : "Loading analytics..."}
+  </div>
+);
+
 export default function LeagueInsightsPage() {
+  const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const leagueSlug = searchParams.get("league") || "Premier-League";
@@ -246,6 +291,7 @@ export default function LeagueInsightsPage() {
   }, [leagueParam, season, window, uclStage, isUcl]);
 
   useEffect(() => {
+    if (view !== "insights") return;
     setAnalyticsLoading(true);
     const qs = new URLSearchParams({
       league: leagueParam,
@@ -279,9 +325,10 @@ export default function LeagueInsightsPage() {
         })
       )
       .finally(() => setAnalyticsLoading(false));
-  }, [leagueParam, season, window, uclStage, trendWindow, minMinutes, minShots, isUcl]);
+  }, [leagueParam, season, window, uclStage, trendWindow, minMinutes, minShots, isUcl, view]);
 
   useEffect(() => {
+    if (view !== "players") return;
     setPlayersLoading(true);
     const qs = new URLSearchParams({
       league: leagueParam,
@@ -326,7 +373,7 @@ export default function LeagueInsightsPage() {
         setTopMinutes([]);
       })
       .finally(() => setPlayersLoading(false));
-  }, [leagueParam, season, window, uclStage, isUcl]);
+  }, [leagueParam, season, window, uclStage, isUcl, view]);
 
   const enriched = useMemo(() => {
     return rows.map((r) => ({
@@ -503,7 +550,7 @@ export default function LeagueInsightsPage() {
     [cards, extraTeamStats]
   );
 
-  const selectedPeriodLabel = useMemo(() => periodLabel(window), [window]);
+  const selectedPeriodLabel = useMemo(() => periodLabel(window, language), [window, language]);
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
@@ -553,66 +600,66 @@ export default function LeagueInsightsPage() {
 
   const metricCards = {
     attack: [
-      { key: "shots", label: "Shots" },
-      { key: "shots_on_target", label: "Shots on target" },
-      { key: "shots_inside_box", label: "Big chances" },
-      { key: "goals", label: "Goals" },
-      { key: "dangerous_attacks", label: "Dangerous attacks" },
+      { key: "shots", label: language === "ru" ? "Удары" : "Shots" },
+      { key: "shots_on_target", label: language === "ru" ? "В створ" : "Shots on target" },
+      { key: "shots_inside_box", label: language === "ru" ? "Гол. моменты" : "Big chances" },
+      { key: "goals", label: language === "ru" ? "Голы" : "Goals" },
+      { key: "dangerous_attacks", label: language === "ru" ? "Опасные атаки" : "Dangerous attacks" },
     ],
     defense: [
-      { key: "shots_conceded", label: "Shots conceded", dir: "asc" },
+      { key: "shots_conceded", label: language === "ru" ? "Допущ. удары" : "Shots conceded", dir: "asc" },
       { key: "xga", label: "xGA", dir: "asc" },
-      { key: "goals_conceded", label: "Goals conceded", dir: "asc" },
-      { key: "tackles", label: "Tackles" },
-      { key: "corners", label: "Corners" },
-      { key: "shots_diff", label: "Shot difference" },
+      { key: "goals_conceded", label: language === "ru" ? "Пропущ. голы" : "Goals conceded", dir: "asc" },
+      { key: "tackles", label: language === "ru" ? "Отборы" : "Tackles" },
+      { key: "corners", label: language === "ru" ? "Угловые" : "Corners" },
+      { key: "shots_diff", label: language === "ru" ? "Разница ударов" : "Shot difference" },
     ],
     possession: [
-      { key: "possession", label: "Possession" },
-      { key: "attacks", label: "Attacks" },
-      { key: "dangerous_attacks", label: "Dangerous attacks" },
-      { key: "corners", label: "Corners" },
+      { key: "possession", label: language === "ru" ? "Владение" : "Possession" },
+      { key: "attacks", label: language === "ru" ? "Атаки" : "Attacks" },
+      { key: "dangerous_attacks", label: language === "ru" ? "Опасные атаки" : "Dangerous attacks" },
+      { key: "corners", label: language === "ru" ? "Угловые" : "Corners" },
       { key: "deep_avg", label: "Deep progressions" },
-      { key: "tempo_shots_per_game", label: "Shot tempo" },
+      { key: "tempo_shots_per_game", label: language === "ru" ? "Темп ударов" : "Shot tempo" },
     ],
     advanced: [
-      { key: "xg_diff", label: "xG difference" },
-      { key: "shots_diff", label: "Shot difference" },
-      { key: "goal_diff", label: "Goal difference" },
+      { key: "xg_diff", label: language === "ru" ? "Разница xG" : "xG difference" },
+      { key: "shots_diff", label: language === "ru" ? "Разница ударов" : "Shot difference" },
+      { key: "goal_diff", label: language === "ru" ? "Разница голов" : "Goal difference" },
       { key: "xg", label: "xG" },
       { key: "xga", label: "xGA", dir: "asc" },
-      { key: "goals", label: "Goals" },
+      { key: "goals", label: language === "ru" ? "Голы" : "Goals" },
     ],
   };
 
   return (
-    <div className="w-full px-4 py-8 space-y-8">
+    <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
       {/* HEADER */}
       <div>
-        <div className="panel rounded-3xl p-6 md:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
-                АНАЛИТИКА
+        <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+            <div className="min-w-0 space-y-1.5">
+              <div className="type-eyebrow">
+                {language === "ru" ? "АНАЛИТИКА" : "INSIGHTS"}
               </div>
 
-              <div className="text-xl sm:text-2xl font-semibold text-white">
+              <div className="type-page-title break-words text-xl sm:text-2xl">
                 {leagueParam}
               </div>
 
-              <p className="text-sm text-slate-400 max-w-[640px] leading-relaxed">
-                Премиальная визуальная аналитика лиги.
+              <p className="type-subtitle max-w-[640px]">
+                {language === "ru" ? "Премиальная визуальная аналитика лиги." : "Premium visual league analytics."}
               </p>
             </div>
 
-            <div className="flex flex-col items-end gap-3">
+            <div className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:items-end">
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted mb-1">
-                СЕЗОН
+                {language === "ru" ? "СЕЗОН" : "SEASON"}
               </span>
               <select
                 value={season}
                 onChange={(e) => setSeason(e.target.value)}
-                className="h-8 w-[168px] rounded-full bg-white/5 border border-white/10 px-3 text-[13px] text-left text-white/80 tabular-nums focus:outline-none focus:ring-1 focus:ring-white/20"
+                className="surface-select h-8 w-full min-w-0 text-[13px] text-left text-white/80 sm:w-[168px]"
               >
                 {SEASONS.map((s) => (
                   <option key={s} value={s} className="bg-slate-900">
@@ -620,34 +667,34 @@ export default function LeagueInsightsPage() {
                   </option>
                 ))}
               </select>
-              <div className="flex items-center gap-2">
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
-                  Период
+                  {language === "ru" ? "Период" : "Window"}
                 </span>
                 <select
                   value={window}
                   onChange={(e) => setWindow(e.target.value)}
-                  className="h-7 w-[168px] rounded-full bg-white/5 border border-white/10 px-3 text-[12px] text-left text-white/80 tabular-nums focus:outline-none focus:ring-1 focus:ring-white/20"
+                  className="surface-select h-7 w-full min-w-0 text-[12px] text-left text-white/80 sm:w-[168px]"
                 >
-                  <option value="season" className="bg-slate-900">Сезон</option>
-                  <option value="1" className="bg-slate-900">Последний тур</option>
-                  <option value="5" className="bg-slate-900">Последние 5</option>
-                  <option value="10" className="bg-slate-900">Последние 10</option>
-                  <option value="15" className="bg-slate-900">Последние 15</option>
+                  <option value="season" className="bg-slate-900">{language === "ru" ? "Сезон" : "Season"}</option>
+                  <option value="1" className="bg-slate-900">{language === "ru" ? "Последний тур" : "Last round"}</option>
+                  <option value="5" className="bg-slate-900">{language === "ru" ? "Последние 5" : "Last 5"}</option>
+                  <option value="10" className="bg-slate-900">{language === "ru" ? "Последние 10" : "Last 10"}</option>
+                  <option value="15" className="bg-slate-900">{language === "ru" ? "Последние 15" : "Last 15"}</option>
                 </select>
               </div>
               {isUcl && (
-                <div className="flex items-center gap-2">
+                <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                   <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
-                    Стадия
+                    {language === "ru" ? "Стадия" : "Stage"}
                   </span>
                   <select
                     value={uclStage}
                     onChange={(e) => setUclStage(e.target.value)}
-                    className="h-7 w-[168px] rounded-full bg-white/5 border border-white/10 px-3 text-[12px] text-left text-white/80 tabular-nums focus:outline-none focus:ring-1 focus:ring-white/20"
+                    className="surface-select h-7 w-full min-w-0 text-[12px] text-left text-white/80 sm:w-[168px]"
                   >
-                    <option value="league" className="bg-slate-900">Турнирная таблица</option>
-                    <option value="playoff" className="bg-slate-900">Плей-офф</option>
+                    <option value="league" className="bg-slate-900">{language === "ru" ? "Турнирная таблица" : "League table"}</option>
+                    <option value="playoff" className="bg-slate-900">{language === "ru" ? "Плей-офф" : "Playoffs"}</option>
                   </select>
                 </div>
               )}
@@ -660,9 +707,9 @@ export default function LeagueInsightsPage() {
       {/* VIEW TABS */}
       <SegmentedTabs
         items={[
-          { key: "teams", label: "Команды" },
-          { key: "players", label: "Игроки" },
-          { key: "insights", label: "Инсайты" },
+          { key: "teams", label: language === "ru" ? "Команды" : "Teams" },
+          { key: "players", label: language === "ru" ? "Игроки" : "Players" },
+          { key: "insights", label: language === "ru" ? "Инсайты" : "Insights" },
         ]}
         value={view}
         onChange={setView}
@@ -676,17 +723,17 @@ export default function LeagueInsightsPage() {
         {summaryCards.map((c) => (
           <div
             key={c.title}
-            className="glass-card p-4 transition hover:border-primary"
+            className="glass-card p-4 transition hover:bg-white/[0.045]"
           >
             <div className="text-xs uppercase tracking-[0.18em] text-white/45">
               {c.title}
             </div>
             <div className="mt-2 flex items-center gap-3">
               <SafeImg
-                src={getTeamLogo(c.data?.team_id)}
+                src={getTeamLogo(resolveTeamId(c.data?.team_id))}
                 alt={c.data?.team || "team"}
                 className="h-7 w-7 object-contain"
-                fallbackSrc={getTeamLogoFallback(c.data?.team_id)}
+                fallbackSrc={getTeamLogoFallback(resolveTeamId(c.data?.team_id))}
               />
               <div className="text-lg font-semibold text-white">
                 {c.data?.team || "—"}
@@ -699,7 +746,7 @@ export default function LeagueInsightsPage() {
             </div>
             <div className="mt-2 text-xs text-white/35">
               {window === "season"
-                ? `${leagueParam} ${season} · сыграно ${c.data?.matches ?? "—"}`
+                ? language === "ru" ? `${leagueParam} ${season} · сыграно ${c.data?.matches ?? "—"}` : `${leagueParam} ${season} · played ${c.data?.matches ?? "—"}`
                 : `${selectedPeriodLabel} · ${c.data?.matches ?? "—"}`
               }
             </div>
@@ -750,17 +797,17 @@ export default function LeagueInsightsPage() {
                           {idx + 1}
                         </span>
                         <SafeImg
-                          src={getTeamLogo(t.team_id)}
+                          src={getTeamLogo(resolveTeamId(t.team_id))}
                           alt={t.team}
                           className="h-[16px] w-[16px] object-contain flex-shrink-0"
-                          fallbackSrc={getTeamLogoFallback(t.team_id)}
+                          fallbackSrc={getTeamLogoFallback(resolveTeamId(t.team_id))}
                         />
                         <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                           {t.team}
                         </span>
-                        <div className="w-full h-[6px] bg-white/10 rounded overflow-hidden">
+                        <div className="w-full h-[6px] rounded-full bg-white/8 overflow-hidden">
                           <div
-                            className="h-full bg-primary/50 rounded"
+                            className="h-full rounded-full bg-primary/42"
                             style={{ width: `${Math.min(100, pct)}%` }}
                           />
                         </div>
@@ -779,7 +826,7 @@ export default function LeagueInsightsPage() {
         <div className="text-lg font-semibold text-white">Team Rankings</div>
         <div className="glass-card overflow-x-auto">
           <div
-            className="sticky top-0 bg-[#0f1422] text-slate-300 text-sm font-semibold"
+            className="sticky top-0 bg-[#0f1422]/96 text-slate-300 text-sm font-semibold backdrop-blur"
             style={{ display: "grid", gridTemplateColumns: buildGridTemplate(allColumns), width: "100%" }}
           >
             <div className="px-3 py-2 text-center">Rank</div>
@@ -825,10 +872,10 @@ export default function LeagueInsightsPage() {
                 <div className="px-3">
                   <div className="flex items-center gap-2">
                     <SafeImg
-                      src={getTeamLogo(t.team_id)}
+                      src={getTeamLogo(resolveTeamId(t.team_id))}
                       alt={t.team}
                       className="h-[18px] w-[18px] object-contain"
-                      fallbackSrc={getTeamLogoFallback(t.team_id)}
+                      fallbackSrc={getTeamLogoFallback(resolveTeamId(t.team_id))}
                     />
                     <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
                       {t.team}
@@ -850,7 +897,7 @@ export default function LeagueInsightsPage() {
       </div>
 
       {loading && (
-        <div className="text-sm text-white/45">Загрузка данных…</div>
+        <div className="surface-loading">{language === "ru" ? "Загрузка данных…" : "Loading data…"}</div>
       )}
       </>
       )}
@@ -858,9 +905,9 @@ export default function LeagueInsightsPage() {
       {/* PLAYER METRICS */}
       {view === "players" && (
       <div className="space-y-6">
-        <div className="text-lg font-semibold text-white">Player Insights</div>
+        <div className="text-lg font-semibold text-white">{language === "ru" ? "Инсайты игроков" : "Player insights"}</div>
         {playersLoading && (
-          <div className="text-sm text-white/45">Загрузка игроков…</div>
+          <div className="surface-loading">{language === "ru" ? "Загрузка игроков…" : "Loading players…"}</div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
           {advancedPlayerLeaders.length > 0 && (
@@ -872,7 +919,7 @@ export default function LeagueInsightsPage() {
               {advancedPlayerLeaders.map((row) => (
                 <div
                   key={`adv-${row.key}-${row.item?.player_id || row.item?.understat_player_id || row.item?.player_name}`}
-                  className="grid items-center gap-3 rounded-2xl border-b border-white/5 last:border-b-0 py-3 px-2 transition hover:bg-white/[0.03] cursor-pointer"
+                  className="grid cursor-pointer items-center gap-3 rounded-2xl border-b border-white/5 px-2 py-3 transition hover:bg-white/[0.028] last:border-b-0"
                   style={{ gridTemplateColumns: "1fr 86px" }}
                   onClick={() =>
                     row.item?.player_id &&
@@ -885,10 +932,10 @@ export default function LeagueInsightsPage() {
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <SafeImg
-                      src={getPlayerPhoto(row.item?.player_id)}
+                      src={getPlayerPhoto(resolvePlayerId(row.item?.player_id, row.item?.api_player_id, row.item?.understat_player_id))}
                       alt={row.item?.player_name || row.item?.player}
                       className="h-[28px] w-[28px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                      fallbackSrc={getPlayerPhotoFallback(row.item?.player_id)}
+                      fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(row.item?.player_id, row.item?.api_player_id, row.item?.understat_player_id))}
                     />
                     <div className="min-w-0">
                       <div className="truncate text-sm text-white">
@@ -918,7 +965,7 @@ export default function LeagueInsightsPage() {
               {topXgPlayers.map((p, idx) => (
                 <div
                   key={`xg-${p.player_id}-${idx}`}
-                  className="grid items-center gap-3 rounded-2xl border-b border-white/5 last:border-b-0 py-2.5 px-2 transition hover:bg-white/[0.03] cursor-pointer"
+                  className="grid cursor-pointer items-center gap-3 rounded-2xl border-b border-white/5 px-2 py-2.5 transition hover:bg-white/[0.028] last:border-b-0"
                   style={{ gridTemplateColumns: "30px 1fr 110px" }}
                   onClick={() =>
                     p.api_player_id &&
@@ -936,10 +983,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name || p.player}
                         className="h-[28px] w-[28px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name || p.player}
@@ -960,13 +1007,13 @@ export default function LeagueInsightsPage() {
 
           <div className="glass-card p-5">
             <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-              Top scorers
+              {language === "ru" ? "Лучшие бомбардиры" : "Top scorers"}
             </div>
             <div className="mt-4 space-y-2.5">
               {topScorers.map((p, idx) => (
                 <div
                   key={`sc-${p.player_id}-${idx}`}
-                  className="grid items-center gap-3 rounded-2xl border-b border-white/5 last:border-b-0 py-2.5 px-2 transition hover:bg-white/[0.03] cursor-pointer"
+                  className="grid cursor-pointer items-center gap-3 rounded-2xl border-b border-white/5 px-2 py-2.5 transition hover:bg-white/[0.028] last:border-b-0"
                   style={{ gridTemplateColumns: "30px 1fr 110px" }}
                   onClick={() =>
                     p.player_id &&
@@ -984,10 +1031,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[28px] w-[28px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1023,20 +1070,20 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topScorers.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
 
           <div className="glass-card p-5">
             <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-              Top assists
+              {language === "ru" ? "Лучшие ассистенты" : "Top assists"}
             </div>
             <div className="mt-4 space-y-2.5">
               {topAssists.map((p, idx) => (
                 <div
                   key={`as-${p.player_id}-${idx}`}
-                  className="grid items-center gap-3 rounded-2xl border-b border-white/5 last:border-b-0 py-2.5 px-2 transition hover:bg-white/[0.03] cursor-pointer"
+                  className="grid cursor-pointer items-center gap-3 rounded-2xl border-b border-white/5 px-2 py-2.5 transition hover:bg-white/[0.028] last:border-b-0"
                   style={{ gridTemplateColumns: "30px 1fr 110px" }}
                   onClick={() =>
                     p.player_id &&
@@ -1054,10 +1101,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[28px] w-[28px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1097,7 +1144,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topAssists.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1128,10 +1175,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1167,7 +1214,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topRated.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1199,10 +1246,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1238,7 +1285,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topShots.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1271,10 +1318,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1310,7 +1357,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topKeyPasses.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1343,10 +1390,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1382,7 +1429,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topTackles.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1415,10 +1462,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1454,7 +1501,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topDribbles.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1487,10 +1534,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1526,7 +1573,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topDuelsWon.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1559,10 +1606,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1598,7 +1645,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topInterceptions.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1631,10 +1678,10 @@ export default function LeagueInsightsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <SafeImg
-                        src={getPlayerPhoto(p.player_id)}
+                        src={getPlayerPhoto(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                         alt={p.player_name}
                         className="h-[24px] w-[24px] rounded-full border border-white/20 object-cover flex-shrink-0"
-                        fallbackSrc={getPlayerPhotoFallback(p.player_id)}
+                        fallbackSrc={getPlayerPhotoFallback(resolvePlayerId(p.player_id, p.api_player_id, p.understat_player_id))}
                       />
                       <span className="text-sm text-white whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.player_name}
@@ -1670,7 +1717,7 @@ export default function LeagueInsightsPage() {
                 </div>
               ))}
               {topMinutes.length === 0 && (
-                <div className="text-sm text-white/45">No data</div>
+                <div className="surface-empty">{language === "ru" ? "Нет данных" : "No data"}</div>
               )}
             </div>
           </div>
@@ -1682,16 +1729,16 @@ export default function LeagueInsightsPage() {
       {view === "insights" && (
         <div className="space-y-8">
           {analyticsLoading && (
-            <div className="text-sm text-white/45">Загрузка аналитики…</div>
+            <div className="surface-loading">{language === "ru" ? "Загрузка аналитики…" : "Loading insights…"}</div>
           )}
 
           <div className="glass-card p-6">
-            <div className="mb-3 text-xs uppercase tracking-[0.16em] text-[#9aa3b2]">Фильтры</div>
+            <div className="mb-3 text-xs uppercase tracking-[0.16em] text-[#9aa3b2]">{language === "ru" ? "Фильтры" : "Filters"}</div>
             <div className="mb-5">
               <SegmentedTabs
                 items={[
-                  { key: "teams", label: "Команды" },
-                  { key: "players", label: "Игроки" },
+                  { key: "teams", label: language === "ru" ? "Команды" : "Teams" },
+                  { key: "players", label: language === "ru" ? "Игроки" : "Players" },
                 ]}
                 value={insightsSection}
                 onChange={setInsightsSection}
@@ -1705,44 +1752,44 @@ export default function LeagueInsightsPage() {
                 <select
                   value={trendWindow}
                   onChange={(e) => setTrendWindow(Number(e.target.value))}
-                  className="h-8 w-full min-w-0 rounded-full bg-white/5 border border-white/10 px-3 text-[12px] text-left text-white/80 focus:outline-none"
+                  className="surface-select h-8 w-full min-w-0 text-[12px] text-left text-white/80"
                 >
-                  <option value={5} className="bg-slate-900">Последние 5 матчей</option>
-                  <option value={10} className="bg-slate-900">Последние 10 матчей</option>
-                  <option value={15} className="bg-slate-900">Последние 15 матчей</option>
-                  <option value={20} className="bg-slate-900">Последние 20 матчей</option>
+                  <option value={5} className="bg-slate-900">{language === "ru" ? "Последние 5 матчей" : "Last 5 matches"}</option>
+                  <option value={10} className="bg-slate-900">{language === "ru" ? "Последние 10 матчей" : "Last 10 matches"}</option>
+                  <option value={15} className="bg-slate-900">{language === "ru" ? "Последние 15 матчей" : "Last 15 matches"}</option>
+                  <option value={20} className="bg-slate-900">{language === "ru" ? "Последние 20 матчей" : "Last 20 matches"}</option>
                 </select>
               ) : (
                 <>
                   <select
                     value={minMinutes}
                     onChange={(e) => setMinMinutes(Number(e.target.value))}
-                    className="h-8 w-full min-w-0 rounded-full bg-white/5 border border-white/10 px-3 text-[12px] text-left text-white/80 focus:outline-none"
+                    className="surface-select h-8 w-full min-w-0 text-[12px] text-left text-white/80"
                   >
-                    <option value={900} className="bg-slate-900">Игроки: 900+ минут</option>
-                    <option value={0} className="bg-slate-900">Игроки: без лимита минут</option>
-                    <option value={90} className="bg-slate-900">Игроки: 90+ минут</option>
-                    <option value={180} className="bg-slate-900">Игроки: 180+ минут</option>
-                    <option value={360} className="bg-slate-900">Игроки: 360+ минут</option>
-                    <option value={720} className="bg-slate-900">Игроки: 720+ минут</option>
+                    <option value={900} className="bg-slate-900">{language === "ru" ? "Игроки: 900+ минут" : "Players: 900+ minutes"}</option>
+                    <option value={0} className="bg-slate-900">{language === "ru" ? "Игроки: без лимита минут" : "Players: no minutes limit"}</option>
+                    <option value={90} className="bg-slate-900">{language === "ru" ? "Игроки: 90+ минут" : "Players: 90+ minutes"}</option>
+                    <option value={180} className="bg-slate-900">{language === "ru" ? "Игроки: 180+ минут" : "Players: 180+ minutes"}</option>
+                    <option value={360} className="bg-slate-900">{language === "ru" ? "Игроки: 360+ минут" : "Players: 360+ minutes"}</option>
+                    <option value={720} className="bg-slate-900">{language === "ru" ? "Игроки: 720+ минут" : "Players: 720+ minutes"}</option>
                   </select>
                   <select
                     value={minShots}
                     onChange={(e) => setMinShots(Number(e.target.value))}
-                    className="h-8 w-full min-w-0 rounded-full bg-white/5 border border-white/10 px-3 text-[12px] text-left text-white/80 focus:outline-none"
+                    className="surface-select h-8 w-full min-w-0 text-[12px] text-left text-white/80"
                   >
-                    <option value={5} className="bg-slate-900">Игроки: 5+ ударов</option>
-                    <option value={10} className="bg-slate-900">Игроки: 10+ ударов</option>
-                    <option value={20} className="bg-slate-900">Игроки: 20+ ударов</option>
-                    <option value={30} className="bg-slate-900">Игроки: 30+ ударов</option>
-                    <option value={40} className="bg-slate-900">Игроки: 40+ ударов</option>
+                    <option value={5} className="bg-slate-900">{language === "ru" ? "Игроки: 5+ ударов" : "Players: 5+ shots"}</option>
+                    <option value={10} className="bg-slate-900">{language === "ru" ? "Игроки: 10+ ударов" : "Players: 10+ shots"}</option>
+                    <option value={20} className="bg-slate-900">{language === "ru" ? "Игроки: 20+ ударов" : "Players: 20+ shots"}</option>
+                    <option value={30} className="bg-slate-900">{language === "ru" ? "Игроки: 30+ ударов" : "Players: 30+ shots"}</option>
+                    <option value={40} className="bg-slate-900">{language === "ru" ? "Игроки: 40+ ударов" : "Players: 40+ shots"}</option>
                   </select>
                   <select
                     value={teamFilter}
                     onChange={(e) => setTeamFilter(e.target.value)}
-                    className="h-8 w-full min-w-0 rounded-full bg-white/5 border border-white/10 px-3 text-[12px] text-left text-white/80 focus:outline-none"
+                    className="surface-select h-8 w-full min-w-0 text-[12px] text-left text-white/80"
                   >
-                    <option value="all" className="bg-slate-900">Все команды</option>
+                    <option value="all" className="bg-slate-900">{language === "ru" ? "Все команды" : "All teams"}</option>
                     {teamFilterOptions.map((teamName) => (
                       <option key={teamName} value={teamName} className="bg-slate-900">{teamName}</option>
                     ))}
@@ -1752,89 +1799,101 @@ export default function LeagueInsightsPage() {
             </div>
             {analytics.fallback_mode && (
               <div className="mt-3 text-xs text-white/50">
-                Для этой лиги часть Understat-метрик недоступна. Показаны базовые командные инсайты из API-статистики.
+                {language === "ru" ? "Для этой лиги часть Understat-метрик недоступна. Показаны базовые командные инсайты из API-статистики." : "Some Understat metrics are unavailable for this league. Basic team insights from API stats are shown instead."}
               </div>
             )}
           </div>
 
           {insightsSection === "teams" && hasTeamMap && (
-            <>
-              <div className="space-y-1">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-[#9aa3b2]">Ключевой график</div>
-                <div className="text-lg font-semibold text-white">Карта силы команд</div>
-              </div>
-              <LeaguePerformanceMap
-                teams={analytics.teams}
-                height={480}
-                highlightedTeam={highlightedTeam}
-                onTeamHover={setHighlightedTeam}
-              />
-            </>
+            <Suspense fallback={renderAnalyticsFallback(language)}>
+              <>
+                <div className="space-y-1">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-[#9aa3b2]">{language === "ru" ? "Ключевой график" : "Key chart"}</div>
+                  <div className="text-lg font-semibold text-white">{language === "ru" ? "Карта силы команд" : "Team strength map"}</div>
+                </div>
+                <LeaguePerformanceMap
+                  teams={analytics.teams}
+                  height={480}
+                  highlightedTeam={highlightedTeam}
+                  onTeamHover={setHighlightedTeam}
+                />
+              </>
+            </Suspense>
           )}
 
           {insightsSection === "teams" && (hasOverperformance || hasShotEfficiency) && (
-            <div className="space-y-6">
-              {hasOverperformance && (
-                <OverperformanceChart
-                  teams={analytics.teams}
-                  highlightedTeam={highlightedTeam}
-                  onTeamHover={setHighlightedTeam}
-                />
-              )}
-              {hasShotEfficiency && (
-                <ShotEfficiencyChart
-                  teams={analytics.teams}
-                  highlightedTeam={highlightedTeam}
-                  onTeamHover={setHighlightedTeam}
-                />
-              )}
-            </div>
+            <Suspense fallback={renderAnalyticsFallback(language)}>
+              <div className="space-y-6">
+                {hasOverperformance && (
+                  <OverperformanceChart
+                    teams={analytics.teams}
+                    highlightedTeam={highlightedTeam}
+                    onTeamHover={setHighlightedTeam}
+                  />
+                )}
+                {hasShotEfficiency && (
+                  <ShotEfficiencyChart
+                    teams={analytics.teams}
+                    highlightedTeam={highlightedTeam}
+                    onTeamHover={setHighlightedTeam}
+                  />
+                )}
+              </div>
+            </Suspense>
           )}
 
           {insightsSection === "players" && (hasPlayerFinishing || hasChanceCreators) && (
-            <div className="space-y-6">
-              {hasPlayerFinishing && (
-                <PlayerFinishingChart
-                  players={analytics.players}
-                  minMinutes={minMinutes}
-                  minShots={minShots}
-                  teamFilter={teamFilter}
-                  onPlayerSelect={openPlayerCard}
-                />
-              )}
-              {hasChanceCreators && (
-                <ChanceCreatorsChart
-                  players={analytics.players}
-                  teamFilter={teamFilter}
-                  onPlayerSelect={openPlayerCard}
-                />
-              )}
-            </div>
+            <Suspense fallback={renderAnalyticsFallback(language)}>
+              <div className="space-y-6">
+                {hasPlayerFinishing && (
+                  <PlayerFinishingChart
+                    players={analytics.players}
+                    minMinutes={minMinutes}
+                    minShots={minShots}
+                    teamFilter={teamFilter}
+                    onPlayerSelect={openPlayerCard}
+                  />
+                )}
+                {hasChanceCreators && (
+                  <ChanceCreatorsChart
+                    players={analytics.players}
+                    teamFilter={teamFilter}
+                    onPlayerSelect={openPlayerCard}
+                  />
+                )}
+              </div>
+            </Suspense>
           )}
 
           {insightsSection === "teams" && (hasTrends || hasLeaders) && (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {hasTrends && (
-                <TeamFormGrid
-                  trends={analytics.trends}
-                  teams={analytics.teams}
-                  trendWindow={trendWindow}
-                  highlightedTeam={highlightedTeam}
-                  onTeamHover={setHighlightedTeam}
-                />
-              )}
-              {hasLeaders && <HistoricalLeaders leaders={analytics.leaders} />}
-            </div>
+            <Suspense fallback={renderAnalyticsFallback(language)}>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {hasTrends && (
+                  <TeamFormGrid
+                    trends={analytics.trends}
+                    teams={analytics.teams}
+                    trendWindow={trendWindow}
+                    highlightedTeam={highlightedTeam}
+                    onTeamHover={setHighlightedTeam}
+                  />
+                )}
+                {hasLeaders && <HistoricalLeaders leaders={analytics.leaders} />}
+              </div>
+            </Suspense>
           )}
 
-          {insightsSection === "teams" && filteredTeamsForInsights.length > 0 && <InsightsPanel teams={filteredTeamsForInsights} />}
+          {insightsSection === "teams" && filteredTeamsForInsights.length > 0 && (
+            <Suspense fallback={renderAnalyticsFallback(language)}>
+              <InsightsPanel teams={filteredTeamsForInsights} />
+            </Suspense>
+          )}
         </div>
       )}
 
       {view === "teams" && (
         <div className="flex items-center justify-between text-xs text-white/55">
           <div>
-            Показано {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedRows.length)} из {sortedRows.length}
+            {language === "ru" ? "Показано" : "Showing"} {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedRows.length)} {language === "ru" ? "из" : "of"} {sortedRows.length}
           </div>
           <div className="flex items-center gap-2">
             <button

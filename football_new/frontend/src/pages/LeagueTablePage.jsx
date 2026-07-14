@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import SafeImg from "@/components/SafeImg";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* =============================
    CONSTANTS & HELPERS
@@ -76,8 +77,17 @@ const SEASON_LABELS = {
   },
 };
 
-const seasonLabel = (league, season) =>
-  SEASON_LABELS[league]?.[season] || season;
+const seasonLabel = (league, season, language = "ru") => {
+  const label = SEASON_LABELS[league]?.[season];
+  if (!label) return season;
+  if (language === "en") {
+    return label
+      .replace("Отбор к Евро", "Euro Qualifiers")
+      .replace("Отбор к ЧМ", "World Cup Qualifiers")
+      .replace("Плей-офф к ЧМ", "World Cup Play-offs");
+  }
+  return label;
+};
 const ageFromDate = (val) => {
   if (!val) return null;
   const d = new Date(val);
@@ -116,36 +126,14 @@ const getPlayerAge = (p) =>
   ) ||
   null;
 
-const formatPlayerMeta = (p) => {
+const formatPlayerMeta = (p, language = "ru") => {
   const bits = [];
   const position = getPlayerPosition(p);
   const age = getPlayerAge(p);
   if (position) bits.push(position);
-  if (age) bits.push(`${age} лет`);
+  if (age) bits.push(language === "ru" ? `${age} лет` : `${age} y.o.`);
   return bits.length ? bits.join(" • ") : "—";
 };
-
-const VIEWS = [
-  { code: "total", label: "Общая" },
-  { code: "home", label: "Дома" },
-  { code: "away", label: "В гостях" },
-  { code: "scorers", label: "Бомбардиры" },
-  { code: "assists", label: "Ассисты" },
-];
-
-const UCL_VIEWS = [
-  { code: "total", label: "Таблица" },
-  { code: "playoff", label: "Плей-офф" },
-  { code: "scorers", label: "Бомбардиры" },
-  { code: "assists", label: "Ассисты" },
-];
-
-const CUP_BRACKET_VIEWS = [
-  { code: "total", label: "Группы" },
-  { code: "playoff", label: "Плей-офф" },
-  { code: "scorers", label: "Бомбардиры" },
-  { code: "assists", label: "Ассисты" },
-];
 
 const INTL_GROUPED_LEAGUES = new Set([
   "World Cup",
@@ -198,6 +186,16 @@ const playerPhotoFallback = (id) =>
     ? `https://media.api-sports.io/football/players/${id}.png`
     : "/icons/player_photos/default.png";
 
+const getGroupTableLabel = (groupName, language, isIntlGroupedLeague) => {
+  if (!groupName) {
+    return language === "ru" ? "Основная таблица" : "Main table";
+  }
+  if (isIntlGroupedLeague && groupName === "Group Stage") {
+    return language === "ru" ? "Третьи места" : "Best Third-Placed Teams";
+  }
+  return groupName;
+};
+
 /* =============================
    SORTING
 ============================= */
@@ -235,6 +233,7 @@ const getSortValue = (row, key) => {
 ============================= */
 
 export default function LeagueTablePage() {
+  const { t, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -245,11 +244,25 @@ export default function LeagueTablePage() {
   const isIntlBracketCup = INTL_BRACKET_LEAGUES.has(leagueParam);
   const isIntlGroupedLeague = INTL_GROUPED_LEAGUES.has(leagueParam);
   const seasonOptions = LEAGUE_SEASONS[leagueParam] || DEFAULT_SEASONS;
-  const availableViews = isEuroCup
-    ? UCL_VIEWS
-    : isIntlBracketCup
-    ? CUP_BRACKET_VIEWS
-    : VIEWS;
+  const viewLabel = (code, fallback) =>
+    ({
+      total: isIntlGroupedLeague ? t("groups") : t("table"),
+      home: t("homeView"),
+      away: t("awayView"),
+      scorers: t("scorers"),
+      assists: t("assists"),
+      playoff: t("playoff"),
+    }[code] || fallback);
+  const availableViews = useMemo(
+    () =>
+      (isEuroCup || isIntlBracketCup
+        ? ["total", "playoff", "scorers", "assists"]
+        : ["total", "home", "away", "scorers", "assists"]).map((code) => ({
+        code,
+        label: viewLabel(code, code),
+      })),
+    [isEuroCup, isIntlBracketCup, isIntlGroupedLeague, t]
+  );
 
   const [season, setSeason] = useState(
     seasonOptions.includes(seasonParam) ? seasonParam : seasonOptions[0]
@@ -374,7 +387,7 @@ export default function LeagueTablePage() {
       : [];
     const groups = new Map();
     for (const row of base) {
-      const key = row.group_name || "Основная таблица";
+      const key = getGroupTableLabel(row.group_name, language, isIntlGroupedLeague);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(row);
     }
@@ -384,7 +397,7 @@ export default function LeagueTablePage() {
         groupName,
         rows: [...groupRows].sort((a, b) => Number(a.rank ?? 999) - Number(b.rank ?? 999)),
       }));
-  }, [isIntlGroupedLeague, rows, view]);
+  }, [isIntlGroupedLeague, rows, view, language]);
 
   /* БОМБАРДИРЫ */
   const scorersRows = useMemo(() => {
@@ -432,8 +445,8 @@ export default function LeagueTablePage() {
       align === "left"
         ? "w-full justify-start text-left"
         : align === "right"
-        ? "ml-auto justify-end text-right"
-        : "mx-auto justify-center text-center";
+        ? "w-full justify-end text-right"
+        : "w-full justify-center text-center";
 
     return (
       <button
@@ -445,8 +458,8 @@ export default function LeagueTablePage() {
           active ? "text-white" : "text-white/45 hover:text-white"
         )}
       >
-        <span>{label}</span>
-        <span className="text-[10px] opacity-60">{dirIcon}</span>
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="w-3 shrink-0 text-center text-[10px] opacity-60">{dirIcon}</span>
       </button>
     );
   };
@@ -471,186 +484,142 @@ export default function LeagueTablePage() {
 
   const legendItems = isEuroCup
     ? [
-        { color: "bg-cyan-400", label: "1/8 финала" },
-        { color: "bg-emerald-400", label: "Плей-офф 9-24" },
-        { color: "bg-rose-500", label: "Вылет 25-36" },
+        { color: "bg-cyan-400", label: language === "ru" ? "1/8 финала" : "Round of 16" },
+        { color: "bg-emerald-400", label: language === "ru" ? "Плей-офф 9-24" : "Play-offs 9-24" },
+        { color: "bg-rose-500", label: language === "ru" ? "Вылет 25-36" : "Eliminated 25-36" },
       ]
     : [
-        { color: "bg-cyan-400", label: "Лига чемпионов" },
-        { color: "bg-emerald-400", label: "Еврокубки" },
-        { color: "bg-rose-500", label: "Зона вылета" },
+        { color: "bg-cyan-400", label: language === "ru" ? "Лига чемпионов" : "Champions League" },
+        { color: "bg-emerald-400", label: language === "ru" ? "Еврокубки" : "European spots" },
+        { color: "bg-rose-500", label: language === "ru" ? "Зона вылета" : "Relegation zone" },
       ];
 
   /* =============================
      DESKTOP TABLE (ОБЩАЯ/ДОМА/В ГОСТЯХ)
   ============================= */
 
-  const renderMainTableDesktop = (tableRows = sortedTable, compact = false) => (
-    <div className={clsx("hidden md:block", BG_PANEL)}>
-      <div className={TABLE_GLASS}>
-        <Table className="w-full table-fixed text-sm border-separate border-spacing-0">
-          <TableHeader>
-            <TableRow className="border-b border-white/8 bg-white/[0.015]">
-                <TableHead
-                  className={clsx(TH_STICKY, "w-12 px-4 py-3 text-center")}
-                >
-                  {sortButton("rank", "#", "center")}
-                </TableHead>
+  const renderMainTableDesktop = (tableRows = sortedTable, compact = false) => {
+    const desktopGridClass = compact
+      ? "grid-cols-[48px_minmax(220px,1fr)_56px_56px_56px_56px_96px_64px]"
+      : "grid-cols-[48px_minmax(240px,1fr)_56px_56px_56px_56px_96px_64px]";
 
-                <TableHead
-                  className={clsx(
-                    TH_STICKY,
-                    compact ? "w-[220px] max-w-[220px] px-4 py-3 text-left" : "w-[240px] max-w-[240px] px-4 py-3 text-left"
-                  )}
-                >
-                  {sortButton("team", "Команда", "left")}
-                </TableHead>
+    return (
+      <div className={clsx("hidden md:block", BG_PANEL)}>
+        <div className={TABLE_GLASS}>
+          <div className={clsx("grid text-sm", desktopGridClass)}>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("rank", "#", "center")}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-left font-semibold text-slate-200")}>
+              {sortButton("team", t("team"), "left")}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("games_played", t("playedShort"))}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("wins", t("winsShort"))}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("draws", t("drawsShort"))}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("losses", t("lossesShort"))}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("goal_diff", t("goalsShort"))}
+            </div>
+            <div className={clsx(TH_STICKY, "px-4 py-3 text-center font-semibold text-slate-200")}>
+              {sortButton("points", t("pointsShort"))}
+            </div>
 
-                <TableHead
-                  className={clsx(TH_STICKY, "w-14 px-4 py-3 text-center")}
-                >
-                  {sortButton("games_played", "И")}
-                </TableHead>
+            {tableRows.map((row, idx) => {
+              const rank = Number(row.rank ?? idx + 1);
+              const gf = Number(row.goals_for ?? 0);
+              const ga = Number(row.goals_against ?? 0);
+              const diff =
+                row.goal_difference != null ? Number(row.goal_difference) : gf - ga;
+              const diffClass =
+                diff > 0
+                  ? "text-emerald-400"
+                  : diff < 0
+                  ? "text-rose-400"
+                  : "text-slate-200";
+              const rowClass = clsx(
+                "border-t border-white/8",
+                HOVER_ROW,
+                zoneHighlight(rank)
+              );
 
-                <TableHead
-                  className={clsx(TH_STICKY, "w-14 px-4 py-3 text-center")}
-                >
-                  {sortButton("wins", "В")}
-                </TableHead>
-
-                <TableHead
-                  className={clsx(TH_STICKY, "w-14 px-4 py-3 text-center")}
-                >
-                  {sortButton("draws", "Н")}
-                </TableHead>
-
-                <TableHead
-                  className={clsx(TH_STICKY, "w-14 px-4 py-3 text-center")}
-                >
-                  {sortButton("losses", "П")}
-                </TableHead>
-
-                <TableHead
-                  className={clsx(TH_STICKY, "w-20 px-4 py-3 text-center")}
-                >
-                  {sortButton("goal_diff", "М")}
-                </TableHead>
-
-                <TableHead
-                  className={clsx(TH_STICKY, "w-16 px-4 py-3 text-center")}
-                >
-                  {sortButton("points", "О")}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {tableRows.map((t, idx) => {
-                const gf = Number(t.goals_for ?? 0);
-                const ga = Number(t.goals_against ?? 0);
-                const diff =
-                  t.goal_difference != null ? Number(t.goal_difference) : gf - ga;
-
-                const diffClass =
-                  diff > 0
-                    ? "text-emerald-400"
-                    : diff < 0
-                    ? "text-rose-400"
-                    : "text-slate-200";
-
-                const rank = Number(t.rank ?? idx + 1);
-
-                return (
-                  <TableRow
-                    key={t.team_id}
-                    className={clsx(
-                      "relative border-t border-white/8",
-                      HOVER_ROW,
-                      zoneHighlight(rank)
-                    )}
+              return [
+                <div key={`${row.team_id}-rank`} className={clsx("px-4 py-3 text-center text-slate-200 tabular-nums", rowClass)}>
+                  {rank}
+                </div>,
+                <div key={`${row.team_id}-team`} className={clsx("px-4 py-3", rowClass)}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/team/${row.team_id}?league=${encodeURIComponent(
+                          leagueParam
+                        )}&season=${season}`
+                      )
+                    }
+                    className="flex w-full min-w-0 items-center gap-2 text-left text-white hover:text-white"
                   >
-                    <TableCell className="px-4 py-3 text-center text-slate-200 tabular-nums">
-                      {rank}
-                    </TableCell>
+                    <SafeImg
+                      src={teamLogo(row.team_id)}
+                      alt={row.team}
+                      className="h-6 w-6 shrink-0 object-contain"
+                      fallbackSrc={teamLogoFallback(row.team_id)}
+                      fallback="team"
+                    />
+                    <span className="min-w-0 truncate font-medium">
+                      {row.team ?? "—"}
+                    </span>
+                  </button>
+                </div>,
+                <div key={`${row.team_id}-gp`} className={clsx("px-4 py-3 text-center text-slate-200 tabular-nums whitespace-nowrap", rowClass)}>
+                  {row.games_played ?? "—"}
+                </div>,
+                <div key={`${row.team_id}-w`} className={clsx("px-4 py-3 text-center text-slate-200 tabular-nums whitespace-nowrap", rowClass)}>
+                  {row.wins ?? "—"}
+                </div>,
+                <div key={`${row.team_id}-d`} className={clsx("px-4 py-3 text-center text-slate-200 tabular-nums whitespace-nowrap", rowClass)}>
+                  {row.draws ?? "—"}
+                </div>,
+                <div key={`${row.team_id}-l`} className={clsx("px-4 py-3 text-center text-slate-200 tabular-nums whitespace-nowrap", rowClass)}>
+                  {row.losses ?? "—"}
+                </div>,
+                <div key={`${row.team_id}-g`} className={clsx("px-4 py-3 text-center tabular-nums whitespace-nowrap", rowClass)}>
+                  <span className={clsx("font-mono whitespace-nowrap", diffClass)}>
+                    {Number.isFinite(gf) && Number.isFinite(ga)
+                      ? `${gf} – ${ga}`
+                      : "—"}
+                  </span>
+                </div>,
+                <div key={`${row.team_id}-pts`} className={clsx("px-4 py-3 text-center font-semibold text-white tabular-nums whitespace-nowrap", rowClass)}>
+                  {row.points ?? "—"}
+                </div>,
+              ];
+            })}
 
-                    <TableCell className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/team/${t.team_id}?league=${encodeURIComponent(
-                              leagueParam
-                            )}&season=${season}`
-                          )
-                        }
-                        className="flex items-center gap-2 text-left text-white hover:text-white"
-                      >
-                        <SafeImg
-                          src={teamLogo(t.team_id)}
-                          alt={t.team}
-                          className="h-6 w-6 object-contain"
-                          fallbackSrc={teamLogoFallback(t.team_id)}
-                          fallback="team"
-                        />
-                        <span className="truncate font-medium">
-                          {t.team ?? "—"}
-                        </span>
-                      </button>
-                    </TableCell>
-
-                    <TableCell className="px-4 py-3 text-center text-slate-200 tabular-nums">
-                      {t.games_played ?? "—"}
-                    </TableCell>
-
-                    <TableCell className="px-4 py-3 text-center text-slate-200 tabular-nums">
-                      {t.wins ?? "—"}
-                    </TableCell>
-
-                    <TableCell className="px-4 py-3 text-center text-slate-200 tabular-nums">
-                      {t.draws ?? "—"}
-                    </TableCell>
-
-                    <TableCell className="px-4 py-3 text-center text-slate-200 tabular-nums">
-                      {t.losses ?? "—"}
-                    </TableCell>
-
-                    <TableCell className="px-4 py-3 text-center tabular-nums">
-                      <span className={clsx("font-mono", diffClass)}>
-                        {Number.isFinite(gf) && Number.isFinite(ga)
-                          ? `${gf} – ${ga}`
-                          : "—"}
-                      </span>
-                    </TableCell>
-
-                    <TableCell className="px-4 py-3 text-center font-semibold text-white tabular-nums">
-                      {t.points ?? "—"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-
-              {!loading && tableRows.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="py-6 text-center text-slate-400"
-                  >
-                    Нет данных
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-        </Table>
+            {!loading && tableRows.length === 0 && (
+              <div className="col-span-8 py-6 text-center text-slate-400">
+                {t("noData")}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   /* =============================
      MOBILE VERSION (ОБЩАЯ/ДОМА/В ГОСТЯХ)
   ============================= */
 
   const renderMainTableMobile = (tableRows = sortedTable) => (
-    <div className="space-y-3 md:hidden">
+    <div className="space-y-2.5 md:hidden">
       {tableRows.map((t, idx) => {
         const gf = Number(t.goals_for ?? 0);
         const ga = Number(t.goals_against ?? 0);
@@ -666,77 +635,60 @@ export default function LeagueTablePage() {
         const rank = Number(t.rank ?? idx + 1);
 
         return (
-          <div
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                `/team/${t.team_id}?league=${encodeURIComponent(
+                  leagueParam
+                )}&season=${season}`
+              )
+            }
             key={t.team_id}
-            className="relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02]"
+            className="relative grid w-full grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-[22px] border border-white/[0.05] bg-gradient-to-br from-white/[0.035] to-white/[0.015] px-3.5 py-3 text-left ring-1 ring-white/[0.025] transition hover:border-white/[0.08] hover:bg-white/[0.045]"
           >
-            <div className="p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                  #{rank}
-                </span>
-                <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-xs font-semibold text-white">
-                  {t.points ?? "—"} очков
-                </span>
-              </div>
-
-              <div className="mt-2 flex items-center gap-3">
-                <SafeImg
-                  src={teamLogo(t.team_id)}
-                  alt={t.team}
-                  className="h-9 w-9 flex-shrink-0 object-contain"
-                  fallbackSrc={teamLogoFallback(t.team_id)}
-                  fallback="team"
-                />
-                <div className="flex-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(
-                        `/team/${t.team_id}?league=${encodeURIComponent(
-                          leagueParam
-                        )}&season=${season}`
-                      )
-                    }
-                    className="text-left text-sm font-semibold text-white hover:text-white"
-                  >
-                    {t.team ?? "—"}
-                  </button>
-                  <div className="mt-1 grid grid-cols-3 gap-2 text-[11px] text-slate-300">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500">
-                        Игры
-                      </div>
-                      <div className="font-medium">
-                        {t.games_played ?? "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500">
-                        В / Н / П
-                      </div>
-                      <div className="font-medium">
-                        {t.wins ?? "—"}/{t.draws ?? "—"}/{t.losses ?? "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500">
-                        Мячи
-                      </div>
-                      <div className={clsx("font-mono", diffClass)}>
-                        {Number.isFinite(gf) && Number.isFinite(ga)
-                          ? `${gf} – ${ga}`
-                          : "—"}
-                      </div>
-                    </div>
-                  </div>
+            <span className="grid h-8 w-8 place-items-center rounded-full border border-white/[0.07] bg-white/[0.045] text-[11px] font-semibold tabular-nums text-slate-200">
+              {rank}
+            </span>
+            <div className="flex min-w-0 items-center gap-2">
+              <SafeImg
+                src={teamLogo(t.team_id)}
+                alt={t.team}
+                className="h-6 w-6 shrink-0 object-contain"
+                fallbackSrc={teamLogoFallback(t.team_id)}
+                fallback="team"
+              />
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-white">
+                  {t.team ?? "—"}
                 </div>
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
+                  <span>{t.wins ?? "—"}W</span>
+                  <span>{t.draws ?? "—"}D</span>
+                  <span>{t.losses ?? "—"}L</span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <div className="rounded-2xl border border-white/[0.05] bg-white/[0.04] px-2 py-1.5 text-center">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-500">P</div>
+                <div className="mt-0.5 text-[12px] font-semibold tabular-nums text-white">{t.games_played ?? "—"}</div>
+              </div>
+              <div className="rounded-2xl border border-white/[0.05] bg-white/[0.04] px-2 py-1.5 text-center">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-500">GD</div>
+                <div className={clsx("mt-0.5 text-[12px] font-semibold tabular-nums", diffClass)}>
+                  {Number.isFinite(diff) ? (diff > 0 ? `+${diff}` : diff) : "—"}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/[0.05] bg-white/[0.055] px-2 py-1.5 text-center">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-slate-500">PTS</div>
+                <div className="mt-0.5 text-[12px] font-semibold tabular-nums text-white">{t.points ?? "—"}</div>
               </div>
             </div>
 
             <div
               className={clsx(
-                "absolute inset-y-0 left-0 w-[3px]",
+                "absolute inset-y-2 left-0 w-[3px] rounded-full",
                 isEuroCup
                   ? rank <= 8
                     ? "bg-cyan-400"
@@ -752,18 +704,21 @@ export default function LeagueTablePage() {
                   : "bg-transparent"
               )}
             />
-          </div>
+          </button>
         );
       })}
 
       {!loading && tableRows.length === 0 && (
-        <div
-          className={clsx(
-            "rounded-2xl border border-white/5 bg-white/[0.02]",
-            "px-4 py-5 text-center text-sm text-slate-400"
-          )}
-        >
-          Нет данных
+        <div className="rounded-[22px] border border-white/[0.05] bg-gradient-to-br from-white/[0.035] to-white/[0.015] px-4 py-6 text-center ring-1 ring-white/[0.025]">
+          <div className="mx-auto grid h-10 w-10 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.03] text-white/55">
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M6 10h8M6 6h8M6 14h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              <circle cx="10" cy="10" r="7.25" stroke="currentColor" strokeOpacity="0.55" />
+            </svg>
+          </div>
+          <div className="mt-3 text-sm text-slate-400">
+          {t("noData")}
+          </div>
         </div>
       )}
     </div>
@@ -789,7 +744,7 @@ export default function LeagueTablePage() {
             "px-4 py-5 text-center text-sm text-slate-400"
           )}
         >
-          Нет данных
+          {t("noData")}
         </div>
       )}
     </div>
@@ -819,7 +774,7 @@ export default function LeagueTablePage() {
                   "px-3 py-3 text-[11px] uppercase tracking-[0.18em] text-white/45"
                 )}
               >
-                Игрок
+                {t("player")}
               </TableHead>
               <TableHead
                 className={clsx(
@@ -827,7 +782,7 @@ export default function LeagueTablePage() {
                   "w-32 px-3 py-3 text-center text-[11px] uppercase tracking-[0.18em] text-white/45"
                 )}
               >
-                Голы
+                {t("goals")}
               </TableHead>
               <TableHead
                 className={clsx(
@@ -835,7 +790,7 @@ export default function LeagueTablePage() {
                   "w-32 px-3 py-3 text-center text-[11px] uppercase tracking-[0.18em] text-white/45"
                 )}
               >
-                Пенальти
+                {t("penalties")}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -878,7 +833,7 @@ export default function LeagueTablePage() {
                         {p.team_name}
                       </div>
                       <div className="truncate text-[11px] text-slate-500">
-                        {formatPlayerMeta(p)}
+                        {formatPlayerMeta(p, language)}
                       </div>
                     </div>
                   </div>
@@ -897,7 +852,7 @@ export default function LeagueTablePage() {
                   colSpan={4}
                   className="py-6 text-center text-slate-400"
                 >
-                  Нет данных
+                  {t("noData")}
                 </TableCell>
               </TableRow>
             )}
@@ -931,7 +886,7 @@ export default function LeagueTablePage() {
                   "px-3 py-3 text-[11px] uppercase tracking-[0.18em] text-white/45"
                 )}
               >
-                Игрок
+                {t("player")}
               </TableHead>
               <TableHead
                 className={clsx(
@@ -939,7 +894,7 @@ export default function LeagueTablePage() {
                   "w-32 px-3 py-3 text-center text-[11px] uppercase tracking-[0.18em] text-white/45"
                 )}
               >
-                Ассисты
+                {t("assists")}
               </TableHead>
               <TableHead
                 className={clsx(
@@ -990,7 +945,7 @@ export default function LeagueTablePage() {
                         {p.team_name}
                       </div>
                       <div className="truncate text-[11px] text-slate-500">
-                        {formatPlayerMeta(p)}
+                        {formatPlayerMeta(p, language)}
                       </div>
                     </div>
                   </div>
@@ -1009,7 +964,7 @@ export default function LeagueTablePage() {
                   colSpan={4}
                   className="py-6 text-center text-slate-400"
                 >
-                  Нет данных
+                  {t("noData")}
                 </TableCell>
               </TableRow>
             )}
@@ -1084,8 +1039,20 @@ export default function LeagueTablePage() {
           className="w-full rounded-xl border border-white/6 bg-white/[0.02] px-2.5 py-2 text-left transition hover:bg-white/[0.05]"
         >
           <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] text-white/40">
-            <span>{idx === 0 ? "Первый матч" : idx === 1 ? "Ответный матч" : `Матч ${idx + 1}`}</span>
-            <span>{leg.date ? new Date(leg.date).toLocaleDateString("ru-RU") : "—"}</span>
+            <span>
+              {idx === 0
+                ? language === "ru"
+                  ? "Первый матч"
+                  : "First leg"
+                : idx === 1
+                ? language === "ru"
+                  ? "Ответный матч"
+                  : "Second leg"
+                : language === "ru"
+                ? `Матч ${idx + 1}`
+                : `Match ${idx + 1}`}
+            </span>
+            <span>{leg.date ? new Date(leg.date).toLocaleDateString(language === "ru" ? "ru-RU" : "en-GB") : "—"}</span>
           </div>
           <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-white/80">
             <span className="min-w-0 flex-1 truncate">{match.left}</span>
@@ -1096,8 +1063,8 @@ export default function LeagueTablePage() {
           </div>
           {legHasPens ? (
             <div className="mt-1 text-[11px] text-white/45">
-              Осн./доп.: <span className="tabular-nums text-white/65">{legFtLeft ?? "—"}:{legFtRight ?? "—"}</span>
-              {" "}• пен.: <span className="tabular-nums text-white/65">{penLeft}:{penRight}</span>
+              {language === "ru" ? "Осн./доп.:" : "FT/AET:"} <span className="tabular-nums text-white/65">{legFtLeft ?? "—"}:{legFtRight ?? "—"}</span>
+              {" "}• {language === "ru" ? "пен." : "pens"}: <span className="tabular-nums text-white/65">{penLeft}:{penRight}</span>
             </div>
           ) : null}
         </button>
@@ -1131,7 +1098,7 @@ export default function LeagueTablePage() {
               <span className="min-w-0 flex-1 truncate">{match.left || "—"}</span>
               {leftWon && (
                 <span
-                  title="Прошёл дальше"
+                  title={language === "ru" ? "Прошёл дальше" : "Advanced"}
                   className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-emerald-200"
                 >
                   ✓
@@ -1159,7 +1126,7 @@ export default function LeagueTablePage() {
               <span className="min-w-0 flex-1 truncate">{match.right || "—"}</span>
               {rightWon && (
                 <span
-                  title="Прошёл дальше"
+                  title={language === "ru" ? "Прошёл дальше" : "Advanced"}
                   className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-emerald-200"
                 >
                   ✓
@@ -1175,7 +1142,7 @@ export default function LeagueTablePage() {
         <div className="mt-2.5 border-t border-white/8 pt-2 text-[10px] md:text-[11px] text-white/45">
           {hasMultipleLegs ? (
             <div className="flex items-center justify-between gap-2">
-              <span>Общий счёт</span>
+              <span>{language === "ru" ? "Общий счёт" : "Aggregate"}</span>
               <span className="tabular-nums text-white/72">
                 {match.agg_left ?? "—"}:{match.agg_right ?? "—"}
               </span>
@@ -1183,18 +1150,28 @@ export default function LeagueTablePage() {
           ) : null}
           {hasPens ? (
             <div className={clsx("flex items-center justify-between gap-2", hasMultipleLegs ? "mt-1" : "")}>
-              <span>Основное/доп. время</span>
+              <span>{language === "ru" ? "Основное/доп. время" : "FT/AET"}</span>
               <span className="tabular-nums text-white/68">
-                {match.ft_left ?? "—"}:{match.ft_right ?? "—"} • пен. {match.pen_left}:{match.pen_right}
+                {match.ft_left ?? "—"}:{match.ft_right ?? "—"} • {language === "ru" ? "пен." : "pens"} {match.pen_left}:{match.pen_right}
               </span>
             </div>
           ) : null}
           {hasMultipleLegs ? (
             <div className="mt-1 text-white/35">
-              {expanded ? "Нажмите, чтобы свернуть пару" : "Нажмите, чтобы раскрыть оба матча пары"}
+              {expanded
+                ? language === "ru"
+                  ? "Нажмите, чтобы свернуть пару"
+                  : "Tap to collapse the tie"
+                : language === "ru"
+                ? "Нажмите, чтобы раскрыть оба матча пары"
+                : "Tap to expand both legs"}
             </div>
           ) : clickable ? (
-            <div className="mt-1 text-white/35">Нажмите на карточку, чтобы открыть статистику матча</div>
+            <div className="mt-1 text-white/35">
+              {language === "ru"
+                ? "Нажмите на карточку, чтобы открыть статистику матча"
+                : "Tap the card to open match stats"}
+            </div>
           ) : null}
           {expanded && hasMultipleLegs ? (
             <div className="mt-2.5 space-y-2 border-t border-white/8 pt-2.5">
@@ -1210,7 +1187,7 @@ export default function LeagueTablePage() {
     <div className={clsx(BG_PANEL, "h-full p-3 md:p-4", extraClass)}>
       <div className="mb-2.5 md:mb-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-          Стадия
+          {t("stage")}
         </div>
         <div className="mt-1 text-sm font-semibold text-white md:text-base">{title}</div>
       </div>
@@ -1219,7 +1196,7 @@ export default function LeagueTablePage() {
           matches.map(renderBracketMatch)
         ) : (
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-5 text-center text-sm text-slate-400">
-            Нет данных
+            {t("noData")}
           </div>
         )}
       </div>
@@ -1263,7 +1240,9 @@ export default function LeagueTablePage() {
           </div>
         </div>
         <div className="text-xs text-slate-400">
-          На широких экранах сетка ужимается в ширину страницы, на узких листается по горизонтали.
+          {language === "ru"
+            ? "На широких экранах сетка ужимается в ширину страницы, на узких листается по горизонтали."
+            : "On wide screens the bracket fits the page width, and on narrow screens it scrolls horizontally."}
         </div>
       </div>
     );
@@ -1275,70 +1254,66 @@ export default function LeagueTablePage() {
 
   const headerSubtitle =
     view === "playoff"
-      ? isEuroCup
-        ? `Турнирная сетка плей-офф ${leagueParam}. Пары, суммарный счёт и исход каждой стадии.`
-        : "Турнирная сетка плей-офф сборного турнира. Пары, суммарный счёт и исход каждой стадии."
-      :
-    view === "scorers"
-      ? "Топ бомбардиров выбранной лиги и сезона. Нажмите на игрока, чтобы открыть детальную статистику."
+      ? t("playoffSubtitle")
+      : view === "scorers"
+      ? t("scorersSubtitle")
       : view === "assists"
-      ? "Топ ассистентов выбранной лиги и сезона. Нажмите на игрока, чтобы открыть детальную статистику."
+      ? t("assistsSubtitle")
       : isIntlGroupedLeague
-      ? "Групповой этап разбит на отдельные мини-таблицы, как в классических международных турнирах."
-      : "Позиции команд, очки и форма в выбранном сезоне. Нажмите на команду, чтобы открыть детальную аналитику.";
+      ? t("groupedTableSubtitle")
+      : t("tableSubtitle");
   const tableHint =
     view === "playoff"
-      ? "Сетка плей-офф по стадиям турнира."
-      :
-    view === "scorers"
-      ? "Сортировка по количеству голов, клик по строке — карточка игрока."
+      ? t("playoffSubtitle")
+      : view === "scorers"
+      ? t("scorersSubtitle")
       : view === "assists"
-      ? "Сортировка по количеству ассистов, клик по строке — карточка игрока."
+      ? t("assistsSubtitle")
       : isIntlGroupedLeague
-      ? "Каждая группа показана отдельным компактным блоком."
-      : "Форма — последние 5 матчей. Кликни на команду, чтобы открыть подробную аналитику.";
+      ? t("groupedTableSubtitle")
+      : t("tableHint");
 
   return (
-    <div className="w-full px-4 py-8 space-y-8">
+    <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
       {/* HEADER */}
       <div>
-        <div className="panel rounded-3xl p-6 md:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
+        <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+            <div className="min-w-0 space-y-1.5">
+              <div className="type-eyebrow">
                 {view === "scorers"
-                  ? "СТАТИСТИКА ИГРОКОВ"
+                  ? t("playerStatsEyebrow")
                   : view === "assists"
-                  ? "СТАТИСТИКА ИГРОКОВ"
-                  : "ТАБЛИЦА ТУРНИРА"}
+                  ? t("playerStatsEyebrow")
+                  : t("standingsEyebrow")}
               </div>
 
-              <div className="text-xl sm:text-2xl font-semibold text-white">
+              <div className="type-page-title text-xl sm:text-2xl">
                 {view === "scorers"
-                  ? `Бомбардиры · ${leagueParam}`
+                  ? `${t("scorers")} · ${leagueParam}`
                   : view === "assists"
-                  ? `Ассисты · ${leagueParam}`
+                  ? `${t("assists")} · ${leagueParam}`
                   : leagueParam}
               </div>
 
-              <p className="text-sm text-slate-400 max-w-[640px] leading-relaxed">
+              <p className="type-subtitle max-w-[640px]">
                 {headerSubtitle}
               </p>
             </div>
 
             {!(isEuroCup && view === "playoff") && (
-              <div className="flex flex-col items-end">
+              <div className="flex w-full min-w-0 flex-col sm:w-auto sm:items-end">
                 <span className="text-[10px] uppercase tracking-[0.18em] text-muted mb-1">
-                  СЕЗОН
+                  {t("seasonUpper")}
                 </span>
                 <select
                   value={season}
                   onChange={(e) => setSeason(e.target.value)}
-                  className="h-8 rounded-full bg-white/5 border border-white/10 px-3 text-[13px] text-white/80 tabular-nums focus:outline-none focus:ring-1 focus:ring-white/20"
+                  className="surface-select h-8 text-[13px] text-white/80"
                 >
                   {seasonOptions.map((s) => (
                     <option key={s} value={s} className="bg-slate-900">
-                      {seasonLabel(leagueParam, s)}
+                      {seasonLabel(leagueParam, s, language)}
                     </option>
                   ))}
                 </select>
@@ -1349,7 +1324,7 @@ export default function LeagueTablePage() {
           {/* tabs */}
           <SegmentedTabs
             className="mt-5"
-            items={availableViews.map((v) => ({ key: v.code, label: v.label }))}
+            items={availableViews.map((v) => ({ key: v.code, label: viewLabel(v.code, v.label) }))}
             value={view}
             onChange={setView}
           />
@@ -1359,7 +1334,7 @@ export default function LeagueTablePage() {
 
       {/* loading */}
       {loading && (
-        <div className="text-sm text-white/45">Загрузка данных…</div>
+        <div className="text-sm text-white/45">{t("dataLoading")}</div>
       )}
 
       {/* content */}

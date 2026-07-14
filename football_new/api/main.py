@@ -15,6 +15,7 @@ from api.insights import router as insights_router
 from api.search import router as search_router
 from api.league_analytics import router as league_analytics_router
 from api.audit import router as audit_router
+from api.image_proxy import router as image_proxy_router
 
 # новые (используемые фронтендом)
 from api.top_assists import router as top_assists_router
@@ -124,6 +125,7 @@ app.include_router(insights_router, tags=["Insights"])
 app.include_router(search_router, tags=["Search"])
 app.include_router(league_analytics_router, tags=["League Analytics"])
 app.include_router(audit_router, tags=["Audit"])
+app.include_router(image_proxy_router, tags=["Image Proxy"])
 app.include_router(top_scorers_router, tags=["Топ бомбардиры"])
 app.include_router(top_assists_router, tags=["Топ ассистенты"])
 app.include_router(top_rated_players_router, tags=["Топ игроки по рейтингу"])

@@ -1,0 +1,36 @@
+{
+  "rows": 6354,
+  "missing_required": [],
+  "coverage": {
+    "fixture_id": 1.0,
+    "league_id": 1.0,
+    "season": 1.0,
+    "round": 1.0,
+    "match_start_utc": 1.0,
+    "prediction_time_utc": 1.0,
+    "mode": 1.0,
+    "hours_before_match": 1.0,
+    "home_team_id": 1.0,
+    "away_team_id": 1.0,
+    "home_goals": 1.0,
+    "away_goals": 1.0,
+    "target_result": 1.0,
+    "target_over25": 1.0,
+    "odds_snapshot_time_utc": 1.0,
+    "avg_odds_home_open": 1.0,
+    "avg_odds_draw_open": 1.0,
+    "avg_odds_away_open": 1.0,
+    "avg_odds_home_current": 1.0,
+    "avg_odds_draw_current": 1.0,
+    "avg_odds_away_current": 1.0,
+    "n_bookmakers_open": 1.0,
+    "n_bookmakers_current": 1.0
+  },
+  "time_violations": {
+    "odds_after_prediction": 0
+  },
+  "market_timing": {
+    "synthetic_same_snapshot": 6354,
+    "rows_with_real_open_current_difference": 0
+  }
+}

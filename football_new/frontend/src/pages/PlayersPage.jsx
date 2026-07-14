@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 function InfoRow({ label, value }) {
   return (
@@ -11,21 +12,22 @@ function InfoRow({ label, value }) {
   );
 }
 
-function RecentTable({ items }) {
+function RecentTable({ items, language = "ru" }) {
+  const isRu = language === "ru";
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="bg-surface-2/80 text-slate-300">
           <tr className="[&>th]:px-3 [&>th]:py-2">
-            <th className="text-left">Дата</th>
-            <th className="text-left">Лига</th>
-            <th className="text-left">Соперник</th>
-            <th className="text-center">Мин</th>
-            <th className="text-center">Г</th>
-            <th className="text-center">П</th>
-            <th className="text-center">ЖК</th>
-            <th className="text-center">КК</th>
-            <th className="text-center">Рейт</th>
+            <th className="text-left">{isRu ? "Дата" : "Date"}</th>
+            <th className="text-left">{isRu ? "Лига" : "League"}</th>
+            <th className="text-left">{isRu ? "Соперник" : "Opponent"}</th>
+            <th className="text-center">{isRu ? "Мин" : "Min"}</th>
+            <th className="text-center">{isRu ? "Г" : "G"}</th>
+            <th className="text-center">{isRu ? "П" : "A"}</th>
+            <th className="text-center">{isRu ? "ЖК" : "YC"}</th>
+            <th className="text-center">{isRu ? "КК" : "RC"}</th>
+            <th className="text-center">{isRu ? "Рейт" : "Rate"}</th>
           </tr>
         </thead>
         <tbody>
@@ -48,21 +50,22 @@ function RecentTable({ items }) {
   );
 }
 
-function CareerTable({ items }) {
+function CareerTable({ items, language = "ru" }) {
+  const isRu = language === "ru";
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="bg-surface-2/80 text-slate-300">
           <tr className="[&>th]:px-3 [&>th]:py-2">
-            <th className="text-left">Сезон</th>
-            <th className="text-left">Клуб</th>
-            <th className="text-center">И</th>
-            <th className="text-center">Мин</th>
-            <th className="text-center">Г</th>
-            <th className="text-center">П</th>
-            <th className="text-center">ЖК</th>
-            <th className="text-center">КК</th>
-            <th className="text-center">Рейт</th>
+            <th className="text-left">{isRu ? "Сезон" : "Season"}</th>
+            <th className="text-left">{isRu ? "Клуб" : "Club"}</th>
+            <th className="text-center">{isRu ? "И" : "Apps"}</th>
+            <th className="text-center">{isRu ? "Мин" : "Min"}</th>
+            <th className="text-center">{isRu ? "Г" : "G"}</th>
+            <th className="text-center">{isRu ? "П" : "A"}</th>
+            <th className="text-center">{isRu ? "ЖК" : "YC"}</th>
+            <th className="text-center">{isRu ? "КК" : "RC"}</th>
+            <th className="text-center">{isRu ? "Рейт" : "Rate"}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,6 +89,8 @@ function CareerTable({ items }) {
 }
 
 export default function PlayerPage() {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   const { id } = useParams();
   const [search] = useSearchParams();
   const league = search.get("league") || "Premier League";
@@ -112,7 +117,7 @@ export default function PlayerPage() {
     return ()=>{ c=true };
   }, [id]);
 
-  const fullName = ov?.player || "Игрок";
+  const fullName = ov?.player || (isRu ? "Игрок" : "Player");
   const photo = `/player_photos/${id}.png`;
 
   return (
@@ -135,8 +140,8 @@ export default function PlayerPage() {
             </div>
             {/* справа — базовые поля (если появятся age/position — подставятся) */}
             <div className="w-64 hidden sm:block">
-              <InfoRow label="Возраст" value={ov?.age} />
-              <InfoRow label="Позиция" value={ov?.position} />
+              <InfoRow label={isRu ? "Возраст" : "Age"} value={ov?.age} />
+              <InfoRow label={isRu ? "Позиция" : "Position"} value={ov?.position} />
             </div>
           </div>
         </CardContent>
@@ -145,26 +150,26 @@ export default function PlayerPage() {
       {/* Последние игры */}
       <Card className="panel">
         <CardContent className="type-section p-4">
-          <div className="type-card-title">Последние игры</div>
+          <div className="type-card-title">{isRu ? "Последние игры" : "Recent matches"}</div>
           <div className="type-caption">
-            Последние матчи игрока: минуты, голы, ассисты и рейтинг.
+            {isRu ? "Последние матчи игрока: минуты, голы, ассисты и рейтинг." : "Player recent matches: minutes, goals, assists, and rating."}
           </div>
-          {recent.length ? <RecentTable items={recent} /> : <div className="text-sm text-slate-400">Нет данных.</div>}
+          {recent.length ? <RecentTable items={recent} language={language} /> : <div className="text-sm text-slate-400">{isRu ? "Нет данных." : "No data."}</div>}
         </CardContent>
       </Card>
 
       {/* Карьера */}
       <Card className="panel">
         <CardContent className="type-section p-4">
-          <div className="type-card-title">Карьера (по сезонам и клубам)</div>
+          <div className="type-card-title">{isRu ? "Карьера (по сезонам и клубам)" : "Career (by seasons and clubs)"}</div>
           <div className="type-caption">
-            Итоговые значения по сезону: игры, минуты, результативность.
+            {isRu ? "Итоговые значения по сезону: игры, минуты, результативность." : "Season totals: appearances, minutes, and production."}
           </div>
-          {career.length ? <CareerTable items={career} /> : <div className="text-sm text-slate-400">Нет данных.</div>}
+          {career.length ? <CareerTable items={career} language={language} /> : <div className="text-sm text-slate-400">{isRu ? "Нет данных." : "No data."}</div>}
         </CardContent>
       </Card>
 
-      {loading && <div className="text-sm text-slate-400">Загрузка…</div>}
+      {loading && <div className="text-sm text-slate-400">{isRu ? "Загрузка…" : "Loading…"}</div>}
     </div>
   );
 }

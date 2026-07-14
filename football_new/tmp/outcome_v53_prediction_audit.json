@@ -1,0 +1,294 @@
+{
+  "overall": {
+    "model": {
+      "matches": 1478,
+      "correct": 778,
+      "accuracy": 0.526387
+    },
+    "market": {
+      "matches": 1478,
+      "correct": 792,
+      "accuracy": 0.535859
+    }
+  },
+  "by_league": {
+    "model": [
+      {
+        "matches": 269,
+        "correct": 150,
+        "accuracy": 0.557621,
+        "league": "Bundesliga"
+      },
+      {
+        "matches": 312,
+        "correct": 160,
+        "accuracy": 0.512821,
+        "league": "La Liga"
+      },
+      {
+        "matches": 235,
+        "correct": 119,
+        "accuracy": 0.506383,
+        "league": "Ligue 1"
+      },
+      {
+        "matches": 323,
+        "correct": 168,
+        "accuracy": 0.520124,
+        "league": "Premier League"
+      },
+      {
+        "matches": 339,
+        "correct": 181,
+        "accuracy": 0.533923,
+        "league": "Serie A"
+      }
+    ],
+    "market": [
+      {
+        "matches": 269,
+        "correct": 149,
+        "accuracy": 0.553903,
+        "league": "Bundesliga"
+      },
+      {
+        "matches": 312,
+        "correct": 172,
+        "accuracy": 0.551282,
+        "league": "La Liga"
+      },
+      {
+        "matches": 235,
+        "correct": 122,
+        "accuracy": 0.519149,
+        "league": "Ligue 1"
+      },
+      {
+        "matches": 323,
+        "correct": 168,
+        "accuracy": 0.520124,
+        "league": "Premier League"
+      },
+      {
+        "matches": 339,
+        "correct": 181,
+        "accuracy": 0.533923,
+        "league": "Serie A"
+      }
+    ]
+  },
+  "by_predicted_outcome": {
+    "model": [
+      {
+        "matches": 552,
+        "correct": 275,
+        "accuracy": 0.498188,
+        "pred_outcome": "Away"
+      },
+      {
+        "matches": 28,
+        "correct": 7,
+        "accuracy": 0.25,
+        "pred_outcome": "Draw"
+      },
+      {
+        "matches": 898,
+        "correct": 496,
+        "accuracy": 0.552339,
+        "pred_outcome": "Home"
+      }
+    ],
+    "market": [
+      {
+        "matches": 490,
+        "correct": 256,
+        "accuracy": 0.522449,
+        "market_pred_outcome": "Away"
+      },
+      {
+        "matches": 1,
+        "correct": 1,
+        "accuracy": 1.0,
+        "market_pred_outcome": "Draw"
+      },
+      {
+        "matches": 987,
+        "correct": 535,
+        "accuracy": 0.542047,
+        "market_pred_outcome": "Home"
+      }
+    ]
+  },
+  "confusion_model": [
+    {
+      "actual": "Away",
+      "Away": 275,
+      "Away_share": 0.595238,
+      "Draw": 8,
+      "Draw_share": 0.017316,
+      "Home": 179,
+      "Home_share": 0.387446
+    },
+    {
+      "actual": "Draw",
+      "Away": 143,
+      "Away_share": 0.383378,
+      "Draw": 7,
+      "Draw_share": 0.018767,
+      "Home": 223,
+      "Home_share": 0.597855
+    },
+    {
+      "actual": "Home",
+      "Away": 134,
+      "Away_share": 0.208398,
+      "Draw": 13,
+      "Draw_share": 0.020218,
+      "Home": 496,
+      "Home_share": 0.771384
+    }
+  ],
+  "confusion_market": [
+    {
+      "actual": "Away",
+      "Away": 256,
+      "Away_share": 0.554113,
+      "Draw": 0,
+      "Draw_share": 0.0,
+      "Home": 206,
+      "Home_share": 0.445887
+    },
+    {
+      "actual": "Draw",
+      "Away": 126,
+      "Away_share": 0.337802,
+      "Draw": 1,
+      "Draw_share": 0.002681,
+      "Home": 246,
+      "Home_share": 0.659517
+    },
+    {
+      "actual": "Home",
+      "Away": 108,
+      "Away_share": 0.167963,
+      "Draw": 0,
+      "Draw_share": 0.0,
+      "Home": 535,
+      "Home_share": 0.832037
+    }
+  ],
+  "confidence_buckets_model": [
+    {
+      "bucket": "<=0.40",
+      "matches": 253,
+      "correct": 101,
+      "accuracy": 0.399209
+    },
+    {
+      "bucket": "0.40-0.50",
+      "matches": 483,
+      "correct": 207,
+      "accuracy": 0.428571
+    },
+    {
+      "bucket": "0.50-0.60",
+      "matches": 367,
+      "correct": 210,
+      "accuracy": 0.572207
+    },
+    {
+      "bucket": "0.60-0.70",
+      "matches": 245,
+      "correct": 161,
+      "accuracy": 0.657143
+    },
+    {
+      "bucket": "0.70+",
+      "matches": 130,
+      "correct": 99,
+      "accuracy": 0.761538
+    }
+  ],
+  "confidence_buckets_market": [
+    {
+      "bucket": "<=0.40",
+      "matches": 249,
+      "correct": 91,
+      "accuracy": 0.365462
+    },
+    {
+      "bucket": "0.40-0.50",
+      "matches": 517,
+      "correct": 248,
+      "accuracy": 0.479691
+    },
+    {
+      "bucket": "0.50-0.60",
+      "matches": 368,
+      "correct": 202,
+      "accuracy": 0.548913
+    },
+    {
+      "bucket": "0.60-0.70",
+      "matches": 209,
+      "correct": 150,
+      "accuracy": 0.717703
+    },
+    {
+      "bucket": "0.70+",
+      "matches": 135,
+      "correct": 101,
+      "accuracy": 0.748148
+    }
+  ],
+  "windows": [
+    {
+      "window": "2026-04-19__2026-05-19",
+      "n": 217,
+      "model_accuracy": 0.488479,
+      "market_accuracy": 0.506912
+    },
+    {
+      "window": "2026-03-20__2026-04-19",
+      "n": 165,
+      "model_accuracy": 0.527273,
+      "market_accuracy": 0.509091
+    },
+    {
+      "window": "2026-02-18__2026-03-20",
+      "n": 193,
+      "model_accuracy": 0.533679,
+      "market_accuracy": 0.53886
+    },
+    {
+      "window": "2026-01-19__2026-02-18",
+      "n": 192,
+      "model_accuracy": 0.536458,
+      "market_accuracy": 0.541667
+    },
+    {
+      "window": "2025-12-20__2026-01-19",
+      "n": 188,
+      "model_accuracy": 0.521277,
+      "market_accuracy": 0.521277
+    },
+    {
+      "window": "2025-11-20__2025-12-20",
+      "n": 221,
+      "model_accuracy": 0.520362,
+      "market_accuracy": 0.552036
+    },
+    {
+      "window": "2025-10-21__2025-11-20",
+      "n": 163,
+      "model_accuracy": 0.527607,
+      "market_accuracy": 0.546012
+    },
+    {
+      "window": "2024-04-29__2024-05-29",
+      "n": 139,
+      "model_accuracy": 0.57554,
+      "market_accuracy": 0.582734
+    }
+  ]
+}

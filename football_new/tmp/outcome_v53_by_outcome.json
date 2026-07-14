@@ -1,0 +1,35 @@
+{
+  "total_bets": 398,
+  "total_wins": 148,
+  "total_avg_odds": 2.659895,
+  "total_roi": -0.072729,
+  "by_outcome": [
+    {
+      "outcome": "Away",
+      "bets": 267,
+      "wins": 111,
+      "hit_rate": 0.41573,
+      "avg_odds": 2.388091,
+      "profit": -11.392,
+      "roi": -0.042667
+    },
+    {
+      "outcome": "Draw",
+      "bets": 96,
+      "wins": 26,
+      "hit_rate": 0.270833,
+      "avg_odds": 3.449437,
+      "profit": -8.694,
+      "roi": -0.090563
+    },
+    {
+      "outcome": "Home",
+      "bets": 35,
+      "wins": 11,
+      "hit_rate": 0.314286,
+      "avg_odds": 2.567771,
+      "profit": -8.86,
+      "roi": -0.253143
+    }
+  ]
+}

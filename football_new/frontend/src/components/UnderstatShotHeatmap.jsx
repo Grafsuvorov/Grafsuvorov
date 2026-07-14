@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const clamp01 = (v) => Math.max(0, Math.min(1, Number(v || 0)));
 
@@ -7,12 +8,25 @@ const parseNum = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+function compactTeamLabel(name, fallback) {
+  const value = String(name || fallback || "").trim();
+  if (!value) return fallback;
+  if (value.length <= 12) return value;
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length > 1) {
+    const label = `${parts[0].slice(0, 3)}. ${parts[1]}`;
+    return label.length <= 12 ? label : parts[0];
+  }
+  return value.slice(0, 12);
+}
+
 function ShotTooltip({ shot }) {
+  const { language } = useLanguage();
   if (!shot) return null;
   const minute = parseNum(shot.minute, null);
   return (
     <div className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg border border-white/10 bg-[rgba(15,23,42,0.96)] px-2 py-1 text-[11px] text-white shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-      <div className="font-semibold">{shot.player_name || "Игрок"}</div>
+      <div className="font-semibold">{shot.player_name || (language === "ru" ? "Игрок" : "Player")}</div>
       <div className="text-white/80">
         {minute != null ? `${minute}'` : "—"} · xG {parseNum(shot.xg).toFixed(2)}
       </div>
@@ -23,9 +37,10 @@ function ShotTooltip({ shot }) {
 
 export default function UnderstatShotHeatmap({
   shots = [],
-  homeTeam = "Хозяева",
-  awayTeam = "Гости",
+  homeTeam = "Home",
+  awayTeam = "Away",
 }) {
+  const { language } = useLanguage();
   const [teamView, setTeamView] = useState("all");
   const [mode, setMode] = useState("heat");
   const [hoveredShotId, setHoveredShotId] = useState(null);
@@ -71,52 +86,54 @@ export default function UnderstatShotHeatmap({
 
   const homeCount = filteredShots.filter((s) => s.side === "h").length;
   const awayCount = filteredShots.filter((s) => s.side === "a").length;
+  const homeLabel = language === "ru" ? compactTeamLabel(homeTeam, "Хозяева") : compactTeamLabel(homeTeam, "Home");
+  const awayLabel = language === "ru" ? compactTeamLabel(awayTeam, "Гости") : compactTeamLabel(awayTeam, "Away");
 
   return (
-    <div className="rounded-[14px] border border-white/10 bg-[#121826] p-4 shadow-[0_0_18px_rgba(124,140,255,0.12)]">
+    <div className="overflow-hidden rounded-[14px] border border-white/10 bg-[#121826] p-3 shadow-[0_0_18px_rgba(124,140,255,0.12)] sm:p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-white">Карта ударов</div>
-          <div className="text-[12px] text-white/55">Тепловая карта на футбольном поле</div>
+          <div className="text-sm font-semibold text-white">{language === "ru" ? "Карта ударов" : "Shot map"}</div>
+          <div className="text-[12px] text-white/55">{language === "ru" ? "Тепловая карта на футбольном поле" : "Shot heatmap on the pitch"}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5">
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="flex min-w-0 rounded-full border border-white/10 bg-white/5 p-0.5">
             <button
               type="button"
               onClick={() => setMode("heat")}
-              className={mode === "heat" ? "rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white" : "rounded-full px-2 py-1 text-[11px] text-white/65"}
+              className={mode === "heat" ? "flex-1 rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white sm:flex-none" : "flex-1 rounded-full px-2 py-1 text-[11px] text-white/65 sm:flex-none"}
             >
-              Тепловая
+              {language === "ru" ? "Тепловая" : "Heat"}
             </button>
             <button
               type="button"
               onClick={() => setMode("dots")}
-              className={mode === "dots" ? "rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white" : "rounded-full px-2 py-1 text-[11px] text-white/65"}
+              className={mode === "dots" ? "flex-1 rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white sm:flex-none" : "flex-1 rounded-full px-2 py-1 text-[11px] text-white/65 sm:flex-none"}
             >
-              Точки
+              {language === "ru" ? "Точки" : "Dots"}
             </button>
           </div>
-          <div className="flex rounded-full border border-white/10 bg-white/5 p-0.5">
+          <div className="flex min-w-0 rounded-full border border-white/10 bg-white/5 p-0.5">
             <button
               type="button"
               onClick={() => setTeamView("all")}
               className={teamView === "all" ? "rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white" : "rounded-full px-2 py-1 text-[11px] text-white/65"}
             >
-              Все
+              {language === "ru" ? "Все" : "All"}
             </button>
             <button
               type="button"
               onClick={() => setTeamView("h")}
-              className={teamView === "h" ? "rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white" : "rounded-full px-2 py-1 text-[11px] text-white/65"}
+              className={teamView === "h" ? "min-w-0 flex-1 rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white sm:flex-none" : "min-w-0 flex-1 rounded-full px-2 py-1 text-[11px] text-white/65 sm:flex-none"}
             >
-              {homeTeam}
+              <span className="block truncate">{homeLabel}</span>
             </button>
             <button
               type="button"
               onClick={() => setTeamView("a")}
-              className={teamView === "a" ? "rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white" : "rounded-full px-2 py-1 text-[11px] text-white/65"}
+              className={teamView === "a" ? "min-w-0 flex-1 rounded-full bg-primary/25 px-2 py-1 text-[11px] text-white sm:flex-none" : "min-w-0 flex-1 rounded-full px-2 py-1 text-[11px] text-white/65 sm:flex-none"}
             >
-              {awayTeam}
+              <span className="block truncate">{awayLabel}</span>
             </button>
           </div>
         </div>
@@ -124,7 +141,7 @@ export default function UnderstatShotHeatmap({
 
       {filteredShots.length === 0 ? (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/65">
-          Нет данных по ударам для выбранного фильтра.
+          {language === "ru" ? "Нет данных по ударам для выбранного фильтра." : "No shot data for the selected filter."}
         </div>
       ) : (
         <>
@@ -217,12 +234,14 @@ export default function UnderstatShotHeatmap({
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-white/65">
             <div>
-              Удары: {filteredShots.length} · Хозяева: {homeCount} · Гости: {awayCount}
+              {language === "ru"
+                ? `Удары: ${filteredShots.length} · Хозяева: ${homeCount} · Гости: ${awayCount}`
+                : `Shots: ${filteredShots.length} · Home: ${homeCount} · Away: ${awayCount}`}
             </div>
             <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[rgba(46,204,113,0.95)]" /> Гол</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[rgba(157,139,255,0.9)]" /> Хозяева</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[rgba(99,179,237,0.9)]" /> Гости</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[rgba(46,204,113,0.95)]" /> {language === "ru" ? "Гол" : "Goal"}</span>
+              <span className="inline-flex min-w-0 items-center gap-1"><span className="h-2 w-2 rounded-full bg-[rgba(157,139,255,0.9)]" /> <span className="truncate">{homeLabel}</span></span>
+              <span className="inline-flex min-w-0 items-center gap-1"><span className="h-2 w-2 rounded-full bg-[rgba(99,179,237,0.9)]" /> <span className="truncate">{awayLabel}</span></span>
             </div>
           </div>
         </>

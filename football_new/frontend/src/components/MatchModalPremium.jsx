@@ -2,9 +2,12 @@ import React, { Suspense } from "react";
 import clsx from "clsx";
 import SafeImg from "@/components/SafeImg";
 import TeamLogoLink from "@/components/TeamLogoLink";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 const MatchStatsBlockV3 = React.lazy(() => import("@/components/MatchStatsBlockV3"));
 
 export default function MatchModalPremium({ match, onClose }) {
+  const { language } = useLanguage();
+  const isRu = language === "ru";
   if (!match) return null;
 
   return (
@@ -14,14 +17,14 @@ export default function MatchModalPremium({ match, onClose }) {
     >
       <div
         className={clsx(
-          "panel bg-surface-2/90 rounded-3xl border border-glass shadow-[0_0_50px_rgba(0,0,0,0.65)]",
+          "surface-toolbar shadow-[0_0_50px_rgba(0,0,0,0.65)]",
           "w-full max-w-4xl p-6 relative overflow-y-auto max-h-[90vh]"
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
         <button
-          className="absolute top-3 right-3 text-slate-400 hover:text-white transition"
+          className="surface-button absolute top-3 right-3 h-8 w-8 justify-center px-0 text-slate-300"
           onClick={onClose}
         >
           ✕
@@ -44,7 +47,7 @@ export default function MatchModalPremium({ match, onClose }) {
 
           <div className="text-center">
             <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">
-              Счёт
+              {isRu ? "Счёт" : "Score"}
             </div>
             <div className="text-white text-3xl font-bold">
               {match.score || "—"}
@@ -69,7 +72,7 @@ export default function MatchModalPremium({ match, onClose }) {
 
         {/* STATS */}
         <div className="mt-6">
-          <Suspense fallback={<div className="text-slate-400">Загружаем…</div>}>
+          <Suspense fallback={<div className="surface-loading">{isRu ? "Загружаем…" : "Loading…"}</div>}>
             <MatchStatsBlockV3 stats={match} />
           </Suspense>
         </div>

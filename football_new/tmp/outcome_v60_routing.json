@@ -1,0 +1,409 @@
+{
+  "overall": {
+    "market": {
+      "matches": 1478,
+      "correct": 792,
+      "accuracy": 0.535859,
+      "draw_predictions": 1,
+      "draw_precision": 1.0,
+      "draw_recall": 0.002681
+    },
+    "v5_3": {
+      "matches": 1478,
+      "correct": 778,
+      "accuracy": 0.526387,
+      "draw_predictions": 28,
+      "draw_precision": 0.25,
+      "draw_recall": 0.018767
+    },
+    "v5_5": {
+      "matches": 1478,
+      "correct": 781,
+      "accuracy": 0.528417,
+      "draw_predictions": 51,
+      "draw_precision": 0.352941,
+      "draw_recall": 0.048257
+    },
+    "routed_v60": {
+      "matches": 1478,
+      "correct": 785,
+      "accuracy": 0.531123,
+      "draw_predictions": 13,
+      "draw_precision": 0.307692,
+      "draw_recall": 0.010724
+    }
+  },
+  "route_counts": {
+    "v5_5": 9,
+    "market": 23,
+    "v5_3": 7
+  },
+  "route_by_league": {
+    "Bundesliga": {
+      "v5_5": 3,
+      "market": 5
+    },
+    "La Liga": {
+      "market": 5,
+      "v5_3": 3
+    },
+    "Ligue 1": {
+      "market": 4,
+      "v5_5": 2,
+      "v5_3": 1
+    },
+    "Premier League": {
+      "v5_5": 4,
+      "market": 4
+    },
+    "Serie A": {
+      "market": 5,
+      "v5_3": 3
+    }
+  },
+  "windows": [
+    {
+      "window": "2026-04-19__2026-05-19",
+      "n": 217,
+      "routing": {
+        "Bundesliga": "v5_5",
+        "La Liga": "market",
+        "Ligue 1": "market",
+        "Premier League": "v5_5",
+        "Serie A": "market"
+      },
+      "market": {
+        "matches": 217,
+        "correct": 110,
+        "accuracy": 0.506912,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 217,
+        "correct": 106,
+        "accuracy": 0.488479,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_5": {
+        "matches": 217,
+        "correct": 103,
+        "accuracy": 0.474654,
+        "draw_predictions": 8,
+        "draw_precision": 0.25,
+        "draw_recall": 0.035088
+      },
+      "routed": {
+        "matches": 217,
+        "correct": 106,
+        "accuracy": 0.488479,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      }
+    },
+    {
+      "window": "2026-03-20__2026-04-19",
+      "n": 165,
+      "routing": {
+        "Bundesliga": "market",
+        "La Liga": "market",
+        "Ligue 1": "market",
+        "Premier League": "market",
+        "Serie A": "v5_3"
+      },
+      "market": {
+        "matches": 165,
+        "correct": 84,
+        "accuracy": 0.509091,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 165,
+        "correct": 87,
+        "accuracy": 0.527273,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_5": {
+        "matches": 165,
+        "correct": 85,
+        "accuracy": 0.515152,
+        "draw_predictions": 2,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "routed": {
+        "matches": 165,
+        "correct": 84,
+        "accuracy": 0.509091,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      }
+    },
+    {
+      "window": "2026-02-18__2026-03-20",
+      "n": 193,
+      "routing": {
+        "Bundesliga": "market",
+        "La Liga": "market",
+        "Ligue 1": "market",
+        "Premier League": "v5_5",
+        "Serie A": "v5_3"
+      },
+      "market": {
+        "matches": 193,
+        "correct": 104,
+        "accuracy": 0.53886,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 193,
+        "correct": 103,
+        "accuracy": 0.533679,
+        "draw_predictions": 3,
+        "draw_precision": 0.333333,
+        "draw_recall": 0.019231
+      },
+      "v5_5": {
+        "matches": 193,
+        "correct": 99,
+        "accuracy": 0.512953,
+        "draw_predictions": 7,
+        "draw_precision": 0.428571,
+        "draw_recall": 0.057692
+      },
+      "routed": {
+        "matches": 193,
+        "correct": 103,
+        "accuracy": 0.533679,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      }
+    },
+    {
+      "window": "2026-01-19__2026-02-18",
+      "n": 192,
+      "routing": {
+        "Bundesliga": "market",
+        "La Liga": "market",
+        "Ligue 1": "v5_5",
+        "Premier League": "v5_5",
+        "Serie A": "v5_3"
+      },
+      "market": {
+        "matches": 192,
+        "correct": 104,
+        "accuracy": 0.541667,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 192,
+        "correct": 103,
+        "accuracy": 0.536458,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_5": {
+        "matches": 192,
+        "correct": 102,
+        "accuracy": 0.53125,
+        "draw_predictions": 1,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "routed": {
+        "matches": 192,
+        "correct": 107,
+        "accuracy": 0.557292,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      }
+    },
+    {
+      "window": "2025-12-20__2026-01-19",
+      "n": 188,
+      "routing": {
+        "Bundesliga": "market",
+        "La Liga": "v5_3",
+        "Ligue 1": "v5_5",
+        "Premier League": "v5_5",
+        "Serie A": "market"
+      },
+      "market": {
+        "matches": 188,
+        "correct": 98,
+        "accuracy": 0.521277,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 188,
+        "correct": 98,
+        "accuracy": 0.521277,
+        "draw_predictions": 6,
+        "draw_precision": 0.666667,
+        "draw_recall": 0.067797
+      },
+      "v5_5": {
+        "matches": 188,
+        "correct": 99,
+        "accuracy": 0.526596,
+        "draw_predictions": 3,
+        "draw_precision": 0.666667,
+        "draw_recall": 0.033898
+      },
+      "routed": {
+        "matches": 188,
+        "correct": 96,
+        "accuracy": 0.510638,
+        "draw_predictions": 2,
+        "draw_precision": 0.5,
+        "draw_recall": 0.016949
+      }
+    },
+    {
+      "window": "2025-11-20__2025-12-20",
+      "n": 221,
+      "routing": {
+        "Bundesliga": "v5_5",
+        "La Liga": "v5_3",
+        "Ligue 1": "market",
+        "Premier League": "market",
+        "Serie A": "market"
+      },
+      "market": {
+        "matches": 221,
+        "correct": 122,
+        "accuracy": 0.552036,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 221,
+        "correct": 115,
+        "accuracy": 0.520362,
+        "draw_predictions": 10,
+        "draw_precision": 0.1,
+        "draw_recall": 0.020833
+      },
+      "v5_5": {
+        "matches": 221,
+        "correct": 121,
+        "accuracy": 0.547511,
+        "draw_predictions": 15,
+        "draw_precision": 0.266667,
+        "draw_recall": 0.083333
+      },
+      "routed": {
+        "matches": 221,
+        "correct": 121,
+        "accuracy": 0.547511,
+        "draw_predictions": 6,
+        "draw_precision": 0.333333,
+        "draw_recall": 0.041667
+      }
+    },
+    {
+      "window": "2025-10-21__2025-11-20",
+      "n": 163,
+      "routing": {
+        "Bundesliga": "v5_5",
+        "La Liga": "v5_3",
+        "Ligue 1": "v5_3",
+        "Premier League": "market",
+        "Serie A": "market"
+      },
+      "market": {
+        "matches": 163,
+        "correct": 89,
+        "accuracy": 0.546012,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_3": {
+        "matches": 163,
+        "correct": 86,
+        "accuracy": 0.527607,
+        "draw_predictions": 9,
+        "draw_precision": 0.111111,
+        "draw_recall": 0.025641
+      },
+      "v5_5": {
+        "matches": 163,
+        "correct": 91,
+        "accuracy": 0.558282,
+        "draw_predictions": 14,
+        "draw_precision": 0.428571,
+        "draw_recall": 0.153846
+      },
+      "routed": {
+        "matches": 163,
+        "correct": 87,
+        "accuracy": 0.533742,
+        "draw_predictions": 4,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      }
+    },
+    {
+      "window": "2024-04-29__2024-05-29",
+      "n": 139,
+      "routing": {
+        "Bundesliga": "market",
+        "La Liga": "market",
+        "Premier League": "market",
+        "Serie A": "market"
+      },
+      "market": {
+        "matches": 139,
+        "correct": 81,
+        "accuracy": 0.582734,
+        "draw_predictions": 1,
+        "draw_precision": 1.0,
+        "draw_recall": 0.027778
+      },
+      "v5_3": {
+        "matches": 139,
+        "correct": 80,
+        "accuracy": 0.57554,
+        "draw_predictions": 0,
+        "draw_precision": 0.0,
+        "draw_recall": 0.0
+      },
+      "v5_5": {
+        "matches": 139,
+        "correct": 81,
+        "accuracy": 0.582734,
+        "draw_predictions": 1,
+        "draw_precision": 1.0,
+        "draw_recall": 0.027778
+      },
+      "routed": {
+        "matches": 139,
+        "correct": 81,
+        "accuracy": 0.582734,
+        "draw_predictions": 1,
+        "draw_precision": 1.0,
+        "draw_recall": 0.027778
+      }
+    }
+  ]
+}

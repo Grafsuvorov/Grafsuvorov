@@ -1,0 +1,58 @@
+{
+  "overall": {
+    "bets": 1478,
+    "wins": 797,
+    "losses": 681,
+    "hit_rate": 0.539242,
+    "avg_odds": 1.954746,
+    "profit": 3.124,
+    "roi": 0.002114
+  },
+  "by_league": [
+    {
+      "league": "Bundesliga",
+      "bets": 269,
+      "wins": 150,
+      "hit_rate": 0.557621,
+      "avg_odds": 1.989737,
+      "profit": 9.576,
+      "roi": 0.035599
+    },
+    {
+      "league": "La Liga",
+      "bets": 312,
+      "wins": 173,
+      "hit_rate": 0.554487,
+      "avg_odds": 1.985442,
+      "profit": 12.544,
+      "roi": 0.040205
+    },
+    {
+      "league": "Ligue 1",
+      "bets": 235,
+      "wins": 120,
+      "hit_rate": 0.510638,
+      "avg_odds": 1.916349,
+      "profit": -15.854,
+      "roi": -0.067464
+    },
+    {
+      "league": "Premier League",
+      "bets": 323,
+      "wins": 168,
+      "hit_rate": 0.520124,
+      "avg_odds": 1.899709,
+      "profit": -19.812,
+      "roi": -0.061337
+    },
+    {
+      "league": "Serie A",
+      "bets": 339,
+      "wins": 186,
+      "hit_rate": 0.548673,
+      "avg_odds": 1.977788,
+      "profit": 16.67,
+      "roi": 0.049174
+    }
+  ]
+}

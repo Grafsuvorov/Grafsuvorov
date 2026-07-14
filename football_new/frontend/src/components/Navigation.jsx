@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { shouldHideMonetization } from '@/lib/pilotAccess.js';
+import { useLanguage } from '@/context/LanguageContext.jsx';
 
 export default function Navigation() {
   const location = useLocation();
   const hideMonetization = shouldHideMonetization();
+  const { t } = useLanguage();
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -29,7 +31,7 @@ export default function Navigation() {
                     : 'border-transparent text-slate-400 hover:border-white/30 hover:text-white'
                 } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
               >
-                Таблица
+                {t("table")}
               </Link>
               <Link
                 to="/matches"
@@ -39,7 +41,7 @@ export default function Navigation() {
                     : 'border-transparent text-slate-400 hover:border-white/30 hover:text-white'
                 } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
               >
-                Результаты
+                {t("results")}
               </Link>
               <Link
                 to="/schedule"
@@ -49,7 +51,7 @@ export default function Navigation() {
                     : 'border-transparent text-slate-400 hover:border-white/30 hover:text-white'
                 } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
               >
-                Расписание
+                {t("calendar")}
               </Link>
               <Link
                 to="/best-picks"
@@ -59,7 +61,7 @@ export default function Navigation() {
                     : 'border-transparent text-slate-400 hover:border-white/30 hover:text-white'
                 } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
               >
-                Подборки
+                {t("picks")}
               </Link>
               {!hideMonetization && (
                 <Link
@@ -70,7 +72,7 @@ export default function Navigation() {
                       : 'border-transparent text-slate-400 hover:border-white/30 hover:text-white'
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                 >
-                  Подписки
+                  {t("subscriptions")}
                 </Link>
               )}
             </div>
@@ -80,7 +82,7 @@ export default function Navigation() {
               to="/profile"
               className="text-slate-400 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
             >
-              Профиль
+              {t("profile")}
             </Link>
           </div>
         </div>

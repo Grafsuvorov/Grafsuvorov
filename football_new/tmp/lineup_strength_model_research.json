@@ -1,0 +1,820 @@
+[OUT] train rows (has_result=1): 704
+[SPLIT] now=2026-04-18 19:00:00+00:00 | TR=2024-08-16 19:00:00+00:00..2025-04-02 18:45:00+00:00 | CAL=2025-04-02 18:45:00+00:00..2025-12-07 14:00:00+00:00 | VAL=2025-12-07 16:30:00+00:00..2026-04-18 19:00:00+00:00
+[OUT] TR=294  CAL=234  VAL=176
+[FEATS] numeric safe features: 587
+[OUT] fixed xgb params for L39 = {'max_depth': 7, 'eta': 0.03, 'min_child_weight': 12.0}  LL=1.0384
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.500  LL=1.0269
+[OUT] best tau_market on CAL = 0.600  LL=0.9702
+
+[OUT] VAL: acc=0.4545  LL=1.0602
+              precision    recall  f1-score   support
+
+    Away(-1)       0.50      0.47      0.49        59
+     Draw(0)       0.00      0.00      0.00        56
+    Home(+1)       0.43      0.85      0.57        61
+
+    accuracy                           0.45       176
+   macro avg       0.31      0.44      0.35       176
+weighted avg       0.32      0.45      0.36       176
+
+[OUT] league prob bias L39 -> delta=[-0.01074225 -0.01571483  0.02645708], scale=0.88, ll=0.9665
+[OUT] league draw calibration L39 ready
+[OUT][L39] acc=0.4545  LL=1.0602  n=176
+[OVR] train rows (has_result=1): 704
+[SPLIT] now=2026-04-18 19:00:00+00:00 | TR=2024-08-16 19:00:00+00:00..2025-04-02 18:45:00+00:00 | CAL=2025-04-02 18:45:00+00:00..2025-12-07 14:00:00+00:00 | VAL=2025-12-07 16:30:00+00:00..2026-04-18 19:00:00+00:00
+[OVR] TR=294  CAL=234  VAL=176
+[FEATS] numeric safe features: 587
+[OVR] best alpha_mix on CAL = 0.100  LL=0.6765
+[OVR] best alpha_market on CAL = 0.000
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5568  LL=0.7081  Brier=0.2537
+[OVR][L39] acc=0.5568  LL=0.7081  n=176
+[OUT] train rows (has_result=1): 570
+[SPLIT] now=2026-04-18 19:05:00+00:00 | TR=2024-08-16 18:45:00+00:00..2025-03-29 20:05:00+00:00 | CAL=2025-03-30 13:00:00+00:00..2025-11-29 18:00:00+00:00 | VAL=2025-11-29 20:05:00+00:00..2026-04-18 19:05:00+00:00
+[OUT] TR=238  CAL=190  VAL=142
+[FEATS] numeric safe features: 587
+[OUT] fixed xgb params for L61 = {'max_depth': 5, 'eta': 0.04, 'min_child_weight': 8.0}  LL=0.9918
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.400  LL=0.9751
+[OUT] best tau_market on CAL = 0.100  LL=0.9653
+
+[OUT] VAL: acc=0.5211  LL=1.0010
+              precision    recall  f1-score   support
+
+    Away(-1)       0.50      0.37      0.43        43
+     Draw(0)       0.00      0.00      0.00        34
+    Home(+1)       0.53      0.89      0.66        65
+
+    accuracy                           0.52       142
+   macro avg       0.34      0.42      0.36       142
+weighted avg       0.39      0.52      0.43       142
+
+[OUT] league prob bias L61 -> delta=[-0.00568916 -0.01796713  0.0236563 ], scale=1.00, ll=0.9625
+[OUT] league draw calibration L61 ready
+[OUT][L61] acc=0.5211  LL=1.0010  n=142
+[OVR] train rows (has_result=1): 570
+[SPLIT] now=2026-04-18 19:05:00+00:00 | TR=2024-08-16 18:45:00+00:00..2025-03-29 20:05:00+00:00 | CAL=2025-03-30 13:00:00+00:00..2025-11-29 18:00:00+00:00 | VAL=2025-11-29 20:05:00+00:00..2026-04-18 19:05:00+00:00
+[OVR] TR=238  CAL=190  VAL=142
+[FEATS] numeric safe features: 587
+[OVR] best alpha_mix on CAL = 0.000  LL=0.6543
+[OVR] best alpha_market on CAL = 0.000
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5634  LL=0.7513  Brier=0.2435
+[OVR][L61] acc=0.5634  LL=0.7513  n=142
+[OUT] train rows (has_result=1): 575
+[SPLIT] now=2026-04-18 16:30:00+00:00 | TR=2024-08-23 18:30:00+00:00..2025-03-29 17:30:00+00:00 | CAL=2025-03-30 13:30:00+00:00..2025-12-14 14:30:00+00:00 | VAL=2025-12-14 16:30:00+00:00..2026-04-18 16:30:00+00:00
+[OUT] TR=241  CAL=191  VAL=143
+[FEATS] numeric safe features: 587
+[OUT] fixed xgb params for L78 = {'max_depth': 4, 'eta': 0.06, 'min_child_weight': 6.0}  LL=1.0564
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.200  LL=1.0230
+[OUT] best tau_market on CAL = 0.600  LL=0.9794
+
+[OUT] VAL: acc=0.5245  LL=0.9877
+              precision    recall  f1-score   support
+
+    Away(-1)       0.52      0.51      0.52        45
+     Draw(0)       0.25      0.10      0.14        40
+    Home(+1)       0.58      0.83      0.68        58
+
+    accuracy                           0.52       143
+   macro avg       0.45      0.48      0.45       143
+weighted avg       0.47      0.52      0.48       143
+
+[OUT] league prob bias L78 -> delta=[ 0.03391059 -0.00976808 -0.02414251], scale=0.88, ll=0.9731
+[OUT] league draw calibration L78 ready
+[OUT][L78] acc=0.5245  LL=0.9877  n=143
+[OVR] train rows (has_result=1): 575
+[SPLIT] now=2026-04-18 16:30:00+00:00 | TR=2024-08-23 18:30:00+00:00..2025-03-29 17:30:00+00:00 | CAL=2025-03-30 13:30:00+00:00..2025-12-14 14:30:00+00:00 | VAL=2025-12-14 16:30:00+00:00..2026-04-18 16:30:00+00:00
+[OVR] TR=241  CAL=191  VAL=143
+[FEATS] numeric safe features: 587
+[OVR] best alpha_mix on CAL = 0.000  LL=0.6535
+[OVR] best alpha_market on CAL = 0.400
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.6364  LL=0.6424  Brier=0.2253
+[OVR][L78] acc=0.6364  LL=0.6424  n=143
+[OUT] train rows (has_result=1): 705
+[SPLIT] now=2026-04-18 18:45:00+00:00 | TR=2024-08-17 16:30:00+00:00..2025-03-29 19:45:00+00:00 | CAL=2025-03-30 10:30:00+00:00..2025-12-14 19:45:00+00:00 | VAL=2025-12-15 19:45:00+00:00..2026-04-18 18:45:00+00:00
+[OUT] TR=294  CAL=235  VAL=176
+[FEATS] numeric safe features: 587
+[OUT] fixed xgb params for L135 = {'max_depth': 5, 'eta': 0.04, 'min_child_weight': 8.0}  LL=1.0311
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.600  LL=1.0268
+[OUT] best tau_market on CAL = 0.600  LL=0.9960
+
+[OUT] VAL: acc=0.5795  LL=0.9510
+              precision    recall  f1-score   support
+
+    Away(-1)       0.68      0.66      0.67        64
+     Draw(0)       0.37      0.28      0.31        40
+    Home(+1)       0.58      0.68      0.63        72
+
+    accuracy                           0.58       176
+   macro avg       0.54      0.54      0.54       176
+weighted avg       0.57      0.58      0.57       176
+
+[OUT] league prob bias L135 -> delta=[ 0.00843616  0.00442775 -0.01286391], scale=1.00, ll=0.9862
+[OUT] league draw calibration L135 ready
+[OUT][L135] acc=0.5795  LL=0.9510  n=176
+[OVR] train rows (has_result=1): 705
+[SPLIT] now=2026-04-18 18:45:00+00:00 | TR=2024-08-17 16:30:00+00:00..2025-03-29 19:45:00+00:00 | CAL=2025-03-30 10:30:00+00:00..2025-12-14 19:45:00+00:00 | VAL=2025-12-15 19:45:00+00:00..2026-04-18 18:45:00+00:00
+[OVR] TR=294  CAL=235  VAL=176
+[FEATS] numeric safe features: 587
+[OVR] best alpha_mix on CAL = 0.000  LL=0.6775
+[OVR] best alpha_market on CAL = 0.200
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5398  LL=0.7025  Brier=0.2545
+[OVR][L135] acc=0.5398  LL=0.7025  n=176
+[OUT] train rows (has_result=1): 690
+[SPLIT] now=2026-04-13 19:00:00+00:00 | TR=2024-08-15 17:00:00+00:00..2025-03-30 19:00:00+00:00 | CAL=2025-03-31 19:00:00+00:00..2025-11-30 17:30:00+00:00 | VAL=2025-11-30 20:00:00+00:00..2026-04-13 19:00:00+00:00
+[OUT] TR=288  CAL=230  VAL=172
+[FEATS] numeric safe features: 587
+[OUT] fixed xgb params for L140 = {'max_depth': 8, 'eta': 0.025, 'min_child_weight': 14.0}  LL=1.0377
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.600  LL=1.0205
+[OUT] best tau_market on CAL = 0.600  LL=0.9600
+
+[OUT] VAL: acc=0.5174  LL=0.9827
+              precision    recall  f1-score   support
+
+    Away(-1)       0.42      0.47      0.44        43
+     Draw(0)       0.00      0.00      0.00        43
+    Home(+1)       0.57      0.80      0.66        86
+
+    accuracy                           0.52       172
+   macro avg       0.33      0.42      0.37       172
+weighted avg       0.39      0.52      0.44       172
+
+[OUT] league prob bias L140 -> delta=[ 0.00777913 -0.02112213  0.013343  ], scale=0.62, ll=0.9596
+[OUT] league draw calibration L140 ready
+[OUT][L140] acc=0.5174  LL=0.9827  n=172
+[OVR] train rows (has_result=1): 690
+[SPLIT] now=2026-04-13 19:00:00+00:00 | TR=2024-08-15 17:00:00+00:00..2025-03-30 19:00:00+00:00 | CAL=2025-03-31 19:00:00+00:00..2025-11-30 17:30:00+00:00 | VAL=2025-11-30 20:00:00+00:00..2026-04-13 19:00:00+00:00
+[OVR] TR=288  CAL=230  VAL=172
+[FEATS] numeric safe features: 587
+[OVR] best alpha_mix on CAL = 0.100  LL=0.6786
+[OVR] best alpha_market on CAL = 0.600
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5523  LL=0.6889  Brier=0.2471
+[OVR][L140] acc=0.5523  LL=0.6889  n=172
+[OUT] train rows (has_result=1): 704
+[SPLIT] now=2026-04-18 19:00:00+00:00 | TR=2024-08-16 19:00:00+00:00..2025-04-02 18:45:00+00:00 | CAL=2025-04-02 18:45:00+00:00..2025-12-07 14:00:00+00:00 | VAL=2025-12-07 16:30:00+00:00..2026-04-18 19:00:00+00:00
+[OUT] TR=294  CAL=234  VAL=176
+[FEATS] numeric safe features: 621
+[OUT] fixed xgb params for L39 = {'max_depth': 7, 'eta': 0.03, 'min_child_weight': 12.0}  LL=1.0384
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.400  LL=1.0169
+[OUT] best tau_market on CAL = 0.600  LL=0.9680
+
+[OUT] VAL: acc=0.4489  LL=1.0652
+              precision    recall  f1-score   support
+
+    Away(-1)       0.51      0.47      0.49        59
+     Draw(0)       0.00      0.00      0.00        56
+    Home(+1)       0.42      0.84      0.56        61
+
+    accuracy                           0.45       176
+   macro avg       0.31      0.44      0.35       176
+weighted avg       0.32      0.45      0.36       176
+
+[OUT] league prob bias L39 -> delta=[-0.00742238 -0.01208092  0.0195033 ], scale=0.88, ll=0.9671
+[OUT] league draw calibration L39 ready
+[OUT][L39] acc=0.4489  LL=1.0652  n=176
+[OVR] train rows (has_result=1): 704
+[SPLIT] now=2026-04-18 19:00:00+00:00 | TR=2024-08-16 19:00:00+00:00..2025-04-02 18:45:00+00:00 | CAL=2025-04-02 18:45:00+00:00..2025-12-07 14:00:00+00:00 | VAL=2025-12-07 16:30:00+00:00..2026-04-18 19:00:00+00:00
+[OVR] TR=294  CAL=234  VAL=176
+[FEATS] numeric safe features: 621
+[OVR] best alpha_mix on CAL = 0.000  LL=0.6790
+[OVR] best alpha_market on CAL = 0.000
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5795  LL=0.8399  Brier=0.2579
+[OVR][L39] acc=0.5795  LL=0.8399  n=176
+[OUT] train rows (has_result=1): 570
+[SPLIT] now=2026-04-18 19:05:00+00:00 | TR=2024-08-16 18:45:00+00:00..2025-03-29 20:05:00+00:00 | CAL=2025-03-30 13:00:00+00:00..2025-11-29 18:00:00+00:00 | VAL=2025-11-29 20:05:00+00:00..2026-04-18 19:05:00+00:00
+[OUT] TR=238  CAL=190  VAL=142
+[FEATS] numeric safe features: 621
+[OUT] fixed xgb params for L61 = {'max_depth': 5, 'eta': 0.04, 'min_child_weight': 8.0}  LL=0.9831
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.800  LL=0.9810
+[OUT] best tau_market on CAL = 0.100  LL=0.9708
+
+[OUT] VAL: acc=0.5493  LL=0.9946
+              precision    recall  f1-score   support
+
+    Away(-1)       0.56      0.42      0.48        43
+     Draw(0)       0.00      0.00      0.00        34
+    Home(+1)       0.55      0.92      0.69        65
+
+    accuracy                           0.55       142
+   macro avg       0.37      0.45      0.39       142
+weighted avg       0.42      0.55      0.46       142
+
+[OUT] league prob bias L61 -> delta=[-0.00861331 -0.02615827  0.03477158], scale=1.00, ll=0.9649
+[OUT] league draw calibration L61 ready
+[OUT][L61] acc=0.5493  LL=0.9946  n=142
+[OVR] train rows (has_result=1): 570
+[SPLIT] now=2026-04-18 19:05:00+00:00 | TR=2024-08-16 18:45:00+00:00..2025-03-29 20:05:00+00:00 | CAL=2025-03-30 13:00:00+00:00..2025-11-29 18:00:00+00:00 | VAL=2025-11-29 20:05:00+00:00..2026-04-18 19:05:00+00:00
+[OVR] TR=238  CAL=190  VAL=142
+[FEATS] numeric safe features: 621
+[OVR] best alpha_mix on CAL = 0.100  LL=0.6638
+[OVR] best alpha_market on CAL = 0.000
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5493  LL=0.6844  Brier=0.2456
+[OVR][L61] acc=0.5493  LL=0.6844  n=142
+[OUT] train rows (has_result=1): 575
+[SPLIT] now=2026-04-18 16:30:00+00:00 | TR=2024-08-23 18:30:00+00:00..2025-03-29 17:30:00+00:00 | CAL=2025-03-30 13:30:00+00:00..2025-12-14 14:30:00+00:00 | VAL=2025-12-14 16:30:00+00:00..2026-04-18 16:30:00+00:00
+[OUT] TR=241  CAL=191  VAL=143
+[FEATS] numeric safe features: 621
+[OUT] fixed xgb params for L78 = {'max_depth': 4, 'eta': 0.06, 'min_child_weight': 6.0}  LL=1.0588
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.300  LL=1.0412
+[OUT] best tau_market on CAL = 0.600  LL=0.9879
+
+[OUT] VAL: acc=0.5315  LL=0.9848
+              precision    recall  f1-score   support
+
+    Away(-1)       0.53      0.53      0.53        45
+     Draw(0)       0.25      0.07      0.12        40
+    Home(+1)       0.57      0.84      0.68        58
+
+    accuracy                           0.53       143
+   macro avg       0.45      0.48      0.44       143
+weighted avg       0.47      0.53      0.48       143
+
+[OUT] league prob bias L78 -> delta=[ 0.03303525 -0.0101329  -0.02290235], scale=0.88, ll=0.9802
+[OUT] league draw calibration L78 ready
+[OUT][L78] acc=0.5315  LL=0.9848  n=143
+[OVR] train rows (has_result=1): 575
+[SPLIT] now=2026-04-18 16:30:00+00:00 | TR=2024-08-23 18:30:00+00:00..2025-03-29 17:30:00+00:00 | CAL=2025-03-30 13:30:00+00:00..2025-12-14 14:30:00+00:00 | VAL=2025-12-14 16:30:00+00:00..2026-04-18 16:30:00+00:00
+[OVR] TR=241  CAL=191  VAL=143
+[FEATS] numeric safe features: 621
+[OVR] best alpha_mix on CAL = 0.000  LL=0.6535
+[OVR] best alpha_market on CAL = 0.400
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.6364  LL=0.6424  Brier=0.2253
+[OVR][L78] acc=0.6364  LL=0.6424  n=143
+[OUT] train rows (has_result=1): 705
+[SPLIT] now=2026-04-18 18:45:00+00:00 | TR=2024-08-17 16:30:00+00:00..2025-03-29 19:45:00+00:00 | CAL=2025-03-30 10:30:00+00:00..2025-12-14 19:45:00+00:00 | VAL=2025-12-15 19:45:00+00:00..2026-04-18 18:45:00+00:00
+[OUT] TR=294  CAL=235  VAL=176
+[FEATS] numeric safe features: 621
+[OUT] fixed xgb params for L135 = {'max_depth': 5, 'eta': 0.04, 'min_child_weight': 8.0}  LL=1.0254
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.600  LL=1.0135
+[OUT] best tau_market on CAL = 0.600  LL=0.9909
+
+[OUT] VAL: acc=0.5739  LL=0.9491
+              precision    recall  f1-score   support
+
+    Away(-1)       0.68      0.64      0.66        64
+     Draw(0)       0.33      0.33      0.33        40
+    Home(+1)       0.62      0.65      0.64        72
+
+    accuracy                           0.57       176
+   macro avg       0.54      0.54      0.54       176
+weighted avg       0.58      0.57      0.57       176
+
+[OUT] league prob bias L135 -> delta=[ 0.00823228  0.00625249 -0.01448476], scale=1.00, ll=0.9882
+[OUT] league draw calibration L135 ready
+[OUT][L135] acc=0.5739  LL=0.9491  n=176
+[OVR] train rows (has_result=1): 705
+[SPLIT] now=2026-04-18 18:45:00+00:00 | TR=2024-08-17 16:30:00+00:00..2025-03-29 19:45:00+00:00 | CAL=2025-03-30 10:30:00+00:00..2025-12-14 19:45:00+00:00 | VAL=2025-12-15 19:45:00+00:00..2026-04-18 18:45:00+00:00
+[OVR] TR=294  CAL=235  VAL=176
+[FEATS] numeric safe features: 621
+[OVR] best alpha_mix on CAL = 0.000  LL=0.6690
+[OVR] best alpha_market on CAL = 0.100
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5455  LL=0.6975  Brier=0.2523
+[OVR][L135] acc=0.5455  LL=0.6975  n=176
+[OUT] train rows (has_result=1): 690
+[SPLIT] now=2026-04-13 19:00:00+00:00 | TR=2024-08-15 17:00:00+00:00..2025-03-30 19:00:00+00:00 | CAL=2025-03-31 19:00:00+00:00..2025-11-30 17:30:00+00:00 | VAL=2025-11-30 20:00:00+00:00..2026-04-13 19:00:00+00:00
+[OUT] TR=288  CAL=230  VAL=172
+[FEATS] numeric safe features: 621
+[OUT] fixed xgb params for L140 = {'max_depth': 8, 'eta': 0.025, 'min_child_weight': 14.0}  LL=1.0386
+[OUT] best alpha (XGB vs Poisson) on CAL = 0.600  LL=1.0215
+[OUT] best tau_market on CAL = 0.600  LL=0.9604
+
+[OUT] VAL: acc=0.5058  LL=0.9829
+              precision    recall  f1-score   support
+
+    Away(-1)       0.40      0.44      0.42        43
+     Draw(0)       0.12      0.02      0.04        43
+    Home(+1)       0.57      0.78      0.66        86
+
+    accuracy                           0.51       172
+   macro avg       0.37      0.41      0.37       172
+weighted avg       0.42      0.51      0.45       172
+
+[OUT] league prob bias L140 -> delta=[ 0.01071121 -0.02869799  0.01798678], scale=0.62, ll=0.9593
+[OUT] league draw calibration L140 ready
+[OUT][L140] acc=0.5058  LL=0.9829  n=172
+[OVR] train rows (has_result=1): 690
+[SPLIT] now=2026-04-13 19:00:00+00:00 | TR=2024-08-15 17:00:00+00:00..2025-03-30 19:00:00+00:00 | CAL=2025-03-31 19:00:00+00:00..2025-11-30 17:30:00+00:00 | VAL=2025-11-30 20:00:00+00:00..2026-04-13 19:00:00+00:00
+[OVR] TR=288  CAL=230  VAL=172
+[FEATS] numeric safe features: 621
+[OVR] best alpha_mix on CAL = 0.200  LL=0.6843
+[OVR] best alpha_market on CAL = 0.600
+[OVR] no league offsets detected
+[OVR] VAL: acc=0.5407  LL=0.6896  Brier=0.2481
+[OVR][L140] acc=0.5407  LL=0.6896  n=172
+{
+  "window": {
+    "season_from": 2024,
+    "rows": 3244,
+    "lineup_feature_count": 348
+  },
+  "baseline": {
+    "outcomes": {
+      "weighted_val_ll": 0.9967445053673762,
+      "weighted_val_acc": 0.519159456118665,
+      "weighted_val_brier": null,
+      "val_n_total": 809,
+      "by_league": {
+        "39": {
+          "val_acc": 0.45454545454545453,
+          "val_ll": 1.0601777989938446,
+          "val_n": 176
+        },
+        "61": {
+          "val_acc": 0.5211267605633803,
+          "val_ll": 1.0010298404442626,
+          "val_n": 142
+        },
+        "78": {
+          "val_acc": 0.5244755244755245,
+          "val_ll": 0.9876826296860438,
+          "val_n": 143
+        },
+        "135": {
+          "val_acc": 0.5795454545454546,
+          "val_ll": 0.9509584859130854,
+          "val_n": 176
+        },
+        "140": {
+          "val_acc": 0.5174418604651163,
+          "val_ll": 0.9826829378511515,
+          "val_n": 172
+        }
+      }
+    },
+    "totals": {
+      "weighted_val_ll": 0.6987640480434227,
+      "weighted_val_acc": 0.5673671199011124,
+      "weighted_val_brier": 0.24565695975544907,
+      "val_n_total": 809,
+      "by_league": {
+        "39": {
+          "val_acc": 0.5568181818181818,
+          "val_ll": 0.7080521793472819,
+          "val_brier": 0.2536751574826889,
+          "val_n": 176
+        },
+        "61": {
+          "val_acc": 0.5633802816901409,
+          "val_ll": 0.751275886569608,
+          "val_brier": 0.2434703013597439,
+          "val_n": 142
+        },
+        "78": {
+          "val_acc": 0.6363636363636364,
+          "val_ll": 0.6423549191358678,
+          "val_brier": 0.22534605832785803,
+          "val_n": 143
+        },
+        "135": {
+          "val_acc": 0.5397727272727273,
+          "val_ll": 0.7025357911949872,
+          "val_brier": 0.25454053843746843,
+          "val_n": 176
+        },
+        "140": {
+          "val_acc": 0.5523255813953488,
+          "val_ll": 0.6889459460603268,
+          "val_brier": 0.24705377224560043,
+          "val_n": 172
+        }
+      }
+    }
+  },
+  "with_lineup_strength": {
+    "outcomes": {
+      "weighted_val_ll": 0.9958388183883566,
+      "weighted_val_acc": 0.5203955500618047,
+      "weighted_val_brier": null,
+      "val_n_total": 809,
+      "by_league": {
+        "39": {
+          "val_acc": 0.44886363636363635,
+          "val_ll": 1.065232449872674,
+          "val_n": 176
+        },
+        "61": {
+          "val_acc": 0.5492957746478874,
+          "val_ll": 0.994617354442031,
+          "val_n": 142
+        },
+        "78": {
+          "val_acc": 0.5314685314685315,
+          "val_ll": 0.9847992036627139,
+          "val_n": 143
+        },
+        "135": {
+          "val_acc": 0.5738636363636364,
+          "val_ll": 0.949064408735374,
+          "val_n": 176
+        },
+        "140": {
+          "val_acc": 0.5058139534883721,
+          "val_ll": 0.9828802703873701,
+          "val_n": 172
+        }
+      }
+    },
+    "totals": {
+      "weighted_val_ll": 0.7147480972314418,
+      "weighted_val_acc": 0.5686032138442522,
+      "weighted_val_brier": 0.24667554282931672,
+      "val_n_total": 809,
+      "by_league": {
+        "39": {
+          "val_acc": 0.5795454545454546,
+          "val_ll": 0.8398621307823014,
+          "val_brier": 0.2579210697008456,
+          "val_n": 176
+        },
+        "61": {
+          "val_acc": 0.5492957746478874,
+          "val_ll": 0.6843846888497914,
+          "val_brier": 0.24558629162428372,
+          "val_n": 142
+        },
+        "78": {
+          "val_acc": 0.6363636363636364,
+          "val_ll": 0.6423549191358678,
+          "val_brier": 0.22534605832785803,
+          "val_n": 143
+        },
+        "135": {
+          "val_acc": 0.5454545454545454,
+          "val_ll": 0.6975059249118246,
+          "val_brier": 0.2522818336296848,
+          "val_n": 176
+        },
+        "140": {
+          "val_acc": 0.5406976744186046,
+          "val_ll": 0.689622404680063,
+          "val_brier": 0.24806432215820873,
+          "val_n": 172
+        }
+      }
+    }
+  },
+  "lineup_feature_columns": [
+    "away_ls_att_rating_all_10",
+    "away_ls_att_rating_all_15",
+    "away_ls_att_rating_all_5",
+    "away_ls_att_rating_away_10",
+    "away_ls_att_rating_away_15",
+    "away_ls_att_rating_away_5",
+    "away_ls_att_rating_home_10",
+    "away_ls_att_rating_home_15",
+    "away_ls_att_rating_home_5",
+    "away_ls_att_rating_long",
+    "away_ls_att_rating_trend_5v15",
+    "away_ls_def_rating_all_10",
+    "away_ls_def_rating_all_15",
+    "away_ls_def_rating_all_5",
+    "away_ls_def_rating_away_10",
+    "away_ls_def_rating_away_15",
+    "away_ls_def_rating_away_5",
+    "away_ls_def_rating_home_10",
+    "away_ls_def_rating_home_15",
+    "away_ls_def_rating_home_5",
+    "away_ls_def_rating_long",
+    "away_ls_def_rating_trend_5v15",
+    "away_ls_gk_rating_all_10",
+    "away_ls_gk_rating_all_15",
+    "away_ls_gk_rating_all_5",
+    "away_ls_gk_rating_away_10",
+    "away_ls_gk_rating_away_15",
+    "away_ls_gk_rating_away_5",
+    "away_ls_gk_rating_home_10",
+    "away_ls_gk_rating_home_15",
+    "away_ls_gk_rating_home_5",
+    "away_ls_gk_rating_long",
+    "away_ls_known_starters_all_10",
+    "away_ls_known_starters_all_15",
+    "away_ls_known_starters_all_5",
+    "away_ls_known_starters_away_10",
+    "away_ls_known_starters_away_15",
+    "away_ls_known_starters_away_5",
+    "away_ls_known_starters_home_10",
+    "away_ls_known_starters_home_15",
+    "away_ls_known_starters_home_5",
+    "away_ls_known_starters_long",
+    "away_ls_line_balance_all_10",
+    "away_ls_line_balance_all_15",
+    "away_ls_line_balance_all_5",
+    "away_ls_line_balance_away_10",
+    "away_ls_line_balance_away_15",
+    "away_ls_line_balance_away_5",
+    "away_ls_line_balance_home_10",
+    "away_ls_line_balance_home_15",
+    "away_ls_line_balance_home_5",
+    "away_ls_line_balance_long",
+    "away_ls_mid_rating_all_10",
+    "away_ls_mid_rating_all_15",
+    "away_ls_mid_rating_all_5",
+    "away_ls_mid_rating_away_10",
+    "away_ls_mid_rating_away_15",
+    "away_ls_mid_rating_away_5",
+    "away_ls_mid_rating_home_10",
+    "away_ls_mid_rating_home_15",
+    "away_ls_mid_rating_home_5",
+    "away_ls_mid_rating_long",
+    "away_ls_rating_std_all_10",
+    "away_ls_rating_std_all_15",
+    "away_ls_rating_std_all_5",
+    "away_ls_rating_std_away_10",
+    "away_ls_rating_std_away_15",
+    "away_ls_rating_std_away_5",
+    "away_ls_rating_std_home_10",
+    "away_ls_rating_std_home_15",
+    "away_ls_rating_std_home_5",
+    "away_ls_rating_std_long",
+    "away_ls_weakest_starter_all_10",
+    "away_ls_weakest_starter_all_15",
+    "away_ls_weakest_starter_all_5",
+    "away_ls_weakest_starter_away_10",
+    "away_ls_weakest_starter_away_15",
+    "away_ls_weakest_starter_away_5",
+    "away_ls_weakest_starter_home_10",
+    "away_ls_weakest_starter_home_15",
+    "away_ls_weakest_starter_home_5",
+    "away_ls_weakest_starter_long",
+    "away_ls_xi_rating_all_10",
+    "away_ls_xi_rating_all_15",
+    "away_ls_xi_rating_all_5",
+    "away_ls_xi_rating_away_10",
+    "away_ls_xi_rating_away_15",
+    "away_ls_xi_rating_away_5",
+    "away_ls_xi_rating_home_10",
+    "away_ls_xi_rating_home_15",
+    "away_ls_xi_rating_home_5",
+    "away_ls_xi_rating_long",
+    "away_ls_xi_rating_trend_5v15",
+    "home_ls_att_rating_all_10",
+    "home_ls_att_rating_all_15",
+    "home_ls_att_rating_all_5",
+    "home_ls_att_rating_away_10",
+    "home_ls_att_rating_away_15",
+    "home_ls_att_rating_away_5",
+    "home_ls_att_rating_home_10",
+    "home_ls_att_rating_home_15",
+    "home_ls_att_rating_home_5",
+    "home_ls_att_rating_long",
+    "home_ls_att_rating_trend_5v15",
+    "home_ls_def_rating_all_10",
+    "home_ls_def_rating_all_15",
+    "home_ls_def_rating_all_5",
+    "home_ls_def_rating_away_10",
+    "home_ls_def_rating_away_15",
+    "home_ls_def_rating_away_5",
+    "home_ls_def_rating_home_10",
+    "home_ls_def_rating_home_15",
+    "home_ls_def_rating_home_5",
+    "home_ls_def_rating_long",
+    "home_ls_def_rating_trend_5v15",
+    "home_ls_gk_rating_all_10",
+    "home_ls_gk_rating_all_15",
+    "home_ls_gk_rating_all_5",
+    "home_ls_gk_rating_away_10",
+    "home_ls_gk_rating_away_15",
+    "home_ls_gk_rating_away_5",
+    "home_ls_gk_rating_home_10",
+    "home_ls_gk_rating_home_15",
+    "home_ls_gk_rating_home_5",
+    "home_ls_gk_rating_long",
+    "home_ls_known_starters_all_10",
+    "home_ls_known_starters_all_15",
+    "home_ls_known_starters_all_5",
+    "home_ls_known_starters_away_10",
+    "home_ls_known_starters_away_15",
+    "home_ls_known_starters_away_5",
+    "home_ls_known_starters_home_10",
+    "home_ls_known_starters_home_15",
+    "home_ls_known_starters_home_5",
+    "home_ls_known_starters_long",
+    "home_ls_line_balance_all_10",
+    "home_ls_line_balance_all_15",
+    "home_ls_line_balance_all_5",
+    "home_ls_line_balance_away_10",
+    "home_ls_line_balance_away_15",
+    "home_ls_line_balance_away_5",
+    "home_ls_line_balance_home_10",
+    "home_ls_line_balance_home_15",
+    "home_ls_line_balance_home_5",
+    "home_ls_line_balance_long",
+    "home_ls_mid_rating_all_10",
+    "home_ls_mid_rating_all_15",
+    "home_ls_mid_rating_all_5",
+    "home_ls_mid_rating_away_10",
+    "home_ls_mid_rating_away_15",
+    "home_ls_mid_rating_away_5",
+    "home_ls_mid_rating_home_10",
+    "home_ls_mid_rating_home_15",
+    "home_ls_mid_rating_home_5",
+    "home_ls_mid_rating_long",
+    "home_ls_rating_std_all_10",
+    "home_ls_rating_std_all_15",
+    "home_ls_rating_std_all_5",
+    "home_ls_rating_std_away_10",
+    "home_ls_rating_std_away_15",
+    "home_ls_rating_std_away_5",
+    "home_ls_rating_std_home_10",
+    "home_ls_rating_std_home_15",
+    "home_ls_rating_std_home_5",
+    "home_ls_rating_std_long",
+    "home_ls_weakest_starter_all_10",
+    "home_ls_weakest_starter_all_15",
+    "home_ls_weakest_starter_all_5",
+    "home_ls_weakest_starter_away_10",
+    "home_ls_weakest_starter_away_15",
+    "home_ls_weakest_starter_away_5",
+    "home_ls_weakest_starter_home_10",
+    "home_ls_weakest_starter_home_15",
+    "home_ls_weakest_starter_home_5",
+    "home_ls_weakest_starter_long",
+    "home_ls_xi_rating_all_10",
+    "home_ls_xi_rating_all_15",
+    "home_ls_xi_rating_all_5",
+    "home_ls_xi_rating_away_10",
+    "home_ls_xi_rating_away_15",
+    "home_ls_xi_rating_away_5",
+    "home_ls_xi_rating_home_10",
+    "home_ls_xi_rating_home_15",
+    "home_ls_xi_rating_home_5",
+    "home_ls_xi_rating_long",
+    "home_ls_xi_rating_trend_5v15",
+    "ls_att_rating_all_10_diff",
+    "ls_att_rating_all_15_diff",
+    "ls_att_rating_all_5_diff",
+    "ls_att_rating_away_10_abs_diff",
+    "ls_att_rating_away_10_diff",
+    "ls_att_rating_away_15_abs_diff",
+    "ls_att_rating_away_15_diff",
+    "ls_att_rating_away_5_abs_diff",
+    "ls_att_rating_away_5_diff",
+    "ls_att_rating_home_10_abs_diff",
+    "ls_att_rating_home_10_diff",
+    "ls_att_rating_home_15_abs_diff",
+    "ls_att_rating_home_15_diff",
+    "ls_att_rating_home_5_abs_diff",
+    "ls_att_rating_home_5_diff",
+    "ls_att_rating_long_diff",
+    "ls_att_rating_trend_5v15_abs_diff",
+    "ls_att_rating_trend_5v15_diff",
+    "ls_def_rating_all_10_diff",
+    "ls_def_rating_all_15_diff",
+    "ls_def_rating_all_5_diff",
+    "ls_def_rating_away_10_abs_diff",
+    "ls_def_rating_away_10_diff",
+    "ls_def_rating_away_15_abs_diff",
+    "ls_def_rating_away_15_diff",
+    "ls_def_rating_away_5_abs_diff",
+    "ls_def_rating_away_5_diff",
+    "ls_def_rating_home_10_abs_diff",
+    "ls_def_rating_home_10_diff",
+    "ls_def_rating_home_15_abs_diff",
+    "ls_def_rating_home_15_diff",
+    "ls_def_rating_home_5_abs_diff",
+    "ls_def_rating_home_5_diff",
+    "ls_def_rating_long_diff",
+    "ls_def_rating_trend_5v15_abs_diff",
+    "ls_def_rating_trend_5v15_diff",
+    "ls_gk_rating_all_10_diff",
+    "ls_gk_rating_all_15_diff",
+    "ls_gk_rating_all_5_diff",
+    "ls_gk_rating_away_10_abs_diff",
+    "ls_gk_rating_away_10_diff",
+    "ls_gk_rating_away_15_abs_diff",
+    "ls_gk_rating_away_15_diff",
+    "ls_gk_rating_away_5_abs_diff",
+    "ls_gk_rating_away_5_diff",
+    "ls_gk_rating_home_10_abs_diff",
+    "ls_gk_rating_home_10_diff",
+    "ls_gk_rating_home_15_abs_diff",
+    "ls_gk_rating_home_15_diff",
+    "ls_gk_rating_home_5_abs_diff",
+    "ls_gk_rating_home_5_diff",
+    "ls_gk_rating_long_diff",
+    "ls_known_starters_all_10_abs_diff",
+    "ls_known_starters_all_10_diff",
+    "ls_known_starters_all_15_abs_diff",
+    "ls_known_starters_all_15_diff",
+    "ls_known_starters_all_5_abs_diff",
+    "ls_known_starters_all_5_diff",
+    "ls_known_starters_away_10_abs_diff",
+    "ls_known_starters_away_10_diff",
+    "ls_known_starters_away_15_abs_diff",
+    "ls_known_starters_away_15_diff",
+    "ls_known_starters_away_5_abs_diff",
+    "ls_known_starters_away_5_diff",
+    "ls_known_starters_home_10_abs_diff",
+    "ls_known_starters_home_10_diff",
+    "ls_known_starters_home_15_abs_diff",
+    "ls_known_starters_home_15_diff",
+    "ls_known_starters_home_5_abs_diff",
+    "ls_known_starters_home_5_diff",
+    "ls_known_starters_long_abs_diff",
+    "ls_known_starters_long_diff",
+    "ls_line_balance_all_10_diff",
+    "ls_line_balance_all_15_diff",
+    "ls_line_balance_all_5_diff",
+    "ls_line_balance_away_10_abs_diff",
+    "ls_line_balance_away_10_diff",
+    "ls_line_balance_away_15_abs_diff",
+    "ls_line_balance_away_15_diff",
+    "ls_line_balance_away_5_abs_diff",
+    "ls_line_balance_away_5_diff",
+    "ls_line_balance_home_10_abs_diff",
+    "ls_line_balance_home_10_diff",
+    "ls_line_balance_home_15_abs_diff",
+    "ls_line_balance_home_15_diff",
+    "ls_line_balance_home_5_abs_diff",
+    "ls_line_balance_home_5_diff",
+    "ls_line_balance_long_diff",
+    "ls_matchup_away_attack_vs_home_def_10",
+    "ls_matchup_home_attack_vs_away_def_10",
+    "ls_matchup_home_mid_vs_away_mid_10",
+    "ls_matchup_venue_xi_edge_10",
+    "ls_mid_rating_all_10_diff",
+    "ls_mid_rating_all_15_diff",
+    "ls_mid_rating_all_5_diff",
+    "ls_mid_rating_away_10_abs_diff",
+    "ls_mid_rating_away_10_diff",
+    "ls_mid_rating_away_15_abs_diff",
+    "ls_mid_rating_away_15_diff",
+    "ls_mid_rating_away_5_abs_diff",
+    "ls_mid_rating_away_5_diff",
+    "ls_mid_rating_home_10_abs_diff",
+    "ls_mid_rating_home_10_diff",
+    "ls_mid_rating_home_15_abs_diff",
+    "ls_mid_rating_home_15_diff",
+    "ls_mid_rating_home_5_abs_diff",
+    "ls_mid_rating_home_5_diff",
+    "ls_mid_rating_long_diff",
+    "ls_rating_std_all_10_abs_diff",
+    "ls_rating_std_all_10_diff",
+    "ls_rating_std_all_15_abs_diff",
+    "ls_rating_std_all_15_diff",
+    "ls_rating_std_all_5_abs_diff",
+    "ls_rating_std_all_5_diff",
+    "ls_rating_std_away_10_abs_diff",
+    "ls_rating_std_away_10_diff",
+    "ls_rating_std_away_15_abs_diff",
+    "ls_rating_std_away_15_diff",
+    "ls_rating_std_away_5_abs_diff",
+    "ls_rating_std_away_5_diff",
+    "ls_rating_std_home_10_abs_diff",
+    "ls_rating_std_home_10_diff",
+    "ls_rating_std_home_15_abs_diff",
+    "ls_rating_std_home_15_diff",
+    "ls_rating_std_home_5_abs_diff",
+    "ls_rating_std_home_5_diff",
+    "ls_rating_std_long_abs_diff",
+    "ls_rating_std_long_diff",
+    "ls_weakest_starter_all_10_diff",
+    "ls_weakest_starter_all_15_diff",
+    "ls_weakest_starter_all_5_diff",
+    "ls_weakest_starter_away_10_abs_diff",
+    "ls_weakest_starter_away_10_diff",
+    "ls_weakest_starter_away_15_abs_diff",
+    "ls_weakest_starter_away_15_diff",
+    "ls_weakest_starter_away_5_abs_diff",
+    "ls_weakest_starter_away_5_diff",
+    "ls_weakest_starter_home_10_abs_diff",
+    "ls_weakest_starter_home_10_diff",
+    "ls_weakest_starter_home_15_abs_diff",
+    "ls_weakest_starter_home_15_diff",
+    "ls_weakest_starter_home_5_abs_diff",
+    "ls_weakest_starter_home_5_diff",
+    "ls_weakest_starter_long_diff",
+    "ls_xi_rating_all_10_diff",
+    "ls_xi_rating_all_15_diff",
+    "ls_xi_rating_all_5_diff",
+    "ls_xi_rating_away_10_abs_diff",
+    "ls_xi_rating_away_10_diff",
+    "ls_xi_rating_away_15_abs_diff",
+    "ls_xi_rating_away_15_diff",
+    "ls_xi_rating_away_5_abs_diff",
+    "ls_xi_rating_away_5_diff",
+    "ls_xi_rating_home_10_abs_diff",
+    "ls_xi_rating_home_10_diff",
+    "ls_xi_rating_home_15_abs_diff",
+    "ls_xi_rating_home_15_diff",
+    "ls_xi_rating_home_5_abs_diff",
+    "ls_xi_rating_home_5_diff",
+    "ls_xi_rating_long_diff",
+    "ls_xi_rating_trend_5v15_abs_diff",
+    "ls_xi_rating_trend_5v15_diff"
+  ],
+  "delta": {
+    "outcomes_val_ll": -0.0009056869790196043,
+    "outcomes_val_acc": 0.0012360939431397266,
+    "totals_val_ll": 0.0159840491880191,
+    "totals_val_acc": 0.0012360939431397266,
+    "totals_val_brier": 0.0010185830738676516
+  }
+}

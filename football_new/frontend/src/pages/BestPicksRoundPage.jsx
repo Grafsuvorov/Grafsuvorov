@@ -13,6 +13,7 @@ import {
   decideTotalsTierByEv,
 } from "@/lib/policyDecision";
 import { buildPolicyNarrative } from "@/lib/policyNarrative";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* ====== метка сборки для дебага ====== */
 const BUILD_TAG = "BestPicks 2025 v5.0 EdgeScore Premium Dark";
@@ -51,6 +52,8 @@ const TTL_INSIGHTS = 5 * 60 * 1000;
 
 const PAGE_SIZE = 24;
 const PAGE_STEP = 24;
+const PICKS_LOOKBACK_DAYS = 3;
+const PICKS_LOOKAHEAD_DAYS = 45;
 
 /* ================== Утилиты ================== */
 function isNil(x) {
@@ -139,6 +142,18 @@ function seasonRange2025() {
   return { from: y + "-07-01", to: y + 1 + "-06-30" };
 }
 
+function compactPicksRange() {
+  var now = new Date();
+  var from = new Date(now);
+  from.setDate(from.getDate() - PICKS_LOOKBACK_DAYS);
+  var to = new Date(now);
+  to.setDate(to.getDate() + PICKS_LOOKAHEAD_DAYS);
+  var fmt = function (d) {
+    return d.toISOString().slice(0, 10);
+  };
+  return { from: fmt(from), to: fmt(to) };
+}
+
 // 'DD.MM HH:MM' → 'YYYY-MM-DD HH:MM' (ISO пропускаем)
 function parseScheduleISO(datetimeDMHM, seasonStr) {
   if (!datetimeDMHM) return "";
@@ -218,9 +233,9 @@ function TeamLogo({ teamId, teamName, league, onOpenTeam }) {
       onClick={handleClick}
       className="flex items-center justify-center rounded-full
                  w-7 h-7 sm:w-8 sm:h-8
-                 bg-white/[0.04] ring-1 ring-white/10
-                 shadow-[0_6px_18px_rgba(0,0,0,0.35)]
-                 hover:ring-white/20 transition"
+                 bg-white/[0.04] border border-white/8
+                 shadow-[0_6px_14px_rgba(0,0,0,0.24)]
+                 hover:bg-white/[0.06] transition"
       title={teamName || "Команда"}
     >
       <SafeImg
@@ -238,21 +253,21 @@ function Pill(props) {
   var color = valOr(props.color, "gray");
   var palette = {
     gray:
-      "bg-surface-3/80 text-slate-200 ring-1 ring-slate-700/70 shadow-inner",
+      "bg-surface-3/80 text-slate-200 border border-slate-700/55",
     amber:
-      "bg-amber-400/15 text-amber-100 ring-1 ring-amber-400/50 shadow-inner",
+      "bg-amber-400/15 text-amber-100 border border-amber-400/32",
     green:
-      "bg-emerald-400/15 text-emerald-100 ring-1 ring-emerald-400/60 shadow-inner",
+      "bg-emerald-400/15 text-emerald-100 border border-emerald-400/34",
     blue:
-      "bg-sky-400/15 text-sky-100 ring-1 ring-sky-400/60 shadow-inner",
+      "bg-sky-400/15 text-sky-100 border border-sky-400/34",
     rose:
-      "bg-rose-400/15 text-rose-100 ring-1 ring-rose-400/60 shadow-inner",
+      "bg-rose-400/15 text-rose-100 border border-rose-400/34",
     indigo:
-      "bg-indigo-400/15 text-indigo-100 ring-1 ring-indigo-400/60 shadow-inner",
+      "bg-indigo-400/15 text-indigo-100 border border-indigo-400/34",
     fuchsia:
-      "bg-fuchsia-400/15 text-fuchsia-100 ring-1 ring-fuchsia-400/60 shadow-inner",
+      "bg-fuchsia-400/15 text-fuchsia-100 border border-fuchsia-400/34",
     pink:
-      "bg-pink-400/15 text-pink-100 ring-1 ring-pink-400/60 shadow-inner",
+      "bg-pink-400/15 text-pink-100 border border-pink-400/34",
   };
   return (
     <span
@@ -347,10 +362,14 @@ function extractPAH(offers) {
 
 function assessRec(rec, leagueName) {
   if (!rec) return { status: "skip", reasons: ["нет ставки"], tier: "NO BET" };
+  if (String(rec.portfolio_tier || "").toUpperCase() === "WATCH") {
+    return { status: "watch", reasons: [], tier: "WATCH" };
+  }
   if (rec.saved && rec.tier) {
     const savedTier = String(rec.tier).toUpperCase();
     if (savedTier === "A") return { status: "hot", reasons: [], tier: "A" };
     if (savedTier === "B") return { status: "ok", reasons: [], tier: "B" };
+    if (savedTier === "WATCH") return { status: "watch", reasons: [], tier: "WATCH" };
   }
   var leagueId = LEAGUE_ID_BY_NAME[leagueName] || null;
   var p = Number(rec.p);
@@ -466,7 +485,17 @@ var LABELS = {
   ou: { over: "ТБ 2.5", under: "ТМ 2.5" },
 };
 
-function explainTotals(ins, choice, offers) {
+function labelSet(language) {
+  return language === "ru"
+    ? LABELS
+    : {
+        outcome: { home: "Home", away: "Away", draw: "Draw" },
+        ou: { over: "Over 2.5", under: "Under 2.5" },
+      };
+}
+
+function explainTotals(ins, choice, offers, language) {
+  const labels = labelSet(language);
   var parts = [];
   if (ins) {
     var hf = valOr(ins.home && ins.home.gf_last5, null);
@@ -479,46 +508,80 @@ function explainTotals(ins, choice, offers) {
     if (choice === "under") {
       if (isNum(hf) && isNum(af) && hf <= 1.2 && af <= 1.2)
         parts.push(
-          "Низкая продуктивность атаки: хозяева " +
-            hf.toFixed(1) +
-            " г/м, гости " +
-            af.toFixed(1) +
-            " г/м (5)."
+          language === "ru"
+            ? "Низкая продуктивность атаки: хозяева " +
+              hf.toFixed(1) +
+              " г/м, гости " +
+              af.toFixed(1) +
+              " г/м (5)."
+            : "Low attacking output: home " +
+              hf.toFixed(1) +
+              " goals/match, away " +
+              af.toFixed(1) +
+              " goals/match (last 5)."
         );
       if (isNum(hg) && isNum(ag) && hg <= 1.0 && ag <= 1.0)
         parts.push(
-          "Надёжная оборона: пропускают " +
-            hg.toFixed(1) +
-            " и " +
-            ag.toFixed(1) +
-            " г/м."
+          language === "ru"
+            ? "Надёжная оборона: пропускают " +
+              hg.toFixed(1) +
+              " и " +
+              ag.toFixed(1) +
+              " г/м."
+            : "Solid defending: conceding " +
+              hg.toFixed(1) +
+              " and " +
+              ag.toFixed(1) +
+              " goals/match."
         );
       if (isNum(avg10) && isNum(uRate))
         parts.push(
-          "Средняя результативность " +
-            avg10.toFixed(1) +
-            " г/м за 10; U2.5=" +
-            Math.round(uRate * 100) +
-            "%."
+          language === "ru"
+            ? "Средняя результативность " +
+              avg10.toFixed(1) +
+              " г/м за 10; U2.5=" +
+              Math.round(uRate * 100) +
+              "%."
+            : "Average scoring is " +
+              avg10.toFixed(1) +
+              " goals/match over 10; U2.5=" +
+              Math.round(uRate * 100) +
+              "%."
         );
     } else {
       if (isNum(hf) && hf >= 1.5)
-        parts.push("Хозяева много создают: " + hf.toFixed(1) + " г/м.");
+        parts.push(
+          language === "ru"
+            ? "Хозяева много создают: " + hf.toFixed(1) + " г/м."
+            : "Home side creates a lot: " + hf.toFixed(1) + " goals/match."
+        );
       if (isNum(af) && af >= 1.5)
-        parts.push("Гости опасны: " + af.toFixed(1) + " г/м.");
+        parts.push(
+          language === "ru"
+            ? "Гости опасны: " + af.toFixed(1) + " г/м."
+            : "Away side is dangerous: " + af.toFixed(1) + " goals/match."
+        );
       if (isNum(hg) && hg >= 1.3)
         parts.push(
-          "Хозяева позволяют: " + hg.toFixed(1) + " г/м пропущенных."
+          language === "ru"
+            ? "Хозяева позволяют: " + hg.toFixed(1) + " г/м пропущенных."
+            : "Home side allows: " + hg.toFixed(1) + " goals conceded per match."
         );
       if (isNum(ag) && ag >= 1.3)
         parts.push(
-          "Гости позволяют: " + ag.toFixed(1) + " г/м пропущенных."
+          language === "ru"
+            ? "Гости позволяют: " + ag.toFixed(1) + " г/м пропущенных."
+            : "Away side allows: " + ag.toFixed(1) + " goals conceded per match."
         );
       if (isNum(avg10))
         parts.push(
-          "Средняя результативность около " +
-            avg10.toFixed(1) +
-            " г/м — предпосылки к «верху»."
+          language === "ru"
+            ? "Средняя результативность около " +
+              avg10.toFixed(1) +
+              " г/м — предпосылки к «верху»."
+            : "Average scoring is around " +
+              avg10.toFixed(1) +
+              " goals/match, which supports the over."
         );
     }
   }
@@ -537,36 +600,56 @@ function explainTotals(ins, choice, offers) {
       var imp = impliedFromOdds(pick.odds);
       var edge = !isNil(pick.p) && !isNil(imp) ? pick.p - imp : null;
       parts.push(
-        "Модель склоняется к " +
-          LABELS.ou[choice] +
-          ": p " +
-          fmtPct(pick.p, 0) +
-          ", имплайд " +
-          fmtPct(imp, 0) +
-          (edge != null ? ", запас " + fmtPct(edge, 1) + "." : ".")
+        language === "ru"
+          ? "Модель склоняется к " +
+            labels.ou[choice] +
+            ": p " +
+            fmtPct(pick.p, 0) +
+            ", имплайд " +
+            fmtPct(imp, 0) +
+            (edge != null ? ", запас " + fmtPct(edge, 1) + "." : ".")
+          : "Model leans to " +
+            labels.ou[choice] +
+            ": p " +
+            fmtPct(pick.p, 0) +
+            ", implied " +
+            fmtPct(imp, 0) +
+            (edge != null ? ", edge " + fmtPct(edge, 1) + "." : ".")
       );
     } else {
       parts.push(
-        "Профиль матча указывает на " +
-          (choice === "under" ? "низ" : "верх") +
-          " по тоталу 2.5."
+        language === "ru"
+          ? "Профиль матча указывает на " +
+            (choice === "under" ? "низ" : "верх") +
+            " по тоталу 2.5."
+          : "The match profile points to " +
+            (choice === "under" ? "the under" : "the over") +
+            " on total 2.5."
       );
     }
   }
   return parts.join(" ");
 }
 
-function explainOutcome(ins, side, tri) {
+function explainOutcome(ins, side, tri, language) {
   var parts = [];
   if (tri && (!isNil(tri.pH) || !isNil(tri.pD) || !isNil(tri.pA))) {
     parts.push(
-      "Рынок: П1 " +
-        fmtPct(tri.pH, 0) +
-        " | Х " +
-        fmtPct(tri.pD, 0) +
-        " | П2 " +
-        fmtPct(tri.pA, 0) +
-        "."
+      language === "ru"
+        ? "Рынок: П1 " +
+          fmtPct(tri.pH, 0) +
+          " | Х " +
+          fmtPct(tri.pD, 0) +
+          " | П2 " +
+          fmtPct(tri.pA, 0) +
+          "."
+        : "Market: H " +
+          fmtPct(tri.pH, 0) +
+          " | D " +
+          fmtPct(tri.pD, 0) +
+          " | A " +
+          fmtPct(tri.pA, 0) +
+          "."
     );
   }
   if (ins) {
@@ -587,31 +670,43 @@ function explainOutcome(ins, side, tri) {
     if (side === "home") {
       if (homePts - awayPts >= 4)
         parts.push(
-          "Форма лучше: " +
-            (hForm ? hForm.txt : "-") +
-            " против " +
-            (aForm ? aForm.txt : "-") +
-            " (посл. 5)."
+          language === "ru"
+            ? "Форма лучше: " +
+              (hForm ? hForm.txt : "-") +
+              " против " +
+              (aForm ? aForm.txt : "-") +
+              " (посл. 5)."
+            : "Form edge: " +
+              (hForm ? hForm.txt : "-") +
+              " vs " +
+              (aForm ? aForm.txt : "-") +
+              " (last 5)."
         );
       if (isNum(hf) && hf >= 1.5)
-        parts.push("Хозяева забивают: " + hf.toFixed(1) + " г/м.");
+        parts.push(language === "ru" ? "Хозяева забивают: " + hf.toFixed(1) + " г/м." : "Home side scores: " + hf.toFixed(1) + " goals/match.");
       if (isNum(ag) && ag >= 1.3)
-        parts.push("Гости позволяют: " + ag.toFixed(1) + " г/м проп.");
+        parts.push(language === "ru" ? "Гости позволяют: " + ag.toFixed(1) + " г/м проп." : "Away side allows: " + ag.toFixed(1) + " goals conceded/match.");
     } else if (side === "away") {
       if (awayPts - homePts >= 4)
         parts.push(
-          "Гости в лучшей форме: " +
-            (aForm ? aForm.txt : "-") +
-            " против " +
-            (hForm ? hForm.txt : "-") +
-            " (посл. 5)."
+          language === "ru"
+            ? "Гости в лучшей форме: " +
+              (aForm ? aForm.txt : "-") +
+              " против " +
+              (hForm ? hForm.txt : "-") +
+              " (посл. 5)."
+            : "Away side is in better form: " +
+              (aForm ? aForm.txt : "-") +
+              " vs " +
+              (hForm ? hForm.txt : "-") +
+              " (last 5)."
         );
       if (isNum(af) && af >= 1.5)
-        parts.push("Гости остры в атаке: " + af.toFixed(1) + " г/м.");
+        parts.push(language === "ru" ? "Гости остры в атаке: " + af.toFixed(1) + " г/м." : "Away side is sharp in attack: " + af.toFixed(1) + " goals/match.");
       if (isNum(hg) && hg >= 1.3)
-        parts.push("Хозяева уязвимы: " + hg.toFixed(1) + " г/м проп.");
+        parts.push(language === "ru" ? "Хозяева уязвимы: " + hg.toFixed(1) + " г/м проп." : "Home side is vulnerable: " + hg.toFixed(1) + " goals conceded/match.");
     } else {
-      parts.push("Матч близкий по силам — шансы сопоставимы.");
+      parts.push(language === "ru" ? "Матч близкий по силам — шансы сопоставимы." : "This is a close matchup with similar chances.");
     }
     if (
       valOr(h2h.home_wins, 0) +
@@ -620,13 +715,21 @@ function explainOutcome(ins, side, tri) {
       0
     ) {
       parts.push(
-        "Очные: " +
-          valOr(h2h.home_wins, 0) +
-          "-" +
-          valOr(h2h.draws, 0) +
-          "-" +
-          valOr(h2h.away_wins, 0) +
-          " со стороны хозяев."
+        language === "ru"
+          ? "Очные: " +
+            valOr(h2h.home_wins, 0) +
+            "-" +
+            valOr(h2h.draws, 0) +
+            "-" +
+            valOr(h2h.away_wins, 0) +
+            " со стороны хозяев."
+          : "H2H: " +
+            valOr(h2h.home_wins, 0) +
+            "-" +
+            valOr(h2h.draws, 0) +
+            "-" +
+            valOr(h2h.away_wins, 0) +
+            " from the home side perspective."
       );
     }
   }
@@ -691,7 +794,8 @@ function preferUnderByInsights(ins) {
 }
 
 /* ================== Выбор ставок ================== */
-function chooseTotals(offers, ins, fixture) {
+function chooseTotals(offers, ins, fixture, language) {
+  const labels = labelSet(language);
   var ou = (offers || [])
     .filter(function (o) {
       return o.market === "OU25";
@@ -766,7 +870,7 @@ function chooseTotals(offers, ins, fixture) {
       return {
         market: "OU25",
         outcome: outKey,
-        label: LABELS.ou[outKey] || "Тотал 2.5",
+        label: labels.ou[outKey] || (language === "ru" ? "Тотал 2.5" : "Total 2.5"),
         p: valOr(best.p, null),
         odds: valOr(best.odds, null),
         ev: isNum(best.ev)
@@ -774,8 +878,11 @@ function chooseTotals(offers, ins, fixture) {
           : !isNil(best.p) && !isNil(best.odds)
           ? calcEV(best.p, best.odds)
           : null,
+        portfolio_tier: best.portfolio_tier || null,
+        saved: !!best.portfolio_tier,
+        tier: best.portfolio_tier === "WATCH" ? "WATCH" : null,
         _mode: !isNil(best.odds) ? "market" : "model",
-        text: explainTotals(ins || null, outKey, offers),
+        text: explainTotals(ins || null, outKey, offers, language),
       };
     }
   }
@@ -786,16 +893,17 @@ function chooseTotals(offers, ins, fixture) {
   return {
     market: "OU25",
     outcome: out2,
-    label: LABELS.ou[out2],
+    label: labels.ou[out2],
     p: pGuess,
     odds: null,
     ev: null,
     _mode: "model",
-    text: explainTotals(ins || null, out2, offers),
+    text: explainTotals(ins || null, out2, offers, language),
   };
 }
 
-function chooseOutcome(offers, leagueName, ins, triad) {
+function chooseOutcome(offers, leagueName, ins, triad, language) {
+  const labels = labelSet(language);
   var lt = leagueFrontTuning(leagueName);
   var oneX2 = (offers || [])
     .filter(function (o) {
@@ -872,12 +980,15 @@ function chooseOutcome(offers, leagueName, ins, triad) {
       return {
         market: "1X2",
         outcome: "draw",
-        label: LABELS.outcome.draw,
+        label: labels.outcome.draw,
         p: pD,
         odds: odD,
         ev: evD,
+        portfolio_tier: bestDraw && bestDraw.portfolio_tier ? bestDraw.portfolio_tier : null,
+        saved: !!(bestDraw && bestDraw.portfolio_tier),
+        tier: bestDraw && bestDraw.portfolio_tier === "WATCH" ? "WATCH" : null,
         _mode: "market",
-        text: explainOutcome(ins || null, "draw", tri),
+        text: explainOutcome(ins || null, "draw", tri, language),
       };
     }
     if (side && isNum(sideEV) && sideEV > 0) {
@@ -886,12 +997,27 @@ function chooseOutcome(offers, leagueName, ins, triad) {
       return {
         market: "1X2",
         outcome: side,
-        label: LABELS.outcome[side],
+        label: labels.outcome[side],
         p: pSide,
         odds: oddsSide,
         ev: sideEV,
+        portfolio_tier:
+          side === "home"
+            ? bestHome && bestHome.portfolio_tier
+            : bestAway && bestAway.portfolio_tier,
+        saved: !!(
+          side === "home"
+            ? bestHome && bestHome.portfolio_tier
+            : bestAway && bestAway.portfolio_tier
+        ),
+        tier:
+          (side === "home"
+            ? bestHome && bestHome.portfolio_tier
+            : bestAway && bestAway.portfolio_tier) === "WATCH"
+            ? "WATCH"
+            : null,
         _mode: "market",
-        text: explainOutcome(ins || null, side, tri),
+        text: explainOutcome(ins || null, side, tri, language),
       };
     }
     var sideProb = pH >= pA ? "home" : "away";
@@ -901,12 +1027,12 @@ function chooseOutcome(offers, leagueName, ins, triad) {
     return {
       market: "1X2",
       outcome: sideProb,
-      label: LABELS.outcome[sideProb],
+      label: labels.outcome[sideProb],
       p: pProb,
       odds: oddsProb,
       ev: evProb,
       _mode: "market",
-      text: explainOutcome(ins || null, sideProb, tri),
+      text: explainOutcome(ins || null, sideProb, tri, language),
     };
   }
 
@@ -935,12 +1061,27 @@ function chooseOutcome(offers, leagueName, ins, triad) {
     return {
       market: "1X2",
       outcome: sideFinal,
-      label: LABELS.outcome[sideFinal],
+      label: labels.outcome[sideFinal],
       p: pF,
       odds: oddsF,
       ev: evF,
+      portfolio_tier:
+        sideFinal === "home"
+          ? bestHome && bestHome.portfolio_tier
+          : bestAway && bestAway.portfolio_tier,
+      saved: !!(
+        sideFinal === "home"
+          ? bestHome && bestHome.portfolio_tier
+          : bestAway && bestAway.portfolio_tier
+      ),
+      tier:
+        (sideFinal === "home"
+          ? bestHome && bestHome.portfolio_tier
+          : bestAway && bestAway.portfolio_tier) === "WATCH"
+          ? "WATCH"
+          : null,
       _mode: "market",
-      text: explainOutcome(ins || null, sideFinal, tri),
+      text: explainOutcome(ins || null, sideFinal, tri, language),
     };
   }
 
@@ -953,12 +1094,12 @@ function chooseOutcome(offers, leagueName, ins, triad) {
   return {
     market: "1X2",
     outcome: sideModel,
-    label: LABELS.outcome[sideModel],
+    label: labels.outcome[sideModel],
     p: clamp01(pGuess),
     odds: null,
     ev: null,
     _mode: "model",
-    text: explainOutcome(ins || null, sideModel, tri),
+    text: explainOutcome(ins || null, sideModel, tri, language),
   };
 }
 
@@ -1191,6 +1332,7 @@ function TeamOverlayIframe(props) {
 
 /* ================== Двойная карточка матча (EdgeScore стиль) ================== */
 function DualCard(props) {
+  const { language } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   var fixture = props.fixture;
   var offers = props.offers || [];
@@ -1220,8 +1362,8 @@ function DualCard(props) {
   var decisionDrawSwitch = !!fixture.decision_draw_switch;
   var decisionTotalSwitch = !!fixture.decision_total_switch;
 
-  var outcome = chooseOutcome(offers, fixture.league, ins, tri);
-  var total = chooseTotals(offers, ins, fixture);
+  var outcome = chooseOutcome(offers, fixture.league, ins, tri, language);
+  var total = chooseTotals(offers, ins, fixture, language);
   var outcomeVerdict = assessRec(outcome, fixture.league);
   var totalVerdict = assessRec(total, fixture.league);
   if (!includeNoBet && outcomeVerdict.tier === "NO BET" && totalVerdict.tier === "NO BET") {
@@ -1239,14 +1381,14 @@ function DualCard(props) {
       <div className="text-[11px] text-slate-400 mt-1 space-y-0.5">
         {hasProb ? (
           <div>
-            Вероятности: П1 {fmtPct(tri.pH, 0)} · Х{" "}
-            {fmtPct(tri.pD, 0)} · П2 {fmtPct(tri.pA, 0)}
+            {language === "ru" ? "Вероятности" : "Probabilities"}: {language === "ru" ? "П1" : "H"} {fmtPct(tri.pH, 0)} · {language === "ru" ? "Х" : "D"}{" "}
+            {fmtPct(tri.pD, 0)} · {language === "ru" ? "П2" : "A"} {fmtPct(tri.pA, 0)}
           </div>
         ) : null}
         {hasOdds ? (
           <div>
-            Кэфы: П1 {fmtNum(tri.odH, 2)} · Х{" "}
-            {fmtNum(tri.odD, 2)} · П2 {fmtNum(tri.odA, 2)}
+            {language === "ru" ? "Кэфы" : "Odds"}: {language === "ru" ? "П1" : "H"} {fmtNum(tri.odH, 2)} · {language === "ru" ? "Х" : "D"}{" "}
+            {fmtNum(tri.odD, 2)} · {language === "ru" ? "П2" : "A"} {fmtNum(tri.odA, 2)}
           </div>
         ) : null}
       </div>
@@ -1274,18 +1416,19 @@ function DualCard(props) {
       ev: rec.ev,
       home: fixture.home_team,
       away: fixture.away_team,
+      language: language,
     });
     var kFull = kellyFraction(rec.p, rec.odds) || 0;
     var kRec = Math.max(0, kFull * kellyCoef);
     var verdict = rec.market === "1X2" ? outcomeVerdict : totalVerdict;
     var decisionHot = false;
-    if (p.title === "Исход") {
+    if (p.title === "Исход" || p.title === "Outcome") {
       if (decisionDrawSwitch || hasDecisionTag("draw switch")) {
         decisionHot = true;
       } else if (decisionCloseFlag && hasDecisionTag("close flagged")) {
         decisionHot = true;
       }
-    } else if (p.title === "Тотал 2.5") {
+    } else if (p.title === "Тотал 2.5" || p.title === "Total 2.5") {
       if (decisionTotalSwitch || hasDecisionTag("total switch")) {
         decisionHot = true;
       }
@@ -1298,8 +1441,18 @@ function DualCard(props) {
         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-50">
           <span className="text-slate-300/90">{p.title}:</span>
           <span className="text-white/90 font-semibold">{rec.label}</span>
+          {p.title === "Исход" || p.title === "Outcome" ? (
+            <span className="rounded-full border border-sky-400/20 px-2 py-0.5 text-[11px] text-sky-200/90">
+              v6 predictor
+            </span>
+          ) : null}
+          {p.title === "Тотал 2.5" || p.title === "Total 2.5" ? (
+            <span className="rounded-full border border-emerald-400/20 px-2 py-0.5 text-[11px] text-emerald-200/90">
+              totals auto
+            </span>
+          ) : null}
           <span className="text-slate-300">
-            p {fmtPct(rec.p, 0)} · odds {fmtNum(rec.odds, 2)} · EV{" "}
+            {language === "ru" ? "p" : "p"} {fmtPct(rec.p, 0)} · {language === "ru" ? "коэфф." : "odds"} {fmtNum(rec.odds, 2)} · EV{" "}
             <span
               className={
                 isNum(rec.ev)
@@ -1316,25 +1469,25 @@ function DualCard(props) {
           </span>
           <span className="flex-1" />
           {verdict.status === "skip" ? (
-            <span className="rounded-full border border-rose-400/30 px-2 py-0.5 text-[11px] text-rose-300/90">
-              Пропустить
+            <span className="rounded-full border border-rose-400/24 px-2 py-0.5 text-[11px] text-rose-300/90">
+              {language === "ru" ? "Пропустить" : "Skip"}
             </span>
           ) : verdict.status === "ok" ? (
-            <span className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-white/70">
-              Наблюдать
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/70">
+              {language === "ru" ? "Наблюдать" : "Watch"}
             </span>
           ) : (
-            <span className="rounded-full border border-emerald-400/35 px-2 py-0.5 text-[11px] text-emerald-300/90">
-              Рекомендуется
+            <span className="rounded-full border border-emerald-400/24 px-2 py-0.5 text-[11px] text-emerald-300/90">
+              {language === "ru" ? "Рекомендуется" : "Recommended"}
             </span>
           )}
           {isHot ? (
-            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-white/60">
+            <span className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-white/60">
               Hot
             </span>
           ) : null}
         </div>
-        {p.title === "Исход" ? <TriadLine /> : null}
+        {p.title === "Исход" || p.title === "Outcome" ? <TriadLine /> : null}
         {(policyText || rec.text) ? (
           <div className="text-sm leading-relaxed text-slate-200/90">
             {policyText || rec.text}
@@ -1342,7 +1495,7 @@ function DualCard(props) {
         ) : null}
         {verdict.status === "skip" && verdict.reasons.length ? (
           <div className="text-[12px] text-slate-400">
-            Причина: {verdict.reasons.join(", ")}.
+            {language === "ru" ? "Причина" : "Reason"}: {verdict.reasons.join(", ")}.
           </div>
         ) : null}
       </div>
@@ -1358,44 +1511,68 @@ function DualCard(props) {
       var aForm = formLabel(
         valOr(ins.away && (ins.away.form_last5 || ins.away.form), null)
       );
-      if (hForm) lines.push("Хозяева: серия " + hForm.txt + ".");
-      if (aForm) lines.push("Гости: серия " + aForm.txt + ".");
+      if (hForm) lines.push(language === "ru" ? "Хозяева: серия " + hForm.txt + "." : "Home: streak " + hForm.txt + ".");
+      if (aForm) lines.push(language === "ru" ? "Гости: серия " + aForm.txt + "." : "Away: streak " + aForm.txt + ".");
       var hf = valOr(ins.home && ins.home.gf_last5, null);
       var af = valOr(ins.away && ins.away.gf_last5, null);
       var hg = valOr(ins.home && ins.home.ga_last5, null);
       var ag = valOr(ins.away && ins.away.ga_last5, null);
       if (isNum(hf) && isNum(hg))
         lines.push(
-          "Хозяева: " +
-            hf.toFixed(1) +
-            " заб / " +
-            hg.toFixed(1) +
-            " проп. (5)."
+          language === "ru"
+            ? "Хозяева: " +
+              hf.toFixed(1) +
+              " заб / " +
+              hg.toFixed(1) +
+              " проп. (5)."
+            : "Home: " +
+              hf.toFixed(1) +
+              " scored / " +
+              hg.toFixed(1) +
+              " conceded (last 5)."
         );
       if (isNum(af) && isNum(ag))
         lines.push(
-          "Гости: " +
-            af.toFixed(1) +
-            " заб / " +
-            ag.toFixed(1) +
-            " проп. (5)."
+          language === "ru"
+            ? "Гости: " +
+              af.toFixed(1) +
+              " заб / " +
+              ag.toFixed(1) +
+              " проп. (5)."
+            : "Away: " +
+              af.toFixed(1) +
+              " scored / " +
+              ag.toFixed(1) +
+              " conceded (last 5)."
         );
       var avg10 = ins.totals ? ins.totals.avg_goals_last10 : null;
       if (isNum(avg10))
         lines.push(
-          "Средняя результативность ≈ " +
-            avg10.toFixed(1) +
-            " г/м."
+          language === "ru"
+            ? "Средняя результативность ≈ " +
+              avg10.toFixed(1) +
+              " г/м."
+            : "Average scoring ≈ " +
+              avg10.toFixed(1) +
+              " goals/match."
         );
     } else if (tri) {
       lines.push(
-        "Шансы по рынку: П1 " +
-          fmtPct(tri.pH, 0) +
-          ", Х " +
-          fmtPct(tri.pD, 0) +
-          ", П2 " +
-          fmtPct(tri.pA, 0) +
-          "."
+        language === "ru"
+          ? "Шансы по рынку: П1 " +
+            fmtPct(tri.pH, 0) +
+            ", Х " +
+            fmtPct(tri.pD, 0) +
+            ", П2 " +
+            fmtPct(tri.pA, 0) +
+            "."
+          : "Market chances: H " +
+            fmtPct(tri.pH, 0) +
+            ", D " +
+            fmtPct(tri.pD, 0) +
+            ", A " +
+            fmtPct(tri.pA, 0) +
+            "."
       );
     }
     var visible = lines.slice(0, 4);
@@ -1405,7 +1582,7 @@ function DualCard(props) {
 
 
        <div className="font-semibold text-slate-50 mb-1.5">
-          Факты по форме
+          {language === "ru" ? "Факты по форме" : "Form facts"}
         </div>
         <ul className="list-disc pl-5 space-y-1.5">
           {visible.map(function (t, i) {
@@ -1469,6 +1646,11 @@ function DualCard(props) {
             {fixture.round ? " • " + fixture.round : ""}
             {fixture.league ? " • " + fixture.league : ""}
           </span>
+          {String(fixture.portfolio_mode || "").toUpperCase() === "WATCH" ? (
+            <span className="rounded-full border border-amber-400/28 bg-amber-400/12 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-amber-100">
+              {language === "ru" ? "watch" : "watch"}
+            </span>
+          ) : null}
         </div>
 
         {/* Лучший выбор модели — премиальный CTA */}
@@ -1498,14 +1680,16 @@ function DualCard(props) {
               });
             });
             return (
-              <div className="mt-4 mb-3 border-l border-white/12 pl-3.5 py-1">
+              <div className="mt-4 mb-3 rounded-[22px] border border-white/[0.06] bg-white/[0.02] px-4 py-3">
                 <div className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                  Матч рекомендуется пропустить
+                  {language === "ru" ? "Матч рекомендуется пропустить" : "Match is better skipped"}
                 </div>
                 <div className="mt-1 text-[13px] text-slate-300/85">
                   {reasons.length
-                    ? "Причины: " + reasons.join(", ") + "."
-                    : "Модель не видит достаточного преимущества по линии рынка."}
+                    ? (language === "ru" ? "Причины: " : "Reasons: ") + reasons.join(", ") + "."
+                    : language === "ru"
+                    ? "Модель не видит достаточного преимущества по линии рынка."
+                    : "The model does not see enough edge against the market line."}
                 </div>
               </div>
             );
@@ -1518,16 +1702,21 @@ function DualCard(props) {
               : "text-slate-300";
 
           return (
-            <div className="mt-4 mb-3 border-l border-white/12 pl-3.5 py-1">
+            <div className="mt-4 mb-3 rounded-[22px] border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.025] px-4 py-3 ring-1 ring-white/[0.025]">
               <div className="flex items-center gap-2 text-sm font-semibold text-white/85">
-                Лучший выбор модели:
-                <span className="text-white">{best.rec.label}</span>
+                {language === "ru" ? "Лучший выбор модели:" : "Best model pick:"}
+                <span className="rounded-full border border-white/[0.06] bg-white/[0.06] px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-white">{best.rec.label}</span>
+                {best.rec.portfolio_tier === "WATCH" ? (
+                  <span className="rounded-full border border-amber-400/28 bg-amber-400/12 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-amber-100">
+                    Watch
+                  </span>
+                ) : null}
               </div>
 
               <div className="mt-1 text-[13px] flex flex-wrap gap-4 text-slate-300">
                 {isNum(best.rec.p) && (
                   <span>
-                    Вероятность:{" "}
+                    {language === "ru" ? "Вероятность" : "Probability"}:{" "}
                     <span className="text-slate-50">
                       {fmtPct(best.rec.p, 0)}
                     </span>
@@ -1535,7 +1724,7 @@ function DualCard(props) {
                 )}
                 {isNum(best.rec.odds) && (
                   <span>
-                    Кэф:{" "}
+                    {language === "ru" ? "Odds" : "Odds"}:{" "}
                     <span className="text-slate-50">
                       {fmtNum(best.rec.odds, 2)}
                     </span>
@@ -1545,12 +1734,12 @@ function DualCard(props) {
                   <span className={tone}>EV: {fmtPct(best.rec.ev, 1)}</span>
                 )}
                 <span className="text-slate-300">
-                  Сигнал:{" "}
+                  {language === "ru" ? "Сигнал" : "Signal"}:{" "}
                   {best.verdict.status === "hot"
-                    ? "сильный"
+                    ? language === "ru" ? "сильный" : "strong"
                     : best.verdict.status === "ok"
-                    ? "умеренный"
-                    : "наблюдать"}
+                    ? language === "ru" ? "умеренный" : "moderate"
+                    : language === "ru" ? "наблюдать" : "watch"}
                 </span>
               </div>
 
@@ -1559,6 +1748,12 @@ function DualCard(props) {
                   {best.rec.text}
                 </div>
               )}
+              {best.rec.portfolio_tier === "WATCH" && fixture.watch_reason ? (
+                <div className="mt-2 text-[12px] text-amber-100/80">
+                  {language === "ru" ? "Не auto: " : "Not auto: "}
+                  {fixture.watch_reason}
+                </div>
+              ) : null}
             </div>
           );
         })()}
@@ -1572,9 +1767,9 @@ function DualCard(props) {
                 return !v;
               });
             }}
-            className="inline-flex items-center gap-2 px-0 py-0 text-sm text-white/60 transition hover:text-white"
+            className="inline-flex items-center gap-2 rounded-full border border-white/[0.05] bg-white/[0.025] px-3 py-1.5 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white"
           >
-            <span>{expanded ? "Скрыть детали" : "Раскрыть детали"}</span>
+            <span>{expanded ? (language === "ru" ? "Скрыть детали" : "Hide details") : (language === "ru" ? "Раскрыть детали" : "Show details")}</span>
             <span className={expanded ? "rotate-180 transition-transform" : "transition-transform"}>⌄</span>
           </button>
         </div>
@@ -1582,10 +1777,10 @@ function DualCard(props) {
         {expanded ? (
           <div className="mt-4 space-y-5">
             <div className="py-1">
-              <Row title="Исход" rec={outcome} compact />
+              <Row title={language === "ru" ? "Исход" : "Outcome"} rec={outcome} compact />
             </div>
             <div className="py-1">
-              <Row title="Тотал 2.5" rec={total} compact />
+              <Row title={language === "ru" ? "Тотал 2.5" : "Total 2.5"} rec={total} compact />
             </div>
             <div className="py-1">
               <Facts compact />
@@ -1600,12 +1795,14 @@ function DualCard(props) {
 
 /* ================== Страница ================== */
 export default function BestPicksRoundPage() {
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [sp] = useSearchParams();
 
   const [league, setLeague] = useState(sp.get("league") || "All");
   const [round, setRound] = useState("");
   const [kellyCoef, setKellyCoef] = useState(0.25);
+  const [signalMode, setSignalMode] = useState("auto");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1623,7 +1820,7 @@ export default function BestPicksRoundPage() {
     teamId: null,
   });
 
-  const range = seasonRange2025();
+  const range = compactPicksRange();
   const from = range.from,
     to = range.to;
 
@@ -1653,22 +1850,33 @@ export default function BestPicksRoundPage() {
       setLoading(true);
       setError("");
       try {
-        var qs1 = new URLSearchParams({
-          from_date: from,
-          to_date: to,
-          season: FIXED_SEASON,
-        });
-        var data1 = await fetchJSONCached(
-          API_ROUTES.matches + "?" + qs1.toString(),
-          TTL_MATCHES
-        );
-        var matchesList = Array.isArray(data1) ? data1 : [];
-        setMatches(matchesList);
+        var matchesPromise = Promise.resolve([]);
+        if (league === "All") {
+          setMatches([]);
+        } else {
+          var qs1 = new URLSearchParams({
+            from_date: from,
+            to_date: to,
+            league: league,
+            season: FIXED_SEASON,
+            include_upcoming: "true",
+            limit: "96",
+          });
+          matchesPromise = fetchJSONCached(
+            API_ROUTES.matches + "?" + qs1.toString(),
+            TTL_MATCHES
+          );
+        }
 
-        var upPromises = TOP_LEAGUES.map(function (L) {
+        var leaguesToFetch = league === "All" ? TOP_LEAGUES : [league];
+        var upPromises = leaguesToFetch.map(function (L) {
           var qsU = new URLSearchParams({
             league: L,
+            from_date: from,
+            to_date: to,
             season: FIXED_SEASON,
+            include_upcoming: "true",
+            limit: "48",
           });
           return fetchJSONCached(
             API_ROUTES.upcoming + "?" + qsU.toString(),
@@ -1734,24 +1942,37 @@ export default function BestPicksRoundPage() {
               });
           });
         });
-        var upAll = await Promise.all(upPromises);
-        var upcomingList = [].concat.apply([], upAll);
-        setUpcoming(upcomingList);
 
         var qs2 = new URLSearchParams({
           from_date: from,
           to_date: to,
           include_nobet: "false",
           trust_single_book: "true",
-          top_n: "80",
+          top_n: "40",
           limit_pairs_each: "8",
           limit_triples_each: "8",
           return_fixtures: "true",
         });
-        var data2 = await fetchJSONCached(
+        if (league !== "All") qs2.set("league", league);
+        var bestPicksPromise = fetchJSONCached(
           API_ROUTES.bestPicks + "?" + qs2.toString(),
           TTL_BESTPICKS
         );
+
+        var [matchesData, upAll, data2] = await Promise.all([
+          matchesPromise,
+          Promise.all(upPromises),
+          bestPicksPromise,
+        ]);
+
+        if (league !== "All") {
+          var matchesList = Array.isArray(matchesData) ? matchesData : [];
+          setMatches(matchesList);
+        }
+
+        var upcomingList = [].concat.apply([], upAll);
+        setUpcoming(upcomingList);
+
         setFixturesRaw(valOr(data2 && data2.fixtures, []));
         setInsightsMap(new Map());
         setVisibleCount(PAGE_SIZE);
@@ -1762,21 +1983,48 @@ export default function BestPicksRoundPage() {
       }
     }
     fetchAll();
-  }, [from, to]);
+  }, [from, to, league]);
 
   // офферы по фикстуре
   const offersByFixture = useMemo(
     function () {
       var m = new Map();
       (fixturesRaw || []).forEach(function (f) {
+        var srcOffers =
+          Array.isArray(f.auto_offers) && f.auto_offers.length
+            ? f.auto_offers
+            : Array.isArray(f.watch_offers) && f.watch_offers.length
+            ? f.watch_offers
+            : f.offers || [];
         m.set(
           f.fixture_id,
-          frontPruneOffers(f.offers || [], f.league)
+          frontPruneOffers(srcOffers, f.league)
         );
       });
       return m;
     },
     [fixturesRaw]
+  );
+
+  const displayOffersByFixture = useMemo(
+    function () {
+      var m = new Map();
+      (fixturesRaw || []).forEach(function (f) {
+        var autoOffers = Array.isArray(f.auto_offers) ? f.auto_offers : [];
+        var watchOffers = Array.isArray(f.watch_offers) ? f.watch_offers : [];
+        var srcOffers =
+          signalMode === "auto"
+            ? autoOffers
+            : signalMode === "watch"
+            ? watchOffers
+            : autoOffers.length
+            ? autoOffers
+            : watchOffers;
+        m.set(f.fixture_id, frontPruneOffers(srcOffers || [], f.league));
+      });
+      return m;
+    },
+    [fixturesRaw, signalMode]
   );
 
   const decisionMetaByFixture = useMemo(
@@ -1797,6 +2045,10 @@ export default function BestPicksRoundPage() {
           best_bet_ev: f.best_bet_ev,
           best_bet_odds: f.best_bet_odds,
           bet_reason: f.bet_reason,
+          portfolio_mode: f.portfolio_mode || "",
+          watch_reason: f.watch_reason || "",
+          auto_offers_count: Array.isArray(f.auto_offers) ? f.auto_offers.length : 0,
+          watch_offers_count: Array.isArray(f.watch_offers) ? f.watch_offers.length : 0,
         });
       });
       return m;
@@ -2001,7 +2253,12 @@ export default function BestPicksRoundPage() {
       });
       if (INCLUDE_NO_BET) return filtered;
       return filtered.filter(function (f) {
-        var offers = offersByFixture.get(f.fixture_id) || [];
+        var mode = String(signalMode || "auto").toLowerCase();
+        var portfolioMode = String(f.portfolio_mode || "").toUpperCase();
+        if (mode === "auto" && portfolioMode !== "AUTO") return false;
+        if (mode === "watch" && portfolioMode !== "WATCH") return false;
+        if (mode === "watch" && portfolioMode === "WATCH") return true;
+        var offers = displayOffersByFixture.get(f.fixture_id) || [];
         var outRec = chooseOutcome(
           offers,
           f.league,
@@ -2015,10 +2272,10 @@ export default function BestPicksRoundPage() {
         );
         var outTier = assessRec(outRec, f.league).tier;
         var totTier = assessRec(totRec, f.league).tier;
-        return outTier !== "NO BET" || totTier !== "NO BET";
+        return outTier !== "NO BET" || outTier === "WATCH" || totTier !== "NO BET" || totTier === "WATCH";
       });
     },
-    [fixturesAll, league, round, offersByFixture]
+    [fixturesAll, league, round, displayOffersByFixture, signalMode]
   );
 
   useEffect(
@@ -2090,43 +2347,78 @@ export default function BestPicksRoundPage() {
   /* ================== Рендер ================== */
   return (
     <div className="min-h-screen text-slate-50">
-      <div className="type-page w-full px-4 py-8 space-y-8">
+      <div className="type-page w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
         {/* шапка страницы */}
-        <div className="glass-card px-6 py-5 flex items-start justify-between gap-4 flex-wrap">
-          <div className="type-title-block">
+        <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+          <div className="min-w-0 type-title-block">
             <div className="inline-flex items-center gap-2 px-0 py-0 text-[10px] uppercase tracking-[0.18em] text-white/45">
               EdgeScore Premium
             </div>
             <h1 className="type-page-title">
-              Подборки ставок · сезон {FIXED_SEASON}
+              {t("bestPicksTitle")} · {t("season").toLowerCase()} {FIXED_SEASON}
             </h1>
             <div className="type-subtitle">
-              {league === "All" ? "Все лиги" : league}
+              {league === "All" ? t("allLeagues") : league}
             </div>
             <p className="type-body max-w-2xl">
-              Две рекомендации по матчам: исход и тотал 2.5 с пояснениями модели.
+              {t("bestPicksLead")}
             </p>
+          </div>
           </div>
         </div>
 
         {/* фильтры (раунд + Kelly) */}
-        <div className="px-2 md:px-4 flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400 uppercase tracking-wide">
-              Раунд
+        <div className="surface-toolbar px-3 py-3 md:px-4">
+          <div className="flex items-center gap-3 flex-wrap sm:gap-4">
+          <div className="surface-chip">
+            <span className="surface-chip-label">
+              {language === "ru" ? "Режим" : "Mode"}
+            </span>
+            <div className="inline-flex rounded-full border border-white/[0.06] bg-white/[0.03] p-1">
+              {[
+                { key: "auto", label: "AUTO" },
+                { key: "watch", label: "WATCH" },
+                { key: "all", label: "ALL" },
+              ].map(function (opt) {
+                var active = signalMode === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={function () {
+                      setSignalMode(opt.key);
+                      setVisibleCount(PAGE_SIZE);
+                    }}
+                    className={
+                      "rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.08em] transition " +
+                      (active
+                        ? "bg-white text-slate-900"
+                        : "text-slate-300 hover:bg-white/[0.05]")
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="surface-chip">
+            <span className="surface-chip-label">
+              {t("round")}
             </span>
             <select
               value={round}
               onChange={function (e) {
                 setRound(e.target.value);
               }}
-              className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-100 disabled:opacity-40"
+              className="surface-select"
               disabled={league === "All"}
             >
-              <option value="">Ближайший</option>
+              <option value="">{t("nearest")}</option>
               {league !== "All" && rounds.length === 0 ? (
                 <option value="" disabled>
-                  — нет раундов —
+                  - {t("noRounds")} -
                 </option>
               ) : null}
               {league !== "All" &&
@@ -2139,8 +2431,8 @@ export default function BestPicksRoundPage() {
                 })}
             </select>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400 uppercase tracking-wide">
+          <div className="surface-chip">
+            <span className="surface-chip-label">
               Kelly ×
             </span>
             <input
@@ -2152,22 +2444,23 @@ export default function BestPicksRoundPage() {
               onChange={function (e) {
                 setKellyCoef(Number(e.target.value));
               }}
-              className="w-36 accent-slate-300"
+              className="w-28 accent-slate-300 sm:w-36"
             />
             <div className="w-10 text-right text-xs font-mono text-slate-100">
               {Math.round(kellyCoef * 100)}%
             </div>
           </div>
+          </div>
         </div>
 
         {loading ? (
-          <div className="text-slate-300/90 mb-4">
-            Загружаем премиальные подборки…
+          <div className="surface-loading mb-4">
+            {t("loadingPremiumPicks")}
           </div>
         ) : null}
         {error ? (
-          <div className="text-rose-400 mb-4">
-            Ошибка: {error}
+          <div className="surface-error mb-4">
+            {t("errorPrefix")}: {error}
           </div>
         ) : null}
 
@@ -2181,21 +2474,21 @@ export default function BestPicksRoundPage() {
                       src={leagueLogoSrc(league)}
                       alt={league}
                       size={20}
-                      className="rounded-full bg-surface-3 border border-slate-700/70"
+                      className="rounded-full bg-surface-3 border border-slate-700/55"
                     />
                   ) : null}
                   <span>
                     {league} — {prettyRound(round)}
                   </span>
                 </h2>
-                <div className="text-xs text-slate-500">
-                  Матчей: {selectedFixtures.length}
+                <div className="rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1 text-[11px] text-slate-400">
+                  {t("matchesCount")}: {selectedFixtures.length}
                 </div>
               </div>
             )}
 
             {/* широкие карточки (2 в ряд) */}
-            <div className="px-2 md:px-4 grid grid-cols-1 xl:grid-cols-2 gap-5 mb-10">
+            <div className="px-1 md:px-4 grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 mb-10">
               {selectedFixtures
                 .slice(0, visibleCount)
                 .map(function (f) {
@@ -2204,7 +2497,7 @@ export default function BestPicksRoundPage() {
                       key={f.fixture_id}
                       fixture={f}
                       offers={valOr(
-                        offersByFixture.get(f.fixture_id),
+                        displayOffersByFixture.get(f.fixture_id),
                         []
                       )}
                       ins={f._insights}
@@ -2229,9 +2522,19 @@ export default function BestPicksRoundPage() {
 
             <div ref={loadMoreRef}></div>
 
-            {league === "All" && !selectedFixtures.length ? (
+            {!selectedFixtures.length ? (
               <div className="text-slate-300/80">
-                Нет матчей с доступным прогнозом.
+                {signalMode === "auto"
+                  ? language === "ru"
+                    ? "Нет матчей с активным auto-сигналом."
+                    : "No matches with an active auto signal."
+                  : signalMode === "watch"
+                  ? language === "ru"
+                    ? "Нет матчей в watch-листе."
+                    : "No matches in the watchlist."
+                  : language === "ru"
+                  ? "Нет матчей с доступным прогнозом."
+                  : "No matches with an available prediction."}
               </div>
             ) : null}
           </>

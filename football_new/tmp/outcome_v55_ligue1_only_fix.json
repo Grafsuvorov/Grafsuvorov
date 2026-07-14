@@ -1,0 +1,19 @@
+{
+  "overall": {
+    "matches": 1478,
+    "base_accuracy": 0.528417,
+    "corrected_accuracy": 0.530447,
+    "market_accuracy": 0.535859,
+    "recovered_matches": 11
+  },
+  "ligue1_only": {
+    "matches": 235,
+    "base_accuracy": 0.497872,
+    "corrected_accuracy": 0.510638,
+    "market_accuracy": 0.519149
+  },
+  "chosen_counts": {
+    "(0.45, 0.36, 0.01)": 4,
+    "(0.42, 0.36, 0.01)": 4
+  }
+}

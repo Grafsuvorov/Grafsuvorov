@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/auth/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { useLanguage } from "@/context/LanguageContext.jsx";
 
-export default function AuthIndicator() {
+export default function AuthIndicator({ compact = false }) {
   const { user, isAuthenticated, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
@@ -32,23 +34,25 @@ export default function AuthIndicator() {
           onClick={() => navigate("/login")}
           className={clsx(
             "rounded-full px-4 py-2 text-sm font-medium transition",
+            compact && "px-3 py-1.5 text-[12px]",
             "text-slate-200/90 hover:text-white",
             "hover:bg-white/5"
           )}
         >
-          Вход в аккаунт
+          {t("signIn")}
         </button>
         <button
           onClick={() => navigate("/register")}
           className={clsx(
             "rounded-full px-5 py-2 text-sm font-semibold transition",
+            compact && "px-3.5 py-1.5 text-[12px]",
             "text-white",
             "bg-gradient-to-r from-[#7C5CFF] via-[#9B78FF] to-[#B77CFF]",
             "shadow-[0_0_20px_rgba(124,92,255,0.35)]",
             "hover:shadow-[0_0_28px_rgba(124,92,255,0.5)]"
           )}
         >
-          Регистрация
+          {t("signUp")}
         </button>
       </div>
     );
@@ -72,20 +76,22 @@ export default function AuthIndicator() {
           {user?.username?.charAt(0)?.toUpperCase() || "U"}
         </div>
 
-        <span className="hidden md:block text-slate-200/90 group-hover:text-white transition">
+        <span className={clsx("hidden text-slate-200/90 group-hover:text-white transition", !compact && "md:block")}>
           {user?.username}
         </span>
       </button>
 
-      <button
-        onClick={() => navigate("/profile")}
-        className="text-sm font-medium text-slate-300 hover:text-white transition"
-      >
-        Профиль
-      </button>
+      {!compact && (
+        <button
+          onClick={() => navigate("/profile")}
+          className="text-sm font-medium text-slate-300 hover:text-white transition"
+        >
+          {t("profile")}
+        </button>
+      )}
 
       {open && (
-        <div className="absolute right-0 mt-2 w-40 rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-[0_18px_45px_rgba(0,0,0,0.55)]">
+        <div className={clsx("absolute right-0 mt-2 w-40 rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-[0_18px_45px_rgba(0,0,0,0.55)]", compact ? "top-full" : "")}>
           <button
             onClick={() => {
               setOpen(false);
@@ -93,7 +99,7 @@ export default function AuthIndicator() {
             }}
             className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/5"
           >
-            Профиль
+            {t("profile")}
           </button>
           <button
             onClick={() => {
@@ -102,7 +108,7 @@ export default function AuthIndicator() {
             }}
             className="mt-1 w-full rounded-xl px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10"
           >
-            Выйти
+            {t("logOut")}
           </button>
         </div>
       )}

@@ -1,0 +1,132 @@
+{
+  "overall": {
+    "matches": 1478,
+    "base_accuracy": 0.528417,
+    "corrected_accuracy": 0.539242,
+    "market_accuracy": 0.535859,
+    "recovered_matches": 50
+  },
+  "chosen_counts": {
+    "(0.45, 0.36, 0.01)": 4,
+    "(0.4, 0.36, 0.01)": 2,
+    "(0.42, 0.36, 0.01)": 2
+  },
+  "by_group": {
+    "La Liga": {
+      "matches": 312,
+      "base_accuracy": 0.512821,
+      "corrected_accuracy": 0.554487,
+      "market_accuracy": 0.551282
+    },
+    "Ligue 1": {
+      "matches": 235,
+      "base_accuracy": 0.497872,
+      "corrected_accuracy": 0.510638,
+      "market_accuracy": 0.519149
+    },
+    "Other": {
+      "matches": 931,
+      "base_accuracy": 0.541353,
+      "corrected_accuracy": 0.541353,
+      "market_accuracy": 0.534909
+    }
+  },
+  "windows": [
+    {
+      "window": "2026-04-19__2026-05-19",
+      "cfg": {
+        "max_conf": 0.45,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 12,
+      "base_accuracy": 0.474654,
+      "corr_accuracy": 0.502304,
+      "market_accuracy": 0.506912
+    },
+    {
+      "window": "2026-03-20__2026-04-19",
+      "cfg": {
+        "max_conf": 0.4,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 1,
+      "base_accuracy": 0.515152,
+      "corr_accuracy": 0.521212,
+      "market_accuracy": 0.509091
+    },
+    {
+      "window": "2026-02-18__2026-03-20",
+      "cfg": {
+        "max_conf": 0.42,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 7,
+      "base_accuracy": 0.512953,
+      "corr_accuracy": 0.518135,
+      "market_accuracy": 0.53886
+    },
+    {
+      "window": "2026-01-19__2026-02-18",
+      "cfg": {
+        "max_conf": 0.42,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 3,
+      "base_accuracy": 0.53125,
+      "corr_accuracy": 0.541667,
+      "market_accuracy": 0.541667
+    },
+    {
+      "window": "2025-12-20__2026-01-19",
+      "cfg": {
+        "max_conf": 0.45,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 4,
+      "base_accuracy": 0.526596,
+      "corr_accuracy": 0.531915,
+      "market_accuracy": 0.521277
+    },
+    {
+      "window": "2025-11-20__2025-12-20",
+      "cfg": {
+        "max_conf": 0.45,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 13,
+      "base_accuracy": 0.547511,
+      "corr_accuracy": 0.561086,
+      "market_accuracy": 0.552036
+    },
+    {
+      "window": "2025-10-21__2025-11-20",
+      "cfg": {
+        "max_conf": 0.45,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 9,
+      "base_accuracy": 0.558282,
+      "corr_accuracy": 0.564417,
+      "market_accuracy": 0.546012
+    },
+    {
+      "window": "2024-04-29__2024-05-29",
+      "cfg": {
+        "max_conf": 0.4,
+        "min_market_home": 0.36,
+        "min_home_gap": 0.01
+      },
+      "recovered": 1,
+      "base_accuracy": 0.582734,
+      "corr_accuracy": 0.589928,
+      "market_accuracy": 0.582734
+    }
+  ]
+}

@@ -1,0 +1,204 @@
+{
+  "all_home": {
+    "bets": 35,
+    "wins": 11,
+    "hit_rate": 0.314286,
+    "avg_odds": 2.567771,
+    "avg_ev": 0.108735,
+    "profit": -8.86,
+    "roi": -0.253143
+  },
+  "by_votes": [
+    {
+      "bets": 1,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 3.59,
+      "avg_ev": 0.067825,
+      "profit": -1.0,
+      "roi": -1.0,
+      "votes": 0
+    },
+    {
+      "bets": 6,
+      "wins": 2,
+      "hit_rate": 0.333333,
+      "avg_odds": 2.836,
+      "avg_ev": 0.106863,
+      "profit": -1.544,
+      "roi": -0.257333,
+      "votes": 1
+    },
+    {
+      "bets": 6,
+      "wins": 1,
+      "hit_rate": 0.166667,
+      "avg_odds": 2.811,
+      "avg_ev": 0.097162,
+      "profit": -2.514,
+      "roi": -0.419,
+      "votes": 2
+    },
+    {
+      "bets": 4,
+      "wins": 2,
+      "hit_rate": 0.5,
+      "avg_odds": 2.3485,
+      "avg_ev": 0.088263,
+      "profit": 0.336,
+      "roi": 0.084,
+      "votes": 3
+    },
+    {
+      "bets": 3,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 2.264,
+      "avg_ev": 0.075988,
+      "profit": -3.0,
+      "roi": -1.0,
+      "votes": 4
+    },
+    {
+      "bets": 1,
+      "wins": 1,
+      "hit_rate": 1.0,
+      "avg_odds": 2.624,
+      "avg_ev": 0.182535,
+      "profit": 1.624,
+      "roi": 1.624,
+      "votes": 5
+    },
+    {
+      "bets": 5,
+      "wins": 0,
+      "hit_rate": 0.0,
+      "avg_odds": 2.5272,
+      "avg_ev": 0.141945,
+      "profit": -5.0,
+      "roi": -1.0,
+      "votes": 6
+    },
+    {
+      "bets": 5,
+      "wins": 3,
+      "hit_rate": 0.6,
+      "avg_odds": 2.5608,
+      "avg_ev": 0.1147,
+      "profit": 2.56,
+      "roi": 0.512,
+      "votes": 7
+    },
+    {
+      "bets": 4,
+      "wins": 2,
+      "hit_rate": 0.5,
+      "avg_odds": 2.0375,
+      "avg_ev": 0.116739,
+      "profit": -0.322,
+      "roi": -0.0805,
+      "votes": 8
+    }
+  ],
+  "best_configs": [
+    {
+      "min_votes": 5,
+      "short_odds_cap": 2.0,
+      "bets": 13,
+      "wins": 5,
+      "hit_rate": 0.384615,
+      "avg_odds": 2.522462,
+      "avg_ev": 0.137851,
+      "profit": -0.688,
+      "roi": -0.052923
+    },
+    {
+      "min_votes": 5,
+      "short_odds_cap": 2.1,
+      "bets": 13,
+      "wins": 5,
+      "hit_rate": 0.384615,
+      "avg_odds": 2.522462,
+      "avg_ev": 0.137851,
+      "profit": -0.688,
+      "roi": -0.052923
+    },
+    {
+      "min_votes": 5,
+      "short_odds_cap": 2.2,
+      "bets": 12,
+      "wins": 4,
+      "hit_rate": 0.333333,
+      "avg_odds": 2.555333,
+      "avg_ev": 0.144476,
+      "profit": -1.816,
+      "roi": -0.151333
+    },
+    {
+      "min_votes": 6,
+      "short_odds_cap": 2.0,
+      "bets": 12,
+      "wins": 4,
+      "hit_rate": 0.333333,
+      "avg_odds": 2.514,
+      "avg_ev": 0.134128,
+      "profit": -2.312,
+      "roi": -0.192667
+    },
+    {
+      "min_votes": 6,
+      "short_odds_cap": 2.1,
+      "bets": 12,
+      "wins": 4,
+      "hit_rate": 0.333333,
+      "avg_odds": 2.514,
+      "avg_ev": 0.134128,
+      "profit": -2.312,
+      "roi": -0.192667
+    },
+    {
+      "min_votes": 4,
+      "short_odds_cap": 2.0,
+      "bets": 16,
+      "wins": 5,
+      "hit_rate": 0.3125,
+      "avg_odds": 2.474,
+      "avg_ev": 0.126252,
+      "profit": -3.688,
+      "roi": -0.2305
+    },
+    {
+      "min_votes": 4,
+      "short_odds_cap": 2.1,
+      "bets": 16,
+      "wins": 5,
+      "hit_rate": 0.3125,
+      "avg_odds": 2.474,
+      "avg_ev": 0.126252,
+      "profit": -3.688,
+      "roi": -0.2305
+    },
+    {
+      "min_votes": 6,
+      "short_odds_cap": 2.2,
+      "bets": 11,
+      "wins": 3,
+      "hit_rate": 0.272727,
+      "avg_odds": 2.549091,
+      "avg_ev": 0.141016,
+      "profit": -3.44,
+      "roi": -0.312727
+    },
+    {
+      "min_votes": 4,
+      "short_odds_cap": 2.2,
+      "bets": 15,
+      "wins": 4,
+      "hit_rate": 0.266667,
+      "avg_odds": 2.497067,
+      "avg_ev": 0.130778,
+      "profit": -4.816,
+      "roi": -0.321067
+    }
+  ]
+}

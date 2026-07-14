@@ -62,10 +62,15 @@ export default function TableSearch({ onSelectTable }) {
           <div>
             <p className="table-search-label">Таблицы</p>
             <h2 className="table-search-title">Найдите нужную таблицу</h2>
+            <p className="table-search-subtitle">
+              Поиск по имени таблицы, сущности, описанию и тегам.
+            </p>
           </div>
           <div className="table-search-count">
-            <span className="table-search-count-value">{tables.length}</span>
-            <span className="table-search-count-hint">в каталоге</span>
+            <span className="table-search-count-value">{query.trim() ? filtered.length : tables.length}</span>
+            <span className="table-search-count-hint">
+              {query.trim() ? "найдено" : "в каталоге"}
+            </span>
           </div>
         </div>
         <div className="table-search-input-wrapper">
@@ -95,16 +100,22 @@ export default function TableSearch({ onSelectTable }) {
                 onClick={() => handleSelect(item)}
               >
                 <div className="table-search-main">
-                  <span className="table-search-name mono">{item.fqn}</span>
-                  <span className={`table-search-badge ${item.source === "ohd" ? "ohd" : "current"}`}>
-                    {item.source === "ohd" ? "OHD / dbt" : "Current"}
-                  </span>
+                  <div className="table-search-title-block">
+                    <span className="table-search-name mono">{item.fqn}</span>
+                    <div className="table-search-meta">
+                      <span className={`table-search-badge ${item.source === "ohd" ? "ohd" : "current"}`}>
+                        {item.source === "ohd" ? "OHD / dbt" : "Current"}
+                      </span>
+                      <span className="table-search-entity">{item.entity_name || "—"}</span>
+                    </div>
+                  </div>
+                  <span className="table-search-action">Открыть</span>
                 </div>
-                <div className="table-search-meta">
-                  <span>{item.entity_name || "—"}</span>
-                  {item.description ? <span>{item.description}</span> : null}
-                </div>
-                <span className="table-search-action">Открыть</span>
+                {item.description ? (
+                  <div className="table-search-description">
+                    {item.description}
+                  </div>
+                ) : null}
               </button>
             ))}
           </div>

@@ -36,6 +36,14 @@ def create_tables():
     from api.models import Base
 
     # создаём отсутствующие таблицы
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS football"))
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS agro"))
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS hybrids"))
+    except Exception as e:
+        print(f"[DB] schema bootstrap skipped due to error: {e}")
+
     Base.metadata.create_all(bind=engine)
 
     # Лёгкая схема-миграция для международных турниров:

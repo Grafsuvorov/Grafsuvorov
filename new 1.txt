@@ -1,290 +1,249 @@
-dq_all0001. Дубликаты по ключу. dm.sales_account_receivables
+ТЗ
+
+  Цель:
+
+  - забирать из YouTrack карточки типа Incident
+  - сохранять их в БД так, чтобы можно было:
+      - видеть, кто и когда создал инцидент
+      - видеть текущее состояние, исполнителя, приоритет и прочие поля карточки
+      - хранить внутреннее описание и блок анализа
+      - привязывать инцидент к объекту schema.table и/или сущности
+      - строить отчеты по инцидентам в приложении
+
+  Что парсим из YouTrack:
+
+  - все карточки Тип карточки = Incident
+  - основные поля карточки
+  - текст описания
+  - поля блока Анализ
+  - служебные поля:
+      - автор
+      - исполнитель
+      - состояние
+      - приоритет
+      - команда/подсистема
+      - направление
+      - проект
+      - время начала сбоя
+      - время обнаружения
+      - время окончания работ
+      - время триггера
+      - трудозатраты
+  - поля привязки к объекту:
+      - Название сущности
+      - Название таблицы
+  - поле Откуда алерт
+  - поле Описание события
+
+  Что должно получиться:
+
+  - одна основная таблица с карточкой инцидента
+  - одна таблица истории/обновлений
+  - одна таблица связей с задачами
+
+  Логика загрузки:
+
+  1. Получаем список инцидентов из YouTrack
+  2. Для каждого инцидента сохраняем текущий срез карточки
+  3. Отдельно сохраняем:
+      - связи с другими задачами
+      - историю изменений/комментарии
+  4. При повторной загрузке:
+      - основную карточку обновляем по issue_id
+      - связи и историю дозагружаем или пересобираем по инциденту
+
+  Что важно для привязки к объекту:
+
+  - сохранять отдельно:
+      - entity_name
+      - table_name_raw
+  - дополнительно вычислять:
+      - table_schema
+      - table_name
+      - object_fqn = schema.table
+  - если Название таблицы пришло как dm.sales_account_receivables, разложить на:
+      - table_schema = dm
+      - table_name = sales_account_receivables
+  - если схема не указана, оставить raw как есть
+
+  ———
+
+  DDL
+
+  create table if not exists tech_etl.yt_incidents (
+      issue_id                 varchar(64)  not null,
+      issue_key                varchar(32)  not null,
+      issue_type               varchar(64)  not null default 'Incident',
+
+      project_name             varchar(255) null,
+      summary                  text         not null,
+      description_text         text         null,
+
+      state_name               varchar(128) null,
+      priority_name            varchar(128) null,
+
+      author_name              varchar(255) null,
+      assignee_name            varchar(255) null,
+      team_name                varchar(255) null,
+      direction_name           varchar(255) null,
+      dashboard_name           varchar(255) null,
+      component_name           varchar(255) null,
+      incident_reason_name     varchar(255) null,
+
+      trigger_dttm             timestamp    null,
+      incident_start_dttm      timestamp    null,
+      detected_dttm            timestamp    null,
+      work_finished_dttm       timestamp    null,
+
+      entity_name              varchar(255) null,
+      table_name_raw           varchar(512) null,
+      table_schema             varchar(128) null,
+      table_name               varchar(255) null,
+      object_fqn               varchar(512) null,
 
+      event_description        text         null,
+      alert_source             text         null,
 
+      root_cause               text         null,
+      fix_actions              text         null,
+      preventive_actions       text         null,
 
+      spent_time_text          varchar(128) null,
+      actual_effort_text       varchar(128) null,
+      estimated_effort_text    varchar(128) null,
+      ai_saving_text           varchar(128) null,
 
+      created_at_yt            timestamp    null,
+      updated_at_yt            timestamp    null,
+      resolved_at_yt           timestamp    null,
 
+      raw_json                 jsonb        null,
 
-Название	Описание
-Время триггера	08.06.2026 07:30
-Название сущности	-
-Название таблицы	dm.sales_account_receivables
-Описание события	Дубликаты по ключу dm.sales_account_receivables
-Откуда алерт	Дашборд DQ https://preprodta.bi.dwh.rusal.com/superset/dashboard/244/
-Анализ 
-Название	Описание
-Причина возникновения	
-Действия по устранению	
-Описание проактивных мероприятий	
+      dttm_loaded              timestamp    not null default now(),
+      dttm_updated             timestamp    not null default now(),
 
+      constraint pk_yt_incidents primary key (issue_id)
+  )
+  distributed randomly;
 
-родитель для
-2
- Добавить ссылки
+  create index if not exists idx_yt_incidents_issue_key
+      on tech_etl.yt_incidents (issue_key);
 
+  create index if not exists idx_yt_incidents_object_fqn
+      on tech_etl.yt_incidents (object_fqn);
 
-M
-DWH-14322
-Перенести поле "предоплатный инвойс" из dds.invoice в новую сущность
+  create index if not exists idx_yt_incidents_entity_name
+      on tech_etl.yt_incidents (entity_name);
 
-N
-DWH-13721
-Добавить проверку на дубли по ключам dds.invoice
+  create index if not exists idx_yt_incidents_state_name
+      on tech_etl.yt_incidents (state_name);
 
-Вложения1
-Прикрепить файлы
-Файлы, прикрепленные к комментариям
+  create index if not exists idx_yt_incidents_trigger_dttm
+      on tech_etl.yt_incidents (trigger_dttm);
 
+  create table if not exists tech_etl.yt_incident_links (
+      issue_id                 varchar(64)  not null,
+      issue_key                varchar(32)  not null,
 
+      linked_issue_id          varchar(64)  not null,
+      linked_issue_key         varchar(32)  not null,
+      linked_issue_type        varchar(64)  null,
+      linked_issue_summary     text         null,
 
-Настройка событий 
-Karimova Diana
-Обновлено около 1 месяца назад
-05м
-8 июн. 2026
-Документирование
-заведение задачи
+      link_type                varchar(128) not null,
 
-Фактические трудозатраты:? → 5м
-Автор инцидента:Sharay Petr → Karimova Diana
-Изменено описание:Подробнее
-User avatar
-Анастасия Семенова
-Прокомментировал(а) 30 дней назад
-Дубли в витрине из-за нескольких предоплатных инвойсов к одному инвойсу.
-
-Сегодня по 5 инвойсам задвоения/затроения в /RUSAL/SD2921MGO «Предоплатные инвойсы»:
-
-5100246596
-
-5100245227
-
-5100244911
-
-5100243658
-
-5100244388
-
-Из-за них 59 дублей в сбытовой витрине ДЗ sales_account_receivables.
-
-image.png
-
-Исполнитель:Анастасия Семенова → Mikhaleva Yana
-Анастасия Семенова
-Обновлено 30 дней назад
-Родитель для:DWH-13721Добавить проверку на дубли по ключам dds.invoice
-Mikhaleva Yana
-Обновлено 30 дней назад
-Исполнитель:Mikhaleva Yana → Kuzmina Kseniya
-Kucherenko Vitaliy
-Обновлено 29 дней назад
-Фактические трудозатраты:5м → 15м
-User avatar
-Kuzmina Kseniya
-Прокомментировал(а) 29 дней назад
-@Анастасия Семенова Привет!
-
-А как вы к этой табличке обращаетесь?
-
-Сейчас будут цепочки, которые будут порождать такие связи.
-
-Karimova Diana
-Обновлено 29 дней назад
-Фактические трудозатраты:15м → 25м
-Karimova Diana
-Обновлено 29 дней назад
-30м
-15 июн. 2026
-Исследование
-Фактические трудозатраты:25м → 55м
-User avatar
-Анастасия Семенова
-Прокомментировал(а) 29 дней назад
-@Kuzmina Kseniya , привет!
-
-используем в модели данных (слой dds).
-
-сейчас предоплатный инвойс - это просто атрибут инвойса.
-
-ранее было уточнение что связь может быть 1-к-1. т.к. теперь связь 1-к-N, это размножает записи по инвойсам даже для тех витрин, которые не используют предоплатные инвойсы.
-
-нужны корректировки ТЗ по витринам, где участвуют предоплатные инвойсы: что делать когда предоплатных несколько.
-
-со стороны СА будем корректировать модель данных и все зависимые скрипты. связь предоплатных инвойсов с основными инвойсами будет вынесена в отдельную таблицу на dds.
-
-Khaustova Mariya
-Обновлено 15 дней назад
-Дашборд КХД/Направление:Нет: дашборд → Управление данными (Каталог, Data Quality)
-User avatar
-Kuzmina Kseniya
-Прокомментировал(а) 12 дней назад
-@Анастасия Семенова Привет! Есть какие-то новсти или нужно будет дополнительно обсудить здесь ещё раз про дубли?
-
-Состояние:Зарегистрирована → В работе
-User avatar
-Анастасия Семенова
-Прокомментировал(а) 12 дней назад
-@Kuzmina Kseniya , @Mikhaleva Yana , привет!
-
-подскажите по пункту "корректировки ТЗ по витринам, где участвуют предоплатные инвойсы: что делать когда предоплатных несколько."
-
-Анастасия Семенова
-Обновлено 12 дней назад
-Родитель для:DWH-14322Перенести поле "предоплатный инвойс" из dds.invoice в новую сущность
-Karimova Diana
-Обновлено 7 дней назад
-Фактические трудозатраты:55м → 2ч 5м
-Обновлено 7 дней назад
-Фактические трудозатраты:2ч 5м → 2ч 15м
-Vyaltsev Sergey
-Обновлено 7 дней назад
-Фактические трудозатраты:2ч 15м → 2ч 30м
-Karimova Diana
-Обновлено 7 дней назад
-Фактические трудозатраты:2ч 30м → 2ч 50м
-Обновлено 7 дней назад
-Фактические трудозатраты:2ч 50м → 4ч 10м
-Обновлено 7 дней назад
-Фактические трудозатраты:4ч 10м → 4ч 20м
-Zolotarev Aleksandr
-Обновлено 6 дней назад
-Фактические трудозатраты:4ч 20м → 4ч 35м
-Обновлено 5 дней назад
-Фактические трудозатраты:4ч 35м → 4ч 50м
-Karimova Diana
-Обновлено 2 дня назад
-Фактические трудозатраты:4ч 50м → 5ч 25м
-Sharay Petr
-Обновлено 2 дня назад
-Фактические трудозатраты:5ч 25м → 5ч 45м
-Karimova Diana
-Обновлено 2 дня назад
-Фактические трудозатраты:5ч 45м → 6ч
-Обновлено около 6 часов назад
-Фактические трудозатраты:6ч → 7ч 5м
-User avatar
-
-
-
-6
-
-Проект
-
-КХД
-User avatar
-Тип карточки
-
-Incident⁠
-I
-Приоритет
-
-Normal⁠
-N
-Состояние
+      dttm_loaded              timestamp    not null default now(),
 
-В работе
-В
-Автор инцидента
+      constraint pk_yt_incident_links
+          primary key (issue_id, linked_issue_id, link_type)
+  )
+  distributed randomly;
 
-Karimova Diana
-User avatar
-Исполнитель
+  create index if not exists idx_yt_incident_links_issue_id
+      on tech_etl.yt_incident_links (issue_id);
 
-Kuzmina Kseniya
-User avatar
-Команда (Подсистема)
+  create index if not exists idx_yt_incident_links_linked_issue_key
+      on tech_etl.yt_incident_links (linked_issue_key);
 
-SA (System Analytics)⁠
-S
-Направление
+  create table if not exists tech_etl.yt_incident_history (
+      issue_id                 varchar(64)  not null,
+      issue_key                varchar(32)  not null,
 
-Сбыт
-С
-Дашборд SD
+      event_dttm               timestamp    not null,
+      author_name              varchar(255) null,
 
-Нет: дашборд
-Время начала сбоя
-8 июн. 2026, 07:30
+      event_type               varchar(64)  not null,
+      field_name               varchar(255) null,
+      old_value                text         null,
+      new_value                text         null,
+      comment_text             text         null,
 
+      dttm_loaded              timestamp    not null default now()
+  )
+  distributed randomly;
 
-Ошибка при проверке на дубли dag_sales_margin_verification
+  create index if not exists idx_yt_incident_history_issue_id
+      on tech_etl.yt_incident_history (issue_id);
 
+  create index if not exists idx_yt_incident_history_event_dttm
+      on tech_etl.yt_incident_history (event_dttm);
 
+  ———
 
+  Как использовать
 
+  yt_incidents
 
+  - основная витрина по инцидентам
+  - тут строить UI и отчеты
 
-Название	Описание
-Время триггера	09.07.2026 07:23
-Название сущности	SALES_MARGIN
-Название таблицы	dm_calc.statement_base_full_calc
-Описание события	Проверка на дубли упала с ошибкой:
-column "shipdata_systemid,shipdata_svh" does not exist LINE 45: ...d_code" ,
-Откуда алерт	Алертинг пульс
-Анализ 
-Название	Описание
-Причина возникновения	В ../statement_base_full_calc/meta_data_file.yaml в блоке key_attributes  неправильно указаны поле. Ошибка в синтаксе shipdata_systemid,shipdata_svh
-Действия по устранению	Исправил перечисление полей, проверка выполнилась успешно.
-Описание проактивных мероприятий	Хотфикс hotfix/2026-07-09 (!3240) · Merge requests · dwh / etl · GitLab
+  yt_incident_links
 
+  - связь инцидента с задачами на исправление, хотфиксами и дочерними работами
 
+  yt_incident_history
 
-Проект
+  - история:
+      - кто перевел в статус
+      - кто менял исполнителя
+      - кто писал комментарии
+      - как росли трудозатраты
 
-КХД
-User avatar
-Тип карточки
+  ———
 
-Incident⁠
-I
-Приоритет
+  Минимальные правила парсинга
 
-Normal⁠
-N
-Состояние
+  Если Название таблицы:
 
-Завершена
-З
-Автор инцидента
+  - содержит точку, например dm.sales_account_receivables
+      - до точки -> table_schema
+      - после точки -> table_name
+      - целиком -> object_fqn
+  - не содержит точку
+      - table_schema = null
+      - table_name = значение
+      - object_fqn = null
 
-KalinichenkoNA
-User avatar
-Исполнитель
+  Если поле пустое:
 
-KalinichenkoNA
-User avatar
-Команда (Подсистема)
+  - сохранять null
 
-DE (Data Engineer)⁠
-D
-Направление
+  raw_json
 
-Нет: направление
-Время начала сбоя
-9 июл. 2026, 07:23
-Время обнаружения
-9 июл. 2026, 07:23
-Время окончания работ
-9 июл. 2026, 07:30
-Компонент
+  - хранить полный JSON карточки
+  - это сильно упростит доработки без повторного перепарсинга
 
-Нет: компонент
-Причина инцидента
+  ———
 
-Человеческий фактор⁠
-Ч
-Spent time
+  Что это даст
+  Можно будет быстро ответить на вопросы:
 
-?
-Фактические трудозатраты
+  - кто создал инцидент
+  - когда он возник
+  - кто его вел
+  - по какой таблице / сущности он был
+  - какие задачи были заведены на исправление
+  - какие причины и действия по устранению были указаны
+  - сколько таких инцидентов было по объекту
 
-?
-Дашборд КХД/Направление
-
-Нет: дашборд
-Экономия за счет ИИ
-
-?
-Оценка трудозатрат
-
-?
+  Если хоти

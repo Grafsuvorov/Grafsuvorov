@@ -1,249 +1,252 @@
-ТЗ
+1. tech_etl.yt_incidents
+  Это главная таблица инцидентов.
+  В ней хранится текущий срез карточки: кто создал, что сломалось, по какой таблице, кто чинит, в каком статусе сейчас.
 
-  Цель:
+  Зачем нужна:
 
-  - забирать из YouTrack карточки типа Incident
-  - сохранять их в БД так, чтобы можно было:
-      - видеть, кто и когда создал инцидент
-      - видеть текущее состояние, исполнителя, приоритет и прочие поля карточки
-      - хранить внутреннее описание и блок анализа
-      - привязывать инцидент к объекту schema.table и/или сущности
-      - строить отчеты по инцидентам в приложении
+  - строить UI по инцидентам
+  - искать инциденты по таблице/сущности
+  - делать отчеты по направлениям, командам, исполнителям
+  - связывать инцидент с объектом КХД
 
-  Что парсим из YouTrack:
+  Поля:
 
-  - все карточки Тип карточки = Incident
-  - основные поля карточки
-  - текст описания
-  - поля блока Анализ
-  - служебные поля:
-      - автор
-      - исполнитель
-      - состояние
+  - issue_id
+      - внутренний технический id карточки в YouTrack
+      - нужен как стабильный ключ
+  - issue_key
+      - человекочитаемый номер, например DWH-14322
+      - нужен для поиска и ссылок
+  - issue_type
+      - тип карточки
+      - у вас здесь обычно будет Incident
+  - project_name
+      - проект YouTrack, например КХД
+  - summary
+      - заголовок карточки
+      - например: dq_all0001. Дубликаты по ключу. dm.sales_account_receivables
+  - description_text
+      - основное описание карточки
+      - общий текст, который пользователь видит в описании
+  - state_name
+      - текущий статус
+      - например: Зарегистрирована, В работе, Завершена
+  - priority_name
       - приоритет
-      - команда/подсистема
+      - например: Normal
+  - author_name
+      - кто создал инцидент
+  - assignee_name
+      - кто сейчас исполнитель
+  - team_name
+      - команда / подсистема
+      - например SA (System Analytics), DE (Data Engineer)
+  - direction_name
       - направление
-      - проект
+      - например Сбыт
+  - dashboard_name
+      - дашборд / бизнес-направление, если поле есть
+      - полезно для аналитики по источнику проблемы
+  - component_name
+      - компонент, если в карточке используется такое поле
+  - incident_reason_name
+      - причина инцидента
+      - например Человеческий фактор
+  - trigger_dttm
+      - время триггера алерта
+  - incident_start_dttm
       - время начала сбоя
-      - время обнаружения
-      - время окончания работ
-      - время триггера
-      - трудозатраты
-  - поля привязки к объекту:
-      - Название сущности
-      - Название таблицы
-  - поле Откуда алерт
-  - поле Описание события
-
-  Что должно получиться:
-
-  - одна основная таблица с карточкой инцидента
-  - одна таблица истории/обновлений
-  - одна таблица связей с задачами
-
-  Логика загрузки:
-
-  1. Получаем список инцидентов из YouTrack
-  2. Для каждого инцидента сохраняем текущий срез карточки
-  3. Отдельно сохраняем:
-      - связи с другими задачами
-      - историю изменений/комментарии
-  4. При повторной загрузке:
-      - основную карточку обновляем по issue_id
-      - связи и историю дозагружаем или пересобираем по инциденту
-
-  Что важно для привязки к объекту:
-
-  - сохранять отдельно:
-      - entity_name
-      - table_name_raw
-  - дополнительно вычислять:
-      - table_schema
-      - table_name
-      - object_fqn = schema.table
-  - если Название таблицы пришло как dm.sales_account_receivables, разложить на:
-      - table_schema = dm
-      - table_name = sales_account_receivables
-  - если схема не указана, оставить raw как есть
-
-  ———
-
-  DDL
-
-  create table if not exists tech_etl.yt_incidents (
-      issue_id                 varchar(64)  not null,
-      issue_key                varchar(32)  not null,
-      issue_type               varchar(64)  not null default 'Incident',
-
-      project_name             varchar(255) null,
-      summary                  text         not null,
-      description_text         text         null,
-
-      state_name               varchar(128) null,
-      priority_name            varchar(128) null,
-
-      author_name              varchar(255) null,
-      assignee_name            varchar(255) null,
-      team_name                varchar(255) null,
-      direction_name           varchar(255) null,
-      dashboard_name           varchar(255) null,
-      component_name           varchar(255) null,
-      incident_reason_name     varchar(255) null,
-
-      trigger_dttm             timestamp    null,
-      incident_start_dttm      timestamp    null,
-      detected_dttm            timestamp    null,
-      work_finished_dttm       timestamp    null,
-
-      entity_name              varchar(255) null,
-      table_name_raw           varchar(512) null,
-      table_schema             varchar(128) null,
-      table_name               varchar(255) null,
-      object_fqn               varchar(512) null,
-
-      event_description        text         null,
-      alert_source             text         null,
-
-      root_cause               text         null,
-      fix_actions              text         null,
-      preventive_actions       text         null,
-
-      spent_time_text          varchar(128) null,
-      actual_effort_text       varchar(128) null,
-      estimated_effort_text    varchar(128) null,
-      ai_saving_text           varchar(128) null,
-
-      created_at_yt            timestamp    null,
-      updated_at_yt            timestamp    null,
-      resolved_at_yt           timestamp    null,
-
-      raw_json                 jsonb        null,
-
-      dttm_loaded              timestamp    not null default now(),
-      dttm_updated             timestamp    not null default now(),
-
-      constraint pk_yt_incidents primary key (issue_id)
-  )
-  distributed randomly;
-
-  create index if not exists idx_yt_incidents_issue_key
-      on tech_etl.yt_incidents (issue_key);
-
-  create index if not exists idx_yt_incidents_object_fqn
-      on tech_etl.yt_incidents (object_fqn);
-
-  create index if not exists idx_yt_incidents_entity_name
-      on tech_etl.yt_incidents (entity_name);
-
-  create index if not exists idx_yt_incidents_state_name
-      on tech_etl.yt_incidents (state_name);
-
-  create index if not exists idx_yt_incidents_trigger_dttm
-      on tech_etl.yt_incidents (trigger_dttm);
-
-  create table if not exists tech_etl.yt_incident_links (
-      issue_id                 varchar(64)  not null,
-      issue_key                varchar(32)  not null,
-
-      linked_issue_id          varchar(64)  not null,
-      linked_issue_key         varchar(32)  not null,
-      linked_issue_type        varchar(64)  null,
-      linked_issue_summary     text         null,
-
-      link_type                varchar(128) not null,
-
-      dttm_loaded              timestamp    not null default now(),
-
-      constraint pk_yt_incident_links
-          primary key (issue_id, linked_issue_id, link_type)
-  )
-  distributed randomly;
-
-  create index if not exists idx_yt_incident_links_issue_id
-      on tech_etl.yt_incident_links (issue_id);
-
-  create index if not exists idx_yt_incident_links_linked_issue_key
-      on tech_etl.yt_incident_links (linked_issue_key);
-
-  create table if not exists tech_etl.yt_incident_history (
-      issue_id                 varchar(64)  not null,
-      issue_key                varchar(32)  not null,
-
-      event_dttm               timestamp    not null,
-      author_name              varchar(255) null,
-
-      event_type               varchar(64)  not null,
-      field_name               varchar(255) null,
-      old_value                text         null,
-      new_value                text         null,
-      comment_text             text         null,
-
-      dttm_loaded              timestamp    not null default now()
-  )
-  distributed randomly;
-
-  create index if not exists idx_yt_incident_history_issue_id
-      on tech_etl.yt_incident_history (issue_id);
-
-  create index if not exists idx_yt_incident_history_event_dttm
-      on tech_etl.yt_incident_history (event_dttm);
+  - detected_dttm
+      - когда инцидент обнаружили
+  - work_finished_dttm
+      - когда работы по инциденту завершились
+  - entity_name
+      - название сущности из карточки
+      - если его указали
+  - table_name_raw
+      - как таблица пришла из YouTrack
+      - например dm.sales_account_receivables
+  - table_schema
+      - схема, выделенная из table_name_raw
+      - например dm
+  - table_name
+      - имя таблицы без схемы
+      - например sales_account_receivables
+  - object_fqn
+      - полное имя объекта в виде schema.table
+      - это главное поле для привязки к объекту приложения
+  - event_description
+      - описание события / формулировка проблемы
+      - например: Дубликаты по ключу dm.sales_account_receivables
+  - alert_source
+      - откуда пришел алерт
+      - например ссылка на DQ dashboard или Алертинг пульс
+  - root_cause
+      - причина возникновения из блока Анализ
+  - fix_actions
+      - действия по устранению из блока Анализ
+  - preventive_actions
+      - проактивные мероприятия из блока Анализ
+  - spent_time_text
+      - поле Spent time как есть текстом
+  - actual_effort_text
+      - фактические трудозатраты как есть текстом
+  - estimated_effort_text
+      - оценка трудозатрат как есть текстом
+  - ai_saving_text
+      - экономия за счет ИИ, если это поле есть
+  - created_at_yt
+      - когда карточка создана в YouTrack
+  - updated_at_yt
+      - когда карточка последний раз обновлялась
+  - resolved_at_yt
+      - когда карточка была переведена в завершенное состояние, если получится вытащить
+  - raw_json
+      - полный JSON карточки
+      - нужен на случай, если потом захотите распарсить дополнительные поля
+  - dttm_loaded
+      - когда запись загрузили в БД
+  - dttm_updated
+      - когда запись в БД в последний раз обновили
 
   ———
 
-  Как использовать
+  2. tech_etl.yt_incident_links
+  Это таблица связей инцидента с другими задачами.
+
+  Зачем нужна:
+
+  - понять, какие задачи были заведены для исправления инцидента
+  - видеть хотфиксы, дочерние задачи, связанные доработки
+  - строить цепочку инцидент -> задачи на исправление
+
+  Поля:
+
+  - issue_id
+      - id самого инцидента
+  - issue_key
+      - номер самого инцидента
+  - linked_issue_id
+      - id связанной карточки
+  - linked_issue_key
+      - номер связанной карточки
+      - например DWH-13721
+  - linked_issue_type
+      - тип связанной карточки
+      - например Task, Incident, Bug
+  - linked_issue_summary
+      - заголовок связанной карточки
+  - link_type
+      - тип связи
+      - например:
+          - родитель для
+          - relates to
+          - subtask of
+  - dttm_loaded
+      - когда эта связь загружена
+
+  ———
+
+  3. tech_etl.yt_incident_history
+  Это таблица истории жизни инцидента.
+
+  Зачем нужна:
+
+  - видеть комментарии
+  - видеть смену статусов
+  - видеть смену исполнителя
+  - видеть изменение трудозатрат
+  - строить timeline инцидента
+
+  Поля:
+
+  - issue_id
+      - id инцидента
+  - issue_key
+      - номер инцидента
+  - event_dttm
+      - когда произошло событие
+  - author_name
+      - кто сделал изменение или написал комментарий
+  - event_type
+      - тип события
+      - например:
+          - comment
+          - field_change
+          - worklog
+          - link_change
+  - field_name
+      - какое поле изменили
+      - например:
+          - Состояние
+          - Исполнитель
+          - Фактические трудозатраты
+  - old_value
+      - старое значение поля
+  - new_value
+      - новое значение поля
+  - comment_text
+      - текст комментария, если это комментарий
+  - dttm_loaded
+      - когда это событие загрузили в БД
+
+  ———
+
+  Как они работают вместе
 
   yt_incidents
 
-  - основная витрина по инцидентам
-  - тут строить UI и отчеты
+  - основная карточка инцидента
+  - текущее состояние
 
   yt_incident_links
 
-  - связь инцидента с задачами на исправление, хотфиксами и дочерними работами
+  - показывает, с какими задачами этот инцидент связан
 
   yt_incident_history
 
-  - история:
-      - кто перевел в статус
-      - кто менял исполнителя
-      - кто писал комментарии
-      - как росли трудозатраты
+  - показывает, как инцидент жил во времени
+
+  Пример:
+
+  - в yt_incidents:
+      - инцидент по dm.sales_account_receivables
+      - автор Karimova Diana
+      - статус В работе
+  - в yt_incident_links:
+      - связи на DWH-14322, DWH-13721
+  - в yt_incident_history:
+      - комментарии аналитиков
+      - смена исполнителя
+      - рост трудозатрат с 5м до 7ч 5м
 
   ———
 
-  Минимальные правила парсинга
+  Почему не одна таблица
+  Потому что:
 
-  Если Название таблицы:
-
-  - содержит точку, например dm.sales_account_receivables
-      - до точки -> table_schema
-      - после точки -> table_name
-      - целиком -> object_fqn
-  - не содержит точку
-      - table_schema = null
-      - table_name = значение
-      - object_fqn = null
-
-  Если поле пустое:
-
-  - сохранять null
-
-  raw_json
-
-  - хранить полный JSON карточки
-  - это сильно упростит доработки без повторного перепарсинга
+  - у одного инцидента может быть много связанных задач
+  - у одного инцидента может быть много комментариев и изменений
+  - если всё хранить в одной таблице, будут дубли и кривая аналитика
 
   ———
 
-  Что это даст
-  Можно будет быстро ответить на вопросы:
+  Что будет в приложении
+  После такой структуры можно сделать:
 
-  - кто создал инцидент
-  - когда он возник
-  - кто его вел
-  - по какой таблице / сущности он был
-  - какие задачи были заведены на исправление
-  - какие причины и действия по устранению были указаны
-  - сколько таких инцидентов было по объекту
+  - карточку инцидента
+  - список инцидентов по таблице
+  - список инцидентов по сущности
+  - блок “связанные задачи”
+  - timeline по инциденту
+  - отчеты:
+      - кто чаще создает инциденты
+      - какие таблицы чаще ломаются
+      - какие команды чаще участвуют
+      - среднее время закрытия
 
-  Если хоти
+  Если хотите, следующим сообщением я могу сделать еще проще:
+
+  - в формате таблица -> зачем нужна -> 5 ключевых полей
+  - или сразу подготовить mapping YouTrack field -> поле в БД.
+

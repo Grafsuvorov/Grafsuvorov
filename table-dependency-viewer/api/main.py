@@ -983,6 +983,511 @@ def get_admin_engineering_efficiency(
         raise HTTPException(status_code=500, detail="Не удалось получить страницу эффективности")
 
 
+@router.get("/api/admin/reports/releases")
+def get_admin_release_reports(
+    request: Request,
+    days: int = Query(180, ge=30, le=3650),
+):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        date_clause, params = _resolve_date_window(None, None, days)
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT
+                        r.release_id,
+                        r.release_type,
+                        r.initiated_by,
+                        r.started_at,
+                        r.finished_at,
+                        r.status,
+                        r.total_objects,
+                        r.ready_to_release,
+                        CASE
+                            WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%hotfix%' THEN 'hotfix'
+                            WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%внерел%'
+                              OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out_of_release%'
+                              OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out of release%'
+                              OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%nonrelease%'
+                              OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%non-release%'
+                            THEN 'outside_release'
+                            ELSE 'release'
+                        END AS release_bucket
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT
+                        ro.*,
+                        rel.started_at,
+                        rel.release_type,
+                        rel.release_bucket,
+                        rel.initiated_by,
+                        rel.status
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel ON rel.release_id = ro.release_id
+                ),
+                release_tasks AS (
+                    SELECT DISTINCT release_id, task_id
+                    FROM ro
+                    WHERE task_id IS NOT NULL AND task_id <> ''
+                ),
+                task_ids AS (
+                    SELECT DISTINCT task_id
+                    FROM release_tasks
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN task_ids t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                task_fact AS (
+                    SELECT
+                        rt.release_id,
+                        rt.task_id,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COALESCE(snap.created_by, 'Не указан') AS creator,
+                        COALESCE(work.minutes, 0) AS minutes
+                    FROM release_tasks rt
+                    LEFT JOIN snap ON snap.issue_id = rt.task_id
+                    LEFT JOIN exec ON exec.issue_id = rt.task_id
+                    LEFT JOIN work ON work.issue_id = rt.task_id
+                ),
+                task_rollup AS (
+                    SELECT
+                        release_id,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT engineer) AS engineers_count,
+                        COUNT(DISTINCT creator) AS creators_count,
+                        COALESCE(SUM(minutes), 0) AS minutes_total
+                    FROM task_fact
+                    GROUP BY release_id
+                ),
+                object_rollup AS (
+                    SELECT
+                        release_id,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT entity_name) FILTER (WHERE entity_name IS NOT NULL AND entity_name <> '') AS entities_count,
+                        COUNT(*) FILTER (WHERE lower(COALESCE(target_system, '')) LIKE '%click%') AS click_objects_count,
+                        COUNT(*) FILTER (
+                            WHERE lower(COALESCE(target_system, '')) LIKE '%greenplum%'
+                               OR lower(COALESCE(target_system, '')) LIKE '%gp%'
+                        ) AS gp_objects_count
+                    FROM ro
+                    GROUP BY release_id
+                ),
+                release_rollup AS (
+                    SELECT
+                        rel.release_id,
+                        rel.release_type,
+                        rel.release_bucket,
+                        rel.initiated_by,
+                        rel.started_at,
+                        rel.finished_at,
+                        rel.status,
+                        rel.total_objects,
+                        rel.ready_to_release,
+                        COALESCE(obj.objects_count, 0) AS objects_count,
+                        COALESCE(obj.entities_count, 0) AS entities_count,
+                        COALESCE(obj.click_objects_count, 0) AS click_objects_count,
+                        COALESCE(obj.gp_objects_count, 0) AS gp_objects_count,
+                        COALESCE(task.tasks_count, 0) AS tasks_count,
+                        COALESCE(task.engineers_count, 0) AS engineers_count,
+                        COALESCE(task.creators_count, 0) AS creators_count,
+                        COALESCE(task.minutes_total, 0) AS minutes_total,
+                        EXTRACT(EPOCH FROM (COALESCE(rel.finished_at, now()) - rel.started_at)) / 60.0 AS duration_minutes
+                    FROM rel
+                    LEFT JOIN object_rollup obj ON obj.release_id = rel.release_id
+                    LEFT JOIN task_rollup task ON task.release_id = rel.release_id
+                )
+            """
+
+            summary = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COUNT(*) AS releases_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'hotfix') AS hotfix_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'outside_release') AS outside_release_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'release') AS release_count,
+                        COALESCE(SUM(objects_count), 0) AS objects_count,
+                        COALESCE(SUM(click_objects_count), 0) AS click_objects_count,
+                        COALESCE(SUM(gp_objects_count), 0) AS gp_objects_count,
+                        COALESCE(SUM(tasks_count), 0) AS tasks_count,
+                        COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total,
+                        COUNT(DISTINCT initiated_by) FILTER (WHERE initiated_by IS NOT NULL AND initiated_by <> '') AS initiators_count,
+                        COUNT(DISTINCT started_at::date) AS release_days_count,
+                        ROUND(COALESCE(AVG(objects_count), 0), 1) AS avg_objects_per_release,
+                        ROUND(COALESCE(AVG(duration_minutes), 0), 1) AS avg_duration_minutes
+                    FROM release_rollup
+                    """
+                ),
+                params,
+            ).mappings().first()
+
+            cadence = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        to_char(date_trunc('week', started_at), 'DD.MM') AS week_label,
+                        date_trunc('week', started_at)::date::text AS week_start,
+                        COUNT(*) AS releases_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'hotfix') AS hotfix_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'outside_release') AS outside_release_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'release') AS regular_release_count,
+                        COALESCE(SUM(objects_count), 0) AS objects_count,
+                        COALESCE(SUM(tasks_count), 0) AS tasks_count
+                    FROM release_rollup
+                    GROUP BY date_trunc('week', started_at)
+                    ORDER BY date_trunc('week', started_at)
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            weekday_heatmap = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        EXTRACT(ISODOW FROM started_at)::int AS weekday_no,
+                        CASE EXTRACT(ISODOW FROM started_at)::int
+                            WHEN 1 THEN 'Пн'
+                            WHEN 2 THEN 'Вт'
+                            WHEN 3 THEN 'Ср'
+                            WHEN 4 THEN 'Чт'
+                            WHEN 5 THEN 'Пт'
+                            WHEN 6 THEN 'Сб'
+                            ELSE 'Вс'
+                        END AS weekday_label,
+                        EXTRACT(HOUR FROM started_at)::int AS hour_of_day,
+                        COUNT(*) AS releases_count,
+                        COALESCE(SUM(objects_count), 0) AS objects_count,
+                        COALESCE(SUM(tasks_count), 0) AS tasks_count
+                    FROM release_rollup
+                    GROUP BY EXTRACT(ISODOW FROM started_at), EXTRACT(HOUR FROM started_at)
+                    ORDER BY weekday_no, hour_of_day
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            type_breakdown = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        release_bucket,
+                        COUNT(*) AS releases_count,
+                        COALESCE(SUM(objects_count), 0) AS objects_count,
+                        COALESCE(SUM(tasks_count), 0) AS tasks_count,
+                        COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total
+                    FROM release_rollup
+                    GROUP BY release_bucket
+                    ORDER BY releases_count DESC, objects_count DESC
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            system_breakdown = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT 'ClickHouse' AS system_name, COALESCE(SUM(click_objects_count), 0) AS objects_count
+                    FROM release_rollup
+                    UNION ALL
+                    SELECT 'Greenplum' AS system_name, COALESCE(SUM(gp_objects_count), 0) AS objects_count
+                    FROM release_rollup
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_entities = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COALESCE(entity_name, 'Без сущности') AS entity_name,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT release_id) AS releases_count,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT CASE WHEN release_bucket = 'hotfix' THEN release_id END) AS hotfix_count,
+                        COUNT(DISTINCT CASE WHEN release_bucket = 'outside_release' THEN release_id END) AS outside_release_count,
+                        MAX(started_at) AS last_release_at
+                    FROM ro
+                    GROUP BY COALESCE(entity_name, 'Без сущности')
+                    ORDER BY objects_count DESC, releases_count DESC, tasks_count DESC
+                    LIMIT 12
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_tables = conn.execute(
+                text(
+                    base
+                    + """
+                    WITH table_entity_rank AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            COUNT(*) AS entity_objects_count,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY schema_name, table_name
+                                ORDER BY COUNT(*) DESC, COALESCE(entity_name, 'Без сущности')
+                            ) AS rn
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+                    )
+                    SELECT
+                        schema_name,
+                        table_name,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT release_id) AS releases_count,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        MAX(started_at) AS last_change_at,
+                        (ARRAY_AGG(DISTINCT COALESCE(entity_name, 'Без сущности') ORDER BY COALESCE(entity_name, 'Без сущности')))[1:4] AS entity_names,
+                        MAX(CASE WHEN ter.rn = 1 THEN ter.entity_name END) AS primary_entity_name
+                    FROM ro
+                    LEFT JOIN table_entity_rank ter
+                      ON ter.schema_name = ro.schema_name
+                     AND ter.table_name = ro.table_name
+                    WHERE schema_name IS NOT NULL
+                      AND table_name IS NOT NULL
+                    GROUP BY schema_name, table_name
+                    ORDER BY releases_count DESC, objects_count DESC, tasks_count DESC
+                    LIMIT 16
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_users = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        engineer,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT task_fact.release_id) AS releases_count,
+                        COUNT(DISTINCT creator) AS creators_count,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours_total,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'hotfix' THEN task_fact.release_id END) AS hotfix_count,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'outside_release' THEN task_fact.release_id END) AS outside_release_count
+                    FROM task_fact
+                    JOIN rel ON rel.release_id = task_fact.release_id
+                    GROUP BY engineer
+                    ORDER BY hours_total DESC NULLS LAST, tasks_count DESC
+                    LIMIT 14
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_creators = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        creator,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT task_fact.release_id) AS releases_count,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours_total,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'hotfix' THEN task_fact.release_id END) AS hotfix_count,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'outside_release' THEN task_fact.release_id END) AS outside_release_count
+                    FROM task_fact
+                    JOIN rel ON rel.release_id = task_fact.release_id
+                    GROUP BY creator
+                    ORDER BY tasks_count DESC, hours_total DESC NULLS LAST
+                    LIMIT 14
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_initiators = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COALESCE(initiated_by, 'Не указан') AS initiated_by,
+                        COUNT(*) AS releases_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'hotfix') AS hotfix_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'outside_release') AS outside_release_count,
+                        COALESCE(SUM(objects_count), 0) AS objects_count,
+                        COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total
+                    FROM release_rollup
+                    GROUP BY COALESCE(initiated_by, 'Не указан')
+                    ORDER BY releases_count DESC, objects_count DESC, hours_total DESC
+                    LIMIT 10
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            entity_timeline = conn.execute(
+                text(
+                    base
+                    + """
+                    WITH top_entity_base AS (
+                        SELECT
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            COUNT(*) AS objects_count
+                        FROM ro
+                        GROUP BY COALESCE(entity_name, 'Без сущности')
+                        ORDER BY objects_count DESC
+                        LIMIT 6
+                    )
+                    SELECT
+                        teb.entity_name,
+                        to_char(date_trunc('month', ro.started_at), 'MM.YY') AS month_label,
+                        date_trunc('month', ro.started_at)::date::text AS month_start,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT ro.release_id) AS releases_count
+                    FROM ro
+                    JOIN top_entity_base teb
+                      ON teb.entity_name = COALESCE(ro.entity_name, 'Без сущности')
+                    GROUP BY teb.entity_name, date_trunc('month', ro.started_at)
+                    ORDER BY month_start, teb.entity_name
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            recent_releases = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        release_id,
+                        release_type,
+                        release_bucket,
+                        initiated_by,
+                        started_at,
+                        status,
+                        objects_count,
+                        tasks_count,
+                        creators_count,
+                        engineers_count,
+                        (SELECT ARRAY_AGG(DISTINCT COALESCE(r2.entity_name, 'Без сущности') ORDER BY COALESCE(r2.entity_name, 'Без сущности'))[1:5]
+                           FROM ro r2
+                          WHERE r2.release_id = release_rollup.release_id) AS entity_names,
+                        ROUND(minutes_total / 60.0, 1) AS hours_total,
+                        ROUND(duration_minutes, 1) AS duration_minutes
+                    FROM release_rollup
+                    ORDER BY started_at DESC NULLS LAST
+                    LIMIT 8
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            exception_releases = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        release_id,
+                        release_type,
+                        release_bucket,
+                        initiated_by,
+                        started_at,
+                        status,
+                        objects_count,
+                        tasks_count,
+                        creators_count,
+                        engineers_count,
+                        (SELECT ARRAY_AGG(DISTINCT COALESCE(r2.entity_name, 'Без сущности') ORDER BY COALESCE(r2.entity_name, 'Без сущности'))[1:5]
+                           FROM ro r2
+                          WHERE r2.release_id = release_rollup.release_id) AS entity_names,
+                        ROUND(minutes_total / 60.0, 1) AS hours_total,
+                        ROUND(duration_minutes, 1) AS duration_minutes
+                    FROM release_rollup
+                    WHERE release_bucket IN ('hotfix', 'outside_release')
+                    ORDER BY started_at DESC NULLS LAST
+                    LIMIT 10
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+        summary_row = summary or {}
+        cadence_rows = [dict(row) for row in cadence]
+        type_rows = [dict(row) for row in type_breakdown]
+        heatmap_rows = [dict(row) for row in weekday_heatmap]
+        entities_rows = [dict(row) for row in top_entities]
+        tables_rows = [dict(row) for row in top_tables]
+        users_rows = [dict(row) for row in top_users]
+        creators_rows = [dict(row) for row in top_creators]
+        initiators_rows = [dict(row) for row in top_initiators]
+        system_rows = [dict(row) for row in system_breakdown]
+        timeline_rows = [dict(row) for row in entity_timeline]
+        recent_rows = [dict(row) for row in recent_releases]
+        exception_rows = [dict(row) for row in exception_releases]
+
+        return {
+            "days": days,
+            "summary": {
+                "releases_count": int(summary_row.get("releases_count") or 0),
+                "release_count": int(summary_row.get("release_count") or 0),
+                "hotfix_count": int(summary_row.get("hotfix_count") or 0),
+                "outside_release_count": int(summary_row.get("outside_release_count") or 0),
+                "objects_count": int(summary_row.get("objects_count") or 0),
+                "click_objects_count": int(summary_row.get("click_objects_count") or 0),
+                "gp_objects_count": int(summary_row.get("gp_objects_count") or 0),
+                "tasks_count": int(summary_row.get("tasks_count") or 0),
+                "hours_total": float(summary_row.get("hours_total") or 0),
+                "initiators_count": int(summary_row.get("initiators_count") or 0),
+                "release_days_count": int(summary_row.get("release_days_count") or 0),
+                "avg_objects_per_release": float(summary_row.get("avg_objects_per_release") or 0),
+                "avg_duration_minutes": float(summary_row.get("avg_duration_minutes") or 0),
+            },
+            "cadence": cadence_rows,
+            "weekday_heatmap": heatmap_rows,
+            "type_breakdown": type_rows,
+            "system_breakdown": system_rows,
+            "top_entities": entities_rows,
+            "top_tables": tables_rows,
+            "top_users": users_rows,
+            "top_creators": creators_rows,
+            "top_initiators": initiators_rows,
+            "entity_timeline": timeline_rows,
+            "recent_releases": recent_rows,
+            "exception_releases": exception_rows,
+            "focus": {
+                "top_entity": entities_rows[0] if entities_rows else None,
+                "top_table": tables_rows[0] if tables_rows else None,
+                "top_user": users_rows[0] if users_rows else None,
+            },
+        }
+    except Exception as e:
+        print("❌ /api/admin/reports/releases error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить аналитику релизов")
+
+
 @router.get("/api/admin/dev-meta/status")
 def get_admin_dev_meta_status(request: Request):
     _require_dev_meta_role(request)

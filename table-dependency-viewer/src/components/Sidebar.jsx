@@ -128,7 +128,7 @@ export default function Sidebar({
                     navigate("/admin/engineering");
                   }}
                 >
-                  Эффективность
+                  Репорты
                 </button>
               )}
               {authEnabled && userProfile?.role === "admin" && (

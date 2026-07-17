@@ -1428,8 +1428,8 @@ def get_admin_release_reports(
                                 ) ranked_entities
                             )
                         ) AS entity_names,
-                        ROUND(minutes_total / 60.0, 1) AS hours_total,
-                        ROUND(duration_minutes, 1) AS duration_minutes
+                        ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
+                        ROUND(duration_minutes::numeric, 1) AS duration_minutes
                     FROM release_rollup
                     ORDER BY started_at DESC NULLS LAST
                     LIMIT 8
@@ -1465,8 +1465,8 @@ def get_admin_release_reports(
                                 ) ranked_entities
                             )
                         ) AS entity_names,
-                        ROUND(minutes_total / 60.0, 1) AS hours_total,
-                        ROUND(duration_minutes, 1) AS duration_minutes
+                        ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
+                        ROUND(duration_minutes::numeric, 1) AS duration_minutes
                     FROM release_rollup
                     WHERE release_bucket IN ('hotfix', 'outside_release')
                     ORDER BY started_at DESC NULLS LAST

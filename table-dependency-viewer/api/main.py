@@ -1291,27 +1291,38 @@ def get_admin_release_reports(
                         FROM table_entities_rank
                         WHERE rn <= 4
                         GROUP BY schema_name, table_name
+                    ),
+                    table_rollup AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            COUNT(*) AS objects_count,
+                            COUNT(DISTINCT release_id) AS releases_count,
+                            COUNT(DISTINCT task_id) AS tasks_count,
+                            MAX(started_at) AS last_change_at
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name
                     )
                     SELECT
-                        ro.schema_name,
-                        ro.table_name,
-                        COUNT(*) AS objects_count,
-                        COUNT(DISTINCT ro.release_id) AS releases_count,
-                        COUNT(DISTINCT ro.task_id) AS tasks_count,
-                        MAX(ro.started_at) AS last_change_at,
-                        MAX(te.entity_names) AS entity_names,
-                        MAX(CASE WHEN ter.rn = 1 THEN ter.entity_name END) AS primary_entity_name
-                    FROM ro
-                    LEFT JOIN table_entity_rank ter
-                      ON ter.schema_name = ro.schema_name
-                     AND ter.table_name = ro.table_name
+                        tr.schema_name,
+                        tr.table_name,
+                        tr.objects_count,
+                        tr.releases_count,
+                        tr.tasks_count,
+                        tr.last_change_at,
+                        te.entity_names,
+                        ter.entity_name AS primary_entity_name
+                    FROM table_rollup tr
                     LEFT JOIN table_entities te
-                      ON te.schema_name = ro.schema_name
-                     AND te.table_name = ro.table_name
-                    WHERE ro.schema_name IS NOT NULL
-                      AND ro.table_name IS NOT NULL
-                    GROUP BY ro.schema_name, ro.table_name
-                    ORDER BY releases_count DESC, objects_count DESC, tasks_count DESC
+                      ON te.schema_name = tr.schema_name
+                     AND te.table_name = tr.table_name
+                    LEFT JOIN table_entity_rank ter
+                      ON ter.schema_name = tr.schema_name
+                     AND ter.table_name = tr.table_name
+                     AND ter.rn = 1
+                    ORDER BY tr.releases_count DESC, tr.objects_count DESC, tr.tasks_count DESC
                     LIMIT 16
                     """
                 ),

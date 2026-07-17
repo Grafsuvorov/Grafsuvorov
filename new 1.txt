@@ -1,7 +1,42 @@
-docker run --rm --entrypoint sh table-dependency-viewer_frontend -c 'echo "--- nginx.conf"; sed -n "1,40p" /etc/nginx/nginx.conf; echo "--- cmd"; ps -o args= 1'
+table-dependency-viewer-frontend-1  | nginx: [crit] pwrite() "/run/nginx.pid" failed (1: Operation not permitted)
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker run --rm --entrypoint sh table-dependency-viewer_frontend -c 'echo "--- nginx.conf"; sed -n "1,40p" /etc/nginx/nginx.conf; echo "--- cmd"; ps -o args= 1'
+--- nginx.conf
+user nginx;
+worker_processes auto;
 
-  И ещё:
+events {
+  worker_connections 1024;
+}
 
-  docker compose up -d --force-recreate frontend
-  docker compose ps
-  docker compose logs frontend --since=2m
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+
+  sendfile on;
+  tcp_nopush on;
+  keepalive_timeout 65;
+  types_hash_max_size 2048;
+
+  include /etc/nginx/conf.d/*.conf;
+}
+--- cmd
+ps -o args= 1
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d --force-recreate frontend
+[+] Running 1/1
+ ⠿ Container table-dependency-viewer-frontend-1  Started                                                          0.5s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose ps
+NAME                                 COMMAND                  SERVICE             STATUS              PORTS
+table-dependency-viewer-api-1        "uvicorn api.main:ap…"   api                 running             0.0.0.0:5312->8000/tcp
+table-dependency-viewer-frontend-1   "/docker-entrypoint.…"   frontend            exited (1)
+[root@rgm-s-dwhapp01 table-dependency-viewer]#  docker compose logs frontend --since=2m
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+table-dependency-viewer-frontend-1  | 10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+table-dependency-viewer-frontend-1  | 10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf differs from the packaged version
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Configuration complete; ready for start up
+table-dependency-viewer-frontend-1  | 2026/07/17 12:51:54 [crit] 1#1: pwrite() "/run/nginx.pid" failed (1: Operation not permitted)
+table-dependency-viewer-frontend-1  | nginx: [crit] pwrite() "/run/nginx.pid" failed (1: Operation not permitted)

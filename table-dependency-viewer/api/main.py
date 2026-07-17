@@ -1262,24 +1262,34 @@ def get_admin_release_reports(
                           AND table_name IS NOT NULL
                         GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
                     ),
+                    table_entity_distinct AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    table_entities_rank AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            entity_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY schema_name, table_name
+                                ORDER BY entity_name
+                            ) AS rn
+                        FROM table_entity_distinct
+                    ),
                     table_entities AS (
                         SELECT
                             schema_name,
                             table_name,
-                            ARRAY(
-                                SELECT entity_name
-                                FROM (
-                                    SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
-                                    FROM ro r2
-                                    WHERE r2.schema_name = ro.schema_name
-                                      AND r2.table_name = ro.table_name
-                                    ORDER BY entity_name
-                                    LIMIT 4
-                                ) ranked_entities
-                            ) AS entity_names
-                        FROM ro
-                        WHERE schema_name IS NOT NULL
-                          AND table_name IS NOT NULL
+                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
+                        FROM table_entities_rank
+                        WHERE rn <= 4
                         GROUP BY schema_name, table_name
                     )
                     SELECT
@@ -1405,33 +1415,50 @@ def get_admin_release_reports(
                 text(
                     base
                     + """
+                    ,
+                    release_entity_distinct AS (
+                        SELECT
+                            release_id,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name
+                        FROM ro
+                        GROUP BY release_id, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    release_entity_rank AS (
+                        SELECT
+                            release_id,
+                            entity_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY release_id
+                                ORDER BY entity_name
+                            ) AS rn
+                        FROM release_entity_distinct
+                    ),
+                    release_entities AS (
+                        SELECT
+                            release_id,
+                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
+                        FROM release_entity_rank
+                        WHERE rn <= 5
+                        GROUP BY release_id
+                    )
                     SELECT
-                        release_id,
-                        release_type,
-                        release_bucket,
-                        initiated_by,
-                        started_at,
-                        status,
-                        objects_count,
-                        tasks_count,
-                        creators_count,
-                        engineers_count,
-                        (
-                            SELECT ARRAY(
-                                SELECT entity_name
-                                FROM (
-                                    SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
-                                    FROM ro r2
-                                    WHERE r2.release_id = release_rollup.release_id
-                                    ORDER BY entity_name
-                                    LIMIT 5
-                                ) ranked_entities
-                            )
-                        ) AS entity_names,
-                        ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
-                        ROUND(duration_minutes::numeric, 1) AS duration_minutes
-                    FROM release_rollup
-                    ORDER BY started_at DESC NULLS LAST
+                        rr.release_id,
+                        rr.release_type,
+                        rr.release_bucket,
+                        rr.initiated_by,
+                        rr.started_at,
+                        rr.status,
+                        rr.objects_count,
+                        rr.tasks_count,
+                        rr.creators_count,
+                        rr.engineers_count,
+                        re.entity_names,
+                        ROUND((rr.minutes_total / 60.0)::numeric, 1) AS hours_total,
+                        ROUND(rr.duration_minutes::numeric, 1) AS duration_minutes
+                    FROM release_rollup rr
+                    LEFT JOIN release_entities re
+                      ON re.release_id = rr.release_id
+                    ORDER BY rr.started_at DESC NULLS LAST
                     LIMIT 8
                     """
                 ),
@@ -1442,34 +1469,51 @@ def get_admin_release_reports(
                 text(
                     base
                     + """
+                    ,
+                    release_entity_distinct AS (
+                        SELECT
+                            release_id,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name
+                        FROM ro
+                        GROUP BY release_id, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    release_entity_rank AS (
+                        SELECT
+                            release_id,
+                            entity_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY release_id
+                                ORDER BY entity_name
+                            ) AS rn
+                        FROM release_entity_distinct
+                    ),
+                    release_entities AS (
+                        SELECT
+                            release_id,
+                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
+                        FROM release_entity_rank
+                        WHERE rn <= 5
+                        GROUP BY release_id
+                    )
                     SELECT
-                        release_id,
-                        release_type,
-                        release_bucket,
-                        initiated_by,
-                        started_at,
-                        status,
-                        objects_count,
-                        tasks_count,
-                        creators_count,
-                        engineers_count,
-                        (
-                            SELECT ARRAY(
-                                SELECT entity_name
-                                FROM (
-                                    SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
-                                    FROM ro r2
-                                    WHERE r2.release_id = release_rollup.release_id
-                                    ORDER BY entity_name
-                                    LIMIT 5
-                                ) ranked_entities
-                            )
-                        ) AS entity_names,
-                        ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
-                        ROUND(duration_minutes::numeric, 1) AS duration_minutes
-                    FROM release_rollup
-                    WHERE release_bucket IN ('hotfix', 'outside_release')
-                    ORDER BY started_at DESC NULLS LAST
+                        rr.release_id,
+                        rr.release_type,
+                        rr.release_bucket,
+                        rr.initiated_by,
+                        rr.started_at,
+                        rr.status,
+                        rr.objects_count,
+                        rr.tasks_count,
+                        rr.creators_count,
+                        rr.engineers_count,
+                        re.entity_names,
+                        ROUND((rr.minutes_total / 60.0)::numeric, 1) AS hours_total,
+                        ROUND(rr.duration_minutes::numeric, 1) AS duration_minutes
+                    FROM release_rollup rr
+                    LEFT JOIN release_entities re
+                      ON re.release_id = rr.release_id
+                    WHERE rr.release_bucket IN ('hotfix', 'outside_release')
+                    ORDER BY rr.started_at DESC NULLS LAST
                     LIMIT 10
                     """
                 ),

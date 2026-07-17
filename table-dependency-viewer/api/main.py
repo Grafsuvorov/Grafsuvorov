@@ -1416,9 +1416,18 @@ def get_admin_release_reports(
                         tasks_count,
                         creators_count,
                         engineers_count,
-                        (SELECT ARRAY_AGG(DISTINCT COALESCE(r2.entity_name, 'Без сущности') ORDER BY COALESCE(r2.entity_name, 'Без сущности'))[1:5]
-                           FROM ro r2
-                          WHERE r2.release_id = release_rollup.release_id) AS entity_names,
+                        (
+                            SELECT ARRAY(
+                                SELECT entity_name
+                                FROM (
+                                    SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
+                                    FROM ro r2
+                                    WHERE r2.release_id = release_rollup.release_id
+                                    ORDER BY entity_name
+                                    LIMIT 5
+                                ) ranked_entities
+                            )
+                        ) AS entity_names,
                         ROUND(minutes_total / 60.0, 1) AS hours_total,
                         ROUND(duration_minutes, 1) AS duration_minutes
                     FROM release_rollup
@@ -1444,9 +1453,18 @@ def get_admin_release_reports(
                         tasks_count,
                         creators_count,
                         engineers_count,
-                        (SELECT ARRAY_AGG(DISTINCT COALESCE(r2.entity_name, 'Без сущности') ORDER BY COALESCE(r2.entity_name, 'Без сущности'))[1:5]
-                           FROM ro r2
-                          WHERE r2.release_id = release_rollup.release_id) AS entity_names,
+                        (
+                            SELECT ARRAY(
+                                SELECT entity_name
+                                FROM (
+                                    SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
+                                    FROM ro r2
+                                    WHERE r2.release_id = release_rollup.release_id
+                                    ORDER BY entity_name
+                                    LIMIT 5
+                                ) ranked_entities
+                            )
+                        ) AS entity_names,
                         ROUND(minutes_total / 60.0, 1) AS hours_total,
                         ROUND(duration_minutes, 1) AS duration_minutes
                     FROM release_rollup

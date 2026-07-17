@@ -1,78 +1,5 @@
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=150
-table-dependency-viewer-api-1  |                         r.ready_to_release,
-table-dependency-viewer-api-1  |                         CASE
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%hotfix%%' THEN 'hotfix'
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%внерел%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%out_of_release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%out of release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%nonrelease%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%non-release%%'
-table-dependency-viewer-api-1  |                             THEN 'outside_release'
-table-dependency-viewer-api-1  |                             ELSE 'release'
-table-dependency-viewer-api-1  |                         END AS release_bucket
-table-dependency-viewer-api-1  |                     FROM tech_etl.release_log r
-table-dependency-viewer-api-1  |                     WHERE r.started_at >= (now() - (%(days)s || ' days')::interval)
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 ro AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         ro.*,
-table-dependency-viewer-api-1  |                         rel.started_at,
-table-dependency-viewer-api-1  |                         rel.release_type,
-table-dependency-viewer-api-1  |                         rel.release_bucket,
-table-dependency-viewer-api-1  |                         rel.initiated_by,
-table-dependency-viewer-api-1  |                         rel.status
-table-dependency-viewer-api-1  |                     FROM tech_etl.release_objects ro
-table-dependency-viewer-api-1  |                     JOIN rel ON rel.release_id = ro.release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_tasks AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT release_id, task_id
-table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     WHERE task_id IS NOT NULL AND task_id <> ''
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_ids AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT task_id
-table-dependency-viewer-api-1  |                     FROM release_tasks
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 snap AS (
-table-dependency-viewer-api-1  |                     SELECT s.*
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_snapshot s
-table-dependency-viewer-api-1  |                     JOIN task_ids t ON t.task_id = s.issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 exec AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT ON (issue_id)
-table-dependency-viewer-api-1  |                            issue_id, author AS executor, ts
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_timeline
-table-dependency-viewer-api-1  |                     WHERE event_type = 'State change'
-table-dependency-viewer-api-1  |                       AND value_to IN ('Ожидание релиза', 'В работе')
-table-dependency-viewer-api-1  |                     ORDER BY issue_id, ts DESC NULLS LAST
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 work AS (
-table-dependency-viewer-api-1  |                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_worklog
-table-dependency-viewer-api-1  |                     GROUP BY issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_fact AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rt.release_id,
-table-dependency-viewer-api-1  |                         rt.task_id,
-table-dependency-viewer-api-1  |                         COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
-table-dependency-viewer-api-1  |                         COALESCE(snap.created_by, 'Не указан') AS creator,
-table-dependency-viewer-api-1  |                         COALESCE(work.minutes, 0) AS minutes
-table-dependency-viewer-api-1  |                     FROM release_tasks rt
-table-dependency-viewer-api-1  |                     LEFT JOIN snap ON snap.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT task_id) AS tasks_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT engineer) AS engineers_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT creator) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(SUM(minutes), 0) AS minutes_total
-table-dependency-viewer-api-1  |                     FROM task_fact
-table-dependency-viewer-api-1  |                     GROUP BY release_id
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
 table-dependency-viewer-api-1  |                 ),
 table-dependency-viewer-api-1  |                 object_rollup AS (
 table-dependency-viewer-api-1  |                     SELECT
@@ -112,92 +39,26 @@ table-dependency-viewer-api-1  |                     LEFT JOIN object_rollup obj
 table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
 table-dependency-viewer-api-1  |                 )
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |                     WITH table_entity_rank AS (
+table-dependency-viewer-api-1  |                     WITH top_entity_base AS (
 table-dependency-viewer-api-1  |                         SELECT
-table-dependency-viewer-api-1  |                             schema_name,
-table-dependency-viewer-api-1  |                             table_name,
 table-dependency-viewer-api-1  |                             COALESCE(entity_name, 'Без сущности') AS entity_name,
-table-dependency-viewer-api-1  |                             COUNT(*) AS entity_objects_count,
-table-dependency-viewer-api-1  |                             ROW_NUMBER() OVER (
-table-dependency-viewer-api-1  |                                 PARTITION BY schema_name, table_name
-table-dependency-viewer-api-1  |                                 ORDER BY COUNT(*) DESC, COALESCE(entity_name, 'Без сущности')
-table-dependency-viewer-api-1  |                             ) AS rn
+table-dependency-viewer-api-1  |                             COUNT(*) AS objects_count
 table-dependency-viewer-api-1  |                         FROM ro
-table-dependency-viewer-api-1  |                         WHERE schema_name IS NOT NULL
-table-dependency-viewer-api-1  |                           AND table_name IS NOT NULL
-table-dependency-viewer-api-1  |                         GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+table-dependency-viewer-api-1  |                         GROUP BY COALESCE(entity_name, 'Без сущности')
+table-dependency-viewer-api-1  |                         ORDER BY objects_count DESC
+table-dependency-viewer-api-1  |                         LIMIT 6
 table-dependency-viewer-api-1  |                     )
 table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         schema_name,
-table-dependency-viewer-api-1  |                         table_name,
+table-dependency-viewer-api-1  |                         teb.entity_name,
+table-dependency-viewer-api-1  |                         to_char(date_trunc('month', ro.started_at), 'MM.YY') AS month_label,
+table-dependency-viewer-api-1  |                         date_trunc('month', ro.started_at)::date::text AS month_start,
 table-dependency-viewer-api-1  |                         COUNT(*) AS objects_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT release_id) AS releases_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT task_id) AS tasks_count,
-table-dependency-viewer-api-1  |                         MAX(started_at) AS last_change_at,
-table-dependency-viewer-api-1  |                         (ARRAY_AGG(DISTINCT COALESCE(entity_name, 'Без сущности') ORDER BY COALESCE(entity_name, 'Без сущности')))[1:4] AS entity_names,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN ter.rn = 1 THEN ter.entity_name END) AS primary_entity_name
+table-dependency-viewer-api-1  |                         COUNT(DISTINCT ro.release_id) AS releases_count
 table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     LEFT JOIN table_entity_rank ter
-table-dependency-viewer-api-1  |                       ON ter.schema_name = ro.schema_name
-table-dependency-viewer-api-1  |                      AND ter.table_name = ro.table_name
-table-dependency-viewer-api-1  |                     WHERE schema_name IS NOT NULL
-table-dependency-viewer-api-1  |                       AND table_name IS NOT NULL
-table-dependency-viewer-api-1  |                     GROUP BY schema_name, table_name
-table-dependency-viewer-api-1  |                     ORDER BY releases_count DESC, objects_count DESC, tasks_count DESC
-table-dependency-viewer-api-1  |                     LIMIT 16
-table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60088 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
-table-dependency-viewer-api-1  |                         COALESCE(obj.objects_count, 0) AS objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.entities_count, 0) AS entities_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.click_objects_count, 0) AS click_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.gp_objects_count, 0) AS gp_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.tasks_count, 0) AS tasks_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.engineers_count, 0) AS engineers_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.creators_count, 0) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.minutes_total, 0) AS minutes_total,
-table-dependency-viewer-api-1  |                         EXTRACT(EPOCH FROM (COALESCE(rel.finished_at, now()) - rel.started_at)) / 60.0 AS duration_minutes
-table-dependency-viewer-api-1  |                     FROM rel
-table-dependency-viewer-api-1  |                     LEFT JOIN object_rollup obj ON obj.release_id = rel.release_id
-table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
-table-dependency-viewer-api-1  |                 )
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |                     WITH table_entity_rank AS (
-table-dependency-viewer-api-1  |                         SELECT
-table-dependency-viewer-api-1  |                             schema_name,
-table-dependency-viewer-api-1  |                             table_name,
-table-dependency-viewer-api-1  |                             COALESCE(entity_name, 'Без сущности') AS entity_name,
-table-dependency-viewer-api-1  |                             COUNT(*) AS entity_objects_count,
-table-dependency-viewer-api-1  |                             ROW_NUMBER() OVER (
-table-dependency-viewer-api-1  |                                 PARTITION BY schema_name, table_name
-table-dependency-viewer-api-1  |                                 ORDER BY COUNT(*) DESC, COALESCE(entity_name, 'Без сущности')
-table-dependency-viewer-api-1  |                             ) AS rn
-table-dependency-viewer-api-1  |                         FROM ro
-table-dependency-viewer-api-1  |                         WHERE schema_name IS NOT NULL
-table-dependency-viewer-api-1  |                           AND table_name IS NOT NULL
-table-dependency-viewer-api-1  |                         GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
-table-dependency-viewer-api-1  |                     )
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         schema_name,
-table-dependency-viewer-api-1  |                         table_name,
-table-dependency-viewer-api-1  |                         COUNT(*) AS objects_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT release_id) AS releases_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT task_id) AS tasks_count,
-table-dependency-viewer-api-1  |                         MAX(started_at) AS last_change_at,
-table-dependency-viewer-api-1  |                         (ARRAY_AGG(DISTINCT COALESCE(entity_name, 'Без сущности') ORDER BY COALESCE(entity_name, 'Без сущности')))[1:4] AS entity_names,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN ter.rn = 1 THEN ter.entity_name END) AS primary_entity_name
-table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     LEFT JOIN table_entity_rank ter
-table-dependency-viewer-api-1  |                       ON ter.schema_name = ro.schema_name
-table-dependency-viewer-api-1  |                      AND ter.table_name = ro.table_name
-table-dependency-viewer-api-1  |                     WHERE schema_name IS NOT NULL
-table-dependency-viewer-api-1  |                       AND table_name IS NOT NULL
-table-dependency-viewer-api-1  |                     GROUP BY schema_name, table_name
-table-dependency-viewer-api-1  |                     ORDER BY releases_count DESC, objects_count DESC, tasks_count DESC
-table-dependency-viewer-api-1  |                     LIMIT 16
+table-dependency-viewer-api-1  |                     JOIN top_entity_base teb
+table-dependency-viewer-api-1  |                       ON teb.entity_name = COALESCE(ro.entity_name, 'Без сущности')
+table-dependency-viewer-api-1  |                     GROUP BY teb.entity_name, date_trunc('month', ro.started_at)
+table-dependency-viewer-api-1  |                     ORDER BY month_start, teb.entity_name
 table-dependency-viewer-api-1  |                     ]
 table-dependency-viewer-api-1  | [parameters: {'days': 180}]
 table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
@@ -206,17 +67,17 @@ table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages
 table-dependency-viewer-api-1  |     self.dialect.do_execute(
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
 table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | psycopg2.errors.SyntaxError: syntax error at or near "WITH table_entity_rank"
-table-dependency-viewer-api-1  | LINE 123:                     WITH table_entity_rank AS (
+table-dependency-viewer-api-1  | psycopg2.errors.SyntaxError: syntax error at or near "WITH top_entity_base"
+table-dependency-viewer-api-1  | LINE 123:                     WITH top_entity_base AS (
 table-dependency-viewer-api-1  |                               ^
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 1245, in get_admin_release_reports
-table-dependency-viewer-api-1  |     top_tables = conn.execute(
-table-dependency-viewer-api-1  |                  ^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 1374, in get_admin_release_reports
+table-dependency-viewer-api-1  |     entity_timeline = conn.execute(
+table-dependency-viewer-api-1  |                       ^^^^^^^^^^^^^
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
 table-dependency-viewer-api-1  |     return meth(
 table-dependency-viewer-api-1  |            ^^^^^
@@ -237,8 +98,8 @@ table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages
 table-dependency-viewer-api-1  |     self.dialect.do_execute(
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
 table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.SyntaxError) syntax error at or near "WITH table_entity_rank"
-table-dependency-viewer-api-1  | LINE 123:                     WITH table_entity_rank AS (
+table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.SyntaxError) syntax error at or near "WITH top_entity_base"
+table-dependency-viewer-api-1  | LINE 123:                     WITH top_entity_base AS (
 table-dependency-viewer-api-1  |                               ^
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | [SQL:
@@ -363,41 +224,29 @@ table-dependency-viewer-api-1  |                     LEFT JOIN object_rollup obj
 table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
 table-dependency-viewer-api-1  |                 )
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |                     WITH table_entity_rank AS (
+table-dependency-viewer-api-1  |                     WITH top_entity_base AS (
 table-dependency-viewer-api-1  |                         SELECT
-table-dependency-viewer-api-1  |                             schema_name,
-table-dependency-viewer-api-1  |                             table_name,
 table-dependency-viewer-api-1  |                             COALESCE(entity_name, 'Без сущности') AS entity_name,
-table-dependency-viewer-api-1  |                             COUNT(*) AS entity_objects_count,
-table-dependency-viewer-api-1  |                             ROW_NUMBER() OVER (
-table-dependency-viewer-api-1  |                                 PARTITION BY schema_name, table_name
-table-dependency-viewer-api-1  |                                 ORDER BY COUNT(*) DESC, COALESCE(entity_name, 'Без сущности')
-table-dependency-viewer-api-1  |                             ) AS rn
+table-dependency-viewer-api-1  |                             COUNT(*) AS objects_count
 table-dependency-viewer-api-1  |                         FROM ro
-table-dependency-viewer-api-1  |                         WHERE schema_name IS NOT NULL
-table-dependency-viewer-api-1  |                           AND table_name IS NOT NULL
-table-dependency-viewer-api-1  |                         GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+table-dependency-viewer-api-1  |                         GROUP BY COALESCE(entity_name, 'Без сущности')
+table-dependency-viewer-api-1  |                         ORDER BY objects_count DESC
+table-dependency-viewer-api-1  |                         LIMIT 6
 table-dependency-viewer-api-1  |                     )
 table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         schema_name,
-table-dependency-viewer-api-1  |                         table_name,
+table-dependency-viewer-api-1  |                         teb.entity_name,
+table-dependency-viewer-api-1  |                         to_char(date_trunc('month', ro.started_at), 'MM.YY') AS month_label,
+table-dependency-viewer-api-1  |                         date_trunc('month', ro.started_at)::date::text AS month_start,
 table-dependency-viewer-api-1  |                         COUNT(*) AS objects_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT release_id) AS releases_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT task_id) AS tasks_count,
-table-dependency-viewer-api-1  |                         MAX(started_at) AS last_change_at,
-table-dependency-viewer-api-1  |                         (ARRAY_AGG(DISTINCT COALESCE(entity_name, 'Без сущности') ORDER BY COALESCE(entity_name, 'Без сущности')))[1:4] AS entity_names,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN ter.rn = 1 THEN ter.entity_name END) AS primary_entity_name
+table-dependency-viewer-api-1  |                         COUNT(DISTINCT ro.release_id) AS releases_count
 table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     LEFT JOIN table_entity_rank ter
-table-dependency-viewer-api-1  |                       ON ter.schema_name = ro.schema_name
-table-dependency-viewer-api-1  |                      AND ter.table_name = ro.table_name
-table-dependency-viewer-api-1  |                     WHERE schema_name IS NOT NULL
-table-dependency-viewer-api-1  |                       AND table_name IS NOT NULL
-table-dependency-viewer-api-1  |                     GROUP BY schema_name, table_name
-table-dependency-viewer-api-1  |                     ORDER BY releases_count DESC, objects_count DESC, tasks_count DESC
-table-dependency-viewer-api-1  |                     LIMIT 16
+table-dependency-viewer-api-1  |                     JOIN top_entity_base teb
+table-dependency-viewer-api-1  |                       ON teb.entity_name = COALESCE(ro.entity_name, 'Без сущности')
+table-dependency-viewer-api-1  |                     GROUP BY teb.entity_name, date_trunc('month', ro.started_at)
+table-dependency-viewer-api-1  |                     ORDER BY month_start, teb.entity_name
 table-dependency-viewer-api-1  |                     ]
 table-dependency-viewer-api-1  | [parameters: {'days': 180}]
 table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60088 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:33124 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:33138 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 200 OK

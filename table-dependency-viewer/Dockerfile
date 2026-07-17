@@ -11,9 +11,7 @@ RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
-COPY nginx-main.conf /etc/nginx/nginx.conf
+FROM nginxinc/nginx-unprivileged:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off; master_process off;"]
+EXPOSE 8080

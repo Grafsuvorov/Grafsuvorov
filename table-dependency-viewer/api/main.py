@@ -1246,7 +1246,8 @@ def get_admin_release_reports(
                 text(
                     base
                     + """
-                    WITH table_entity_rank AS (
+                    ,
+                    table_entity_rank AS (
                         SELECT
                             schema_name,
                             table_name,
@@ -1260,23 +1261,46 @@ def get_admin_release_reports(
                         WHERE schema_name IS NOT NULL
                           AND table_name IS NOT NULL
                         GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    table_entities AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            ARRAY(
+                                SELECT entity_name
+                                FROM (
+                                    SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
+                                    FROM ro r2
+                                    WHERE r2.schema_name = ro.schema_name
+                                      AND r2.table_name = ro.table_name
+                                    ORDER BY entity_name
+                                    LIMIT 4
+                                ) ranked_entities
+                            ) AS entity_names
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name
                     )
                     SELECT
-                        schema_name,
-                        table_name,
+                        ro.schema_name,
+                        ro.table_name,
                         COUNT(*) AS objects_count,
-                        COUNT(DISTINCT release_id) AS releases_count,
-                        COUNT(DISTINCT task_id) AS tasks_count,
-                        MAX(started_at) AS last_change_at,
-                        (ARRAY_AGG(DISTINCT COALESCE(entity_name, 'Без сущности') ORDER BY COALESCE(entity_name, 'Без сущности')))[1:4] AS entity_names,
+                        COUNT(DISTINCT ro.release_id) AS releases_count,
+                        COUNT(DISTINCT ro.task_id) AS tasks_count,
+                        MAX(ro.started_at) AS last_change_at,
+                        MAX(te.entity_names) AS entity_names,
                         MAX(CASE WHEN ter.rn = 1 THEN ter.entity_name END) AS primary_entity_name
                     FROM ro
                     LEFT JOIN table_entity_rank ter
                       ON ter.schema_name = ro.schema_name
                      AND ter.table_name = ro.table_name
-                    WHERE schema_name IS NOT NULL
-                      AND table_name IS NOT NULL
-                    GROUP BY schema_name, table_name
+                    LEFT JOIN table_entities te
+                      ON te.schema_name = ro.schema_name
+                     AND te.table_name = ro.table_name
+                    WHERE ro.schema_name IS NOT NULL
+                      AND ro.table_name IS NOT NULL
+                    GROUP BY ro.schema_name, ro.table_name
                     ORDER BY releases_count DESC, objects_count DESC, tasks_count DESC
                     LIMIT 16
                     """

@@ -1375,7 +1375,8 @@ def get_admin_release_reports(
                 text(
                     base
                     + """
-                    WITH top_entity_base AS (
+                    ,
+                    top_entity_base AS (
                         SELECT
                             COALESCE(entity_name, 'Без сущности') AS entity_name,
                             COUNT(*) AS objects_count

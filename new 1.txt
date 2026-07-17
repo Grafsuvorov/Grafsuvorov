@@ -1,4 +1,6 @@
 
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
+table-dependency-viewer-api-1  |                         rel.release_id,
 table-dependency-viewer-api-1  |                         rel.release_type,
 table-dependency-viewer-api-1  |                         rel.release_bucket,
 table-dependency-viewer-api-1  |                         rel.initiated_by,
@@ -44,23 +46,21 @@ table-dependency-viewer-api-1  |                                     LIMIT 5
 table-dependency-viewer-api-1  |                                 ) ranked_entities
 table-dependency-viewer-api-1  |                             )
 table-dependency-viewer-api-1  |                         ) AS entity_names,
-table-dependency-viewer-api-1  |                         ROUND(minutes_total / 60.0, 1) AS hours_total,
-table-dependency-viewer-api-1  |                         ROUND(duration_minutes, 1) AS duration_minutes
+table-dependency-viewer-api-1  |                         ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
+table-dependency-viewer-api-1  |                         ROUND(duration_minutes::numeric, 1) AS duration_minutes
 table-dependency-viewer-api-1  |                     FROM release_rollup
 table-dependency-viewer-api-1  |                     ORDER BY started_at DESC NULLS LAST
 table-dependency-viewer-api-1  |                     LIMIT 8
 table-dependency-viewer-api-1  |                     ]
 table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/2j85)
 table-dependency-viewer-api-1  | Traceback (most recent call last):
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
 table-dependency-viewer-api-1  |     self.dialect.do_execute(
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
 table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | psycopg2.errors.UndefinedFunction: function round(double precision, integer) does not exist
-table-dependency-viewer-api-1  | LINE 147:                         ROUND(duration_minutes, 1) AS durati...
-table-dependency-viewer-api-1  |                                   ^
-table-dependency-viewer-api-1  | HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+table-dependency-viewer-api-1  | psycopg2.errors.InternalError_: illegal rescan of motion node: invalid plan (nodeMotion.c:1712)  (seg0 slice7 10.66.229.203:10000 pid=101330) (nodeMotion.c:1712)
+table-dependency-viewer-api-1  | HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
@@ -89,10 +89,8 @@ table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages
 table-dependency-viewer-api-1  |     self.dialect.do_execute(
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
 table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedFunction) function round(double precision, integer) does not exist
-table-dependency-viewer-api-1  | LINE 147:                         ROUND(duration_minutes, 1) AS durati...
-table-dependency-viewer-api-1  |                                   ^
-table-dependency-viewer-api-1  | HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+table-dependency-viewer-api-1  | sqlalchemy.exc.InternalError: (psycopg2.errors.InternalError_) illegal rescan of motion node: invalid plan (nodeMotion.c:1712)  (seg0 slice7 10.66.229.203:10000 pid=101330) (nodeMotion.c:1712)
+table-dependency-viewer-api-1  | HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | [SQL:
 table-dependency-viewer-api-1  |                 WITH rel AS (
@@ -239,13 +237,16 @@ table-dependency-viewer-api-1  |                                     LIMIT 5
 table-dependency-viewer-api-1  |                                 ) ranked_entities
 table-dependency-viewer-api-1  |                             )
 table-dependency-viewer-api-1  |                         ) AS entity_names,
-table-dependency-viewer-api-1  |                         ROUND(minutes_total / 60.0, 1) AS hours_total,
-table-dependency-viewer-api-1  |                         ROUND(duration_minutes, 1) AS duration_minutes
+table-dependency-viewer-api-1  |                         ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
+table-dependency-viewer-api-1  |                         ROUND(duration_minutes::numeric, 1) AS duration_minutes
 table-dependency-viewer-api-1  |                     FROM release_rollup
 table-dependency-viewer-api-1  |                     ORDER BY started_at DESC NULLS LAST
 table-dependency-viewer-api-1  |                     LIMIT 8
 table-dependency-viewer-api-1  |                     ]
 table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/2j85)
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35772 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:44926 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:44904 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:44934 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:44938 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 200 OK

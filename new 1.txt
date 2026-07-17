@@ -16,10 +16,10 @@ table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Sourcing /docker-en
 table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
 table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
 table-dependency-viewer-frontend-1  | /docker-entrypoint.sh: Configuration complete; ready for start up
-table-dependency-viewer-frontend-1  | 2026/07/17 12:26:48 [notice] 1#1: using the "epoll" event method
-table-dependency-viewer-frontend-1  | 2026/07/17 12:26:48 [notice] 1#1: nginx/1.31.3
-table-dependency-viewer-frontend-1  | 2026/07/17 12:26:48 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0)
-table-dependency-viewer-frontend-1  | 2026/07/17 12:26:48 [notice] 1#1: OS: Linux 3.10.0-1160.el7.x86_64
-table-dependency-viewer-frontend-1  | 2026/07/17 12:26:48 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1048576:1048576
-table-dependency-viewer-frontend-1  | 2026/07/17 12:26:48 [crit] 1#1: pwrite() "/run/nginx.pid" failed (1: Operation not permitted)
+table-dependency-viewer-frontend-1  | 2026/07/17 12:30:29 [notice] 1#1: using the "epoll" event method
+table-dependency-viewer-frontend-1  | 2026/07/17 12:30:29 [notice] 1#1: nginx/1.31.3
+table-dependency-viewer-frontend-1  | 2026/07/17 12:30:29 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0)
+table-dependency-viewer-frontend-1  | 2026/07/17 12:30:29 [notice] 1#1: OS: Linux 3.10.0-1160.el7.x86_64
+table-dependency-viewer-frontend-1  | 2026/07/17 12:30:29 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+table-dependency-viewer-frontend-1  | 2026/07/17 12:30:29 [crit] 1#1: pwrite() "/run/nginx.pid" failed (1: Operation not permitted)
 table-dependency-viewer-frontend-1  | nginx: [crit] pwrite() "/run/nginx.pid" failed (1: Operation not permitted)

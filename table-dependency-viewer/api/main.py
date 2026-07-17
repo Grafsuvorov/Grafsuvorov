@@ -1133,8 +1133,8 @@ def get_admin_release_reports(
                         COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total,
                         COUNT(DISTINCT initiated_by) FILTER (WHERE initiated_by IS NOT NULL AND initiated_by <> '') AS initiators_count,
                         COUNT(DISTINCT started_at::date) AS release_days_count,
-                        ROUND(COALESCE(AVG(objects_count), 0), 1) AS avg_objects_per_release,
-                        ROUND(COALESCE(AVG(duration_minutes), 0), 1) AS avg_duration_minutes
+                        ROUND(COALESCE(AVG(objects_count)::numeric, 0), 1) AS avg_objects_per_release,
+                        ROUND(COALESCE(AVG(duration_minutes)::numeric, 0), 1) AS avg_duration_minutes
                     FROM release_rollup
                     """
                 ),

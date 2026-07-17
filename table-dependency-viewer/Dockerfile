@@ -1,7 +1,13 @@
 FROM node:20-alpine AS build
+
+ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+ && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+ && npm ci --include=dev
 COPY . .
 RUN npm run build
 

@@ -1847,6 +1847,16 @@ main.content {
   gap: 14px;
 }
 
+.team-report-focus .release-report-focus-card {
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 35%),
+    rgba(15, 23, 42, 0.64);
+}
+
+.team-report-focus .release-report-focus-title {
+  font-size: 18px;
+}
+
 .release-report-focus-card {
   border-radius: 18px;
   padding: 16px 18px;

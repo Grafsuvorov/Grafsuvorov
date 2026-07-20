@@ -1026,7 +1026,7 @@ function TeamEfficiencyTab({
           <div className="engineering-grid">
             <section className="engineering-block">
               <div className="section-subtitle">Нагрузка по дням</div>
-              <div className="muted">Топ-8 инженеров по часам за период и общий ритм задач.</div>
+              <div className="muted">Топ-8 инженеров по часам за период и общий ритм задач в одном временном слое.</div>
               <div className="engineering-chart">
                 <ComposedDailyChart data={dailyChart} topEngineers={topEngineers} />
               </div>
@@ -1097,7 +1097,7 @@ function TeamEfficiencyTab({
             </section>
 
             <section className="engineering-block">
-              <div className="section-subtitle">По дашбордам КХД</div>
+              <div className="section-subtitle">Трудозатраты по направлениям КХД</div>
               <div className="engineering-chart">
                 <ResponsiveContainer width="100%" height={290}>
                   <BarChart data={dashboardChart} margin={{ top: 10, right: 10, left: 0, bottom: 24 }}>
@@ -1126,7 +1126,7 @@ function TeamEfficiencyTab({
 
           <div className="engineering-grid engineering-grid-secondary">
             <section className="engineering-block">
-              <div className="section-subtitle">Топ-30 объектов по времени</div>
+              <div className="section-subtitle">Объекты с самым большим вкладом по времени</div>
               <div className="engineering-table">
                 <div className="engineering-table-head engineering-object-row">
                   <span>Объект</span>
@@ -1150,7 +1150,7 @@ function TeamEfficiencyTab({
             </section>
 
             <section className="engineering-block">
-              <div className="section-subtitle">Отчет по дашбордам</div>
+              <div className="section-subtitle">Распределение по дашбордам</div>
               <div className="engineering-table">
                 <div className="engineering-table-head engineering-dashboard-row">
                   <span>Дашборд</span>

@@ -1,252 +1,191 @@
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
-table-dependency-viewer-api-1  |                         rel.release_id,
-table-dependency-viewer-api-1  |                         rel.release_type,
-table-dependency-viewer-api-1  |                         rel.release_bucket,
-table-dependency-viewer-api-1  |                         rel.initiated_by,
-table-dependency-viewer-api-1  |                         rel.started_at,
-table-dependency-viewer-api-1  |                         rel.finished_at,
-table-dependency-viewer-api-1  |                         rel.status,
-table-dependency-viewer-api-1  |                         rel.total_objects,
-table-dependency-viewer-api-1  |                         rel.ready_to_release,
-table-dependency-viewer-api-1  |                         COALESCE(obj.objects_count, 0) AS objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.entities_count, 0) AS entities_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.click_objects_count, 0) AS click_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.gp_objects_count, 0) AS gp_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.tasks_count, 0) AS tasks_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.engineers_count, 0) AS engineers_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.creators_count, 0) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.minutes_total, 0) AS minutes_total,
-table-dependency-viewer-api-1  |                         EXTRACT(EPOCH FROM (COALESCE(rel.finished_at, now()) - rel.started_at)) / 60.0 AS duration_minutes
-table-dependency-viewer-api-1  |                     FROM rel
-table-dependency-viewer-api-1  |                     LEFT JOIN object_rollup obj ON obj.release_id = rel.release_id
-table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
-table-dependency-viewer-api-1  |                 )
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         release_type,
-table-dependency-viewer-api-1  |                         release_bucket,
-table-dependency-viewer-api-1  |                         initiated_by,
-table-dependency-viewer-api-1  |                         started_at,
-table-dependency-viewer-api-1  |                         status,
-table-dependency-viewer-api-1  |                         objects_count,
-table-dependency-viewer-api-1  |                         tasks_count,
-table-dependency-viewer-api-1  |                         creators_count,
-table-dependency-viewer-api-1  |                         engineers_count,
-table-dependency-viewer-api-1  |                         (
-table-dependency-viewer-api-1  |                             SELECT ARRAY(
-table-dependency-viewer-api-1  |                                 SELECT entity_name
-table-dependency-viewer-api-1  |                                 FROM (
-table-dependency-viewer-api-1  |                                     SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
-table-dependency-viewer-api-1  |                                     FROM ro r2
-table-dependency-viewer-api-1  |                                     WHERE r2.release_id = release_rollup.release_id
-table-dependency-viewer-api-1  |                                     ORDER BY entity_name
-table-dependency-viewer-api-1  |                                     LIMIT 5
-table-dependency-viewer-api-1  |                                 ) ranked_entities
-table-dependency-viewer-api-1  |                             )
-table-dependency-viewer-api-1  |                         ) AS entity_names,
-table-dependency-viewer-api-1  |                         ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
-table-dependency-viewer-api-1  |                         ROUND(duration_minutes::numeric, 1) AS duration_minutes
-table-dependency-viewer-api-1  |                     FROM release_rollup
-table-dependency-viewer-api-1  |                     ORDER BY started_at DESC NULLS LAST
-table-dependency-viewer-api-1  |                     LIMIT 8
-table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/2j85)
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
-table-dependency-viewer-api-1  |     self.dialect.do_execute(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
-table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | psycopg2.errors.InternalError_: illegal rescan of motion node: invalid plan (nodeMotion.c:1712)  (seg0 slice7 10.66.229.203:10000 pid=101330) (nodeMotion.c:1712)
-table-dependency-viewer-api-1  | HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 1404, in get_admin_release_reports
-table-dependency-viewer-api-1  |     recent_releases = conn.execute(
-table-dependency-viewer-api-1  |                       ^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
-table-dependency-viewer-api-1  |     return meth(
-table-dependency-viewer-api-1  |            ^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
-table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
-table-dependency-viewer-api-1  |     ret = self._execute_context(
-table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
-table-dependency-viewer-api-1  |     return self._exec_single_context(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
-table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
-table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
-table-dependency-viewer-api-1  |     self.dialect.do_execute(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
-table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | sqlalchemy.exc.InternalError: (psycopg2.errors.InternalError_) illegal rescan of motion node: invalid plan (nodeMotion.c:1712)  (seg0 slice7 10.66.229.203:10000 pid=101330) (nodeMotion.c:1712)
-table-dependency-viewer-api-1  | HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | [SQL:
-table-dependency-viewer-api-1  |                 WITH rel AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         r.release_id,
-table-dependency-viewer-api-1  |                         r.release_type,
-table-dependency-viewer-api-1  |                         r.initiated_by,
-table-dependency-viewer-api-1  |                         r.started_at,
-table-dependency-viewer-api-1  |                         r.finished_at,
-table-dependency-viewer-api-1  |                         r.status,
-table-dependency-viewer-api-1  |                         r.total_objects,
-table-dependency-viewer-api-1  |                         r.ready_to_release,
-table-dependency-viewer-api-1  |                         CASE
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%hotfix%%' THEN 'hotfix'
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%внерел%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%out_of_release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%out of release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%nonrelease%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%non-release%%'
-table-dependency-viewer-api-1  |                             THEN 'outside_release'
-table-dependency-viewer-api-1  |                             ELSE 'release'
-table-dependency-viewer-api-1  |                         END AS release_bucket
-table-dependency-viewer-api-1  |                     FROM tech_etl.release_log r
-table-dependency-viewer-api-1  |                     WHERE r.started_at >= (now() - (%(days)s || ' days')::interval)
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 ro AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         ro.*,
-table-dependency-viewer-api-1  |                         rel.started_at,
-table-dependency-viewer-api-1  |                         rel.release_type,
-table-dependency-viewer-api-1  |                         rel.release_bucket,
-table-dependency-viewer-api-1  |                         rel.initiated_by,
-table-dependency-viewer-api-1  |                         rel.status
-table-dependency-viewer-api-1  |                     FROM tech_etl.release_objects ro
-table-dependency-viewer-api-1  |                     JOIN rel ON rel.release_id = ro.release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_tasks AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT release_id, task_id
-table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     WHERE task_id IS NOT NULL AND task_id <> ''
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_ids AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT task_id
-table-dependency-viewer-api-1  |                     FROM release_tasks
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 snap AS (
-table-dependency-viewer-api-1  |                     SELECT s.*
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_snapshot s
-table-dependency-viewer-api-1  |                     JOIN task_ids t ON t.task_id = s.issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 exec AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT ON (issue_id)
-table-dependency-viewer-api-1  |                            issue_id, author AS executor, ts
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_timeline
-table-dependency-viewer-api-1  |                     WHERE event_type = 'State change'
-table-dependency-viewer-api-1  |                       AND value_to IN ('Ожидание релиза', 'В работе')
-table-dependency-viewer-api-1  |                     ORDER BY issue_id, ts DESC NULLS LAST
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 work AS (
-table-dependency-viewer-api-1  |                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_worklog
-table-dependency-viewer-api-1  |                     GROUP BY issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_fact AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rt.release_id,
-table-dependency-viewer-api-1  |                         rt.task_id,
-table-dependency-viewer-api-1  |                         COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
-table-dependency-viewer-api-1  |                         COALESCE(snap.created_by, 'Не указан') AS creator,
-table-dependency-viewer-api-1  |                         COALESCE(work.minutes, 0) AS minutes
-table-dependency-viewer-api-1  |                     FROM release_tasks rt
-table-dependency-viewer-api-1  |                     LEFT JOIN snap ON snap.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT task_id) AS tasks_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT engineer) AS engineers_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT creator) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(SUM(minutes), 0) AS minutes_total
-table-dependency-viewer-api-1  |                     FROM task_fact
-table-dependency-viewer-api-1  |                     GROUP BY release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 object_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         COUNT(*) AS objects_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT entity_name) FILTER (WHERE entity_name IS NOT NULL AND entity_name <> '') AS entities_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE lower(COALESCE(target_system, '')) LIKE '%%click%%') AS click_objects_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (
-table-dependency-viewer-api-1  |                             WHERE lower(COALESCE(target_system, '')) LIKE '%%greenplum%%'
-table-dependency-viewer-api-1  |                                OR lower(COALESCE(target_system, '')) LIKE '%%gp%%'
-table-dependency-viewer-api-1  |                         ) AS gp_objects_count
-table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     GROUP BY release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rel.release_id,
-table-dependency-viewer-api-1  |                         rel.release_type,
-table-dependency-viewer-api-1  |                         rel.release_bucket,
-table-dependency-viewer-api-1  |                         rel.initiated_by,
-table-dependency-viewer-api-1  |                         rel.started_at,
-table-dependency-viewer-api-1  |                         rel.finished_at,
-table-dependency-viewer-api-1  |                         rel.status,
-table-dependency-viewer-api-1  |                         rel.total_objects,
-table-dependency-viewer-api-1  |                         rel.ready_to_release,
-table-dependency-viewer-api-1  |                         COALESCE(obj.objects_count, 0) AS objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.entities_count, 0) AS entities_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.click_objects_count, 0) AS click_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.gp_objects_count, 0) AS gp_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.tasks_count, 0) AS tasks_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.engineers_count, 0) AS engineers_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.creators_count, 0) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.minutes_total, 0) AS minutes_total,
-table-dependency-viewer-api-1  |                         EXTRACT(EPOCH FROM (COALESCE(rel.finished_at, now()) - rel.started_at)) / 60.0 AS duration_minutes
-table-dependency-viewer-api-1  |                     FROM rel
-table-dependency-viewer-api-1  |                     LEFT JOIN object_rollup obj ON obj.release_id = rel.release_id
-table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
-table-dependency-viewer-api-1  |                 )
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         release_type,
-table-dependency-viewer-api-1  |                         release_bucket,
-table-dependency-viewer-api-1  |                         initiated_by,
-table-dependency-viewer-api-1  |                         started_at,
-table-dependency-viewer-api-1  |                         status,
-table-dependency-viewer-api-1  |                         objects_count,
-table-dependency-viewer-api-1  |                         tasks_count,
-table-dependency-viewer-api-1  |                         creators_count,
-table-dependency-viewer-api-1  |                         engineers_count,
-table-dependency-viewer-api-1  |                         (
-table-dependency-viewer-api-1  |                             SELECT ARRAY(
-table-dependency-viewer-api-1  |                                 SELECT entity_name
-table-dependency-viewer-api-1  |                                 FROM (
-table-dependency-viewer-api-1  |                                     SELECT DISTINCT COALESCE(r2.entity_name, 'Без сущности') AS entity_name
-table-dependency-viewer-api-1  |                                     FROM ro r2
-table-dependency-viewer-api-1  |                                     WHERE r2.release_id = release_rollup.release_id
-table-dependency-viewer-api-1  |                                     ORDER BY entity_name
-table-dependency-viewer-api-1  |                                     LIMIT 5
-table-dependency-viewer-api-1  |                                 ) ranked_entities
-table-dependency-viewer-api-1  |                             )
-table-dependency-viewer-api-1  |                         ) AS entity_names,
-table-dependency-viewer-api-1  |                         ROUND((minutes_total / 60.0)::numeric, 1) AS hours_total,
-table-dependency-viewer-api-1  |                         ROUND(duration_minutes::numeric, 1) AS duration_minutes
-table-dependency-viewer-api-1  |                     FROM release_rollup
-table-dependency-viewer-api-1  |                     ORDER BY started_at DESC NULLS LAST
-table-dependency-viewer-api-1  |                     LIMIT 8
-table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/2j85)
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44926 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44904 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44934 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44938 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 200 OK
+drop table if exists items;
+create temporary table items as (
+    select
+        flow_id,
+        source_system,
+        record_id,
+        uuid,
+        dt_insert,
+        unnest(xpath('//Item', document_xml)) as xml_item
+    from
+        landing."INPUT_DATA_FROM_SAPXI_IN"
+    where
+        flow_id = 'SI_MaintenaceOrder_AI'
+        and dt_insert >= current_date - INTERVAL '30 days'
+)
+distributed by (uuid);
+ 
+drop table if exists items_attr;
+create temporary table items_attr as (
+    select
+        (xpath('AUFNR/text()', xml_item))[1]::VARCHAR as "AUFNR",
+        (xpath('EQUNR/text()', xml_item))[1]::VARCHAR as "EQUNR_HDR",
+        (xpath('TPLNR/text()', xml_item))[1]::VARCHAR as "TPLNR_HDR",
+        (xpath('AUART/text()', xml_item))[1]::VARCHAR as "AUART",
+        (xpath('ILART/text()', xml_item))[1]::VARCHAR as "ILART",
+        (xpath('GSTRP_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GSTRP_DT",
+        (xpath('GLTRP_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GLTRP_DT",
+        (xpath('ARBPL/text()', xml_item))[1]::VARCHAR as "ARBPL_HDR",
+        (xpath('ZZSWERK/text()', xml_item))[1]::VARCHAR as "ZZSWERK",
+        (xpath('IWERK/text()', xml_item))[1]::VARCHAR as "IWERK",
+        (xpath('ZZDIVISION/text()', xml_item))[1]::VARCHAR as "ZZDIVISION",
+        (xpath('BUKRS/text()', xml_item))[1]::VARCHAR as "BUKRS",
+        (xpath('PLNNR/text()', xml_item))[1]::VARCHAR as "PLNNR_HDR",
+        (xpath('STTXT/text()', xml_item))[1]::VARCHAR as "STTXT",
+        (xpath('ASTXT/text()', xml_item))[1]::VARCHAR as "ASTXT",
+        (xpath('WARPL/text()', xml_item))[1]::VARCHAR as "WARPL",
+        (xpath('ABNUM/text()', xml_item))[1]::VARCHAR::INTEGER as "ABNUM",
+        (xpath('ZERNAM_TXT/text()', xml_item))[1]::VARCHAR as "ZERNAM_TXT",
+        (xpath('GSTRI_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GSTRI_DT",
+        (xpath('GETRI_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GETRI_DT",
+        (xpath('KTEXT/text()', xml_item))[1]::VARCHAR as "KTEXT",
+        (xpath('ZZDRAW/text()', xml_item))[1]::VARCHAR as "ZZDRAW",
+        (xpath('ZZDRAWM/text()', xml_item))[1]::VARCHAR as "ZZDRAWM",
+        (xpath('ANLZU/text()', xml_item))[1]::VARCHAR as "ANLZU",
+        (xpath('GEWRK/text()', xml_item))[1]::VARCHAR as "VAWRK",
+        (xpath('AUTYP/text()', xml_item))[1]::VARCHAR::INTEGER as "AUTYP",
+        (xpath('VBELN/text()', xml_item))[1]::VARCHAR as "VBELN",
+        (xpath('PLNTY/text()', xml_item))[1]::VARCHAR as "PLNTY",
+        (xpath('PLNAL/text()', xml_item))[1]::VARCHAR as "PLNAL",
+        not coalesce((xpath('ZREJECT_HDR/text()', xml_item))[1]::VARCHAR is NULL, false)::BOOL as "ZREJECT_HDR",
+        (xpath('PSPEL/text()', xml_item))[1]::VARCHAR as "PSPEL",
+        xml_item,
+        flow_id,
+        source_system,
+        record_id,
+        uuid,
+        dt_insert
+    from
+        items
+)
+distributed by ("AUFNR");
+ 
+insert into stg."RAL_IS2_TORO2_ORD_HDR_OPR" (
+    /* ---------- бизнес‑атрибуты-заголовок ---------- */
+    "AUFNR",        	-- Заказ (код)
+    "EQUNR_HDR",      	-- Единица оборудования (код)
+    "TPLNR_HDR",      	-- Техническое место (код)
+    "AUART",        	-- Вид заказа (код)
+    "ILART",        	-- Вид работ (код)
+    "GSTRP_DT",     	-- Базисный срок начала (Дата + Время)
+    "GLTRP_DT",     	-- Базисный срок окончания  (Дата + Время)
+    "ARBPL_HDR",       -- Выполняющее рабочее место (код)
+    "ZZSWERK",      	-- Завод владелец (код)
+    "IWERK",        	-- Завод, планирующий выполнение (код)
+    "ZZDIVISION",   	-- Участок (код)
+    "BUKRS",       	-- Балансовая единица (код)
+    "PLNNR_HDR",       -- Группа технологических карт (код)
+    "STTXT",        	-- Системные статусы
+    "ASTXT",        	-- Пользовательские статусы
+    "WARPL",        	-- План предупредительного (код)
+    "ABNUM",        	-- Отзыв к плану предупредительного (код)
+    "ZERNAM_TXT",  	-- ФИО создавшего
+    "GSTRI_DT",    	-- Фактический срок начала (Дата + Время)
+    "GETRI_DT",     	-- Фактический срок окончания (Дата + Время)
+    "KTEXT",        	-- Краткое описание
+    "ZZDRAW",       	-- Входящий чертеж (код)
+    "ZZDRAWM",      	-- Исходящий чертеж (код)
+    "ANLZU",        	-- Состояние производственной установки (код)
+    "VAWRK",        	-- Завод ответственного рабочего места (код)
+    "AUTYP",        	-- Тип заказа (код)
+    "VBELN",        	-- Документ продажи (код)
+    "PLNTY",        	-- Тип технологической карты (код)
+    "PLNAL",        	-- Счётчик группы технологических карт (код)
+    "ZREJECT_HDR",  	-- Отклонённая операция (признак)
+    "PSPEL",        	-- СПП‑элемент (код)
+    /* ---------- бизнес‑атрибуты-операция ---------- */
+    "VORNR",  			-- Операция (код)
+    "KTSCH",  			-- Образец (код)
+    "ARBPL_OPR",  		-- Выполняющее операцию рабочее место (код)
+    "WERKS",  			-- Завод  выполняющего рабочего места (код)
+    "NTANF_DT", 		-- Базисный срок начала (Дата + время)
+    "NTEND_DT",  		-- Базисный срок окончания (Дата + время)
+    "FSAVD_DT",  		-- Самое раннее запланированное начало (Дата + время)
+    "FSEDD_DT", 		-- Самое раннее запланированное окончание (Дата + время)
+    "EQUNR_OPR",  		-- Единица оборудования операции (код)
+    "TPLNR_OPR",  		-- Техническое место операции (код)
+    "ARBEI",  			-- Плановая работа
+    "ANZZL",  			-- Необходимые мощности
+    "ISMNW",  			-- Фактическая работа
+    "DAUNO",  			-- Стандартная продолжительность
+    "DAUNE",  			-- Единица измерения стандартной продолжительности (код)
+    "ARBEH",  			-- Единица измерения работы (код)
+    "LTXA1",  			-- Краткий текст
+    "ZOP_STTXT",  		-- Системные статусы
+    "ZOP_ASTXT",  		-- Пользовательские статусы
+    "PLNNR_OPR",  		-- Группа технологических карт операции (код)
+    "USR10",  			-- Весь персонал
+    "ZREJECT_OPR",  	-- Отклонение
+    /* ---------- атрибуты источника ---------- */
+    flow_id,
+    source_system,
+    record_id,
+    uuid,
+    dt_insert
+)
+select
+    /* ---------- бизнес‑атрибуты-заголовок ---------- */
+    "AUFNR",        	-- Заказ (код)
+    "EQUNR_HDR",      	-- Единица оборудования (код)
+    "TPLNR_HDR",       -- Техническое место (код)
+    "AUART",        	-- Вид заказа (код)
+    "ILART",        	-- Вид работ (код)
+    "GSTRP_DT",     	-- Базисный срок начала (Дата + Время)
+    "GLTRP_DT",     	-- Базисный срок окончания  (Дата + Время)
+    "ARBPL_HDR",      	-- Выполняющее рабочее место (код)
+    "ZZSWERK",      	-- Завод владелец (код)
+    "IWERK",        	-- Завод, планирующий выполнение (код)
+    "ZZDIVISION",   	-- Участок (код)
+    "BUKRS",       	-- Балансовая единица (код)
+    "PLNNR_HDR",       -- Группа технологических карт (код)
+    "STTXT",        	-- Системные статусы
+    "ASTXT",        	-- Пользовательские статусы
+    "WARPL",        	-- План предупредительного (код)
+    "ABNUM",        	-- Отзыв к плану предупредительного (код)
+    "ZERNAM_TXT",  	-- ФИО создавшего
+    "GSTRI_DT",    	-- Фактический срок начала (Дата + Время)
+    "GETRI_DT",     	-- Фактический срок окончания (Дата + Время)
+    "KTEXT",        	-- Краткое описание
+    "ZZDRAW",       	-- Входящий чертеж (код)
+    "ZZDRAWM",      	-- Исходящий чертеж (код)
+    "ANLZU",        	-- Состояние производственной установки (код)
+    "VAWRK",        	-- Завод ответственного рабочего места (код)
+    "AUTYP",        	-- Тип заказа (код)
+    "VBELN",        	-- Документ продажи (код)
+    "PLNTY",        	-- Тип технологической карты (код)
+    "PLNAL",        	-- Счётчик группы технологических карт (код)
+    "ZREJECT_HDR",  	-- Отклонённая операция (признак)
+    "PSPEL",        	-- СПП‑элемент (код)
+    /* ---------- бизнес‑атрибуты-операция ---------- */
+    (xpath('VORNR/text()', attr_node))[1]::VARCHAR                                          as "VORNR",
+    (xpath('KTSCH/text()', attr_node))[1]::VARCHAR                                          as "KTSCH",
+    (xpath('ARBPL/text()', attr_node))[1]::VARCHAR                                          as "ARBPL_OPR",
+    (xpath('WERKS/text()', attr_node))[1]::VARCHAR                                          as "WERKS",
+    (xpath('NTANF_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "NTANF_DT",
+    (xpath('NTEND_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "NTEND_DT",
+    (xpath('FSAVD_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "FSAVD_DT",
+    (xpath('FSEDD_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "FSEDD_DT",
+    (xpath('EQUNR/text()', attr_node))[1]::VARCHAR                                          as "EQUNR_OPR",
+    (xpath('TPLNR/text()', attr_node))[1]::VARCHAR                                          as "TPLNR_OPR",
+    (xpath('ARBEI/text()', attr_node))[1]::VARCHAR::NUMERIC(11, 2)                          as "ARBEI",
+    (xpath('ANZZL/text()', attr_node))[1]::VARCHAR::INTEGER                                 as "ANZZL",
+    (xpath('ISMNW/text()', attr_node))[1]::VARCHAR::NUMERIC(11, 2)                          as "ISMNW",
+    (xpath('DAUNO/text()', attr_node))[1]::VARCHAR::NUMERIC(10, 2)                          as "DAUNO",
+    (xpath('DAUNE/text()', attr_node))[1]::VARCHAR                                          as "DAUNE",
+    (xpath('ARBEH/text()', attr_node))[1]::VARCHAR                                          as "ARBEH",
+    (xpath('LTXA1/text()', attr_node))[1]::VARCHAR                                          as "LTXA1",
+    (xpath('ZOP_STTXT/text()', attr_node))[1]::VARCHAR                                      as "ZOP_STTXT",
+    (xpath('ZOP_ASTXT/text()', attr_node))[1]::VARCHAR                                      as "ZOP_ASTXT",
+    (xpath('PLNNR/text()', attr_node))[1]::VARCHAR                                          as "PLNNR_OPR",
+    not coalesce((xpath('USR10/text()', attr_node))[1]::VARCHAR is NULL, false)::BOOL       as "USR10",
+    not coalesce((xpath('ZREJECT_OPR/text()', attr_node))[1]::VARCHAR is NULL, false)::BOOL as "ZREJECT_OPR",
+    /* ---------- атрибуты источника ---------- */
+    flow_id,
+    source_system,
+    record_id,
+    uuid,
+    dt_insert
+from
+    items_attr
+    cross join lateral unnest(xpath('ORDER_OPR', xml_item))                                            as attr_node;
+ 

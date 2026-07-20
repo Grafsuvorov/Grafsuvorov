@@ -25,6 +25,7 @@ const RELEASE_SUBTABS = [
   { id: "overview", label: "Обзор" },
   { id: "exceptions", label: "Хотфиксы / Внерелизы" },
 ];
+const CHART_COLORS = ["#38bdf8", "#f59e0b", "#0f766e", "#f97316", "#a78bfa", "#fb7185"];
 const RELEASE_BUCKET_LABELS = {
   release: "Релизы",
   hotfix: "Хотфиксы",
@@ -114,6 +115,17 @@ function formatSystemLabel(value) {
   if (normalized === "greenplum") return "Greenplum";
   return value || "Система";
 }
+
+const CHART_TOOLTIP_PROPS = {
+  contentStyle: {
+    background: "#0f172a",
+    border: "1px solid rgba(148, 163, 184, 0.28)",
+    borderRadius: "12px",
+    boxShadow: "0 16px 34px rgba(2, 6, 23, 0.34)",
+  },
+  labelStyle: { color: "#f8fafc" },
+  itemStyle: { color: "#e2e8f0" },
+};
 
 export default function AdminEngineeringPage() {
   const navigate = useNavigate();
@@ -541,7 +553,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                 <section className="engineering-block release-report-block">
                   <div className="engineering-block-head">
                     <div>
-                      <div className="section-subtitle">Сущности, которые меняются чаще всего</div>
+                      <div className="section-subtitle">Сущности, чаще всего входившие в релизы</div>
                       <div className="muted">Выбор сущности ниже фильтрует таблицы и релизы справа.</div>
                     </div>
                   </div>
@@ -551,7 +563,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
                         <XAxis type="number" stroke="#94a3b8" />
                         <YAxis type="category" dataKey="entity_name" width={180} stroke="#94a3b8" tickFormatter={(value) => shortLabel(value, 24)} />
-                        <Tooltip formatter={(value, key) => [value, key === "releases_count" ? "Релизы" : "Объекты"]} />
+                        <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(value, key) => [value, key === "releases_count" ? "Релизы" : "Объекты"]} />
                         <Bar dataKey="releases_count" name="Релизы" fill="#0f766e" radius={[0, 8, 8, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -911,7 +923,7 @@ function TeamEfficiencyTab({
             <div className="engineering-kpi">
               <div className="label">Объекты</div>
               <div className="value">{data.summary?.objects_count ?? 0}</div>
-              <div className="hint">release objects</div>
+              <div className="hint">объекты в релизных изменениях</div>
             </div>
             <div className="engineering-kpi">
               <div className="label">Часы</div>
@@ -924,6 +936,36 @@ function TeamEfficiencyTab({
               <div className="hint">с активностью в окне</div>
             </div>
           </div>
+
+          {selectedEngineerRow ? (
+            <div className="release-report-focus team-report-focus">
+              <div className="release-report-focus-card">
+                <div className="section-subtitle">Фокус по инженеру</div>
+                <div className="release-report-focus-title">{selectedEngineerRow.engineer}</div>
+                <div className="release-report-focus-meta">
+                  <span>{selectedEngineerRow.tasks_count} задач</span>
+                  <span>{selectedEngineerRow.objects_count} объектов</span>
+                  <span>{formatHours(selectedEngineerRow.hours)}</span>
+                </div>
+              </div>
+              <div className="release-report-focus-card">
+                <div className="section-subtitle">Текущий статус</div>
+                <div className="release-report-focus-title">{selectedEngineerRow.load_status}</div>
+                <div className="release-report-focus-meta">
+                  <span>{formatHours(selectedEngineerRow.avg_hours_per_task)} на задачу</span>
+                </div>
+              </div>
+              <div className="release-report-focus-card">
+                <div className="section-subtitle">Сильный контур</div>
+                <div className="release-report-focus-title">
+                  {selectedEngineerRow.schemas?.[0]?.schema_name || "Нет ярко выраженной схемы"}
+                </div>
+                <div className="release-report-focus-meta">
+                  <span>{formatHours(selectedEngineerRow.schemas?.[0]?.hours || 0)}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="engineering-focus-grid">
             <div className="engineering-focus-card focus-overloaded">
@@ -1047,7 +1089,7 @@ function TeamEfficiencyTab({
                       stroke="#94a3b8"
                       tickFormatter={(value) => shortLabel(value, 12)}
                     />
-                    <Tooltip formatter={(value) => [formatHours(value), "Часы"]} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(value) => [formatHours(value), "Часы"]} />
                     <Bar dataKey="hours" radius={[0, 8, 8, 0]} fill="#38bdf8" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1070,7 +1112,7 @@ function TeamEfficiencyTab({
                       tickFormatter={(value) => shortLabel(value, 14)}
                     />
                     <YAxis stroke="#94a3b8" />
-                    <Tooltip formatter={(value) => [formatHours(value), "Часы"]} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(value) => [formatHours(value), "Часы"]} />
                     <Bar dataKey="hours" radius={[8, 8, 0, 0]}>
                       {dashboardChart.map((row, index) => (
                         <Cell key={`dash-${row.dashboard_direction}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -1158,7 +1200,7 @@ function ComposedDailyChart({ data, topEngineers }) {
         <XAxis dataKey="day" stroke="#94a3b8" tickFormatter={(value) => value?.slice(5) || value} />
         <YAxis yAxisId="hours" stroke="#94a3b8" />
         <YAxis yAxisId="tasks" orientation="right" stroke="#94a3b8" />
-        <Tooltip />
+        <Tooltip {...CHART_TOOLTIP_PROPS} />
         <Legend />
         {topEngineers.map((engineer, idx) => (
           <Bar

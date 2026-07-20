@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Area,
   Bar,
   BarChart,
   CartesianGrid,
@@ -26,7 +25,6 @@ const RELEASE_SUBTABS = [
   { id: "overview", label: "Обзор" },
   { id: "exceptions", label: "Хотфиксы / Внерелизы" },
 ];
-const CHART_COLORS = ["#38bdf8", "#f59e0b", "#34d399", "#f97316", "#a78bfa", "#fb7185"];
 const RELEASE_BUCKET_LABELS = {
   release: "Релизы",
   hotfix: "Хотфиксы",
@@ -37,6 +35,15 @@ const RELEASE_BUCKET_CLASSES = {
   hotfix: "hotfix",
   outside_release: "outside",
 };
+const GENERIC_ENTITY_NAMES = new Set([
+  "clickhouse",
+  "greenplum",
+  "gp",
+  "click",
+  "без сущности",
+  "unknown",
+  "null",
+]);
 const STATUS_CLASS = {
   Перегружен: "overloaded",
   Недогружен: "underloaded",
@@ -79,6 +86,33 @@ function releaseBucketLabel(value) {
 
 function releaseBucketClass(value) {
   return RELEASE_BUCKET_CLASSES[value] || "release";
+}
+
+function normalizeEntityName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isMeaningfulEntityName(value) {
+  const normalized = normalizeEntityName(value);
+  if (!normalized) return false;
+  return !GENERIC_ENTITY_NAMES.has(normalized);
+}
+
+function formatReleaseHeadline(row) {
+  const type = String(row?.release_type || "").trim();
+  if (type && type.length > 2 && !/^release$/i.test(type)) {
+    return type;
+  }
+  return `${releaseBucketLabel(row?.release_bucket)} от ${formatShortDate(row?.started_at)}`;
+}
+
+function formatSystemLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "clickhouse") return "ClickHouse";
+  if (normalized === "greenplum") return "Greenplum";
+  return value || "Система";
 }
 
 export default function AdminEngineeringPage() {
@@ -238,27 +272,32 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
   const entityTimeline = data?.entity_timeline || [];
   const focus = data?.focus || {};
 
+  const displayTopEntities = useMemo(() => {
+    const filtered = topEntities.filter((row) => isMeaningfulEntityName(row.entity_name));
+    return filtered.length ? filtered : topEntities;
+  }, [topEntities]);
+
   useEffect(() => {
-    if (!topEntities.length) {
+    if (!displayTopEntities.length) {
       setSelectedEntity(null);
       return;
     }
-    if (selectedEntity && topEntities.some((row) => row.entity_name === selectedEntity)) {
+    if (selectedEntity && displayTopEntities.some((row) => row.entity_name === selectedEntity)) {
       return;
     }
-    setSelectedEntity(topEntities[0].entity_name);
-  }, [topEntities, selectedEntity]);
+    setSelectedEntity(displayTopEntities[0].entity_name);
+  }, [displayTopEntities, selectedEntity]);
 
   const peakWeek = useMemo(() => {
     if (!cadence.length) return null;
     return [...cadence].sort((a, b) => Number(b.releases_count || 0) - Number(a.releases_count || 0))[0] || null;
   }, [cadence]);
 
-  const cadenceWidth = useMemo(() => Math.max(860, cadence.length * 54), [cadence.length]);
+  const cadenceChart = useMemo(() => cadence.slice(-16), [cadence]);
 
   const entityOptions = useMemo(
-    () => ["Все сущности", ...topEntities.map((row) => row.entity_name)],
-    [topEntities]
+    () => ["Все сущности", ...displayTopEntities.map((row) => row.entity_name)],
+    [displayTopEntities]
   );
 
   const selectedEntityValue = selectedEntity || "Все сущности";
@@ -278,6 +317,11 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
     if (!normalizedSelectedEntity) return exceptionReleases;
     return exceptionReleases.filter((row) => (row.entity_names || []).includes(normalizedSelectedEntity));
   }, [exceptionReleases, normalizedSelectedEntity]);
+
+  const selectedEntitySummary = useMemo(() => {
+    if (!normalizedSelectedEntity) return null;
+    return displayTopEntities.find((row) => row.entity_name === normalizedSelectedEntity) || null;
+  }, [displayTopEntities, normalizedSelectedEntity]);
 
   const weekdayGrid = useMemo(() => {
     const labels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -300,20 +344,10 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
     });
   }, [weekdayHeatmap]);
 
-  const timelineChart = useMemo(() => {
-    const monthMap = new Map();
-    entityTimeline.forEach((row) => {
-      const bucket = monthMap.get(row.month_label) || { month_label: row.month_label };
-      bucket[row.entity_name] = Number(row.objects_count || 0);
-      monthMap.set(row.month_label, bucket);
-    });
-    return [...monthMap.values()];
-  }, [entityTimeline]);
-
-  const timelineEntities = useMemo(
-    () => [...new Set(entityTimeline.map((row) => row.entity_name))].slice(0, 6),
-    [entityTimeline]
-  );
+  const selectedEntityActivity = useMemo(() => {
+    if (!normalizedSelectedEntity) return [];
+    return entityTimeline.filter((row) => row.entity_name === normalizedSelectedEntity).slice(-6);
+  }, [entityTimeline, normalizedSelectedEntity]);
 
   return (
     <>
@@ -418,13 +452,13 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
               <div className="engineering-block-head">
                 <div>
                   <div className="section-subtitle">Частота релизов по неделям</div>
-                  <div className="muted">Регулярные релизы, хотфиксы и внерелизные поставки в одном ритме.</div>
+                  <div className="muted">Последние недели: ритм поставок, хотфиксов и внерелизов без перегруженного масштаба.</div>
                 </div>
               </div>
               <div className="engineering-chart release-report-chart-wide">
-                <div className="release-report-chart-scroll" style={{ width: cadenceWidth }}>
+                <div className="release-report-chart-scroll">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={cadence} margin={{ top: 10, right: 12, left: 0, bottom: 10 }}>
+                    <ComposedChart data={cadenceChart} margin={{ top: 10, right: 12, left: 0, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
                       <XAxis dataKey="week_label" stroke="#94a3b8" />
                       <YAxis yAxisId="count" stroke="#94a3b8" />
@@ -434,7 +468,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       <Bar yAxisId="count" dataKey="regular_release_count" stackId="releases" name="Релизы" fill="#38bdf8" radius={[5, 5, 0, 0]} />
                       <Bar yAxisId="count" dataKey="hotfix_count" stackId="releases" name="Хотфиксы" fill="#f59e0b" radius={[5, 5, 0, 0]} />
                       <Bar yAxisId="count" dataKey="outside_release_count" stackId="releases" name="Внерелизы" fill="#fb7185" radius={[5, 5, 0, 0]} />
-                      <Line yAxisId="objects" type="monotone" dataKey="objects_count" name="Объекты" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
+                      <Line yAxisId="objects" type="monotone" dataKey="objects_count" name="Объекты" stroke="#0f766e" strokeWidth={2.5} dot={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -470,26 +504,29 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
               <div className="release-system-strip">
                 {systemBreakdown.map((row) => (
                   <div key={row.system_name} className="release-system-card">
-                    <span className="label">{row.system_name}</span>
+                    <span className="label">{formatSystemLabel(row.system_name)}</span>
                     <strong>{row.objects_count}</strong>
                     <span className="hint">объектов в поставках</span>
                   </div>
                 ))}
               </div>
 
-              <div className="section-subtitle">Последние релизы</div>
+              <div className="section-subtitle">Последние поставки</div>
               <div className="release-report-stream">
                 {recentReleases.map((row) => (
                   <div key={row.release_id} className="release-report-stream-row">
-                    <div>
-                      <div className="release-report-stream-title mono">{row.release_id}</div>
-                      <div className="muted">{formatDateTime(row.started_at)}</div>
+                    <div className="release-report-stream-main">
+                      <div className="release-report-stream-title">{formatReleaseHeadline(row)}</div>
+                      <div className="release-report-stream-subline">
+                        <span className="mono">{row.release_id}</span>
+                        <span>{formatDateTime(row.started_at)}</span>
+                      </div>
                     </div>
                     <div className="release-report-stream-meta">
                       <span className={`release-report-badge bucket-${releaseBucketClass(row.release_bucket)}`}>
                         {releaseBucketLabel(row.release_bucket)}
                       </span>
-                      <span>{row.objects_count} obj</span>
+                      <span>{row.objects_count} объектов</span>
                       <span>{formatHours(row.hours_total)}</span>
                     </div>
                   </div>
@@ -510,12 +547,12 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                   </div>
                   <div className="engineering-chart">
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={topEntities} layout="vertical" margin={{ top: 10, right: 12, left: 12, bottom: 10 }}>
+                      <BarChart data={displayTopEntities} layout="vertical" margin={{ top: 10, right: 18, left: 18, bottom: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
                         <XAxis type="number" stroke="#94a3b8" />
-                        <YAxis type="category" dataKey="entity_name" width={130} stroke="#94a3b8" tickFormatter={(value) => shortLabel(value, 18)} />
-                        <Tooltip formatter={(value, key) => [value, key === "objects_count" ? "Объекты" : "Релизы"]} />
-                        <Bar dataKey="objects_count" name="Объекты" fill="#38bdf8" radius={[0, 8, 8, 0]} />
+                        <YAxis type="category" dataKey="entity_name" width={180} stroke="#94a3b8" tickFormatter={(value) => shortLabel(value, 24)} />
+                        <Tooltip formatter={(value, key) => [value, key === "releases_count" ? "Релизы" : "Объекты"]} />
+                        <Bar dataKey="releases_count" name="Релизы" fill="#0f766e" radius={[0, 8, 8, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -620,15 +657,18 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                         onClick={() => onOpenRelease(row.release_id)}
                       >
                         <div className="release-report-stream-main">
-                          <div className="release-report-stream-title mono">{row.release_id}</div>
-                          <div className="muted">{formatDateTime(row.started_at)}</div>
+                          <div className="release-report-stream-title">{formatReleaseHeadline(row)}</div>
+                          <div className="release-report-stream-subline">
+                            <span className="mono">{row.release_id}</span>
+                            <span>{formatDateTime(row.started_at)}</span>
+                          </div>
                         </div>
                         <div className="release-report-stream-meta">
                           <span className={`release-report-badge bucket-${releaseBucketClass(row.release_bucket)}`}>
                             {releaseBucketLabel(row.release_bucket)}
                           </span>
                           <span>{row.tasks_count} задач</span>
-                          <span>{row.objects_count} obj</span>
+                          <span>{row.objects_count} объектов</span>
                           <span>{formatHours(row.hours_total)}</span>
                         </div>
                       </button>
@@ -690,30 +730,63 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
 
               <div className="engineering-grid reports-grid-secondary">
                 <section className="engineering-block release-report-block">
-                  <div className="section-subtitle">Мини-таймлайн по активным сущностям</div>
-                  <div className="engineering-chart">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <ComposedChart data={timelineChart} margin={{ top: 10, right: 12, left: 0, bottom: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
-                        <XAxis dataKey="month_label" stroke="#94a3b8" />
-                        <YAxis stroke="#94a3b8" />
-                        <Tooltip />
-                        <Legend />
-                        {timelineEntities.map((entityName, index) => (
-                          <Area
-                            key={entityName}
-                            type="monotone"
-                            dataKey={entityName}
-                            name={shortLabel(entityName, 18)}
-                            stroke={CHART_COLORS[index % CHART_COLORS.length]}
-                            fill={CHART_COLORS[index % CHART_COLORS.length]}
-                            fillOpacity={0.12}
-                            strokeWidth={2}
-                          />
-                        ))}
-                      </ComposedChart>
-                    </ResponsiveContainer>
+                  <div className="engineering-block-head">
+                    <div>
+                      <div className="section-subtitle">Фокус по выбранной сущности</div>
+                      <div className="muted">
+                        {normalizedSelectedEntity ? normalizedSelectedEntity : "Выберите сущность из списка выше, чтобы увидеть концентрированный срез."}
+                      </div>
+                    </div>
                   </div>
+                  {selectedEntitySummary ? (
+                    <div className="release-entity-focus">
+                      <div className="release-entity-focus-grid">
+                        <div className="release-entity-focus-card">
+                          <span className="label">Релизы</span>
+                          <strong>{selectedEntitySummary.releases_count}</strong>
+                        </div>
+                        <div className="release-entity-focus-card">
+                          <span className="label">Объекты</span>
+                          <strong>{selectedEntitySummary.objects_count}</strong>
+                        </div>
+                        <div className="release-entity-focus-card">
+                          <span className="label">Задачи</span>
+                          <strong>{selectedEntitySummary.tasks_count}</strong>
+                        </div>
+                        <div className="release-entity-focus-card">
+                          <span className="label">Последняя активность</span>
+                          <strong>{formatShortDate(selectedEntitySummary.last_release_at)}</strong>
+                        </div>
+                      </div>
+                      <div className="release-entity-focus-detail">
+                        <div className="release-entity-focus-line">
+                          <span>Хотфиксы</span>
+                          <strong>{selectedEntitySummary.hotfix_count || 0}</strong>
+                        </div>
+                        <div className="release-entity-focus-line">
+                          <span>Внерелизы</span>
+                          <strong>{selectedEntitySummary.outside_release_count || 0}</strong>
+                        </div>
+                        <div className="release-entity-focus-line">
+                          <span>Ключевые таблицы</span>
+                          <strong>{filteredTables.length}</strong>
+                        </div>
+                      </div>
+                      {selectedEntityActivity.length ? (
+                        <div className="release-entity-activity">
+                          {selectedEntityActivity.map((row) => (
+                            <div key={`${row.entity_name}-${row.month_start}`} className="release-entity-activity-row">
+                              <span>{row.month_label}</span>
+                              <span>{row.releases_count} релизов</span>
+                              <strong>{row.objects_count} объектов</strong>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="muted">Нет выбранной сущности для детального среза.</div>
+                  )}
                 </section>
 
                 <section className="engineering-block release-report-block">
@@ -758,16 +831,19 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       className="release-report-stream-row release-report-stream-button"
                       onClick={() => onOpenRelease(row.release_id)}
                     >
-                      <div className="release-report-stream-main">
-                        <div className="release-report-stream-title mono">{row.release_id}</div>
-                        <div className="muted">{formatDateTime(row.started_at)}</div>
+                        <div className="release-report-stream-main">
+                        <div className="release-report-stream-title">{formatReleaseHeadline(row)}</div>
+                        <div className="release-report-stream-subline">
+                          <span className="mono">{row.release_id}</span>
+                          <span>{formatDateTime(row.started_at)}</span>
+                        </div>
                       </div>
                       <div className="release-report-stream-meta">
                         <span className={`release-report-badge bucket-${releaseBucketClass(row.release_bucket)}`}>
                           {releaseBucketLabel(row.release_bucket)}
                         </span>
                         <span>{row.tasks_count} задач</span>
-                        <span>{row.objects_count} obj</span>
+                        <span>{row.objects_count} объектов</span>
                         <span>{formatHours(row.hours_total)}</span>
                       </div>
                     </button>

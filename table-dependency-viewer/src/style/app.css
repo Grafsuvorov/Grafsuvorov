@@ -1765,9 +1765,9 @@ main.content {
   padding: 18px 18px 16px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background:
-    radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 32%),
+    radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%),
     linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02)),
-    rgba(15, 23, 42, 0.78);
+    rgba(15, 23, 42, 0.72);
 }
 
 .release-report-kpi::after {
@@ -1807,14 +1807,14 @@ main.content {
 
 .cube-release {
   background:
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.28), transparent 34%),
-    linear-gradient(180deg, rgba(8, 47, 73, 0.56), rgba(15, 23, 42, 0.92));
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.24), transparent 34%),
+    linear-gradient(180deg, rgba(12, 74, 110, 0.54), rgba(15, 23, 42, 0.9));
 }
 
 .cube-objects {
   background:
-    radial-gradient(circle at top right, rgba(167, 139, 250, 0.28), transparent 34%),
-    linear-gradient(180deg, rgba(49, 46, 129, 0.56), rgba(15, 23, 42, 0.92));
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(17, 94, 89, 0.52), rgba(15, 23, 42, 0.9));
 }
 
 .cube-hotfix {
@@ -1825,20 +1825,20 @@ main.content {
 
 .cube-outside {
   background:
-    radial-gradient(circle at top right, rgba(244, 114, 182, 0.26), transparent 34%),
-    linear-gradient(180deg, rgba(131, 24, 67, 0.5), rgba(15, 23, 42, 0.92));
+    radial-gradient(circle at top right, rgba(225, 29, 72, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(136, 19, 55, 0.46), rgba(15, 23, 42, 0.9));
 }
 
 .cube-hours {
   background:
-    radial-gradient(circle at top right, rgba(52, 211, 153, 0.26), transparent 34%),
-    linear-gradient(180deg, rgba(6, 78, 59, 0.52), rgba(15, 23, 42, 0.92));
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(22, 101, 52, 0.48), rgba(15, 23, 42, 0.9));
 }
 
 .cube-users {
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.24), transparent 34%),
-    linear-gradient(180deg, rgba(30, 64, 175, 0.52), rgba(15, 23, 42, 0.92));
+    radial-gradient(circle at top right, rgba(71, 85, 105, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(51, 65, 85, 0.5), rgba(15, 23, 42, 0.88));
 }
 
 .release-report-focus {
@@ -1903,7 +1903,7 @@ main.content {
 }
 
 .reports-grid-primary {
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.9fr);
+  grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr);
 }
 
 .reports-grid-secondary {
@@ -1952,11 +1952,12 @@ main.content {
 }
 
 .release-report-chart-wide {
-  height: 340px;
+  height: 320px;
 }
 
 .release-report-chart-scroll {
   height: 100%;
+  min-width: 0;
 }
 
 .release-report-type-grid {
@@ -1969,19 +1970,19 @@ main.content {
   border-radius: 16px;
   padding: 14px;
   border: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.035);
 }
 
 .release-type-card.bucket-release {
-  background: linear-gradient(180deg, rgba(8, 47, 73, 0.58), rgba(15, 23, 42, 0.72));
+  background: linear-gradient(180deg, rgba(8, 47, 73, 0.46), rgba(15, 23, 42, 0.68));
 }
 
 .release-type-card.bucket-hotfix {
-  background: linear-gradient(180deg, rgba(120, 53, 15, 0.54), rgba(15, 23, 42, 0.72));
+  background: linear-gradient(180deg, rgba(120, 53, 15, 0.42), rgba(15, 23, 42, 0.68));
 }
 
 .release-type-card.bucket-outside {
-  background: linear-gradient(180deg, rgba(131, 24, 67, 0.48), rgba(15, 23, 42, 0.72));
+  background: linear-gradient(180deg, rgba(136, 19, 55, 0.38), rgba(15, 23, 42, 0.68));
 }
 
 .release-type-head,
@@ -2025,7 +2026,7 @@ main.content {
   border-radius: 14px;
   padding: 12px 14px;
   border: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.03);
 }
 
 .release-system-card .label {
@@ -2068,6 +2069,14 @@ main.content {
 .release-report-stream-title {
   font-weight: 700;
   color: #f8fbff;
+}
+
+.release-report-stream-subline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  color: rgba(226, 232, 240, 0.6);
+  font-size: 12px;
 }
 
 .release-report-stream-main {
@@ -2147,6 +2156,74 @@ main.content {
   background: rgba(56, 189, 248, 0.06);
 }
 
+.release-entity-focus {
+  display: grid;
+  gap: 14px;
+}
+
+.release-entity-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.release-entity-focus-card {
+  border-radius: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(255,255,255,0.035);
+  display: grid;
+  gap: 8px;
+}
+
+.release-entity-focus-card .label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.62);
+}
+
+.release-entity-focus-card strong {
+  font-size: 24px;
+  color: #f8fbff;
+}
+
+.release-entity-focus-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.release-entity-focus-line,
+.release-entity-activity-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.release-entity-focus-line:last-child,
+.release-entity-activity-row:last-child {
+  border-bottom: 0;
+}
+
+.release-entity-focus-line span,
+.release-entity-activity-row span {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 13px;
+}
+
+.release-entity-focus-line strong,
+.release-entity-activity-row strong {
+  color: #f8fbff;
+  font-weight: 700;
+}
+
+.release-entity-activity {
+  display: grid;
+}
+
 @media (max-width: 1180px) {
   .release-report-focus,
   .reports-grid-primary,
@@ -2174,6 +2251,10 @@ main.content {
   }
 
   .release-system-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .release-entity-focus-grid {
     grid-template-columns: 1fr;
   }
 
@@ -13906,7 +13987,9 @@ html[data-theme="light"] .reports-subtab.active {
 html[data-theme="light"] .release-report-kpi,
 html[data-theme="light"] .release-report-focus-card,
 html[data-theme="light"] .release-type-card,
-html[data-theme="light"] .release-report-stream-row {
+html[data-theme="light"] .release-report-stream-row,
+html[data-theme="light"] .release-system-card,
+html[data-theme="light"] .release-entity-focus-card {
   background: #ffffff;
   border-color: rgba(148, 163, 184, 0.18);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
@@ -13916,7 +13999,11 @@ html[data-theme="light"] .release-report-kpi .label,
 html[data-theme="light"] .release-type-head,
 html[data-theme="light"] .release-type-metrics span,
 html[data-theme="light"] .release-type-foot,
-html[data-theme="light"] .release-report-stream-meta {
+html[data-theme="light"] .release-report-stream-meta,
+html[data-theme="light"] .release-report-stream-subline,
+html[data-theme="light"] .release-entity-focus-card .label,
+html[data-theme="light"] .release-entity-focus-line span,
+html[data-theme="light"] .release-entity-activity-row span {
   color: #64748b;
 }
 
@@ -13924,7 +14011,10 @@ html[data-theme="light"] .release-report-kpi .value,
 html[data-theme="light"] .release-report-focus-title,
 html[data-theme="light"] .release-type-metrics strong,
 html[data-theme="light"] .release-report-stream-title,
-html[data-theme="light"] .release-system-card strong {
+html[data-theme="light"] .release-system-card strong,
+html[data-theme="light"] .release-entity-focus-card strong,
+html[data-theme="light"] .release-entity-focus-line strong,
+html[data-theme="light"] .release-entity-activity-row strong {
   color: #0f172a;
 }
 

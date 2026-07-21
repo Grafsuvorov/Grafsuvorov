@@ -1,7 +1,6 @@
 
- ⠿ Container table-dependency-viewer-frontend-1  Started                                                    11.0s
+ ⠿ Container table-dependency-viewer-api-1       Started                                                    10.9s
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=200
-table-dependency-viewer-api-1  |                     SELECT issue_id, field_name, NULLIF(BTRIM(field_value), '') AS field_value
 table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
 table-dependency-viewer-api-1  |                     WHERE issue_id IN (SELECT task_id FROM task_ids)
 table-dependency-viewer-api-1  |                       AND field_name IN (
@@ -132,8 +131,11 @@ table-dependency-viewer-api-1  |                         rt.release_id,
 table-dependency-viewer-api-1  |                         rt.task_id,
 table-dependency-viewer-api-1  |                         COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
 table-dependency-viewer-api-1  |                         COALESCE(snap.created_by, 'Не указан') AS creator,
-table-dependency-viewer-api-1  |                         COALESCE(work.minutes, 0) AS minutes
+table-dependency-viewer-api-1  |                         COALESCE(work.minutes, 0) AS minutes,
+table-dependency-viewer-api-1  |                         rel.release_bucket
 table-dependency-viewer-api-1  |                     FROM release_tasks rt
+table-dependency-viewer-api-1  |                     JOIN rel
+table-dependency-viewer-api-1  |                       ON rel.release_id = rt.release_id
 table-dependency-viewer-api-1  |                     LEFT JOIN snap ON snap.issue_id = rt.task_id
 table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = rt.task_id
 table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = rt.task_id
@@ -187,17 +189,16 @@ table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task 
 table-dependency-viewer-api-1  |                 )
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         tf.release_id,
-table-dependency-viewer-api-1  |                         tf.task_id,
-table-dependency-viewer-api-1  |                         tf.engineer,
-table-dependency-viewer-api-1  |                         tf.creator,
-table-dependency-viewer-api-1  |                         tf.minutes,
-table-dependency-viewer-api-1  |                         rel.release_bucket
-table-dependency-viewer-api-1  |                     FROM task_fact tf
-table-dependency-viewer-api-1  |                     JOIN rel
-table-dependency-viewer-api-1  |                       ON rel.release_id = tf.release_id
+table-dependency-viewer-api-1  |                         release_id,
+table-dependency-viewer-api-1  |                         task_id,
+table-dependency-viewer-api-1  |                         engineer,
+table-dependency-viewer-api-1  |                         creator,
+table-dependency-viewer-api-1  |                         minutes,
+table-dependency-viewer-api-1  |                         release_bucket
+table-dependency-viewer-api-1  |                     FROM task_fact
 table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 180}]
+table-dependency-viewer-api-1  | [parameters: {'days': 30}]
 table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/2j85)
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:60894 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:33838 - "GET /api/admin/reports/releases?days=30 HTTP/1.1" 200 OK
+[root@rgm-s-dwhapp01 table-de

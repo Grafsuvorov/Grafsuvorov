@@ -1061,14 +1061,14 @@ def get_admin_release_reports(
                         MAX(
                             CASE
                                 WHEN field_name = 'Фактическая дата релиза'
-                                 AND field_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2}(:[0-9]{2})?)?$'
+                                 AND field_value ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}( [0-9]{{2}}:[0-9]{{2}}(:[0-9]{{2}})?)?$'
                                 THEN field_value::timestamp
                             END
                         ) AS actual_release_at,
                         MAX(
                             CASE
                                 WHEN field_name = 'Дата выкатки'
-                                 AND field_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2}(:[0-9]{2})?)?$'
+                                 AND field_value ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}( [0-9]{{2}}:[0-9]{{2}}(:[0-9]{{2}})?)?$'
                                 THEN field_value::timestamp
                             END
                         ) AS rollout_at

@@ -1096,7 +1096,7 @@ def get_admin_release_reports(
                     SELECT
                         rr.release_id,
                         COALESCE(
-                            NULLIF(rmd.release_slot_number, ''),
+                            NULLIF(CASE WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN rmd.release_slot_number END, ''),
                             rr.release_type
                         ) AS release_type,
                         rr.initiated_by,
@@ -1107,8 +1107,6 @@ def get_admin_release_reports(
                         rr.ready_to_release,
                         CASE
                             WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
-                            WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
-                            WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
                             ELSE rr.fallback_release_bucket
                         END AS release_bucket
                     FROM raw_rel rr

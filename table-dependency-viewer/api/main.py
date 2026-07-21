@@ -1044,8 +1044,7 @@ def get_admin_release_reports(
                 task_custom_base AS (
                     SELECT issue_id, field_name, NULLIF(BTRIM(field_value), '') AS field_value
                     FROM {TABLE_YT_ISSUE_CUSTOM}
-                    WHERE issue_id IN (SELECT task_id FROM task_ids)
-                      AND field_name IN (
+                    WHERE field_name IN (
                           'Тип карточки',
                           'Тип внерелиза',
                           'Фактическая дата релиза',
@@ -1083,18 +1082,7 @@ def get_admin_release_reports(
                             ELSE NULL
                         END AS custom_bucket
                     FROM task_custom
-                ),
-                release_match_by_task AS (
-                    SELECT
-                        rt.release_id,
-                        MAX(tc.release_slot_number) AS release_slot_number,
-                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
-                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
-                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
-                    FROM release_tasks rt
-                    JOIN task_custom_norm tc
-                      ON tc.issue_id = rt.task_id
-                    GROUP BY rt.release_id
+                    WHERE lower(COALESCE(card_type, '')) IN ('release slot', 'внерелиз')
                 ),
                 release_match_by_date AS (
                     SELECT
@@ -1113,7 +1101,7 @@ def get_admin_release_reports(
                     SELECT
                         rr.release_id,
                         COALESCE(
-                            NULLIF(COALESCE(rmt.release_slot_number, rmd.release_slot_number), ''),
+                            NULLIF(rmd.release_slot_number, ''),
                             rr.release_type
                         ) AS release_type,
                         rr.initiated_by,
@@ -1123,17 +1111,12 @@ def get_admin_release_reports(
                         rr.total_objects,
                         rr.ready_to_release,
                         CASE
-                            WHEN COALESCE(rmt.release_slot_count, 0) > 0 THEN 'release'
-                            WHEN COALESCE(rmt.hotfix_count, 0) > 0 THEN 'hotfix'
-                            WHEN COALESCE(rmt.outside_release_count, 0) > 0 THEN 'outside_release'
                             WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
                             WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
                             WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
                             ELSE rr.fallback_release_bucket
                         END AS release_bucket
                     FROM raw_rel rr
-                    LEFT JOIN release_match_by_task rmt
-                      ON rmt.release_id = rr.release_id
                     LEFT JOIN release_match_by_date rmd
                       ON rmd.release_id = rr.release_id
                 ),

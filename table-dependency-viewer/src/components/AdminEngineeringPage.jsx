@@ -291,6 +291,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
   const exceptionByType = exceptionInsights.by_type || [];
   const exceptionByCreator = exceptionInsights.by_creator || [];
   const exceptionByEntity = exceptionInsights.by_entity || [];
+  const exceptionByDirection = exceptionInsights.by_direction || [];
   const exceptionByDay = exceptionInsights.by_day || [];
 
   const displayTopEntities = useMemo(() => {
@@ -964,6 +965,24 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       </div>
                     ))}
                   </div>
+                  <div className="engineering-table">
+                    <div className="engineering-table-head release-report-exception-row">
+                      <span>Направление</span>
+                      <span>Карточки</span>
+                      <span>Объекты</span>
+                      <span>Часы</span>
+                    </div>
+                    {exceptionByDirection.map((row) => (
+                      <div key={row.direction} className="engineering-table-row release-report-exception-row">
+                        <span className="engineering-primary" title={row.direction}>{row.direction}</span>
+                        <span>{row.count}</span>
+                        <span>{row.objects_count}</span>
+                        <span>{formatHours(row.hours_total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="release-report-exception-grid">
                   <div className="engineering-table">
                     <div className="engineering-table-head release-report-exception-row">
                       <span>Автор</span>

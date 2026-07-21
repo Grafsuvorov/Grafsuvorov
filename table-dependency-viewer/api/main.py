@@ -1380,7 +1380,9 @@ def get_admin_release_reports(
                         'Тип карточки',
                         'Тип внерелиза',
                         'Фактическая дата релиза',
-                        'Дата выкатки'
+                        'Дата выкатки',
+                        'Направление',
+                        'Дашборд КХД/Направление'
                     )
                     """
                 )
@@ -1398,6 +1400,8 @@ def get_admin_release_reports(
                         "outside_type": None,
                         "actual_release_at_text": None,
                         "rollout_at_text": None,
+                        "direction": None,
+                        "dashboard_direction": None,
                     },
                 )
                 field_name = row.get("field_name")
@@ -1409,6 +1413,10 @@ def get_admin_release_reports(
                     card["actual_release_at_text"] = row.get("field_value")
                 elif field_name == "Дата выкатки":
                     card["rollout_at_text"] = row.get("field_value")
+                elif field_name == "Направление":
+                    card["direction"] = row.get("field_value")
+                elif field_name == "Дашборд КХД/Направление":
+                    card["dashboard_direction"] = row.get("field_value")
 
             exception_issue_ids = []
             exception_card_rows = []
@@ -1437,6 +1445,7 @@ def get_admin_release_reports(
                         "release_bucket": release_bucket,
                         "release_type": outside_type or "Внерелиз",
                         "started_at": datetime.combine(effective_date, datetime.min.time()),
+                        "direction": card.get("direction") or card.get("dashboard_direction") or "Не указано",
                     }
                 )
 
@@ -1511,6 +1520,7 @@ def get_admin_release_reports(
                         "release_type": row["release_type"],
                         "release_bucket": row["release_bucket"],
                         "initiated_by": creator,
+                        "direction": row.get("direction") or "Не указано",
                         "started_at": row["started_at"],
                         "status": snap_row.get("current_state") or "Не указан",
                         "objects_count": int(object_row.get("objects_count") or 0),
@@ -1858,6 +1868,9 @@ def get_admin_release_reports(
             exception_entity_stats = defaultdict(
                 lambda: {"entity_name": "Без сущности", "count": 0, "objects_count": 0}
             )
+            exception_direction_stats = defaultdict(
+                lambda: {"direction": "Не указано", "count": 0, "objects_count": 0, "hours_total": 0.0}
+            )
             exception_day_stats = defaultdict(
                 lambda: {"day": "", "count": 0, "hotfix_count": 0, "outside_release_count": 0, "objects_count": 0}
             )
@@ -1876,6 +1889,13 @@ def get_admin_release_reports(
                 type_bucket["count"] += 1
                 type_bucket["objects_count"] += int(row.get("objects_count") or 0)
                 type_bucket["hours_total"] += float(row.get("hours_total") or 0)
+
+                direction = row.get("direction") or "Не указано"
+                direction_bucket = exception_direction_stats[direction]
+                direction_bucket["direction"] = direction
+                direction_bucket["count"] += 1
+                direction_bucket["objects_count"] += int(row.get("objects_count") or 0)
+                direction_bucket["hours_total"] += float(row.get("hours_total") or 0)
 
                 for entity_name in row.get("entity_names") or ["Без сущности"]:
                     entity_bucket = exception_entity_stats[entity_name]
@@ -1959,6 +1979,16 @@ def get_admin_release_reports(
                 "by_entity": sorted(
                     list(exception_entity_stats.values()),
                     key=lambda row: (-row["count"], -row["objects_count"], row["entity_name"]),
+                )[:8],
+                "by_direction": sorted(
+                    [
+                        {
+                            **row,
+                            "hours_total": round(row["hours_total"], 1),
+                        }
+                        for row in exception_direction_stats.values()
+                    ],
+                    key=lambda row: (-row["count"], -row["objects_count"], row["direction"]),
                 )[:8],
                 "by_day": sorted(
                     list(exception_day_stats.values()),

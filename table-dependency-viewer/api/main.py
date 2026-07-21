@@ -1180,8 +1180,11 @@ def get_admin_release_reports(
                         rt.task_id,
                         COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
                         COALESCE(snap.created_by, 'Не указан') AS creator,
-                        COALESCE(work.minutes, 0) AS minutes
+                        COALESCE(work.minutes, 0) AS minutes,
+                        rel.release_bucket
                     FROM release_tasks rt
+                    JOIN rel
+                      ON rel.release_id = rt.release_id
                     LEFT JOIN snap ON snap.issue_id = rt.task_id
                     LEFT JOIN exec ON exec.issue_id = rt.task_id
                     LEFT JOIN work ON work.issue_id = rt.task_id
@@ -1384,15 +1387,13 @@ def get_admin_release_reports(
                 base
                 + """
                     SELECT
-                        tf.release_id,
-                        tf.task_id,
-                        tf.engineer,
-                        tf.creator,
-                        tf.minutes,
-                        rel.release_bucket
-                    FROM task_fact tf
-                    JOIN rel
-                      ON rel.release_id = tf.release_id
+                        release_id,
+                        task_id,
+                        engineer,
+                        creator,
+                        minutes,
+                        release_bucket
+                    FROM task_fact
                     """,
                 "task_detail_rows",
             )

@@ -1023,12 +1023,7 @@ def get_admin_release_reports(
                 ),
                 raw_ro AS (
                     SELECT
-                        ro.*,
-                        raw_rel.started_at,
-                        raw_rel.release_type,
-                        raw_rel.fallback_release_bucket,
-                        raw_rel.initiated_by,
-                        raw_rel.status
+                        ro.*
                     FROM {TABLE_RELEASE_OBJECTS} ro
                     JOIN raw_rel ON raw_rel.release_id = ro.release_id
                 ),

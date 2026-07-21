@@ -1,3 +1,5 @@
+select * from tech_etl.release_log rl left join по started_at::date tech_etl.yt_issue_custom_field фактическая дата релиза 'Дата выкатки' release slot внерелиз
+
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
 table-dependency-viewer-api-1  |                                   ^
 table-dependency-viewer-api-1  |
@@ -249,3 +251,4 @@ table-dependency-viewer-api-1  | [parameters: {'days': 180}]
 table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | INFO:     172.22.0.3:42932 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+[root@rgm-s-dwhapp01 table-dependency-viewer]#

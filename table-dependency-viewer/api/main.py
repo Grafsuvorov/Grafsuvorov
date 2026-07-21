@@ -1406,49 +1406,17 @@ def get_admin_release_reports(
                 base
                 + """
                     ,
-                    table_entity_rank AS (
-                        SELECT
-                            schema_name,
-                            table_name,
-                            COALESCE(entity_name, 'Без сущности') AS entity_name,
-                            COUNT(*) AS entity_objects_count,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY schema_name, table_name
-                                ORDER BY COUNT(*) DESC, COALESCE(entity_name, 'Без сущности')
-                            ) AS rn
-                        FROM ro
-                        WHERE schema_name IS NOT NULL
-                          AND table_name IS NOT NULL
-                        GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
-                    ),
-                    table_entity_distinct AS (
-                        SELECT
-                            schema_name,
-                            table_name,
-                            COALESCE(entity_name, 'Без сущности') AS entity_name
-                        FROM ro
-                        WHERE schema_name IS NOT NULL
-                          AND table_name IS NOT NULL
-                        GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
-                    ),
-                    table_entities_rank AS (
-                        SELECT
-                            schema_name,
-                            table_name,
-                            entity_name,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY schema_name, table_name
-                                ORDER BY entity_name
-                            ) AS rn
-                        FROM table_entity_distinct
-                    ),
                     table_entities AS (
                         SELECT
                             schema_name,
                             table_name,
-                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
-                        FROM table_entities_rank
-                        WHERE rn <= 4
+                            ARRAY_AGG(entity_name) AS entity_names,
+                            MIN(entity_name) AS primary_entity_name
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                          AND entity_name IS NOT NULL
+                          AND entity_name <> ''
                         GROUP BY schema_name, table_name
                     ),
                     table_rollup AS (
@@ -1472,15 +1440,11 @@ def get_admin_release_reports(
                         tr.tasks_count,
                         tr.last_change_at,
                         te.entity_names,
-                        ter.entity_name AS primary_entity_name
+                        te.primary_entity_name
                     FROM table_rollup tr
                     LEFT JOIN table_entities te
                       ON te.schema_name = tr.schema_name
                      AND te.table_name = tr.table_name
-                    LEFT JOIN table_entity_rank ter
-                      ON ter.schema_name = tr.schema_name
-                     AND ter.table_name = tr.table_name
-                     AND ter.rn = 1
                     ORDER BY tr.releases_count DESC, tr.objects_count DESC, tr.tasks_count DESC
                     LIMIT 16
                     """,
@@ -1490,17 +1454,37 @@ def get_admin_release_reports(
             top_users = _safe_query_all(
                 base
                 + """
+                    ,
+                    engineer_release_distinct AS (
+                        SELECT
+                            tf.engineer,
+                            tf.release_id,
+                            rel.release_bucket
+                        FROM task_fact tf
+                        JOIN rel ON rel.release_id = tf.release_id
+                        GROUP BY tf.engineer, tf.release_id, rel.release_bucket
+                    ),
+                    engineer_release_rollup AS (
+                        SELECT
+                            engineer,
+                            COUNT(*) AS releases_count,
+                            SUM(CASE WHEN release_bucket = 'hotfix' THEN 1 ELSE 0 END) AS hotfix_count,
+                            SUM(CASE WHEN release_bucket = 'outside_release' THEN 1 ELSE 0 END) AS outside_release_count
+                        FROM engineer_release_distinct
+                        GROUP BY engineer
+                    )
                     SELECT
-                        engineer,
-                        COUNT(DISTINCT task_id) AS tasks_count,
-                        COUNT(DISTINCT task_fact.release_id) AS releases_count,
+                        tf.engineer,
+                        COUNT(DISTINCT tf.task_id) AS tasks_count,
+                        COALESCE(err.releases_count, 0) AS releases_count,
                         COUNT(DISTINCT creator) AS creators_count,
-                        COALESCE(SUM(minutes), 0) / 60.0 AS hours_total,
-                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'hotfix' THEN task_fact.release_id END) AS hotfix_count,
-                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'outside_release' THEN task_fact.release_id END) AS outside_release_count
-                    FROM task_fact
-                    JOIN rel ON rel.release_id = task_fact.release_id
-                    GROUP BY engineer
+                        COALESCE(SUM(tf.minutes), 0) / 60.0 AS hours_total,
+                        COALESCE(err.hotfix_count, 0) AS hotfix_count,
+                        COALESCE(err.outside_release_count, 0) AS outside_release_count
+                    FROM task_fact tf
+                    LEFT JOIN engineer_release_rollup err
+                      ON err.engineer = tf.engineer
+                    GROUP BY tf.engineer, err.releases_count, err.hotfix_count, err.outside_release_count
                     ORDER BY hours_total DESC NULLS LAST, tasks_count DESC
                     LIMIT 14
                     """,
@@ -1510,16 +1494,36 @@ def get_admin_release_reports(
             top_creators = _safe_query_all(
                 base
                 + """
+                    ,
+                    creator_release_distinct AS (
+                        SELECT
+                            tf.creator,
+                            tf.release_id,
+                            rel.release_bucket
+                        FROM task_fact tf
+                        JOIN rel ON rel.release_id = tf.release_id
+                        GROUP BY tf.creator, tf.release_id, rel.release_bucket
+                    ),
+                    creator_release_rollup AS (
+                        SELECT
+                            creator,
+                            COUNT(*) AS releases_count,
+                            SUM(CASE WHEN release_bucket = 'hotfix' THEN 1 ELSE 0 END) AS hotfix_count,
+                            SUM(CASE WHEN release_bucket = 'outside_release' THEN 1 ELSE 0 END) AS outside_release_count
+                        FROM creator_release_distinct
+                        GROUP BY creator
+                    )
                     SELECT
-                        creator,
-                        COUNT(DISTINCT task_id) AS tasks_count,
-                        COUNT(DISTINCT task_fact.release_id) AS releases_count,
-                        COALESCE(SUM(minutes), 0) / 60.0 AS hours_total,
-                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'hotfix' THEN task_fact.release_id END) AS hotfix_count,
-                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'outside_release' THEN task_fact.release_id END) AS outside_release_count
-                    FROM task_fact
-                    JOIN rel ON rel.release_id = task_fact.release_id
-                    GROUP BY creator
+                        tf.creator,
+                        COUNT(DISTINCT tf.task_id) AS tasks_count,
+                        COALESCE(crr.releases_count, 0) AS releases_count,
+                        COALESCE(SUM(tf.minutes), 0) / 60.0 AS hours_total,
+                        COALESCE(crr.hotfix_count, 0) AS hotfix_count,
+                        COALESCE(crr.outside_release_count, 0) AS outside_release_count
+                    FROM task_fact tf
+                    LEFT JOIN creator_release_rollup crr
+                      ON crr.creator = tf.creator
+                    GROUP BY tf.creator, crr.releases_count, crr.hotfix_count, crr.outside_release_count
                     ORDER BY tasks_count DESC, hours_total DESC NULLS LAST
                     LIMIT 14
                     """,
@@ -1532,8 +1536,8 @@ def get_admin_release_reports(
                     SELECT
                         COALESCE(initiated_by, 'Не указан') AS initiated_by,
                         COUNT(*) AS releases_count,
-                        COUNT(*) FILTER (WHERE release_bucket = 'hotfix') AS hotfix_count,
-                        COUNT(*) FILTER (WHERE release_bucket = 'outside_release') AS outside_release_count,
+                        SUM(CASE WHEN release_bucket = 'hotfix' THEN 1 ELSE 0 END) AS hotfix_count,
+                        SUM(CASE WHEN release_bucket = 'outside_release' THEN 1 ELSE 0 END) AS outside_release_count,
                         COALESCE(SUM(objects_count), 0) AS objects_count,
                         COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total
                     FROM release_rollup
@@ -1583,22 +1587,11 @@ def get_admin_release_reports(
                         FROM ro
                         GROUP BY release_id, COALESCE(entity_name, 'Без сущности')
                     ),
-                    release_entity_rank AS (
-                        SELECT
-                            release_id,
-                            entity_name,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY release_id
-                                ORDER BY entity_name
-                            ) AS rn
-                        FROM release_entity_distinct
-                    ),
                     release_entities AS (
                         SELECT
                             release_id,
-                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
-                        FROM release_entity_rank
-                        WHERE rn <= 5
+                            ARRAY_AGG(entity_name) AS entity_names
+                        FROM release_entity_distinct
                         GROUP BY release_id
                     )
                     SELECT
@@ -1635,22 +1628,11 @@ def get_admin_release_reports(
                         FROM ro
                         GROUP BY release_id, COALESCE(entity_name, 'Без сущности')
                     ),
-                    release_entity_rank AS (
-                        SELECT
-                            release_id,
-                            entity_name,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY release_id
-                                ORDER BY entity_name
-                            ) AS rn
-                        FROM release_entity_distinct
-                    ),
                     release_entities AS (
                         SELECT
                             release_id,
-                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
-                        FROM release_entity_rank
-                        WHERE rn <= 5
+                            ARRAY_AGG(entity_name) AS entity_names
+                        FROM release_entity_distinct
                         GROUP BY release_id
                     )
                     SELECT

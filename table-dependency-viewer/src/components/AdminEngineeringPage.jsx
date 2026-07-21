@@ -237,9 +237,9 @@ export default function AdminEngineeringPage() {
               type="button"
               className="btn btn-secondary reports-print-btn"
               onClick={handlePrintReports}
-              title="Откроется системный диалог, где можно выбрать Сохранить в PDF"
+              title="Откроется системный диалог экспорта в PDF"
             >
-              PDF / Печать
+              Экспорт в PDF
             </button>
           </div>
         </div>

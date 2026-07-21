@@ -1849,6 +1849,59 @@ def get_admin_release_reports(
             ]
             type_rows = [row for row in type_rows if row["releases_count"] > 0 or row["objects_count"] > 0 or row["tasks_count"] > 0]
 
+            cadence_map = {}
+            for row in cadence:
+                item = dict(row)
+                cadence_map[item["week_start"]] = {
+                    "week_label": item["week_label"],
+                    "week_start": item["week_start"],
+                    "releases_count": int(item.get("releases_count") or 0),
+                    "hotfix_count": int(item.get("hotfix_count") or 0),
+                    "outside_release_count": int(item.get("outside_release_count") or 0),
+                    "regular_release_count": int(item.get("regular_release_count") or 0),
+                    "objects_count": int(item.get("objects_count") or 0),
+                    "tasks_count": int(item.get("tasks_count") or 0),
+                }
+            for row in exception_summary_rows:
+                started_at = row.get("started_at")
+                if not started_at:
+                    continue
+                week_start_dt = started_at - timedelta(days=started_at.weekday())
+                week_start_dt = week_start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                week_start = week_start_dt.date().isoformat()
+                bucket = cadence_map.setdefault(
+                    week_start,
+                    {
+                        "week_label": week_start_dt.strftime("%d.%m"),
+                        "week_start": week_start,
+                        "releases_count": 0,
+                        "hotfix_count": 0,
+                        "outside_release_count": 0,
+                        "regular_release_count": 0,
+                        "objects_count": 0,
+                        "tasks_count": 0,
+                    },
+                )
+                bucket["releases_count"] += 1
+                bucket["objects_count"] += int(row.get("objects_count") or 0)
+                bucket["tasks_count"] += int(row.get("tasks_count") or 0)
+                if row.get("release_bucket") == "hotfix":
+                    bucket["hotfix_count"] += 1
+                elif row.get("release_bucket") == "outside_release":
+                    bucket["outside_release_count"] += 1
+            cadence_rows = sorted(cadence_map.values(), key=lambda row: row["week_start"])
+
+            release_day_values = {
+                row.get("started_at").date().isoformat()
+                for row in regular_release_rows
+                if row.get("started_at")
+            }
+            release_day_values.update(
+                row.get("started_at").date().isoformat()
+                for row in exception_summary_rows
+                if row.get("started_at")
+            )
+
             key_blocks_empty = not top_entities or not top_tables or not top_users or not recent_releases
             if debug or key_blocks_empty:
                 debug_counts = conn.execute(
@@ -1872,8 +1925,6 @@ def get_admin_release_reports(
                         SELECT 'task_custom_norm_with_bucket' AS step, COUNT(*) AS cnt
                         FROM task_custom_norm
                         WHERE custom_bucket IS NOT NULL
-                        UNION ALL
-                        SELECT 'release_match_by_task' AS step, COUNT(*) AS cnt FROM release_match_by_task
                         UNION ALL
                         SELECT 'release_match_by_date' AS step, COUNT(*) AS cnt FROM release_match_by_date
                         UNION ALL
@@ -1910,7 +1961,8 @@ def get_admin_release_reports(
                 )
 
         summary_row = summary or {}
-        cadence_rows = [dict(row) for row in cadence]
+        if not locals().get("cadence_rows"):
+            cadence_rows = [dict(row) for row in cadence]
         if not locals().get("type_rows"):
             type_rows = [dict(row) for row in type_breakdown]
         heatmap_rows = [dict(row) for row in weekday_heatmap]
@@ -1937,7 +1989,7 @@ def get_admin_release_reports(
                 "tasks_count": regular_tasks_count + exception_tasks_total,
                 "hours_total": round(regular_hours_total + exception_hours_total, 1),
                 "initiators_count": int(summary_row.get("initiators_count") or 0),
-                "release_days_count": int(summary_row.get("release_days_count") or 0),
+                "release_days_count": len(release_day_values),
                 "avg_objects_per_release": float(summary_row.get("avg_objects_per_release") or 0),
                 "avg_duration_minutes": float(summary_row.get("avg_duration_minutes") or 0),
             },

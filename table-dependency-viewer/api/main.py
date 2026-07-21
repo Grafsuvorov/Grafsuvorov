@@ -1201,6 +1201,7 @@ def get_admin_release_reports(
             base_rollup = (
                 base_task
                 + """
+                ,
                 task_rollup AS (
                     SELECT
                         release_id,

@@ -1058,20 +1058,8 @@ def get_admin_release_reports(
                         MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
                         MAX(CASE WHEN field_name = 'Тип внерелиза' THEN field_value END) AS outside_type,
                         MAX(CASE WHEN field_name = 'Номер релиза КХД' THEN field_value END) AS release_slot_number,
-                        MAX(
-                            CASE
-                                WHEN field_name = 'Фактическая дата релиза'
-                                 AND field_value ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}( [0-9]{{2}}:[0-9]{{2}}(:[0-9]{{2}})?)?$'
-                                THEN field_value::timestamp
-                            END
-                        ) AS actual_release_at,
-                        MAX(
-                            CASE
-                                WHEN field_name = 'Дата выкатки'
-                                 AND field_value ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}( [0-9]{{2}}:[0-9]{{2}}(:[0-9]{{2}})?)?$'
-                                THEN field_value::timestamp
-                            END
-                        ) AS rollout_at
+                        MAX(CASE WHEN field_name = 'Фактическая дата релиза' THEN field_value END) AS actual_release_at_text,
+                        MAX(CASE WHEN field_name = 'Дата выкатки' THEN field_value END) AS rollout_at_text
                     FROM task_custom_base
                     GROUP BY issue_id
                 ),
@@ -1081,7 +1069,7 @@ def get_admin_release_reports(
                         card_type,
                         outside_type,
                         release_slot_number,
-                        COALESCE(actual_release_at, rollout_at) AS effective_release_at,
+                        LEFT(COALESCE(actual_release_at_text, rollout_at_text), 16) AS effective_release_at_key,
                         CASE
                             WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
                             WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
@@ -1098,7 +1086,6 @@ def get_admin_release_reports(
                 release_match_by_task AS (
                     SELECT
                         rt.release_id,
-                        MAX(tc.effective_release_at) AS matched_release_at,
                         MAX(tc.release_slot_number) AS release_slot_number,
                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
@@ -1111,15 +1098,14 @@ def get_admin_release_reports(
                 release_match_by_date AS (
                     SELECT
                         rr.release_id,
-                        MAX(tc.effective_release_at) AS matched_release_at,
                         MAX(tc.release_slot_number) AS release_slot_number,
                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
                     FROM raw_rel rr
                     JOIN task_custom_norm tc
-                      ON tc.effective_release_at IS NOT NULL
-                     AND date_trunc('minute', tc.effective_release_at) = date_trunc('minute', rr.started_at)
+                      ON tc.effective_release_at_key IS NOT NULL
+                     AND tc.effective_release_at_key = to_char(rr.started_at, 'YYYY-MM-DD HH24:MI')
                     GROUP BY rr.release_id
                 ),
                 rel AS (
@@ -1130,7 +1116,7 @@ def get_admin_release_reports(
                             rr.release_type
                         ) AS release_type,
                         rr.initiated_by,
-                        COALESCE(rmt.matched_release_at, rmd.matched_release_at, rr.started_at) AS started_at,
+                        rr.started_at,
                         rr.finished_at,
                         rr.status,
                         rr.total_objects,

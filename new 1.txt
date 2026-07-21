@@ -1,251 +1,62 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
-table-dependency-viewer-api-1  |     ret = self._execute_context(
-table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
-table-dependency-viewer-api-1  |     return self._exec_single_context(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
-table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
-table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
-table-dependency-viewer-api-1  |     self.dialect.do_execute(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
-table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.AmbiguousColumn) column reference "release_type" is ambiguous
-table-dependency-viewer-api-1  | LINE 217:                         release_type,
-table-dependency-viewer-api-1  |                                   ^
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | [SQL:
-table-dependency-viewer-api-1  |                 WITH raw_rel AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         r.release_id,
-table-dependency-viewer-api-1  |                         r.release_type,
-table-dependency-viewer-api-1  |                         r.initiated_by,
-table-dependency-viewer-api-1  |                         r.started_at,
-table-dependency-viewer-api-1  |                         r.finished_at,
-table-dependency-viewer-api-1  |                         r.status,
-table-dependency-viewer-api-1  |                         r.total_objects,
-table-dependency-viewer-api-1  |                         r.ready_to_release,
-table-dependency-viewer-api-1  |                         CASE
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%hotfix%%' THEN 'hotfix'
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%внерел%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%vnerelease%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%vne release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%out_of_release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%out of release%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%nonrelease%%'
-table-dependency-viewer-api-1  |                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%%non-release%%'
-table-dependency-viewer-api-1  |                             THEN 'outside_release'
-table-dependency-viewer-api-1  |                             ELSE 'release'
-table-dependency-viewer-api-1  |                         END AS fallback_release_bucket
-table-dependency-viewer-api-1  |                     FROM tech_etl.release_log r
-table-dependency-viewer-api-1  |                     WHERE r.started_at >= (now() - (%(days)s || ' days')::interval)
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 raw_ro AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         ro.*,
-table-dependency-viewer-api-1  |                         raw_rel.started_at,
-table-dependency-viewer-api-1  |                         raw_rel.release_type,
-table-dependency-viewer-api-1  |                         raw_rel.fallback_release_bucket,
-table-dependency-viewer-api-1  |                         raw_rel.initiated_by,
-table-dependency-viewer-api-1  |                         raw_rel.status
-table-dependency-viewer-api-1  |                     FROM tech_etl.release_objects ro
-table-dependency-viewer-api-1  |                     JOIN raw_rel ON raw_rel.release_id = ro.release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_tasks AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT release_id, task_id
-table-dependency-viewer-api-1  |                     FROM raw_ro
-table-dependency-viewer-api-1  |                     WHERE task_id IS NOT NULL AND task_id <> ''
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_ids AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT task_id
-table-dependency-viewer-api-1  |                     FROM release_tasks
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_custom_base AS (
-table-dependency-viewer-api-1  |                     SELECT issue_id, field_name, NULLIF(BTRIM(field_value), '') AS field_value
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
-table-dependency-viewer-api-1  |                     WHERE field_name IN (
-table-dependency-viewer-api-1  |                           'Тип карточки',
-table-dependency-viewer-api-1  |                           'Тип внерелиза',
-table-dependency-viewer-api-1  |                           'Фактическая дата релиза',
-table-dependency-viewer-api-1  |                           'Дата выкатки',
-table-dependency-viewer-api-1  |                           'Номер релиза КХД'
-table-dependency-viewer-api-1  |                       )
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_custom AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         issue_id,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN field_name = 'Тип внерелиза' THEN field_value END) AS outside_type,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN field_name = 'Номер релиза КХД' THEN field_value END) AS release_slot_number,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN field_name = 'Фактическая дата релиза' THEN field_value END) AS actual_release_at_text,
-table-dependency-viewer-api-1  |                         MAX(CASE WHEN field_name = 'Дата выкатки' THEN field_value END) AS rollout_at_text
-table-dependency-viewer-api-1  |                     FROM task_custom_base
-table-dependency-viewer-api-1  |                     GROUP BY issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_custom_norm AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         issue_id,
-table-dependency-viewer-api-1  |                         card_type,
-table-dependency-viewer-api-1  |                         outside_type,
-table-dependency-viewer-api-1  |                         release_slot_number,
-table-dependency-viewer-api-1  |                         LEFT(COALESCE(actual_release_at_text, rollout_at_text), 10) AS effective_release_at_key,
-table-dependency-viewer-api-1  |                         CASE
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
-table-dependency-viewer-api-1  |                              AND (
-table-dependency-viewer-api-1  |                                  lower(COALESCE(outside_type, '')) LIKE '%%хотфикс%%'
-table-dependency-viewer-api-1  |                                  OR lower(COALESCE(outside_type, '')) LIKE '%%hotfix%%'
-table-dependency-viewer-api-1  |                              )
-table-dependency-viewer-api-1  |                             THEN 'hotfix'
-table-dependency-viewer-api-1  |                             WHEN lower(COALESCE(card_type, '')) = 'внерелиз' THEN 'outside_release'
-table-dependency-viewer-api-1  |                             ELSE NULL
-table-dependency-viewer-api-1  |                         END AS custom_bucket
-table-dependency-viewer-api-1  |                     FROM task_custom
-table-dependency-viewer-api-1  |                     WHERE lower(COALESCE(card_type, '')) IN ('release slot', 'внерелиз')
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_match_by_date AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rr.release_id,
-table-dependency-viewer-api-1  |                         MAX(tc.release_slot_number) AS release_slot_number,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
-table-dependency-viewer-api-1  |                     FROM raw_rel rr
-table-dependency-viewer-api-1  |                     JOIN task_custom_norm tc
-table-dependency-viewer-api-1  |                       ON tc.effective_release_at_key IS NOT NULL
-table-dependency-viewer-api-1  |                      AND tc.effective_release_at_key = to_char(rr.started_at, 'YYYY-MM-DD')
-table-dependency-viewer-api-1  |                     GROUP BY rr.release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 rel AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rr.release_id,
-table-dependency-viewer-api-1  |                         COALESCE(
-table-dependency-viewer-api-1  |                             NULLIF(rmd.release_slot_number, ''),
-table-dependency-viewer-api-1  |                             rr.release_type
-table-dependency-viewer-api-1  |                         ) AS release_type,
-table-dependency-viewer-api-1  |                         rr.initiated_by,
-table-dependency-viewer-api-1  |                         rr.started_at,
-table-dependency-viewer-api-1  |                         rr.finished_at,
-table-dependency-viewer-api-1  |                         rr.status,
-table-dependency-viewer-api-1  |                         rr.total_objects,
-table-dependency-viewer-api-1  |                         rr.ready_to_release,
-table-dependency-viewer-api-1  |                         CASE
-table-dependency-viewer-api-1  |                             WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
-table-dependency-viewer-api-1  |                             WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
-table-dependency-viewer-api-1  |                             WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
-table-dependency-viewer-api-1  |                             ELSE rr.fallback_release_bucket
-table-dependency-viewer-api-1  |                         END AS release_bucket
-table-dependency-viewer-api-1  |                     FROM raw_rel rr
-table-dependency-viewer-api-1  |                     LEFT JOIN release_match_by_date rmd
-table-dependency-viewer-api-1  |                       ON rmd.release_id = rr.release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 ro AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         raw_ro.*,
-table-dependency-viewer-api-1  |                         rel.started_at,
-table-dependency-viewer-api-1  |                         rel.release_type,
-table-dependency-viewer-api-1  |                         rel.release_bucket,
-table-dependency-viewer-api-1  |                         rel.initiated_by,
-table-dependency-viewer-api-1  |                         rel.status
-table-dependency-viewer-api-1  |                     FROM raw_ro
-table-dependency-viewer-api-1  |                     JOIN rel ON rel.release_id = raw_ro.release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 snap AS (
-table-dependency-viewer-api-1  |                     SELECT s.*
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_snapshot s
-table-dependency-viewer-api-1  |                     JOIN task_ids t ON t.task_id = s.issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 exec AS (
-table-dependency-viewer-api-1  |                     SELECT DISTINCT ON (issue_id)
-table-dependency-viewer-api-1  |                            issue_id, author AS executor, ts
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_timeline
-table-dependency-viewer-api-1  |                     WHERE event_type = 'State change'
-table-dependency-viewer-api-1  |                       AND value_to IN ('Ожидание релиза', 'В работе')
-table-dependency-viewer-api-1  |                     ORDER BY issue_id, ts DESC NULLS LAST
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 work AS (
-table-dependency-viewer-api-1  |                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_worklog
-table-dependency-viewer-api-1  |                     GROUP BY issue_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_fact AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rt.release_id,
-table-dependency-viewer-api-1  |                         rt.task_id,
-table-dependency-viewer-api-1  |                         COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
-table-dependency-viewer-api-1  |                         COALESCE(snap.created_by, 'Не указан') AS creator,
-table-dependency-viewer-api-1  |                         COALESCE(work.minutes, 0) AS minutes
-table-dependency-viewer-api-1  |                     FROM release_tasks rt
-table-dependency-viewer-api-1  |                     LEFT JOIN snap ON snap.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT task_id) AS tasks_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT engineer) AS engineers_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT creator) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(SUM(minutes), 0) AS minutes_total
-table-dependency-viewer-api-1  |                     FROM task_fact
-table-dependency-viewer-api-1  |                     GROUP BY release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 object_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         COUNT(*) AS objects_count,
-table-dependency-viewer-api-1  |                         COUNT(DISTINCT entity_name) FILTER (WHERE entity_name IS NOT NULL AND entity_name <> '') AS entities_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE lower(COALESCE(target_system, '')) LIKE '%%click%%') AS click_objects_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (
-table-dependency-viewer-api-1  |                             WHERE lower(COALESCE(target_system, '')) LIKE '%%greenplum%%'
-table-dependency-viewer-api-1  |                                OR lower(COALESCE(target_system, '')) LIKE '%%gp%%'
-table-dependency-viewer-api-1  |                         ) AS gp_objects_count
-table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     GROUP BY release_id
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_rollup AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rel.release_id,
-table-dependency-viewer-api-1  |                         rel.release_type,
-table-dependency-viewer-api-1  |                         rel.release_bucket,
-table-dependency-viewer-api-1  |                         rel.initiated_by,
-table-dependency-viewer-api-1  |                         rel.started_at,
-table-dependency-viewer-api-1  |                         rel.finished_at,
-table-dependency-viewer-api-1  |                         rel.status,
-table-dependency-viewer-api-1  |                         rel.total_objects,
-table-dependency-viewer-api-1  |                         rel.ready_to_release,
-table-dependency-viewer-api-1  |                         COALESCE(obj.objects_count, 0) AS objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.entities_count, 0) AS entities_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.click_objects_count, 0) AS click_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(obj.gp_objects_count, 0) AS gp_objects_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.tasks_count, 0) AS tasks_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.engineers_count, 0) AS engineers_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.creators_count, 0) AS creators_count,
-table-dependency-viewer-api-1  |                         COALESCE(task.minutes_total, 0) AS minutes_total,
-table-dependency-viewer-api-1  |                         EXTRACT(EPOCH FROM (COALESCE(rel.finished_at, now()) - rel.started_at)) / 60.0 AS duration_minutes
-table-dependency-viewer-api-1  |                     FROM rel
-table-dependency-viewer-api-1  |                     LEFT JOIN object_rollup obj ON obj.release_id = rel.release_id
-table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
-table-dependency-viewer-api-1  |                 )
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         release_type,
-table-dependency-viewer-api-1  |                         release_bucket,
-table-dependency-viewer-api-1  |                         initiated_by,
-table-dependency-viewer-api-1  |                         started_at,
-table-dependency-viewer-api-1  |                         status,
-table-dependency-viewer-api-1  |                         COALESCE(entity_name, 'Без сущности') AS entity_name,
-table-dependency-viewer-api-1  |                         schema_name,
-table-dependency-viewer-api-1  |                         table_name,
-table-dependency-viewer-api-1  |                         task_id
-table-dependency-viewer-api-1  |                     FROM ro
-table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:44918 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+Да, этот блок считается так.
+
+  Во фронте карточка берёт поля:
+
+  - row.releases_count
+  - row.objects_count
+  - row.tasks_count
+  - row.hours_total
+
+  Это видно в src/components/AdminEngineeringPage.jsx:502.
+
+  Сам SQL для Среза по типам поставок такой, в api/main.py:1280:
+
+  SELECT
+      release_bucket,
+      COUNT(*) AS releases_count,
+      COALESCE(SUM(objects_count), 0) AS objects_count,
+      COALESCE(SUM(tasks_count), 0) AS tasks_count,
+      COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total
+  FROM release_rollup
+  GROUP BY release_bucket
+  ORDER BY releases_count DESC, objects_count DESC
+
+  Что это значит по смыслу:
+
+  - Релизы = 925
+    это количество записей в release_rollup с release_bucket = 'release'
+  - Хотфиксы = 224 объекта
+    если вы про число 224 на карточке, то это objects_count
+    то есть сумма количества строк/объектов из release_objects по всем релизам этого типа
+  - Задачи = 42
+    это не глобально уникальные задачи по всему типу
+    это SUM(tasks_count) из release_rollup
+
+  А tasks_count внутри одного релиза считается так, в api/main.py:1193:
+
+  SELECT
+      release_id,
+      COUNT(DISTINCT task_id) AS tasks_count,
+      COUNT(DISTINCT engineer) AS engineers_count,
+      COUNT(DISTINCT creator) AS creators_count,
+      COALESCE(SUM(minutes), 0) AS minutes_total
+  FROM task_fact
+  GROUP BY release_id
+
+  То есть:
+
+  - сначала для каждого release_id считается число уникальных task_id
+  - потом в type_breakdown эти значения суммируются по типу поставки
+
+  Важный нюанс:
+
+  - если одна и та же задача попадала в несколько релизов, она будет учтена несколько раз
+  - значит 42 задач это:
+      - сумма уникальных задач внутри каждого релиза данного типа
+      - а не COUNT(DISTINCT task_id) по всему бакету целиком
+
+  Если хотите, я могу сразу поменять это поведение на более честное для бизнеса:
+
+  - либо уникальные задачи по типу поставки
+  - либо оставить как сейчас, но переименовать в вхождений задач или задач в релизах, чтобы не путало.
+

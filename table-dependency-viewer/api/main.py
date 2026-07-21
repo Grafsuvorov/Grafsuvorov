@@ -987,6 +987,7 @@ def get_admin_engineering_efficiency(
 def get_admin_release_reports(
     request: Request,
     days: int = Query(180, ge=30, le=3650),
+    debug: bool = Query(False),
 ):
     user = get_current_user_from_request(request)
     if user.role != "admin":
@@ -994,15 +995,7 @@ def get_admin_release_reports(
     try:
         date_clause, params = _resolve_date_window(None, None, days)
         with engine.connect() as conn:
-            def _safe_query_all(sql_text: str, label: str):
-                try:
-                    return conn.execute(text(sql_text), params).mappings().all()
-                except Exception as inner_error:
-                    print(f"❌ /api/admin/reports/releases {label} error:", inner_error)
-                    print(traceback.format_exc())
-                    return []
-
-            base_core = f"""
+            base = f"""
                 WITH raw_rel AS (
                     SELECT
                         r.release_id,
@@ -1153,15 +1146,8 @@ def get_admin_release_reports(
                         rel.initiated_by,
                         rel.status
                     FROM raw_ro
-                    JOIN rel
-                      ON rel.release_id = raw_ro.release_id
-                )
-            """
-
-            base_task = (
-                base_core
-                + f"""
-                ,
+                    JOIN rel ON rel.release_id = raw_ro.release_id
+                ),
                 snap AS (
                     SELECT s.*
                     FROM {TABLE_YT_ISSUE_SNAPSHOT} s
@@ -1186,22 +1172,12 @@ def get_admin_release_reports(
                         rt.task_id,
                         COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
                         COALESCE(snap.created_by, 'Не указан') AS creator,
-                        COALESCE(work.minutes, 0) AS minutes,
-                        rel.release_bucket
+                        COALESCE(work.minutes, 0) AS minutes
                     FROM release_tasks rt
-                    JOIN rel
-                      ON rel.release_id = rt.release_id
                     LEFT JOIN snap ON snap.issue_id = rt.task_id
                     LEFT JOIN exec ON exec.issue_id = rt.task_id
                     LEFT JOIN work ON work.issue_id = rt.task_id
-                )
-            """
-            )
-
-            base_rollup = (
-                base_task
-                + """
-                ,
+                ),
                 task_rollup AS (
                     SELECT
                         release_id,
@@ -1250,11 +1226,10 @@ def get_admin_release_reports(
                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
                 )
             """
-            )
 
             summary = conn.execute(
                 text(
-                    base_rollup
+                    base
                     + """
                     SELECT
                         COUNT(*) AS releases_count,
@@ -1278,7 +1253,7 @@ def get_admin_release_reports(
 
             cadence = conn.execute(
                 text(
-                    base_rollup
+                    base
                     + """
                     SELECT
                         to_char(date_trunc('week', started_at), 'DD.MM') AS week_label,
@@ -1299,7 +1274,7 @@ def get_admin_release_reports(
 
             weekday_heatmap = conn.execute(
                 text(
-                    base_rollup
+                    base
                     + """
                     SELECT
                         EXTRACT(ISODOW FROM started_at)::int AS weekday_no,
@@ -1326,7 +1301,7 @@ def get_admin_release_reports(
 
             type_breakdown = conn.execute(
                 text(
-                    base_rollup
+                    base
                     + """
                     SELECT
                         release_bucket,
@@ -1344,7 +1319,7 @@ def get_admin_release_reports(
 
             system_breakdown = conn.execute(
                 text(
-                    base_rollup
+                    base
                     + """
                     SELECT 'ClickHouse' AS system_name, COALESCE(SUM(click_objects_count), 0) AS objects_count
                     FROM release_rollup
@@ -1356,342 +1331,375 @@ def get_admin_release_reports(
                 params,
             ).mappings().all()
 
-            ro_detail_rows = _safe_query_all(
-                base_core
-                + """
+            top_entities = conn.execute(
+                text(
+                    base
+                    + """
                     SELECT
-                        release_id,
-                        release_type,
-                        release_bucket,
-                        initiated_by,
-                        started_at,
-                        status,
                         COALESCE(entity_name, 'Без сущности') AS entity_name,
-                        schema_name,
-                        table_name,
-                        task_id
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT release_id) AS releases_count,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT CASE WHEN release_bucket = 'hotfix' THEN release_id END) AS hotfix_count,
+                        COUNT(DISTINCT CASE WHEN release_bucket = 'outside_release' THEN release_id END) AS outside_release_count,
+                        MAX(started_at) AS last_release_at
                     FROM ro
-                    """,
-                "ro_detail_rows",
-            )
+                    GROUP BY COALESCE(entity_name, 'Без сущности')
+                    ORDER BY objects_count DESC, releases_count DESC, tasks_count DESC
+                    LIMIT 12
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-            release_detail_rows = _safe_query_all(
-                base_rollup
-                + """
+            top_tables = conn.execute(
+                text(
+                    base
+                    + """
+                    ,
+                    table_entity_rank AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            COUNT(*) AS entity_objects_count,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY schema_name, table_name
+                                ORDER BY COUNT(*) DESC, COALESCE(entity_name, 'Без сущности')
+                            ) AS rn
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    table_entity_distinct AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    table_entities_rank AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            entity_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY schema_name, table_name
+                                ORDER BY entity_name
+                            ) AS rn
+                        FROM table_entity_distinct
+                    ),
+                    table_entities AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
+                        FROM table_entities_rank
+                        WHERE rn <= 4
+                        GROUP BY schema_name, table_name
+                    ),
+                    table_rollup AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            COUNT(*) AS objects_count,
+                            COUNT(DISTINCT release_id) AS releases_count,
+                            COUNT(DISTINCT task_id) AS tasks_count,
+                            MAX(started_at) AS last_change_at
+                        FROM ro
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name
+                    )
                     SELECT
-                        release_id,
-                        release_type,
-                        release_bucket,
-                        initiated_by,
-                        started_at,
-                        status,
-                        objects_count,
-                        tasks_count,
-                        creators_count,
-                        engineers_count,
-                        minutes_total,
-                        duration_minutes
-                    FROM release_rollup
-                    ORDER BY started_at DESC NULLS LAST
-                    """,
-                "release_detail_rows",
-            )
+                        tr.schema_name,
+                        tr.table_name,
+                        tr.objects_count,
+                        tr.releases_count,
+                        tr.tasks_count,
+                        tr.last_change_at,
+                        te.entity_names,
+                        ter.entity_name AS primary_entity_name
+                    FROM table_rollup tr
+                    LEFT JOIN table_entities te
+                      ON te.schema_name = tr.schema_name
+                     AND te.table_name = tr.table_name
+                    LEFT JOIN table_entity_rank ter
+                      ON ter.schema_name = tr.schema_name
+                     AND ter.table_name = tr.table_name
+                     AND ter.rn = 1
+                    ORDER BY tr.releases_count DESC, tr.objects_count DESC, tr.tasks_count DESC
+                    LIMIT 16
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-            task_detail_rows = _safe_query_all(
-                base_task
-                + """
+            top_users = conn.execute(
+                text(
+                    base
+                    + """
                     SELECT
-                        release_id,
-                        task_id,
                         engineer,
-                        creator,
-                        minutes,
-                        release_bucket
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT task_fact.release_id) AS releases_count,
+                        COUNT(DISTINCT creator) AS creators_count,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours_total,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'hotfix' THEN task_fact.release_id END) AS hotfix_count,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'outside_release' THEN task_fact.release_id END) AS outside_release_count
                     FROM task_fact
-                    """,
-                "task_detail_rows",
-            )
-
-            entity_stats = defaultdict(
-                lambda: {
-                    "entity_name": "Без сущности",
-                    "objects_count": 0,
-                    "release_ids": set(),
-                    "task_ids": set(),
-                    "hotfix_release_ids": set(),
-                    "outside_release_ids": set(),
-                    "last_release_at": None,
-                }
-            )
-            table_stats = defaultdict(
-                lambda: {
-                    "schema_name": None,
-                    "table_name": None,
-                    "objects_count": 0,
-                    "release_ids": set(),
-                    "task_ids": set(),
-                    "last_change_at": None,
-                    "entity_names": set(),
-                }
-            )
-            entity_names_by_release = defaultdict(set)
-
-            for row in ro_detail_rows:
-                entity_name = row.get("entity_name") or "Без сущности"
-                release_id = row.get("release_id")
-                release_bucket = row.get("release_bucket")
-                started_at = row.get("started_at")
-                task_id = row.get("task_id")
-
-                entity_names_by_release[release_id].add(entity_name)
-
-                entity_bucket = entity_stats[entity_name]
-                entity_bucket["entity_name"] = entity_name
-                entity_bucket["objects_count"] += 1
-                if release_id:
-                    entity_bucket["release_ids"].add(release_id)
-                if task_id:
-                    entity_bucket["task_ids"].add(task_id)
-                if release_bucket == "hotfix" and release_id:
-                    entity_bucket["hotfix_release_ids"].add(release_id)
-                if release_bucket == "outside_release" and release_id:
-                    entity_bucket["outside_release_ids"].add(release_id)
-                if started_at and (
-                    entity_bucket["last_release_at"] is None or started_at > entity_bucket["last_release_at"]
-                ):
-                    entity_bucket["last_release_at"] = started_at
-
-                schema_name = row.get("schema_name")
-                table_name = row.get("table_name")
-                if schema_name and table_name:
-                    table_bucket = table_stats[(schema_name, table_name)]
-                    table_bucket["schema_name"] = schema_name
-                    table_bucket["table_name"] = table_name
-                    table_bucket["objects_count"] += 1
-                    if release_id:
-                        table_bucket["release_ids"].add(release_id)
-                    if task_id:
-                        table_bucket["task_ids"].add(task_id)
-                    if entity_name and entity_name != "Без сущности":
-                        table_bucket["entity_names"].add(entity_name)
-                    if started_at and (
-                        table_bucket["last_change_at"] is None or started_at > table_bucket["last_change_at"]
-                    ):
-                        table_bucket["last_change_at"] = started_at
-
-            top_entities = sorted(
-                [
-                    {
-                        "entity_name": bucket["entity_name"],
-                        "objects_count": bucket["objects_count"],
-                        "releases_count": len(bucket["release_ids"]),
-                        "tasks_count": len(bucket["task_ids"]),
-                        "hotfix_count": len(bucket["hotfix_release_ids"]),
-                        "outside_release_count": len(bucket["outside_release_ids"]),
-                        "last_release_at": bucket["last_release_at"],
-                    }
-                    for bucket in entity_stats.values()
-                ],
-                key=lambda row: (
-                    -(row["objects_count"] or 0),
-                    -(row["releases_count"] or 0),
-                    -(row["tasks_count"] or 0),
-                    row["entity_name"] or "",
+                    JOIN rel ON rel.release_id = task_fact.release_id
+                    GROUP BY engineer
+                    ORDER BY hours_total DESC NULLS LAST, tasks_count DESC
+                    LIMIT 14
+                    """
                 ),
-            )[:12]
+                params,
+            ).mappings().all()
 
-            top_tables = sorted(
-                [
-                    {
-                        "schema_name": bucket["schema_name"],
-                        "table_name": bucket["table_name"],
-                        "objects_count": bucket["objects_count"],
-                        "releases_count": len(bucket["release_ids"]),
-                        "tasks_count": len(bucket["task_ids"]),
-                        "last_change_at": bucket["last_change_at"],
-                        "entity_names": sorted(bucket["entity_names"]),
-                        "primary_entity_name": min(bucket["entity_names"]) if bucket["entity_names"] else None,
-                    }
-                    for bucket in table_stats.values()
-                ],
-                key=lambda row: (
-                    -(row["releases_count"] or 0),
-                    -(row["objects_count"] or 0),
-                    -(row["tasks_count"] or 0),
-                    f"{row['schema_name']}.{row['table_name']}",
+            top_creators = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        creator,
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(DISTINCT task_fact.release_id) AS releases_count,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours_total,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'hotfix' THEN task_fact.release_id END) AS hotfix_count,
+                        COUNT(DISTINCT CASE WHEN rel.release_bucket = 'outside_release' THEN task_fact.release_id END) AS outside_release_count
+                    FROM task_fact
+                    JOIN rel ON rel.release_id = task_fact.release_id
+                    GROUP BY creator
+                    ORDER BY tasks_count DESC, hours_total DESC NULLS LAST
+                    LIMIT 14
+                    """
                 ),
-            )[:16]
+                params,
+            ).mappings().all()
 
-            user_stats = defaultdict(
-                lambda: {
-                    "engineer": "Не указан",
-                    "task_ids": set(),
-                    "release_ids": set(),
-                    "creator_names": set(),
-                    "minutes_total": 0,
-                    "hotfix_release_ids": set(),
-                    "outside_release_ids": set(),
-                }
-            )
-            creator_stats = defaultdict(
-                lambda: {
-                    "creator": "Не указан",
-                    "task_ids": set(),
-                    "release_ids": set(),
-                    "minutes_total": 0,
-                    "hotfix_release_ids": set(),
-                    "outside_release_ids": set(),
-                }
-            )
+            top_initiators = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COALESCE(initiated_by, 'Не указан') AS initiated_by,
+                        COUNT(*) AS releases_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'hotfix') AS hotfix_count,
+                        COUNT(*) FILTER (WHERE release_bucket = 'outside_release') AS outside_release_count,
+                        COALESCE(SUM(objects_count), 0) AS objects_count,
+                        COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total
+                    FROM release_rollup
+                    GROUP BY COALESCE(initiated_by, 'Не указан')
+                    ORDER BY releases_count DESC, objects_count DESC, hours_total DESC
+                    LIMIT 10
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-            for row in task_detail_rows:
-                engineer = row.get("engineer") or "Не указан"
-                creator = row.get("creator") or "Не указан"
-                release_id = row.get("release_id")
-                task_id = row.get("task_id")
-                release_bucket = row.get("release_bucket")
-                minutes = float(row.get("minutes") or 0)
+            entity_timeline = conn.execute(
+                text(
+                    base
+                    + """
+                    ,
+                    top_entity_base AS (
+                        SELECT
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            COUNT(*) AS objects_count
+                        FROM ro
+                        GROUP BY COALESCE(entity_name, 'Без сущности')
+                        ORDER BY objects_count DESC
+                        LIMIT 6
+                    )
+                    SELECT
+                        teb.entity_name,
+                        to_char(date_trunc('month', ro.started_at), 'MM.YY') AS month_label,
+                        date_trunc('month', ro.started_at)::date::text AS month_start,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT ro.release_id) AS releases_count
+                    FROM ro
+                    JOIN top_entity_base teb
+                      ON teb.entity_name = COALESCE(ro.entity_name, 'Без сущности')
+                    GROUP BY teb.entity_name, date_trunc('month', ro.started_at)
+                    ORDER BY month_start, teb.entity_name
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-                user_bucket = user_stats[engineer]
-                user_bucket["engineer"] = engineer
-                if task_id:
-                    user_bucket["task_ids"].add(task_id)
-                if release_id:
-                    user_bucket["release_ids"].add(release_id)
-                user_bucket["creator_names"].add(creator)
-                user_bucket["minutes_total"] += minutes
-                if release_bucket == "hotfix" and release_id:
-                    user_bucket["hotfix_release_ids"].add(release_id)
-                if release_bucket == "outside_release" and release_id:
-                    user_bucket["outside_release_ids"].add(release_id)
+            recent_releases = conn.execute(
+                text(
+                    base
+                    + """
+                    ,
+                    release_entity_distinct AS (
+                        SELECT
+                            release_id,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name
+                        FROM ro
+                        GROUP BY release_id, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    release_entity_rank AS (
+                        SELECT
+                            release_id,
+                            entity_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY release_id
+                                ORDER BY entity_name
+                            ) AS rn
+                        FROM release_entity_distinct
+                    ),
+                    release_entities AS (
+                        SELECT
+                            release_id,
+                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
+                        FROM release_entity_rank
+                        WHERE rn <= 5
+                        GROUP BY release_id
+                    )
+                    SELECT
+                        rr.release_id,
+                        rr.release_type,
+                        rr.release_bucket,
+                        rr.initiated_by,
+                        rr.started_at,
+                        rr.status,
+                        rr.objects_count,
+                        rr.tasks_count,
+                        rr.creators_count,
+                        rr.engineers_count,
+                        re.entity_names,
+                        ROUND((rr.minutes_total / 60.0)::numeric, 1) AS hours_total,
+                        ROUND(rr.duration_minutes::numeric, 1) AS duration_minutes
+                    FROM release_rollup rr
+                    LEFT JOIN release_entities re
+                      ON re.release_id = rr.release_id
+                    ORDER BY rr.started_at DESC NULLS LAST
+                    LIMIT 8
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-                creator_bucket = creator_stats[creator]
-                creator_bucket["creator"] = creator
-                if task_id:
-                    creator_bucket["task_ids"].add(task_id)
-                if release_id:
-                    creator_bucket["release_ids"].add(release_id)
-                creator_bucket["minutes_total"] += minutes
-                if release_bucket == "hotfix" and release_id:
-                    creator_bucket["hotfix_release_ids"].add(release_id)
-                if release_bucket == "outside_release" and release_id:
-                    creator_bucket["outside_release_ids"].add(release_id)
+            exception_releases = conn.execute(
+                text(
+                    base
+                    + """
+                    ,
+                    release_entity_distinct AS (
+                        SELECT
+                            release_id,
+                            COALESCE(entity_name, 'Без сущности') AS entity_name
+                        FROM ro
+                        GROUP BY release_id, COALESCE(entity_name, 'Без сущности')
+                    ),
+                    release_entity_rank AS (
+                        SELECT
+                            release_id,
+                            entity_name,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY release_id
+                                ORDER BY entity_name
+                            ) AS rn
+                        FROM release_entity_distinct
+                    ),
+                    release_entities AS (
+                        SELECT
+                            release_id,
+                            ARRAY_AGG(entity_name ORDER BY entity_name) AS entity_names
+                        FROM release_entity_rank
+                        WHERE rn <= 5
+                        GROUP BY release_id
+                    )
+                    SELECT
+                        rr.release_id,
+                        rr.release_type,
+                        rr.release_bucket,
+                        rr.initiated_by,
+                        rr.started_at,
+                        rr.status,
+                        rr.objects_count,
+                        rr.tasks_count,
+                        rr.creators_count,
+                        rr.engineers_count,
+                        re.entity_names,
+                        ROUND((rr.minutes_total / 60.0)::numeric, 1) AS hours_total,
+                        ROUND(rr.duration_minutes::numeric, 1) AS duration_minutes
+                    FROM release_rollup rr
+                    LEFT JOIN release_entities re
+                      ON re.release_id = rr.release_id
+                    WHERE rr.release_bucket IN ('hotfix', 'outside_release')
+                    ORDER BY rr.started_at DESC NULLS LAST
+                    LIMIT 10
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-            top_users = sorted(
-                [
+            key_blocks_empty = not top_entities or not top_tables or not top_users or not recent_releases
+            if debug or key_blocks_empty:
+                debug_counts = conn.execute(
+                    text(
+                        base
+                        + """
+                        SELECT 'raw_rel' AS step, COUNT(*) AS cnt FROM raw_rel
+                        UNION ALL
+                        SELECT 'raw_ro' AS step, COUNT(*) AS cnt FROM raw_ro
+                        UNION ALL
+                        SELECT 'release_tasks' AS step, COUNT(*) AS cnt FROM release_tasks
+                        UNION ALL
+                        SELECT 'task_ids' AS step, COUNT(*) AS cnt FROM task_ids
+                        UNION ALL
+                        SELECT 'task_custom_base' AS step, COUNT(*) AS cnt FROM task_custom_base
+                        UNION ALL
+                        SELECT 'task_custom' AS step, COUNT(*) AS cnt FROM task_custom
+                        UNION ALL
+                        SELECT 'task_custom_norm' AS step, COUNT(*) AS cnt FROM task_custom_norm
+                        UNION ALL
+                        SELECT 'task_custom_norm_with_bucket' AS step, COUNT(*) AS cnt
+                        FROM task_custom_norm
+                        WHERE custom_bucket IS NOT NULL
+                        UNION ALL
+                        SELECT 'release_match_by_task' AS step, COUNT(*) AS cnt FROM release_match_by_task
+                        UNION ALL
+                        SELECT 'release_match_by_date' AS step, COUNT(*) AS cnt FROM release_match_by_date
+                        UNION ALL
+                        SELECT 'rel' AS step, COUNT(*) AS cnt FROM rel
+                        UNION ALL
+                        SELECT 'ro' AS step, COUNT(*) AS cnt FROM ro
+                        UNION ALL
+                        SELECT 'task_fact' AS step, COUNT(*) AS cnt FROM task_fact
+                        UNION ALL
+                        SELECT 'release_rollup' AS step, COUNT(*) AS cnt FROM release_rollup
+                        ORDER BY step
+                        """
+                    ),
+                    params,
+                ).mappings().all()
+                print(
+                    "ℹ️ /api/admin/reports/releases debug:",
                     {
-                        "engineer": bucket["engineer"],
-                        "tasks_count": len(bucket["task_ids"]),
-                        "releases_count": len(bucket["release_ids"]),
-                        "creators_count": len(bucket["creator_names"]),
-                        "hours_total": round(bucket["minutes_total"] / 60.0, 1),
-                        "hotfix_count": len(bucket["hotfix_release_ids"]),
-                        "outside_release_count": len(bucket["outside_release_ids"]),
-                    }
-                    for bucket in user_stats.values()
-                ],
-                key=lambda row: (-(row["hours_total"] or 0), -(row["tasks_count"] or 0), row["engineer"] or ""),
-            )[:14]
-
-            top_creators = sorted(
-                [
-                    {
-                        "creator": bucket["creator"],
-                        "tasks_count": len(bucket["task_ids"]),
-                        "releases_count": len(bucket["release_ids"]),
-                        "hours_total": round(bucket["minutes_total"] / 60.0, 1),
-                        "hotfix_count": len(bucket["hotfix_release_ids"]),
-                        "outside_release_count": len(bucket["outside_release_ids"]),
-                    }
-                    for bucket in creator_stats.values()
-                ],
-                key=lambda row: (-(row["tasks_count"] or 0), -(row["hours_total"] or 0), row["creator"] or ""),
-            )[:14]
-
-            top_initiators_map = defaultdict(
-                lambda: {
-                    "initiated_by": "Не указан",
-                    "releases_count": 0,
-                    "hotfix_count": 0,
-                    "outside_release_count": 0,
-                    "objects_count": 0,
-                    "hours_total": 0.0,
-                }
-            )
-            release_rows_enriched = []
-            for row in release_detail_rows:
-                release_row = dict(row)
-                release_row["entity_names"] = sorted(entity_names_by_release.get(row.get("release_id"), set()))
-                release_row["hours_total"] = round(float(row.get("minutes_total") or 0) / 60.0, 1)
-                release_row["duration_minutes"] = round(float(row.get("duration_minutes") or 0), 1)
-                release_rows_enriched.append(release_row)
-
-                initiator = row.get("initiated_by") or "Не указан"
-                initiator_bucket = top_initiators_map[initiator]
-                initiator_bucket["initiated_by"] = initiator
-                initiator_bucket["releases_count"] += 1
-                initiator_bucket["objects_count"] += int(row.get("objects_count") or 0)
-                initiator_bucket["hours_total"] += float(row.get("minutes_total") or 0) / 60.0
-                if row.get("release_bucket") == "hotfix":
-                    initiator_bucket["hotfix_count"] += 1
-                if row.get("release_bucket") == "outside_release":
-                    initiator_bucket["outside_release_count"] += 1
-
-            top_initiators = sorted(
-                [
-                    {
-                        **bucket,
-                        "hours_total": round(bucket["hours_total"], 1),
-                    }
-                    for bucket in top_initiators_map.values()
-                ],
-                key=lambda row: (-(row["releases_count"] or 0), -(row["objects_count"] or 0), -(row["hours_total"] or 0)),
-            )[:10]
-
-            top_entity_names = [row["entity_name"] for row in top_entities[:6]]
-            entity_timeline_map = defaultdict(
-                lambda: {
-                    "entity_name": "Без сущности",
-                    "month_label": "",
-                    "month_start": "",
-                    "objects_count": 0,
-                    "release_ids": set(),
-                }
-            )
-            for row in ro_detail_rows:
-                entity_name = row.get("entity_name") or "Без сущности"
-                started_at = row.get("started_at")
-                release_id = row.get("release_id")
-                if entity_name not in top_entity_names or not started_at:
-                    continue
-                month_start = started_at.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-                key = (entity_name, month_start)
-                bucket = entity_timeline_map[key]
-                bucket["entity_name"] = entity_name
-                bucket["month_label"] = month_start.strftime("%m.%y")
-                bucket["month_start"] = month_start.date().isoformat()
-                bucket["objects_count"] += 1
-                if release_id:
-                    bucket["release_ids"].add(release_id)
-
-            entity_timeline = sorted(
-                [
-                    {
-                        "entity_name": bucket["entity_name"],
-                        "month_label": bucket["month_label"],
-                        "month_start": bucket["month_start"],
-                        "objects_count": bucket["objects_count"],
-                        "releases_count": len(bucket["release_ids"]),
-                    }
-                    for bucket in entity_timeline_map.values()
-                ],
-                key=lambda row: (row["month_start"], row["entity_name"]),
-            )
-
-            recent_releases = release_rows_enriched[:8]
-            exception_releases = [
-                row for row in release_rows_enriched if row.get("release_bucket") in ("hotfix", "outside_release")
-            ][:10]
+                        "days": days,
+                        "top_entities": len(top_entities),
+                        "top_tables": len(top_tables),
+                        "top_users": len(top_users),
+                        "top_creators": len(top_creators),
+                        "top_initiators": len(top_initiators),
+                        "entity_timeline": len(entity_timeline),
+                        "recent_releases": len(recent_releases),
+                        "exception_releases": len(exception_releases),
+                        "counts": [dict(row) for row in debug_counts],
+                        "top_entity_sample": dict(top_entities[0]) if top_entities else None,
+                        "top_table_sample": dict(top_tables[0]) if top_tables else None,
+                        "top_user_sample": dict(top_users[0]) if top_users else None,
+                        "recent_release_sample": dict(recent_releases[0]) if recent_releases else None,
+                    },
+                )
 
         summary_row = summary or {}
         cadence_rows = [dict(row) for row in cadence]

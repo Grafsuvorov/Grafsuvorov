@@ -1335,17 +1335,61 @@ def get_admin_release_reports(
                 text(
                     base
                     + """
+                    ,
+                    entity_object_rollup AS (
+                        SELECT
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            COUNT(*) AS objects_count,
+                            MAX(started_at) AS last_release_at
+                        FROM ro
+                        GROUP BY COALESCE(entity_name, 'Без сущности')
+                    ),
+                    entity_release_distinct AS (
+                        SELECT
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            release_id,
+                            release_bucket
+                        FROM ro
+                        GROUP BY COALESCE(entity_name, 'Без сущности'), release_id, release_bucket
+                    ),
+                    entity_release_rollup AS (
+                        SELECT
+                            entity_name,
+                            COUNT(*) AS releases_count,
+                            SUM(CASE WHEN release_bucket = 'hotfix' THEN 1 ELSE 0 END) AS hotfix_count,
+                            SUM(CASE WHEN release_bucket = 'outside_release' THEN 1 ELSE 0 END) AS outside_release_count
+                        FROM entity_release_distinct
+                        GROUP BY entity_name
+                    ),
+                    entity_task_distinct AS (
+                        SELECT
+                            COALESCE(entity_name, 'Без сущности') AS entity_name,
+                            task_id
+                        FROM ro
+                        WHERE task_id IS NOT NULL AND task_id <> ''
+                        GROUP BY COALESCE(entity_name, 'Без сущности'), task_id
+                    ),
+                    entity_task_rollup AS (
+                        SELECT
+                            entity_name,
+                            COUNT(*) AS tasks_count
+                        FROM entity_task_distinct
+                        GROUP BY entity_name
+                    )
                     SELECT
-                        COALESCE(entity_name, 'Без сущности') AS entity_name,
-                        COUNT(*) AS objects_count,
-                        COUNT(DISTINCT release_id) AS releases_count,
-                        COUNT(DISTINCT task_id) AS tasks_count,
-                        COUNT(DISTINCT CASE WHEN release_bucket = 'hotfix' THEN release_id END) AS hotfix_count,
-                        COUNT(DISTINCT CASE WHEN release_bucket = 'outside_release' THEN release_id END) AS outside_release_count,
-                        MAX(started_at) AS last_release_at
-                    FROM ro
-                    GROUP BY COALESCE(entity_name, 'Без сущности')
-                    ORDER BY objects_count DESC, releases_count DESC, tasks_count DESC
+                        eor.entity_name,
+                        eor.objects_count,
+                        COALESCE(err.releases_count, 0) AS releases_count,
+                        COALESCE(etr.tasks_count, 0) AS tasks_count,
+                        COALESCE(err.hotfix_count, 0) AS hotfix_count,
+                        COALESCE(err.outside_release_count, 0) AS outside_release_count,
+                        eor.last_release_at
+                    FROM entity_object_rollup eor
+                    LEFT JOIN entity_release_rollup err
+                      ON err.entity_name = eor.entity_name
+                    LEFT JOIN entity_task_rollup etr
+                      ON etr.entity_name = eor.entity_name
+                    ORDER BY eor.objects_count DESC, COALESCE(err.releases_count, 0) DESC, COALESCE(etr.tasks_count, 0) DESC
                     LIMIT 12
                     """
                 ),

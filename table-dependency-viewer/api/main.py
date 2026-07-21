@@ -994,6 +994,14 @@ def get_admin_release_reports(
     try:
         date_clause, params = _resolve_date_window(None, None, days)
         with engine.connect() as conn:
+            def _safe_query_all(sql_text: str, label: str):
+                try:
+                    return conn.execute(text(sql_text), params).mappings().all()
+                except Exception as inner_error:
+                    print(f"❌ /api/admin/reports/releases {label} error:", inner_error)
+                    print(traceback.format_exc())
+                    return []
+
             base = f"""
                 WITH raw_rel AS (
                     SELECT
@@ -1331,10 +1339,9 @@ def get_admin_release_reports(
                 params,
             ).mappings().all()
 
-            top_entities = conn.execute(
-                text(
-                    base
-                    + """
+            top_entities = _safe_query_all(
+                base
+                + """
                     ,
                     entity_object_rollup AS (
                         SELECT
@@ -1391,15 +1398,13 @@ def get_admin_release_reports(
                       ON etr.entity_name = eor.entity_name
                     ORDER BY eor.objects_count DESC, COALESCE(err.releases_count, 0) DESC, COALESCE(etr.tasks_count, 0) DESC
                     LIMIT 12
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "top_entities",
+            )
 
-            top_tables = conn.execute(
-                text(
-                    base
-                    + """
+            top_tables = _safe_query_all(
+                base
+                + """
                     ,
                     table_entity_rank AS (
                         SELECT
@@ -1478,15 +1483,13 @@ def get_admin_release_reports(
                      AND ter.rn = 1
                     ORDER BY tr.releases_count DESC, tr.objects_count DESC, tr.tasks_count DESC
                     LIMIT 16
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "top_tables",
+            )
 
-            top_users = conn.execute(
-                text(
-                    base
-                    + """
+            top_users = _safe_query_all(
+                base
+                + """
                     SELECT
                         engineer,
                         COUNT(DISTINCT task_id) AS tasks_count,
@@ -1500,15 +1503,13 @@ def get_admin_release_reports(
                     GROUP BY engineer
                     ORDER BY hours_total DESC NULLS LAST, tasks_count DESC
                     LIMIT 14
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "top_users",
+            )
 
-            top_creators = conn.execute(
-                text(
-                    base
-                    + """
+            top_creators = _safe_query_all(
+                base
+                + """
                     SELECT
                         creator,
                         COUNT(DISTINCT task_id) AS tasks_count,
@@ -1521,15 +1522,13 @@ def get_admin_release_reports(
                     GROUP BY creator
                     ORDER BY tasks_count DESC, hours_total DESC NULLS LAST
                     LIMIT 14
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "top_creators",
+            )
 
-            top_initiators = conn.execute(
-                text(
-                    base
-                    + """
+            top_initiators = _safe_query_all(
+                base
+                + """
                     SELECT
                         COALESCE(initiated_by, 'Не указан') AS initiated_by,
                         COUNT(*) AS releases_count,
@@ -1541,15 +1540,13 @@ def get_admin_release_reports(
                     GROUP BY COALESCE(initiated_by, 'Не указан')
                     ORDER BY releases_count DESC, objects_count DESC, hours_total DESC
                     LIMIT 10
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "top_initiators",
+            )
 
-            entity_timeline = conn.execute(
-                text(
-                    base
-                    + """
+            entity_timeline = _safe_query_all(
+                base
+                + """
                     ,
                     top_entity_base AS (
                         SELECT
@@ -1571,15 +1568,13 @@ def get_admin_release_reports(
                       ON teb.entity_name = COALESCE(ro.entity_name, 'Без сущности')
                     GROUP BY teb.entity_name, date_trunc('month', ro.started_at)
                     ORDER BY month_start, teb.entity_name
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "entity_timeline",
+            )
 
-            recent_releases = conn.execute(
-                text(
-                    base
-                    + """
+            recent_releases = _safe_query_all(
+                base
+                + """
                     ,
                     release_entity_distinct AS (
                         SELECT
@@ -1625,15 +1620,13 @@ def get_admin_release_reports(
                       ON re.release_id = rr.release_id
                     ORDER BY rr.started_at DESC NULLS LAST
                     LIMIT 8
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "recent_releases",
+            )
 
-            exception_releases = conn.execute(
-                text(
-                    base
-                    + """
+            exception_releases = _safe_query_all(
+                base
+                + """
                     ,
                     release_entity_distinct AS (
                         SELECT
@@ -1680,10 +1673,9 @@ def get_admin_release_reports(
                     WHERE rr.release_bucket IN ('hotfix', 'outside_release')
                     ORDER BY rr.started_at DESC NULLS LAST
                     LIMIT 10
-                    """
-                ),
-                params,
-            ).mappings().all()
+                    """,
+                "exception_releases",
+            )
 
         summary_row = summary or {}
         cadence_rows = [dict(row) for row in cadence]

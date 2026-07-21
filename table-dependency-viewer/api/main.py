@@ -1077,7 +1077,7 @@ def get_admin_release_reports(
                         card_type,
                         outside_type,
                         release_slot_number,
-                        LEFT(COALESCE(actual_release_at_text, rollout_at_text), 16) AS effective_release_at_key,
+                        LEFT(COALESCE(actual_release_at_text, rollout_at_text), 10) AS effective_release_at_key,
                         CASE
                             WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
                             WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
@@ -1113,7 +1113,7 @@ def get_admin_release_reports(
                     FROM raw_rel rr
                     JOIN task_custom_norm tc
                       ON tc.effective_release_at_key IS NOT NULL
-                     AND tc.effective_release_at_key = to_char(rr.started_at, 'YYYY-MM-DD HH24:MI')
+                     AND tc.effective_release_at_key = to_char(rr.started_at, 'YYYY-MM-DD')
                     GROUP BY rr.release_id
                 ),
                 rel AS (

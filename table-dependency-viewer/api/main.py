@@ -1368,6 +1368,162 @@ def get_admin_release_reports(
                 params,
             ).mappings().all()
 
+            exception_custom_rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        issue_id,
+                        field_name,
+                        NULLIF(BTRIM(field_value), '') AS field_value
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name IN (
+                        'Тип карточки',
+                        'Тип внерелиза',
+                        'Фактическая дата релиза',
+                        'Дата выкатки'
+                    )
+                    """
+                )
+            ).mappings().all()
+
+            exception_cards_by_issue = {}
+            window_end = datetime.now().date()
+            window_start = window_end - timedelta(days=days)
+            for row in exception_custom_rows:
+                card = exception_cards_by_issue.setdefault(
+                    row.get("issue_id"),
+                    {
+                        "issue_id": row.get("issue_id"),
+                        "card_type": None,
+                        "outside_type": None,
+                        "actual_release_at_text": None,
+                        "rollout_at_text": None,
+                    },
+                )
+                field_name = row.get("field_name")
+                if field_name == "Тип карточки":
+                    card["card_type"] = row.get("field_value")
+                elif field_name == "Тип внерелиза":
+                    card["outside_type"] = row.get("field_value")
+                elif field_name == "Фактическая дата релиза":
+                    card["actual_release_at_text"] = row.get("field_value")
+                elif field_name == "Дата выкатки":
+                    card["rollout_at_text"] = row.get("field_value")
+
+            exception_issue_ids = []
+            exception_card_rows = []
+            for card in exception_cards_by_issue.values():
+                card_type = (card.get("card_type") or "").strip().lower()
+                if card_type != "внерелиз":
+                    continue
+                effective_text = (card.get("rollout_at_text") or card.get("actual_release_at_text") or "")[:10]
+                try:
+                    effective_date = date.fromisoformat(effective_text)
+                except Exception:
+                    continue
+                if effective_date < window_start or effective_date > window_end:
+                    continue
+                outside_type = (card.get("outside_type") or "").strip()
+                outside_type_norm = outside_type.lower()
+                release_bucket = (
+                    "hotfix"
+                    if ("хотфикс" in outside_type_norm or "hotfix" in outside_type_norm)
+                    else "outside_release"
+                )
+                exception_issue_ids.append(card["issue_id"])
+                exception_card_rows.append(
+                    {
+                        "issue_id": card["issue_id"],
+                        "release_bucket": release_bucket,
+                        "release_type": outside_type or "Внерелиз",
+                        "started_at": datetime.combine(effective_date, datetime.min.time()),
+                    }
+                )
+
+            exception_snap_map = {}
+            exception_work_map = {}
+            exception_object_map = {}
+            if exception_issue_ids:
+                exception_snap_rows = conn.execute(
+                    text(
+                        f"""
+                        SELECT issue_id, created_by, assignee, current_state
+                        FROM {TABLE_YT_ISSUE_SNAPSHOT}
+                        WHERE issue_id = ANY(:ids)
+                        """
+                    ),
+                    {"ids": exception_issue_ids},
+                ).mappings().all()
+                exception_snap_map = {row["issue_id"]: dict(row) for row in exception_snap_rows}
+
+                exception_work_rows = conn.execute(
+                    text(
+                        f"""
+                        SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                        FROM {TABLE_YT_ISSUE_WORKLOG}
+                        WHERE issue_id = ANY(:ids)
+                        GROUP BY issue_id
+                        """
+                    ),
+                    {"ids": exception_issue_ids},
+                ).mappings().all()
+                exception_work_map = {row["issue_id"]: float(row.get("minutes") or 0) for row in exception_work_rows}
+
+                exception_object_rows = conn.execute(
+                    text(
+                        f"""
+                        SELECT
+                            ro.task_id,
+                            ro.release_id,
+                            COALESCE(ro.entity_name, 'Без сущности') AS entity_name
+                        FROM {TABLE_RELEASE_OBJECTS} ro
+                        JOIN {TABLE_RELEASE_LOG} rl
+                          ON rl.release_id = ro.release_id
+                        WHERE ro.task_id = ANY(:ids)
+                          AND rl.started_at >= (now() - (:days || ' days')::interval)
+                        """
+                    ),
+                    {"ids": exception_issue_ids, "days": days},
+                ).mappings().all()
+                for row in exception_object_rows:
+                    bucket = exception_object_map.setdefault(
+                        row["task_id"],
+                        {"objects_count": 0, "entity_names": set(), "release_ids": set()},
+                    )
+                    bucket["objects_count"] += 1
+                    if row.get("entity_name"):
+                        bucket["entity_names"].add(row["entity_name"])
+                    if row.get("release_id"):
+                        bucket["release_ids"].add(row["release_id"])
+
+            exception_summary_rows = []
+            for row in exception_card_rows:
+                issue_id = row["issue_id"]
+                snap_row = exception_snap_map.get(issue_id, {})
+                object_row = exception_object_map.get(issue_id, {})
+                creator = snap_row.get("created_by") or "Не указан"
+                engineer = snap_row.get("assignee") or creator
+                linked_release_ids = sorted(object_row.get("release_ids", set()))
+                exception_summary_rows.append(
+                    {
+                        "release_id": linked_release_ids[0] if linked_release_ids else issue_id,
+                        "task_id": issue_id,
+                        "release_type": row["release_type"],
+                        "release_bucket": row["release_bucket"],
+                        "initiated_by": creator,
+                        "started_at": row["started_at"],
+                        "status": snap_row.get("current_state") or "Не указан",
+                        "objects_count": int(object_row.get("objects_count") or 0),
+                        "tasks_count": 1,
+                        "creators_count": 1,
+                        "engineers_count": 1 if engineer else 0,
+                        "minutes_total": float(exception_work_map.get(issue_id, 0)),
+                        "hours_total": round(float(exception_work_map.get(issue_id, 0)) / 60.0, 1),
+                        "duration_minutes": 0.0,
+                        "entity_names": sorted(object_row.get("entity_names", set())),
+                    }
+                )
+
             entity_stats = defaultdict(
                 lambda: {
                     "entity_name": "Без сущности",
@@ -1650,9 +1806,48 @@ def get_admin_release_reports(
             )
 
             recent_releases = release_rows_enriched[:8]
-            exception_releases = [
-                row for row in release_rows_enriched if row.get("release_bucket") in ("hotfix", "outside_release")
-            ][:10]
+            exception_releases = sorted(
+                exception_summary_rows,
+                key=lambda row: row.get("started_at") or datetime.min,
+                reverse=True,
+            )[:10]
+
+            regular_release_rows = [row for row in release_rows_enriched if row.get("release_bucket") == "release"]
+            regular_release_count = len(regular_release_rows)
+            regular_objects_count = sum(int(row.get("objects_count") or 0) for row in regular_release_rows)
+            regular_tasks_count = sum(int(row.get("tasks_count") or 0) for row in regular_release_rows)
+            regular_hours_total = sum(float(row.get("minutes_total") or 0) for row in regular_release_rows) / 60.0
+
+            hotfix_rows = [row for row in exception_summary_rows if row.get("release_bucket") == "hotfix"]
+            outside_rows = [row for row in exception_summary_rows if row.get("release_bucket") == "outside_release"]
+            exception_objects_total = sum(int(row.get("objects_count") or 0) for row in exception_summary_rows)
+            exception_tasks_total = len(exception_summary_rows)
+            exception_hours_total = sum(float(row.get("hours_total") or 0) for row in exception_summary_rows)
+
+            type_rows = [
+                {
+                    "release_bucket": "release",
+                    "releases_count": regular_release_count,
+                    "objects_count": regular_objects_count,
+                    "tasks_count": regular_tasks_count,
+                    "hours_total": round(regular_hours_total, 1),
+                },
+                {
+                    "release_bucket": "hotfix",
+                    "releases_count": len(hotfix_rows),
+                    "objects_count": sum(int(row.get("objects_count") or 0) for row in hotfix_rows),
+                    "tasks_count": len(hotfix_rows),
+                    "hours_total": round(sum(float(row.get("hours_total") or 0) for row in hotfix_rows), 1),
+                },
+                {
+                    "release_bucket": "outside_release",
+                    "releases_count": len(outside_rows),
+                    "objects_count": sum(int(row.get("objects_count") or 0) for row in outside_rows),
+                    "tasks_count": len(outside_rows),
+                    "hours_total": round(sum(float(row.get("hours_total") or 0) for row in outside_rows), 1),
+                },
+            ]
+            type_rows = [row for row in type_rows if row["releases_count"] > 0 or row["objects_count"] > 0 or row["tasks_count"] > 0]
 
             key_blocks_empty = not top_entities or not top_tables or not top_users or not recent_releases
             if debug or key_blocks_empty:
@@ -1716,7 +1911,8 @@ def get_admin_release_reports(
 
         summary_row = summary or {}
         cadence_rows = [dict(row) for row in cadence]
-        type_rows = [dict(row) for row in type_breakdown]
+        if not locals().get("type_rows"):
+            type_rows = [dict(row) for row in type_breakdown]
         heatmap_rows = [dict(row) for row in weekday_heatmap]
         entities_rows = [dict(row) for row in top_entities]
         tables_rows = [dict(row) for row in top_tables]
@@ -1731,15 +1927,15 @@ def get_admin_release_reports(
         return {
             "days": days,
             "summary": {
-                "releases_count": int(summary_row.get("releases_count") or 0),
-                "release_count": int(summary_row.get("release_count") or 0),
-                "hotfix_count": int(summary_row.get("hotfix_count") or 0),
-                "outside_release_count": int(summary_row.get("outside_release_count") or 0),
-                "objects_count": int(summary_row.get("objects_count") or 0),
+                "releases_count": regular_release_count + len(hotfix_rows) + len(outside_rows),
+                "release_count": regular_release_count,
+                "hotfix_count": len(hotfix_rows),
+                "outside_release_count": len(outside_rows),
+                "objects_count": regular_objects_count + exception_objects_total,
                 "click_objects_count": int(summary_row.get("click_objects_count") or 0),
                 "gp_objects_count": int(summary_row.get("gp_objects_count") or 0),
-                "tasks_count": int(summary_row.get("tasks_count") or 0),
-                "hours_total": float(summary_row.get("hours_total") or 0),
+                "tasks_count": regular_tasks_count + exception_tasks_total,
+                "hours_total": round(regular_hours_total + exception_hours_total, 1),
                 "initiators_count": int(summary_row.get("initiators_count") or 0),
                 "release_days_count": int(summary_row.get("release_days_count") or 0),
                 "avg_objects_per_release": float(summary_row.get("avg_objects_per_release") or 0),

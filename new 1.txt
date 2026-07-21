@@ -1,16 +1,235 @@
-Да, этот блок считается так.
+Да. Ниже целиком SQL для блока Срез по типам поставок в том виде, как он сейчас считается по backend-логике.
 
-  Во фронте карточка берёт поля:
+  Здесь окно анализа за последние 180 дней. Если нужно, замените 180 на своё число.
 
-  - row.releases_count
-  - row.objects_count
-  - row.tasks_count
-  - row.hours_total
-
-  Это видно в src/components/AdminEngineeringPage.jsx:502.
-
-  Сам SQL для Среза по типам поставок такой, в api/main.py:1280:
-
+  WITH raw_rel AS (
+      SELECT
+          r.release_id,
+          r.release_type,
+          r.initiated_by,
+          r.started_at,
+          r.finished_at,
+          r.status,
+          r.total_objects,
+          r.ready_to_release,
+          CASE
+              WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%hotfix%' THEN 'hotfix'
+              WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%внерел%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%vnerelease%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%vne release%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out_of_release%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out of release%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%nonrelease%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%non-release%'
+              THEN 'outside_release'
+              ELSE 'release'
+          END AS fallback_release_bucket
+      FROM tech_etl.release_log r
+      WHERE r.started_at >= (now() - ('180 days')::interval)
+  ),
+  raw_ro AS (
+      SELECT
+          ro.*
+      FROM tech_etl.release_objects ro
+      JOIN raw_rel
+        ON raw_rel.release_id = ro.release_id
+  ),
+  release_tasks AS (
+      SELECT DISTINCT release_id, task_id
+      FROM raw_ro
+      WHERE task_id IS NOT NULL
+        AND task_id <> ''
+  ),
+  task_ids AS (
+      SELECT DISTINCT task_id
+      FROM release_tasks
+  ),
+  task_custom_base AS (
+      SELECT
+          issue_id,
+          field_name,
+          NULLIF(BTRIM(field_value), '') AS field_value
+      FROM tech_etl.yt_issue_custom_field
+      WHERE field_name IN (
+          'Тип карточки',
+          'Тип внерелиза',
+          'Фактическая дата релиза',
+          'Дата выкатки',
+          'Номер релиза КХД'
+      )
+  ),
+  task_custom AS (
+      SELECT
+          issue_id,
+          MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
+          MAX(CASE WHEN field_name = 'Тип внерелиза' THEN field_value END) AS outside_type,
+          MAX(CASE WHEN field_name = 'Номер релиза КХД' THEN field_value END) AS release_slot_number,
+          MAX(CASE WHEN field_name = 'Фактическая дата релиза' THEN field_value END) AS actual_release_at_text,
+          MAX(CASE WHEN field_name = 'Дата выкатки' THEN field_value END) AS rollout_at_text
+      FROM task_custom_base
+      GROUP BY issue_id
+  ),
+  task_custom_norm AS (
+      SELECT
+          issue_id,
+          card_type,
+          outside_type,
+          release_slot_number,
+          LEFT(COALESCE(actual_release_at_text, rollout_at_text), 10) AS effective_release_at_key,
+          CASE
+              WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
+              WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
+               AND (
+                   lower(COALESCE(outside_type, '')) LIKE '%хотфикс%'
+                   OR lower(COALESCE(outside_type, '')) LIKE '%hotfix%'
+               )
+              THEN 'hotfix'
+              WHEN lower(COALESCE(card_type, '')) = 'внерелиз' THEN 'outside_release'
+              ELSE NULL
+          END AS custom_bucket
+      FROM task_custom
+      WHERE lower(COALESCE(card_type, '')) IN ('release slot', 'внерелиз')
+  ),
+  release_match_by_date AS (
+      SELECT
+          rr.release_id,
+          MAX(tc.release_slot_number) AS release_slot_number,
+          COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
+          COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
+          COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
+      FROM raw_rel rr
+      JOIN task_custom_norm tc
+        ON tc.effective_release_at_key IS NOT NULL
+       AND tc.effective_release_at_key = to_char(rr.started_at, 'YYYY-MM-DD')
+      GROUP BY rr.release_id
+  ),
+  rel AS (
+      SELECT
+          rr.release_id,
+          COALESCE(
+              NULLIF(rmd.release_slot_number, ''),
+              rr.release_type
+          ) AS release_type,
+          rr.initiated_by,
+          rr.started_at,
+          rr.finished_at,
+          rr.status,
+          rr.total_objects,
+          rr.ready_to_release,
+          CASE
+              WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
+              WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
+              WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
+              ELSE rr.fallback_release_bucket
+          END AS release_bucket
+      FROM raw_rel rr
+      LEFT JOIN release_match_by_date rmd
+        ON rmd.release_id = rr.release_id
+  ),
+  ro AS (
+      SELECT
+          raw_ro.*,
+          rel.started_at,
+          rel.release_type,
+          rel.release_bucket,
+          rel.initiated_by,
+          rel.status
+      FROM raw_ro
+      JOIN rel
+        ON rel.release_id = raw_ro.release_id
+  ),
+  snap AS (
+      SELECT s.*
+      FROM tech_etl.yt_issue_snapshot s
+      JOIN task_ids t
+        ON t.task_id = s.issue_id
+  ),
+  exec AS (
+      SELECT DISTINCT ON (issue_id)
+          issue_id,
+          author AS executor,
+          ts
+      FROM tech_etl.yt_issue_timeline
+      WHERE event_type = 'State change'
+        AND value_to IN ('Ожидание релиза', 'В работе')
+      ORDER BY issue_id, ts DESC NULLS LAST
+  ),
+  work AS (
+      SELECT
+          issue_id,
+          COALESCE(SUM(minutes), 0) AS minutes
+      FROM tech_etl.yt_issue_worklog
+      GROUP BY issue_id
+  ),
+  task_fact AS (
+      SELECT
+          rt.release_id,
+          rt.task_id,
+          COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+          COALESCE(snap.created_by, 'Не указан') AS creator,
+          COALESCE(work.minutes, 0) AS minutes
+      FROM release_tasks rt
+      LEFT JOIN snap
+        ON snap.issue_id = rt.task_id
+      LEFT JOIN exec
+        ON exec.issue_id = rt.task_id
+      LEFT JOIN work
+        ON work.issue_id = rt.task_id
+  ),
+  task_rollup AS (
+      SELECT
+          release_id,
+          COUNT(DISTINCT task_id) AS tasks_count,
+          COUNT(DISTINCT engineer) AS engineers_count,
+          COUNT(DISTINCT creator) AS creators_count,
+          COALESCE(SUM(minutes), 0) AS minutes_total
+      FROM task_fact
+      GROUP BY release_id
+  ),
+  object_rollup AS (
+      SELECT
+          release_id,
+          COUNT(*) AS objects_count,
+          COUNT(DISTINCT entity_name) FILTER (
+              WHERE entity_name IS NOT NULL
+                AND entity_name <> ''
+          ) AS entities_count,
+          COUNT(*) FILTER (
+              WHERE lower(COALESCE(target_system, '')) LIKE '%click%'
+          ) AS click_objects_count,
+          COUNT(*) FILTER (
+              WHERE lower(COALESCE(target_system, '')) LIKE '%greenplum%'
+                 OR lower(COALESCE(target_system, '')) LIKE '%gp%'
+          ) AS gp_objects_count
+      FROM ro
+      GROUP BY release_id
+  ),
+  release_rollup AS (
+      SELECT
+          rel.release_id,
+          rel.release_type,
+          rel.release_bucket,
+          rel.initiated_by,
+          rel.started_at,
+          rel.finished_at,
+          rel.status,
+          rel.total_objects,
+          rel.ready_to_release,
+          COALESCE(obj.objects_count, 0) AS objects_count,
+          COALESCE(obj.entities_count, 0) AS entities_count,
+          COALESCE(obj.click_objects_count, 0) AS click_objects_count,
+          COALESCE(obj.gp_objects_count, 0) AS gp_objects_count,
+          COALESCE(task.tasks_count, 0) AS tasks_count,
+          COALESCE(task.engineers_count, 0) AS engineers_count,
+          COALESCE(task.creators_count, 0) AS creators_count,
+          COALESCE(task.minutes_total, 0) AS minutes_total,
+          EXTRACT(EPOCH FROM (COALESCE(rel.finished_at, now()) - rel.started_at)) / 60.0 AS duration_minutes
+      FROM rel
+      LEFT JOIN object_rollup obj
+        ON obj.release_id = rel.release_id
+      LEFT JOIN task_rollup task
+        ON task.release_id = rel.release_id
+  )
   SELECT
       release_bucket,
       COUNT(*) AS releases_count,
@@ -19,44 +238,175 @@
       COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total
   FROM release_rollup
   GROUP BY release_bucket
-  ORDER BY releases_count DESC, objects_count DESC
+  ORDER BY releases_count DESC, objects_count DESC;
 
-  Что это значит по смыслу:
+  Если хотите посмотреть, из чего именно получились ваши 925 / 224 / 42, выполните ещё этот запрос по релизам построчно:
 
-  - Релизы = 925
-    это количество записей в release_rollup с release_bucket = 'release'
-  - Хотфиксы = 224 объекта
-    если вы про число 224 на карточке, то это objects_count
-    то есть сумма количества строк/объектов из release_objects по всем релизам этого типа
-  - Задачи = 42
-    это не глобально уникальные задачи по всему типу
-    это SUM(tasks_count) из release_rollup
-
-  А tasks_count внутри одного релиза считается так, в api/main.py:1193:
-
+  WITH raw_rel AS (
+      SELECT
+          r.release_id,
+          r.release_type,
+          r.initiated_by,
+          r.started_at,
+          r.finished_at,
+          r.status,
+          r.total_objects,
+          r.ready_to_release,
+          CASE
+              WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%hotfix%' THEN 'hotfix'
+              WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%внерел%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%vnerelease%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%vne release%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out_of_release%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out of release%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%nonrelease%'
+                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%non-release%'
+              THEN 'outside_release'
+              ELSE 'release'
+          END AS fallback_release_bucket
+      FROM tech_etl.release_log r
+      WHERE r.started_at >= (now() - ('180 days')::interval)
+  ),
+  raw_ro AS (
+      SELECT ro.*
+      FROM tech_etl.release_objects ro
+      JOIN raw_rel
+        ON raw_rel.release_id = ro.release_id
+  ),
+  release_tasks AS (
+      SELECT DISTINCT release_id, task_id
+      FROM raw_ro
+      WHERE task_id IS NOT NULL
+        AND task_id <> ''
+  ),
+  task_ids AS (
+      SELECT DISTINCT task_id
+      FROM release_tasks
+  ),
+  task_custom_base AS (
+      SELECT
+          issue_id,
+          field_name,
+          NULLIF(BTRIM(field_value), '') AS field_value
+      FROM tech_etl.yt_issue_custom_field
+      WHERE field_name IN (
+          'Тип карточки',
+          'Тип внерелиза',
+          'Фактическая дата релиза',
+          'Дата выкатки',
+          'Номер релиза КХД'
+      )
+  ),
+  task_custom AS (
+      SELECT
+          issue_id,
+          MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
+          MAX(CASE WHEN field_name = 'Тип внерелиза' THEN field_value END) AS outside_type,
+          MAX(CASE WHEN field_name = 'Номер релиза КХД' THEN field_value END) AS release_slot_number,
+          MAX(CASE WHEN field_name = 'Фактическая дата релиза' THEN field_value END) AS actual_release_at_text,
+          MAX(CASE WHEN field_name = 'Дата выкатки' THEN field_value END) AS rollout_at_text
+      FROM task_custom_base
+      GROUP BY issue_id
+  ),
+  task_custom_norm AS (
+      SELECT
+          issue_id,
+          card_type,
+          outside_type,
+          release_slot_number,
+          LEFT(COALESCE(actual_release_at_text, rollout_at_text), 10) AS effective_release_at_key,
+          CASE
+              WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
+              WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
+               AND (
+                   lower(COALESCE(outside_type, '')) LIKE '%хотфикс%'
+                   OR lower(COALESCE(outside_type, '')) LIKE '%hotfix%'
+               )
+              THEN 'hotfix'
+              WHEN lower(COALESCE(card_type, '')) = 'внерелиз' THEN 'outside_release'
+              ELSE NULL
+          END AS custom_bucket
+      FROM task_custom
+      WHERE lower(COALESCE(card_type, '')) IN ('release slot', 'внерелиз')
+  ),
+  release_match_by_date AS (
+      SELECT
+          rr.release_id,
+          MAX(tc.release_slot_number) AS release_slot_number,
+          COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
+          COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
+          COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
+      FROM raw_rel rr
+      JOIN task_custom_norm tc
+        ON tc.effective_release_at_key IS NOT NULL
+       AND tc.effective_release_at_key = to_char(rr.started_at, 'YYYY-MM-DD')
+      GROUP BY rr.release_id
+  ),
+  rel AS (
+      SELECT
+          rr.release_id,
+          COALESCE(NULLIF(rmd.release_slot_number, ''), rr.release_type) AS release_type,
+          rr.initiated_by,
+          rr.started_at,
+          rr.finished_at,
+          rr.status,
+          rr.total_objects,
+          rr.ready_to_release,
+          CASE
+              WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
+              WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
+              WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
+              ELSE rr.fallback_release_bucket
+          END AS release_bucket
+      FROM raw_rel rr
+      LEFT JOIN release_match_by_date rmd
+        ON rmd.release_id = rr.release_id
+  ),
+  ro AS (
+      SELECT
+          raw_ro.*,
+          rel.started_at,
+          rel.release_type,
+          rel.release_bucket
+      FROM raw_ro
+      JOIN rel
+        ON rel.release_id = raw_ro.release_id
+  ),
+  task_fact AS (
+      SELECT DISTINCT
+          rt.release_id,
+          rt.task_id
+      FROM release_tasks rt
+  ),
+  task_rollup AS (
+      SELECT
+          release_id,
+          COUNT(DISTINCT task_id) AS tasks_count
+      FROM task_fact
+      GROUP BY release_id
+  ),
+  object_rollup AS (
+      SELECT
+          release_id,
+          COUNT(*) AS objects_count
+      FROM ro
+      GROUP BY release_id
+  )
   SELECT
-      release_id,
-      COUNT(DISTINCT task_id) AS tasks_count,
-      COUNT(DISTINCT engineer) AS engineers_count,
-      COUNT(DISTINCT creator) AS creators_count,
-      COALESCE(SUM(minutes), 0) AS minutes_total
-  FROM task_fact
-  GROUP BY release_id
+      rel.release_bucket,
+      rel.release_id,
+      rel.release_type,
+      rel.started_at,
+      COALESCE(obj.objects_count, 0) AS objects_count,
+      COALESCE(task.tasks_count, 0) AS tasks_count
+  FROM rel
+  LEFT JOIN object_rollup obj
+    ON obj.release_id = rel.release_id
+  LEFT JOIN task_rollup task
+    ON task.release_id = rel.release_id
+  ORDER BY rel.release_bucket, rel.started_at DESC;
 
-  То есть:
+  Если хотите, следующим сообщением могу дать ещё 2 коротких SQL:
 
-  - сначала для каждого release_id считается число уникальных task_id
-  - потом в type_breakdown эти значения суммируются по типу поставки
-
-  Важный нюанс:
-
-  - если одна и та же задача попадала в несколько релизов, она будет учтена несколько раз
-  - значит 42 задач это:
-      - сумма уникальных задач внутри каждого релиза данного типа
-      - а не COUNT(DISTINCT task_id) по всему бакету целиком
-
-  Если хотите, я могу сразу поменять это поведение на более честное для бизнеса:
-
-  - либо уникальные задачи по типу поставки
-  - либо оставить как сейчас, но переименовать в вхождений задач или задач в релизах, чтобы не путало.
-
+  - только для release_bucket = 'hotfix'
+  - и отдельно COUNT(DISTINCT task_id) по всему бакету, чтобы сравнить с текущими 42 задач.

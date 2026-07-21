@@ -1,191 +1,51 @@
-drop table if exists items;
-create temporary table items as (
-    select
-        flow_id,
-        source_system,
-        record_id,
-        uuid,
-        dt_insert,
-        unnest(xpath('//Item', document_xml)) as xml_item
-    from
-        landing."INPUT_DATA_FROM_SAPXI_IN"
-    where
-        flow_id = 'SI_MaintenaceOrder_AI'
-        and dt_insert >= current_date - INTERVAL '30 days'
-)
-distributed by (uuid);
- 
-drop table if exists items_attr;
-create temporary table items_attr as (
-    select
-        (xpath('AUFNR/text()', xml_item))[1]::VARCHAR as "AUFNR",
-        (xpath('EQUNR/text()', xml_item))[1]::VARCHAR as "EQUNR_HDR",
-        (xpath('TPLNR/text()', xml_item))[1]::VARCHAR as "TPLNR_HDR",
-        (xpath('AUART/text()', xml_item))[1]::VARCHAR as "AUART",
-        (xpath('ILART/text()', xml_item))[1]::VARCHAR as "ILART",
-        (xpath('GSTRP_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GSTRP_DT",
-        (xpath('GLTRP_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GLTRP_DT",
-        (xpath('ARBPL/text()', xml_item))[1]::VARCHAR as "ARBPL_HDR",
-        (xpath('ZZSWERK/text()', xml_item))[1]::VARCHAR as "ZZSWERK",
-        (xpath('IWERK/text()', xml_item))[1]::VARCHAR as "IWERK",
-        (xpath('ZZDIVISION/text()', xml_item))[1]::VARCHAR as "ZZDIVISION",
-        (xpath('BUKRS/text()', xml_item))[1]::VARCHAR as "BUKRS",
-        (xpath('PLNNR/text()', xml_item))[1]::VARCHAR as "PLNNR_HDR",
-        (xpath('STTXT/text()', xml_item))[1]::VARCHAR as "STTXT",
-        (xpath('ASTXT/text()', xml_item))[1]::VARCHAR as "ASTXT",
-        (xpath('WARPL/text()', xml_item))[1]::VARCHAR as "WARPL",
-        (xpath('ABNUM/text()', xml_item))[1]::VARCHAR::INTEGER as "ABNUM",
-        (xpath('ZERNAM_TXT/text()', xml_item))[1]::VARCHAR as "ZERNAM_TXT",
-        (xpath('GSTRI_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GSTRI_DT",
-        (xpath('GETRI_DT/text()', xml_item))[1]::VARCHAR::TIMESTAMP as "GETRI_DT",
-        (xpath('KTEXT/text()', xml_item))[1]::VARCHAR as "KTEXT",
-        (xpath('ZZDRAW/text()', xml_item))[1]::VARCHAR as "ZZDRAW",
-        (xpath('ZZDRAWM/text()', xml_item))[1]::VARCHAR as "ZZDRAWM",
-        (xpath('ANLZU/text()', xml_item))[1]::VARCHAR as "ANLZU",
-        (xpath('GEWRK/text()', xml_item))[1]::VARCHAR as "VAWRK",
-        (xpath('AUTYP/text()', xml_item))[1]::VARCHAR::INTEGER as "AUTYP",
-        (xpath('VBELN/text()', xml_item))[1]::VARCHAR as "VBELN",
-        (xpath('PLNTY/text()', xml_item))[1]::VARCHAR as "PLNTY",
-        (xpath('PLNAL/text()', xml_item))[1]::VARCHAR as "PLNAL",
-        not coalesce((xpath('ZREJECT_HDR/text()', xml_item))[1]::VARCHAR is NULL, false)::BOOL as "ZREJECT_HDR",
-        (xpath('PSPEL/text()', xml_item))[1]::VARCHAR as "PSPEL",
-        xml_item,
-        flow_id,
-        source_system,
-        record_id,
-        uuid,
-        dt_insert
-    from
-        items
-)
-distributed by ("AUFNR");
- 
-insert into stg."RAL_IS2_TORO2_ORD_HDR_OPR" (
-    /* ---------- бизнес‑атрибуты-заголовок ---------- */
-    "AUFNR",        	-- Заказ (код)
-    "EQUNR_HDR",      	-- Единица оборудования (код)
-    "TPLNR_HDR",      	-- Техническое место (код)
-    "AUART",        	-- Вид заказа (код)
-    "ILART",        	-- Вид работ (код)
-    "GSTRP_DT",     	-- Базисный срок начала (Дата + Время)
-    "GLTRP_DT",     	-- Базисный срок окончания  (Дата + Время)
-    "ARBPL_HDR",       -- Выполняющее рабочее место (код)
-    "ZZSWERK",      	-- Завод владелец (код)
-    "IWERK",        	-- Завод, планирующий выполнение (код)
-    "ZZDIVISION",   	-- Участок (код)
-    "BUKRS",       	-- Балансовая единица (код)
-    "PLNNR_HDR",       -- Группа технологических карт (код)
-    "STTXT",        	-- Системные статусы
-    "ASTXT",        	-- Пользовательские статусы
-    "WARPL",        	-- План предупредительного (код)
-    "ABNUM",        	-- Отзыв к плану предупредительного (код)
-    "ZERNAM_TXT",  	-- ФИО создавшего
-    "GSTRI_DT",    	-- Фактический срок начала (Дата + Время)
-    "GETRI_DT",     	-- Фактический срок окончания (Дата + Время)
-    "KTEXT",        	-- Краткое описание
-    "ZZDRAW",       	-- Входящий чертеж (код)
-    "ZZDRAWM",      	-- Исходящий чертеж (код)
-    "ANLZU",        	-- Состояние производственной установки (код)
-    "VAWRK",        	-- Завод ответственного рабочего места (код)
-    "AUTYP",        	-- Тип заказа (код)
-    "VBELN",        	-- Документ продажи (код)
-    "PLNTY",        	-- Тип технологической карты (код)
-    "PLNAL",        	-- Счётчик группы технологических карт (код)
-    "ZREJECT_HDR",  	-- Отклонённая операция (признак)
-    "PSPEL",        	-- СПП‑элемент (код)
-    /* ---------- бизнес‑атрибуты-операция ---------- */
-    "VORNR",  			-- Операция (код)
-    "KTSCH",  			-- Образец (код)
-    "ARBPL_OPR",  		-- Выполняющее операцию рабочее место (код)
-    "WERKS",  			-- Завод  выполняющего рабочего места (код)
-    "NTANF_DT", 		-- Базисный срок начала (Дата + время)
-    "NTEND_DT",  		-- Базисный срок окончания (Дата + время)
-    "FSAVD_DT",  		-- Самое раннее запланированное начало (Дата + время)
-    "FSEDD_DT", 		-- Самое раннее запланированное окончание (Дата + время)
-    "EQUNR_OPR",  		-- Единица оборудования операции (код)
-    "TPLNR_OPR",  		-- Техническое место операции (код)
-    "ARBEI",  			-- Плановая работа
-    "ANZZL",  			-- Необходимые мощности
-    "ISMNW",  			-- Фактическая работа
-    "DAUNO",  			-- Стандартная продолжительность
-    "DAUNE",  			-- Единица измерения стандартной продолжительности (код)
-    "ARBEH",  			-- Единица измерения работы (код)
-    "LTXA1",  			-- Краткий текст
-    "ZOP_STTXT",  		-- Системные статусы
-    "ZOP_ASTXT",  		-- Пользовательские статусы
-    "PLNNR_OPR",  		-- Группа технологических карт операции (код)
-    "USR10",  			-- Весь персонал
-    "ZREJECT_OPR",  	-- Отклонение
-    /* ---------- атрибуты источника ---------- */
-    flow_id,
-    source_system,
-    record_id,
-    uuid,
-    dt_insert
-)
-select
-    /* ---------- бизнес‑атрибуты-заголовок ---------- */
-    "AUFNR",        	-- Заказ (код)
-    "EQUNR_HDR",      	-- Единица оборудования (код)
-    "TPLNR_HDR",       -- Техническое место (код)
-    "AUART",        	-- Вид заказа (код)
-    "ILART",        	-- Вид работ (код)
-    "GSTRP_DT",     	-- Базисный срок начала (Дата + Время)
-    "GLTRP_DT",     	-- Базисный срок окончания  (Дата + Время)
-    "ARBPL_HDR",      	-- Выполняющее рабочее место (код)
-    "ZZSWERK",      	-- Завод владелец (код)
-    "IWERK",        	-- Завод, планирующий выполнение (код)
-    "ZZDIVISION",   	-- Участок (код)
-    "BUKRS",       	-- Балансовая единица (код)
-    "PLNNR_HDR",       -- Группа технологических карт (код)
-    "STTXT",        	-- Системные статусы
-    "ASTXT",        	-- Пользовательские статусы
-    "WARPL",        	-- План предупредительного (код)
-    "ABNUM",        	-- Отзыв к плану предупредительного (код)
-    "ZERNAM_TXT",  	-- ФИО создавшего
-    "GSTRI_DT",    	-- Фактический срок начала (Дата + Время)
-    "GETRI_DT",     	-- Фактический срок окончания (Дата + Время)
-    "KTEXT",        	-- Краткое описание
-    "ZZDRAW",       	-- Входящий чертеж (код)
-    "ZZDRAWM",      	-- Исходящий чертеж (код)
-    "ANLZU",        	-- Состояние производственной установки (код)
-    "VAWRK",        	-- Завод ответственного рабочего места (код)
-    "AUTYP",        	-- Тип заказа (код)
-    "VBELN",        	-- Документ продажи (код)
-    "PLNTY",        	-- Тип технологической карты (код)
-    "PLNAL",        	-- Счётчик группы технологических карт (код)
-    "ZREJECT_HDR",  	-- Отклонённая операция (признак)
-    "PSPEL",        	-- СПП‑элемент (код)
-    /* ---------- бизнес‑атрибуты-операция ---------- */
-    (xpath('VORNR/text()', attr_node))[1]::VARCHAR                                          as "VORNR",
-    (xpath('KTSCH/text()', attr_node))[1]::VARCHAR                                          as "KTSCH",
-    (xpath('ARBPL/text()', attr_node))[1]::VARCHAR                                          as "ARBPL_OPR",
-    (xpath('WERKS/text()', attr_node))[1]::VARCHAR                                          as "WERKS",
-    (xpath('NTANF_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "NTANF_DT",
-    (xpath('NTEND_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "NTEND_DT",
-    (xpath('FSAVD_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "FSAVD_DT",
-    (xpath('FSEDD_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "FSEDD_DT",
-    (xpath('EQUNR/text()', attr_node))[1]::VARCHAR                                          as "EQUNR_OPR",
-    (xpath('TPLNR/text()', attr_node))[1]::VARCHAR                                          as "TPLNR_OPR",
-    (xpath('ARBEI/text()', attr_node))[1]::VARCHAR::NUMERIC(11, 2)                          as "ARBEI",
-    (xpath('ANZZL/text()', attr_node))[1]::VARCHAR::INTEGER                                 as "ANZZL",
-    (xpath('ISMNW/text()', attr_node))[1]::VARCHAR::NUMERIC(11, 2)                          as "ISMNW",
-    (xpath('DAUNO/text()', attr_node))[1]::VARCHAR::NUMERIC(10, 2)                          as "DAUNO",
-    (xpath('DAUNE/text()', attr_node))[1]::VARCHAR                                          as "DAUNE",
-    (xpath('ARBEH/text()', attr_node))[1]::VARCHAR                                          as "ARBEH",
-    (xpath('LTXA1/text()', attr_node))[1]::VARCHAR                                          as "LTXA1",
-    (xpath('ZOP_STTXT/text()', attr_node))[1]::VARCHAR                                      as "ZOP_STTXT",
-    (xpath('ZOP_ASTXT/text()', attr_node))[1]::VARCHAR                                      as "ZOP_ASTXT",
-    (xpath('PLNNR/text()', attr_node))[1]::VARCHAR                                          as "PLNNR_OPR",
-    not coalesce((xpath('USR10/text()', attr_node))[1]::VARCHAR is NULL, false)::BOOL       as "USR10",
-    not coalesce((xpath('ZREJECT_OPR/text()', attr_node))[1]::VARCHAR is NULL, false)::BOOL as "ZREJECT_OPR",
-    /* ---------- атрибуты источника ---------- */
-    flow_id,
-    source_system,
-    record_id,
-    uuid,
-    dt_insert
-from
-    items_attr
-    cross join lateral unnest(xpath('ORDER_OPR', xml_item))                                            as attr_node;
- 
+DWH-11619	Тип карточки	Внерелиз	2026-04-17 09:26:42.966
+DWH-11619	Priority	Major	2026-04-17 09:26:42.966
+DWH-11619	State	Завершена	2026-04-17 09:26:42.966
+DWH-11619	Assignee	Staroverova Anastasiya	2026-04-17 09:26:42.966
+DWH-11619	Subsystem	DE (Data Engineer)	2026-04-17 09:26:42.966
+DWH-11619	Дашборд SD		2026-04-17 09:26:42.966
+DWH-11619	Дата выкатки	2026-04-03 15:00	2026-04-17 09:26:42.966
+DWH-11619	Согласующий	Blinov Dmitriy	2026-04-17 09:26:42.966
+DWH-11619	Тип внерелиза	Хотфикс	2026-04-17 09:26:42.966
+DWH-11619	Spent time		2026-04-17 09:26:42.966
+DWH-11619	Фактические трудозатраты		2026-04-17 09:26:42.966
+DWH-11619	Дашборд КХД/Направление	SD-0023 Analysis of supply chain	2026-04-17 09:26:42.966
+DWH-11619	Экономия за счет ИИ		2026-04-17 09:26:42.966
+DWH-11619	Согласовано DE		2026-04-17 09:26:42.966
+DWH-11619	Согласовано SA		2026-04-17 09:26:42.966
+DWH-11619	Оценка трудозатрат		2026-04-17 09:26:42.966
+
+
+DWH-13360	Тип карточки	Внерелиз	2026-06-21 20:00:08.000
+DWH-13360	Priority	Major	2026-06-21 20:00:08.000
+DWH-13360	State	Завершена	2026-06-21 20:00:08.000
+DWH-13360	Assignee	Aleksandr Kornienko	2026-06-21 20:00:08.000
+DWH-13360	Subsystem	DE (Data Engineer)	2026-06-21 20:00:08.000
+DWH-13360	Направление	Сбыт	2026-06-21 20:00:08.000
+DWH-13360	Дашборд SD	Metal in supply chain	2026-06-21 20:00:08.000
+DWH-13360	Дата выкатки	2026-06-04 15:00	2026-06-21 20:00:08.000
+DWH-13360	Согласующий	Gruntovich Mikhail	2026-06-21 20:00:08.000
+DWH-13360	Тип внерелиза	Для показа	2026-06-21 20:00:08.000
+DWH-13360	Spent time		2026-06-21 20:00:08.000
+DWH-13360	Фактические трудозатраты	2ч	2026-06-21 20:00:08.000
+DWH-13360	Дашборд КХД/Направление	SD-0022 Оборотный капитал – Готовая продукция	2026-06-21 20:00:08.000
+DWH-13360	Экономия за счет ИИ		2026-06-21 20:00:08.000
+DWH-13360	Согласовано DE		2026-06-21 20:00:08.000
+DWH-13360	Согласовано SA		2026-06-21 20:00:08.000
+DWH-13360	Оценка трудозатрат		2026-06-21 20:00:08.000
+
+
+DWH-13809	Тип карточки	Release Slot	2026-07-15 10:06:31.000
+DWH-13809	Priority	Normal	2026-07-15 10:06:31.000
+DWH-13809	State	Зарегистрирована	2026-07-15 10:06:31.000
+DWH-13809	Assignee	Shkretov Dmitriy	2026-07-15 10:06:31.000
+DWH-13809	Subsystem	DE (Data Engineer)	2026-07-15 10:06:31.000
+DWH-13809	Направление	Финансы	2026-07-15 10:06:31.000
+DWH-13809	Spent time		2026-07-15 10:06:31.000
+DWH-13809	Фактические трудозатраты		2026-07-15 10:06:31.000
+DWH-13809	Дашборд КХД/Направление		2026-07-15 10:06:31.000
+DWH-13809	Фактическая дата релиза	2026-07-15 15:00	2026-07-15 10:06:31.000
+DWH-13809	Дежурный аналитик КХД	Khaustova Mariya	2026-07-15 10:06:31.000
+DWH-13809	Номер релиза КХД	FI-12-26	2026-07-15 10:06:31.000
+DWH-13809	Экономия за счет ИИ		2026-07-15 10:06:31.000
+DWH-13809	Оценка трудозатрат		2026-07-15 10:06:31.000

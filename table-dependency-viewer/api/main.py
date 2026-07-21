@@ -1849,6 +1849,123 @@ def get_admin_release_reports(
             ]
             type_rows = [row for row in type_rows if row["releases_count"] > 0 or row["objects_count"] > 0 or row["tasks_count"] > 0]
 
+            exception_creator_stats = defaultdict(
+                lambda: {"creator": "Не указан", "count": 0, "objects_count": 0, "hours_total": 0.0}
+            )
+            exception_type_stats = defaultdict(
+                lambda: {"release_type": "Внерелиз", "count": 0, "objects_count": 0, "hours_total": 0.0}
+            )
+            exception_entity_stats = defaultdict(
+                lambda: {"entity_name": "Без сущности", "count": 0, "objects_count": 0}
+            )
+            exception_day_stats = defaultdict(
+                lambda: {"day": "", "count": 0, "hotfix_count": 0, "outside_release_count": 0, "objects_count": 0}
+            )
+
+            for row in exception_summary_rows:
+                creator = row.get("initiated_by") or "Не указан"
+                creator_bucket = exception_creator_stats[creator]
+                creator_bucket["creator"] = creator
+                creator_bucket["count"] += 1
+                creator_bucket["objects_count"] += int(row.get("objects_count") or 0)
+                creator_bucket["hours_total"] += float(row.get("hours_total") or 0)
+
+                release_type_label = row.get("release_type") or "Внерелиз"
+                type_bucket = exception_type_stats[release_type_label]
+                type_bucket["release_type"] = release_type_label
+                type_bucket["count"] += 1
+                type_bucket["objects_count"] += int(row.get("objects_count") or 0)
+                type_bucket["hours_total"] += float(row.get("hours_total") or 0)
+
+                for entity_name in row.get("entity_names") or ["Без сущности"]:
+                    entity_bucket = exception_entity_stats[entity_name]
+                    entity_bucket["entity_name"] = entity_name
+                    entity_bucket["count"] += 1
+                    entity_bucket["objects_count"] += int(row.get("objects_count") or 0)
+
+                started_at = row.get("started_at")
+                if started_at:
+                    day_key = started_at.date().isoformat()
+                    day_bucket = exception_day_stats[day_key]
+                    day_bucket["day"] = day_key
+                    day_bucket["count"] += 1
+                    day_bucket["objects_count"] += int(row.get("objects_count") or 0)
+                    if row.get("release_bucket") == "hotfix":
+                        day_bucket["hotfix_count"] += 1
+                    else:
+                        day_bucket["outside_release_count"] += 1
+
+            exception_insights = {
+                "share_of_unplanned": round(
+                    ((len(hotfix_rows) + len(outside_rows)) / max(regular_release_count + len(hotfix_rows) + len(outside_rows), 1)) * 100,
+                    1,
+                ),
+                "top_type": (
+                    sorted(
+                        [
+                            {
+                                **row,
+                                "hours_total": round(row["hours_total"], 1),
+                            }
+                            for row in exception_type_stats.values()
+                        ],
+                        key=lambda row: (-row["count"], -row["objects_count"], row["release_type"]),
+                    )[0]
+                    if exception_type_stats
+                    else None
+                ),
+                "top_creator": (
+                    sorted(
+                        [
+                            {
+                                **row,
+                                "hours_total": round(row["hours_total"], 1),
+                            }
+                            for row in exception_creator_stats.values()
+                        ],
+                        key=lambda row: (-row["count"], -row["objects_count"], row["creator"]),
+                    )[0]
+                    if exception_creator_stats
+                    else None
+                ),
+                "top_entity": (
+                    sorted(
+                        list(exception_entity_stats.values()),
+                        key=lambda row: (-row["count"], -row["objects_count"], row["entity_name"]),
+                    )[0]
+                    if exception_entity_stats
+                    else None
+                ),
+                "by_type": sorted(
+                    [
+                        {
+                            **row,
+                            "hours_total": round(row["hours_total"], 1),
+                        }
+                        for row in exception_type_stats.values()
+                    ],
+                    key=lambda row: (-row["count"], -row["objects_count"], row["release_type"]),
+                )[:6],
+                "by_creator": sorted(
+                    [
+                        {
+                            **row,
+                            "hours_total": round(row["hours_total"], 1),
+                        }
+                        for row in exception_creator_stats.values()
+                    ],
+                    key=lambda row: (-row["count"], -row["objects_count"], row["creator"]),
+                )[:8],
+                "by_entity": sorted(
+                    list(exception_entity_stats.values()),
+                    key=lambda row: (-row["count"], -row["objects_count"], row["entity_name"]),
+                )[:8],
+                "by_day": sorted(
+                    list(exception_day_stats.values()),
+                    key=lambda row: row["day"],
+                )[-12:],
+            }
+
             cadence_map = {}
             for row in cadence:
                 item = dict(row)
@@ -2005,6 +2122,7 @@ def get_admin_release_reports(
             "entity_timeline": timeline_rows,
             "recent_releases": recent_rows,
             "exception_releases": exception_rows,
+            "exception_insights": exception_insights,
             "focus": {
                 "top_entity": entities_rows[0] if entities_rows else None,
                 "top_table": tables_rows[0] if tables_rows else None,

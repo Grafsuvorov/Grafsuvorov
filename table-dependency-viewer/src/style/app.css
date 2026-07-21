@@ -1965,6 +1965,10 @@ main.content {
   height: 320px;
 }
 
+.release-report-chart-compact {
+  height: 220px;
+}
+
 .release-report-chart-scroll {
   height: 100%;
   min-width: 0;
@@ -2142,6 +2146,16 @@ main.content {
   grid-template-columns: minmax(0, 1.8fr) 0.65fr 0.7fr 0.8fr;
 }
 
+.release-report-focus-exceptions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.release-report-exception-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
 .release-report-initiators-row {
   grid-template-columns: minmax(0, 1.5fr) 0.6fr 0.7fr 0.8fr 0.75fr 0.8fr;
 }
@@ -2236,8 +2250,10 @@ main.content {
 
 @media (max-width: 1180px) {
   .release-report-focus,
+  .release-report-focus-exceptions,
   .reports-grid-primary,
   .reports-grid-secondary,
+  .release-report-exception-grid,
   .engineering-focus-grid,
   .engineering-grid,
   .engineering-grid-secondary {

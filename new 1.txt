@@ -1,17 +1,5 @@
 
- ⠿ Container table-dependency-viewer-api-1       Started                                                    10.9s
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=200
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
-table-dependency-viewer-api-1  |                     WHERE issue_id IN (SELECT task_id FROM task_ids)
-table-dependency-viewer-api-1  |                       AND field_name IN (
-table-dependency-viewer-api-1  |                           'Тип карточки',
-table-dependency-viewer-api-1  |                           'Тип внерелиза',
-table-dependency-viewer-api-1  |                           'Фактическая дата релиза',
-table-dependency-viewer-api-1  |                           'Дата выкатки',
-table-dependency-viewer-api-1  |                           'Номер релиза КХД'
-table-dependency-viewer-api-1  |                       )
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 task_custom AS (
 table-dependency-viewer-api-1  |                     SELECT
 table-dependency-viewer-api-1  |                         issue_id,
 table-dependency-viewer-api-1  |                         MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
@@ -106,7 +94,9 @@ table-dependency-viewer-api-1  |                         rel.status
 table-dependency-viewer-api-1  |                     FROM raw_ro
 table-dependency-viewer-api-1  |                     JOIN rel
 table-dependency-viewer-api-1  |                       ON rel.release_id = raw_ro.release_id
-table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                 ,
 table-dependency-viewer-api-1  |                 snap AS (
 table-dependency-viewer-api-1  |                     SELECT s.*
 table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_snapshot s
@@ -139,7 +129,8 @@ table-dependency-viewer-api-1  |                       ON rel.release_id = rt.re
 table-dependency-viewer-api-1  |                     LEFT JOIN snap ON snap.issue_id = rt.task_id
 table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = rt.task_id
 table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 )
+table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  |                 task_rollup AS (
 table-dependency-viewer-api-1  |                     SELECT
 table-dependency-viewer-api-1  |                         release_id,
@@ -189,16 +180,23 @@ table-dependency-viewer-api-1  |                     LEFT JOIN task_rollup task 
 table-dependency-viewer-api-1  |                 )
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         release_id,
-table-dependency-viewer-api-1  |                         task_id,
-table-dependency-viewer-api-1  |                         engineer,
-table-dependency-viewer-api-1  |                         creator,
-table-dependency-viewer-api-1  |                         minutes,
-table-dependency-viewer-api-1  |                         release_bucket
-table-dependency-viewer-api-1  |                     FROM task_fact
+table-dependency-viewer-api-1  |                         COUNT(*) AS releases_count,
+table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE release_bucket = 'hotfix') AS hotfix_count,
+table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE release_bucket = 'outside_release') AS outside_release_count,
+table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE release_bucket = 'release') AS release_count,
+table-dependency-viewer-api-1  |                         COALESCE(SUM(objects_count), 0) AS objects_count,
+table-dependency-viewer-api-1  |                         COALESCE(SUM(click_objects_count), 0) AS click_objects_count,
+table-dependency-viewer-api-1  |                         COALESCE(SUM(gp_objects_count), 0) AS gp_objects_count,
+table-dependency-viewer-api-1  |                         COALESCE(SUM(tasks_count), 0) AS tasks_count,
+table-dependency-viewer-api-1  |                         COALESCE(SUM(minutes_total), 0) / 60.0 AS hours_total,
+table-dependency-viewer-api-1  |                         COUNT(DISTINCT initiated_by) FILTER (WHERE initiated_by IS NOT NULL AND initiated_by <> '') AS initiators_count,
+table-dependency-viewer-api-1  |                         COUNT(DISTINCT started_at::date) AS release_days_count,
+table-dependency-viewer-api-1  |                         ROUND(COALESCE(AVG(objects_count)::numeric, 0), 1) AS avg_objects_per_release,
+table-dependency-viewer-api-1  |                         ROUND(COALESCE(AVG(duration_minutes)::numeric, 0), 1) AS avg_duration_minutes
+table-dependency-viewer-api-1  |                     FROM release_rollup
 table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 30}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/2j85)
+table-dependency-viewer-api-1  | [parameters: {'days': 180}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:33838 - "GET /api/admin/reports/releases?days=30 HTTP/1.1" 200 OK
-[root@rgm-s-dwhapp01 table-de
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:35258 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:35260 - "POST /auth/audit/event HTTP/1.1" 200 OK

@@ -1002,7 +1002,7 @@ def get_admin_release_reports(
                     print(traceback.format_exc())
                     return []
 
-            base = f"""
+            base_core = f"""
                 WITH raw_rel AS (
                     SELECT
                         r.release_id,
@@ -1155,7 +1155,13 @@ def get_admin_release_reports(
                     FROM raw_ro
                     JOIN rel
                       ON rel.release_id = raw_ro.release_id
-                ),
+                )
+            """
+
+            base_task = (
+                base_core
+                + f"""
+                ,
                 snap AS (
                     SELECT s.*
                     FROM {TABLE_YT_ISSUE_SNAPSHOT} s
@@ -1188,7 +1194,13 @@ def get_admin_release_reports(
                     LEFT JOIN snap ON snap.issue_id = rt.task_id
                     LEFT JOIN exec ON exec.issue_id = rt.task_id
                     LEFT JOIN work ON work.issue_id = rt.task_id
-                ),
+                )
+            """
+            )
+
+            base_rollup = (
+                base_task
+                + """
                 task_rollup AS (
                     SELECT
                         release_id,
@@ -1237,10 +1249,11 @@ def get_admin_release_reports(
                     LEFT JOIN task_rollup task ON task.release_id = rel.release_id
                 )
             """
+            )
 
             summary = conn.execute(
                 text(
-                    base
+                    base_rollup
                     + """
                     SELECT
                         COUNT(*) AS releases_count,
@@ -1264,7 +1277,7 @@ def get_admin_release_reports(
 
             cadence = conn.execute(
                 text(
-                    base
+                    base_rollup
                     + """
                     SELECT
                         to_char(date_trunc('week', started_at), 'DD.MM') AS week_label,
@@ -1285,7 +1298,7 @@ def get_admin_release_reports(
 
             weekday_heatmap = conn.execute(
                 text(
-                    base
+                    base_rollup
                     + """
                     SELECT
                         EXTRACT(ISODOW FROM started_at)::int AS weekday_no,
@@ -1312,7 +1325,7 @@ def get_admin_release_reports(
 
             type_breakdown = conn.execute(
                 text(
-                    base
+                    base_rollup
                     + """
                     SELECT
                         release_bucket,
@@ -1330,7 +1343,7 @@ def get_admin_release_reports(
 
             system_breakdown = conn.execute(
                 text(
-                    base
+                    base_rollup
                     + """
                     SELECT 'ClickHouse' AS system_name, COALESCE(SUM(click_objects_count), 0) AS objects_count
                     FROM release_rollup
@@ -1343,7 +1356,7 @@ def get_admin_release_reports(
             ).mappings().all()
 
             ro_detail_rows = _safe_query_all(
-                base
+                base_core
                 + """
                     SELECT
                         release_id,
@@ -1362,7 +1375,7 @@ def get_admin_release_reports(
             )
 
             release_detail_rows = _safe_query_all(
-                base
+                base_rollup
                 + """
                     SELECT
                         release_id,
@@ -1384,7 +1397,7 @@ def get_admin_release_reports(
             )
 
             task_detail_rows = _safe_query_all(
-                base
+                base_task
                 + """
                     SELECT
                         release_id,

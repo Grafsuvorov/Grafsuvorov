@@ -568,6 +568,71 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
     )[0] || null;
   }, [filteredExceptionByWeek]);
 
+  const exceptionTrendSummary = useMemo(() => {
+    if (!filteredExceptionByWeek.length) return null;
+    const latest = filteredExceptionByWeek[filteredExceptionByWeek.length - 1];
+    const previous = filteredExceptionByWeek.slice(0, -1);
+    const previousAvg = previous.length
+      ? previous.reduce((sum, row) => sum + Number(row.count || 0), 0) / previous.length
+      : 0;
+    const latestCount = Number(latest.count || 0);
+    const delta = latestCount - previousAvg;
+    const hotfixShare = latestCount ? (Number(latest.hotfix_count || 0) / latestCount) * 100 : 0;
+    const outsideShare = latestCount ? (Number(latest.outside_release_count || 0) / latestCount) * 100 : 0;
+    const status =
+      delta >= 2 ? "surge" :
+      delta <= -2 ? "cooldown" :
+      latestCount === 0 ? "quiet" :
+      "stable";
+    const leadBucket =
+      hotfixShare >= outsideShare ? "Хотфиксы" : "Внерелизы";
+    const narrative =
+      status === "surge"
+        ? `Последняя неделя ускорилась: ${latestCount} карточек против среднего ${previousAvg.toFixed(1)} за предыдущие недели.`
+        : status === "cooldown"
+          ? `Последняя неделя тише обычного: ${latestCount} карточек против среднего ${previousAvg.toFixed(1)}.`
+          : status === "quiet"
+            ? "В последнюю неделю исключения не зафиксированы."
+            : `Последняя неделя идёт близко к норме: ${latestCount} карточек при среднем ${previousAvg.toFixed(1)}.`;
+    return {
+      latest,
+      previousAvg,
+      delta,
+      status,
+      leadBucket,
+      hotfixShare,
+      outsideShare,
+      narrative,
+    };
+  }, [filteredExceptionByWeek]);
+
+  const exceptionAnomalyBadges = useMemo(() => {
+    if (!exceptionTrendSummary) return [];
+    const badges = [];
+    badges.push({
+      label:
+        exceptionTrendSummary.status === "surge"
+          ? "Всплеск"
+          : exceptionTrendSummary.status === "cooldown"
+            ? "Спад"
+            : exceptionTrendSummary.status === "quiet"
+              ? "Тихая неделя"
+              : "Норма",
+      tone: exceptionTrendSummary.status,
+    });
+    badges.push({
+      label: `Ведёт ${exceptionTrendSummary.leadBucket.toLowerCase()}`,
+      tone: exceptionTrendSummary.leadBucket === "Хотфиксы" ? "hotfix" : "outside",
+    });
+    if (selectedExceptionPeakWeek) {
+      badges.push({
+        label: `Пик: ${selectedExceptionPeakWeek.week_label}`,
+        tone: "peak",
+      });
+    }
+    return badges;
+  }, [exceptionTrendSummary, selectedExceptionPeakWeek]);
+
   const filteredExceptionTimeline = useMemo(() => {
     const stats = new Map();
     filteredExceptionRows.forEach((row) => {
@@ -1193,6 +1258,42 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                     )}
                   </div>
                 </div>
+
+                {exceptionTrendSummary ? (
+                  <div className="release-report-anomaly-card">
+                    <div className="release-report-anomaly-head">
+                      <div>
+                        <div className="section-subtitle">Сигнал недели</div>
+                        <div className="muted">{exceptionTrendSummary.narrative}</div>
+                      </div>
+                      <div className="release-report-anomaly-badges">
+                        {exceptionAnomalyBadges.map((badge) => (
+                          <span key={badge.label} className={`release-report-anomaly-badge tone-${badge.tone}`}>
+                            {badge.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="release-report-anomaly-metrics">
+                      <div className="release-report-anomaly-metric">
+                        <span>Последняя неделя</span>
+                        <strong>{exceptionTrendSummary.latest.count}</strong>
+                      </div>
+                      <div className="release-report-anomaly-metric">
+                        <span>Среднее до неё</span>
+                        <strong>{exceptionTrendSummary.previousAvg.toFixed(1)}</strong>
+                      </div>
+                      <div className="release-report-anomaly-metric">
+                        <span>Доля хотфиксов</span>
+                        <strong>{exceptionTrendSummary.hotfixShare.toFixed(0)}%</strong>
+                      </div>
+                      <div className="release-report-anomaly-metric">
+                        <span>Доля внерелизов</span>
+                        <strong>{exceptionTrendSummary.outsideShare.toFixed(0)}%</strong>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 {filteredExceptionByDay.length ? (
                   <div className="engineering-chart release-report-chart-compact">

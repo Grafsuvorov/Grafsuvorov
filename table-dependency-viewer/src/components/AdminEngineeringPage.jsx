@@ -131,6 +131,7 @@ export default function AdminEngineeringPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("releases");
   const [days, setDays] = useState(180);
+  const handlePrintReports = () => window.print();
 
   const [releaseData, setReleaseData] = useState(null);
   const [releaseLoading, setReleaseLoading] = useState(false);
@@ -223,6 +224,9 @@ export default function AdminEngineeringPage() {
                 {option} дн
               </button>
             ))}
+            <button type="button" className="btn btn-secondary reports-print-btn" onClick={handlePrintReports}>
+              Сохранить PDF
+            </button>
           </div>
         </div>
 

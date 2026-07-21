@@ -14150,3 +14150,104 @@ html[data-theme="light"] .engineering-table-head.release-report-initiators-row,
 html[data-theme="light"] .engineering-table-head.release-report-exception-row {
   color: #64748b !important;
 }
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .sidebar,
+  .topbar,
+  .reports-toolbar,
+  .reports-tabs,
+  .reports-subtabs,
+  .release-report-stream-button,
+  .reports-print-btn,
+  .btn,
+  .icon-btn,
+  .modal-backdrop,
+  .toast-container {
+    display: none !important;
+  }
+
+  .container,
+  .cc-page,
+  .engineering-page,
+  .reports-page,
+  .release-report-block,
+  .release-report-kpi,
+  .release-report-focus-card,
+  .release-type-card,
+  .release-system-card,
+  .release-entity-focus-card,
+  .engineering-block,
+  .engineering-chart {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border-color: rgba(148, 163, 184, 0.28) !important;
+  }
+
+  .container,
+  .cc-page,
+  .card.engineering-page.reports-page {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .page-header,
+  .reports-header {
+    padding-bottom: 16px !important;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.28) !important;
+  }
+
+  .reports-page,
+  .release-report-block,
+  .release-report-kpi,
+  .release-report-focus-card,
+  .release-type-card,
+  .release-system-card,
+  .release-entity-focus-card,
+  .engineering-block,
+  .engineering-table-wrap {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .engineering-grid,
+  .engineering-grid-secondary,
+  .release-report-kpis,
+  .release-report-focus,
+  .release-report-type-grid,
+  .release-system-grid,
+  .release-entity-focus,
+  .release-report-chart-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .release-report-chart-scroll {
+    overflow: visible !important;
+  }
+
+  .recharts-wrapper,
+  .recharts-surface {
+    max-width: 100% !important;
+  }
+
+  .muted,
+  .release-report-kpi .label,
+  .release-report-kpi .hint,
+  .release-report-stream-meta,
+  .release-report-stream-subline,
+  .release-type-head,
+  .release-type-foot {
+    color: #475569 !important;
+  }
+}

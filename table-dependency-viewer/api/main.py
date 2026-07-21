@@ -995,7 +995,7 @@ def get_admin_release_reports(
         date_clause, params = _resolve_date_window(None, None, days)
         with engine.connect() as conn:
             base = f"""
-                WITH rel AS (
+                WITH raw_rel AS (
                     SELECT
                         r.release_id,
                         r.release_type,
@@ -1016,29 +1016,151 @@ def get_admin_release_reports(
                               OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%non-release%'
                             THEN 'outside_release'
                             ELSE 'release'
-                        END AS release_bucket
+                        END AS fallback_release_bucket
                     FROM {TABLE_RELEASE_LOG} r
                     WHERE {date_clause}
                 ),
-                ro AS (
+                raw_ro AS (
                     SELECT
                         ro.*,
-                        rel.started_at,
-                        rel.release_type,
-                        rel.release_bucket,
-                        rel.initiated_by,
-                        rel.status
+                        raw_rel.started_at,
+                        raw_rel.release_type,
+                        raw_rel.fallback_release_bucket,
+                        raw_rel.initiated_by,
+                        raw_rel.status
                     FROM {TABLE_RELEASE_OBJECTS} ro
-                    JOIN rel ON rel.release_id = ro.release_id
+                    JOIN raw_rel ON raw_rel.release_id = ro.release_id
                 ),
                 release_tasks AS (
                     SELECT DISTINCT release_id, task_id
-                    FROM ro
+                    FROM raw_ro
                     WHERE task_id IS NOT NULL AND task_id <> ''
                 ),
                 task_ids AS (
                     SELECT DISTINCT task_id
                     FROM release_tasks
+                ),
+                task_custom_base AS (
+                    SELECT issue_id, field_name, NULLIF(BTRIM(field_value), '') AS field_value
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE issue_id IN (SELECT task_id FROM task_ids)
+                      AND field_name IN (
+                          'Тип карточки',
+                          'Тип внерелиза',
+                          'Фактическая дата релиза',
+                          'Дата выкатки',
+                          'Номер релиза КХД'
+                      )
+                ),
+                task_custom AS (
+                    SELECT
+                        issue_id,
+                        MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
+                        MAX(CASE WHEN field_name = 'Тип внерелиза' THEN field_value END) AS outside_type,
+                        MAX(CASE WHEN field_name = 'Номер релиза КХД' THEN field_value END) AS release_slot_number,
+                        MAX(
+                            CASE
+                                WHEN field_name = 'Фактическая дата релиза'
+                                 AND field_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2}(:[0-9]{2})?)?$'
+                                THEN field_value::timestamp
+                            END
+                        ) AS actual_release_at,
+                        MAX(
+                            CASE
+                                WHEN field_name = 'Дата выкатки'
+                                 AND field_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2}(:[0-9]{2})?)?$'
+                                THEN field_value::timestamp
+                            END
+                        ) AS rollout_at
+                    FROM task_custom_base
+                    GROUP BY issue_id
+                ),
+                task_custom_norm AS (
+                    SELECT
+                        issue_id,
+                        card_type,
+                        outside_type,
+                        release_slot_number,
+                        COALESCE(actual_release_at, rollout_at) AS effective_release_at,
+                        CASE
+                            WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
+                            WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
+                             AND (
+                                 lower(COALESCE(outside_type, '')) LIKE '%хотфикс%'
+                                 OR lower(COALESCE(outside_type, '')) LIKE '%hotfix%'
+                             )
+                            THEN 'hotfix'
+                            WHEN lower(COALESCE(card_type, '')) = 'внерелиз' THEN 'outside_release'
+                            ELSE NULL
+                        END AS custom_bucket
+                    FROM task_custom
+                ),
+                release_match_by_task AS (
+                    SELECT
+                        rt.release_id,
+                        MAX(tc.effective_release_at) AS matched_release_at,
+                        MAX(tc.release_slot_number) AS release_slot_number,
+                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
+                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
+                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
+                    FROM release_tasks rt
+                    JOIN task_custom_norm tc
+                      ON tc.issue_id = rt.task_id
+                    GROUP BY rt.release_id
+                ),
+                release_match_by_date AS (
+                    SELECT
+                        rr.release_id,
+                        MAX(tc.effective_release_at) AS matched_release_at,
+                        MAX(tc.release_slot_number) AS release_slot_number,
+                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
+                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
+                        COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
+                    FROM raw_rel rr
+                    JOIN task_custom_norm tc
+                      ON tc.effective_release_at IS NOT NULL
+                     AND date_trunc('minute', tc.effective_release_at) = date_trunc('minute', rr.started_at)
+                    GROUP BY rr.release_id
+                ),
+                rel AS (
+                    SELECT
+                        rr.release_id,
+                        COALESCE(
+                            NULLIF(COALESCE(rmt.release_slot_number, rmd.release_slot_number), ''),
+                            rr.release_type
+                        ) AS release_type,
+                        rr.initiated_by,
+                        COALESCE(rmt.matched_release_at, rmd.matched_release_at, rr.started_at) AS started_at,
+                        rr.finished_at,
+                        rr.status,
+                        rr.total_objects,
+                        rr.ready_to_release,
+                        CASE
+                            WHEN COALESCE(rmt.release_slot_count, 0) > 0 THEN 'release'
+                            WHEN COALESCE(rmt.hotfix_count, 0) > 0 THEN 'hotfix'
+                            WHEN COALESCE(rmt.outside_release_count, 0) > 0 THEN 'outside_release'
+                            WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
+                            WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
+                            WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
+                            ELSE rr.fallback_release_bucket
+                        END AS release_bucket
+                    FROM raw_rel rr
+                    LEFT JOIN release_match_by_task rmt
+                      ON rmt.release_id = rr.release_id
+                    LEFT JOIN release_match_by_date rmd
+                      ON rmd.release_id = rr.release_id
+                ),
+                ro AS (
+                    SELECT
+                        raw_ro.*,
+                        rel.started_at,
+                        rel.release_type,
+                        rel.release_bucket,
+                        rel.initiated_by,
+                        rel.status
+                    FROM raw_ro
+                    JOIN rel
+                      ON rel.release_id = raw_ro.release_id
                 ),
                 snap AS (
                     SELECT s.*

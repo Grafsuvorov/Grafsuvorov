@@ -2168,6 +2168,97 @@ main.content {
   gap: 14px;
 }
 
+.release-report-exception-story-grid {
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 14px;
+}
+
+.release-report-story-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.08), transparent 42%),
+    rgba(255,255,255,0.03);
+}
+
+.release-report-story-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  color: rgba(226, 232, 240, 0.76);
+}
+
+.release-report-story-copy strong {
+  font-size: 22px;
+  color: #f8fbff;
+}
+
+.release-report-story-bars,
+.release-report-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.release-report-story-bar-row,
+.release-report-timeline-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.release-report-story-bar-row {
+  grid-template-columns: 72px minmax(0, 1fr) 28px;
+}
+
+.release-report-story-bar-row span,
+.release-report-timeline-meta,
+.release-report-timeline-date {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.66);
+}
+
+.release-report-story-bar-row strong,
+.release-report-timeline-metrics strong {
+  color: #f8fbff;
+}
+
+.release-report-story-bar-track {
+  position: relative;
+  min-height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  overflow: hidden;
+}
+
+.release-report-story-bar-fill {
+  min-height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8, #f97316);
+}
+
+.release-report-timeline-row {
+  grid-template-columns: 88px minmax(0, 1fr);
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.release-report-timeline-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.release-report-timeline-body,
+.release-report-timeline-metrics,
+.release-report-timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
 .release-report-initiators-row {
   grid-template-columns: minmax(0, 1.5fr) 0.6fr 0.7fr 0.8fr 0.75fr 0.8fr;
 }

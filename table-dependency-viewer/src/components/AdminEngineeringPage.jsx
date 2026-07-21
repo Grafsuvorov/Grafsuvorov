@@ -116,6 +116,15 @@ function formatSystemLabel(value) {
   return value || "Система";
 }
 
+function weekStartKey(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const day = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - day);
+  return date.toISOString().slice(0, 10);
+}
+
 const CHART_TOOLTIP_PROPS = {
   contentStyle: {
     background: "#0f172a",
@@ -506,6 +515,89 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
   const selectedExceptionTopType = filteredExceptionByType[0] || null;
   const selectedExceptionTopCreator = filteredExceptionByCreator[0] || null;
   const selectedExceptionTopEntity = filteredExceptionByEntity[0] || null;
+
+  const selectedExceptionTopDriver = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const direction = row.direction || "Не указано";
+      const releaseType = row.release_type || releaseBucketLabel(row.release_bucket);
+      const key = `${direction}__${releaseType}`;
+      const bucket = stats.get(key) || {
+        key,
+        direction,
+        release_type: releaseType,
+        count: 0,
+        objects_count: 0,
+        hours_total: 0,
+      };
+      bucket.count += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      bucket.hours_total += Number(row.hours_total || 0);
+      stats.set(key, bucket);
+    });
+    return [...stats.values()].sort(
+      (a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a.key).localeCompare(String(b.key), "ru")
+    )[0] || null;
+  }, [filteredExceptionRows]);
+
+  const filteredExceptionByWeek = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const key = weekStartKey(row.started_at);
+      if (!key) return;
+      const bucket = stats.get(key) || {
+        week_start: key,
+        week_label: formatShortDate(key),
+        count: 0,
+        hotfix_count: 0,
+        outside_release_count: 0,
+        objects_count: 0,
+      };
+      bucket.count += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      if (row.release_bucket === "hotfix") bucket.hotfix_count += 1;
+      if (row.release_bucket === "outside_release") bucket.outside_release_count += 1;
+      stats.set(key, bucket);
+    });
+    return [...stats.values()].sort((a, b) => String(a.week_start).localeCompare(String(b.week_start))).slice(-12);
+  }, [filteredExceptionRows]);
+
+  const selectedExceptionPeakWeek = useMemo(() => {
+    return [...filteredExceptionByWeek].sort(
+      (a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a.week_start).localeCompare(String(b.week_start))
+    )[0] || null;
+  }, [filteredExceptionByWeek]);
+
+  const filteredExceptionTimeline = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const key = (row.started_at || "").slice(0, 10);
+      if (!key) return;
+      const bucket = stats.get(key) || {
+        day: key,
+        items: 0,
+        objects_count: 0,
+        hours_total: 0,
+        hotfix_count: 0,
+        outside_release_count: 0,
+        directions: new Set(),
+      };
+      bucket.items += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      bucket.hours_total += Number(row.hours_total || 0);
+      if (row.release_bucket === "hotfix") bucket.hotfix_count += 1;
+      if (row.release_bucket === "outside_release") bucket.outside_release_count += 1;
+      bucket.directions.add(row.direction || "Не указано");
+      stats.set(key, bucket);
+    });
+    return [...stats.values()]
+      .sort((a, b) => String(b.day).localeCompare(String(a.day)))
+      .slice(0, 8)
+      .map((row) => ({
+        ...row,
+        directions: [...row.directions].sort((a, b) => a.localeCompare(b, "ru")),
+      }));
+  }, [filteredExceptionRows]);
 
   const selectedEntitySummary = useMemo(() => {
     if (!normalizedSelectedEntity) return null;
@@ -1087,13 +1179,13 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                     )}
                   </div>
                   <div className="release-report-focus-card">
-                    <div className="section-subtitle">Лидирующая сущность</div>
-                    {selectedExceptionTopEntity ? (
+                    <div className="section-subtitle">Что чаще всего уводит в поток</div>
+                    {selectedExceptionTopDriver ? (
                       <>
-                        <div className="release-report-focus-title">{selectedExceptionTopEntity.entity_name}</div>
+                        <div className="release-report-focus-title">{selectedExceptionTopDriver.direction}</div>
                         <div className="release-report-focus-meta">
-                          <span>{selectedExceptionTopEntity.count} карточек</span>
-                          <span>{selectedExceptionTopEntity.objects_count} объектов</span>
+                          <span>{selectedExceptionTopDriver.release_type}</span>
+                          <span>{selectedExceptionTopDriver.count} карточек</span>
                         </div>
                       </>
                     ) : (
@@ -1129,6 +1221,67 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                     </ResponsiveContainer>
                   </div>
                 ) : null}
+
+                <div className="engineering-grid release-report-exception-story-grid">
+                  <section className="release-report-story-card">
+                    <div className="section-subtitle">Всплески по неделям</div>
+                    {selectedExceptionPeakWeek ? (
+                      <div className="release-report-story-copy">
+                        <strong>{selectedExceptionPeakWeek.week_label}</strong>
+                        <span>{selectedExceptionPeakWeek.count} карточек</span>
+                        <span>{selectedExceptionPeakWeek.objects_count} объектов</span>
+                      </div>
+                    ) : (
+                      <div className="muted">Нет недельных всплесков.</div>
+                    )}
+                    {filteredExceptionByWeek.length ? (
+                      <div className="release-report-story-bars">
+                        {filteredExceptionByWeek.map((row) => {
+                          const peak = Math.max(...filteredExceptionByWeek.map((item) => Number(item.count || 0)), 1);
+                          return (
+                            <div key={row.week_start} className="release-report-story-bar-row">
+                              <span>{row.week_label}</span>
+                              <div className="release-report-story-bar-track">
+                                <div
+                                  className="release-report-story-bar-fill"
+                                  style={{ width: `${(Number(row.count || 0) / peak) * 100}%` }}
+                                />
+                              </div>
+                              <strong>{row.count}</strong>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </section>
+
+                  <section className="release-report-story-card">
+                    <div className="section-subtitle">Таймлайн исключений</div>
+                    {filteredExceptionTimeline.length ? (
+                      <div className="release-report-timeline">
+                        {filteredExceptionTimeline.map((row) => (
+                          <div key={row.day} className="release-report-timeline-row">
+                            <div className="release-report-timeline-date">{formatShortDate(row.day)}</div>
+                            <div className="release-report-timeline-body">
+                              <div className="release-report-timeline-metrics">
+                                <strong>{row.items} карточек</strong>
+                                <span>{row.objects_count} объектов</span>
+                                <span>{formatHours(row.hours_total)}</span>
+                              </div>
+                              <div className="release-report-timeline-meta">
+                                <span>{row.hotfix_count} хотфиксов</span>
+                                <span>{row.outside_release_count} внерелизов</span>
+                                <span>{shortLabel(row.directions.join(", "), 48)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="muted">Для таймлайна пока нет событий.</div>
+                    )}
+                  </section>
+                </div>
 
                 <div className="release-report-stream">
                   {filteredExceptionRows.map((row) => (

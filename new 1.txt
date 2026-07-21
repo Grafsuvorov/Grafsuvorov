@@ -1,6 +1,21 @@
-select * from tech_etl.release_log rl left join по started_at::date tech_etl.yt_issue_custom_field фактическая дата релиза 'Дата выкатки' release slot внерелиз
-
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+table-dependency-viewer-api-1  |     ret = self._execute_context(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+table-dependency-viewer-api-1  |     return self._exec_single_context(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.AmbiguousColumn) column reference "release_type" is ambiguous
+table-dependency-viewer-api-1  | LINE 217:                         release_type,
 table-dependency-viewer-api-1  |                                   ^
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | [SQL:
@@ -52,8 +67,7 @@ table-dependency-viewer-api-1  |                 ),
 table-dependency-viewer-api-1  |                 task_custom_base AS (
 table-dependency-viewer-api-1  |                     SELECT issue_id, field_name, NULLIF(BTRIM(field_value), '') AS field_value
 table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
-table-dependency-viewer-api-1  |                     WHERE issue_id IN (SELECT task_id FROM task_ids)
-table-dependency-viewer-api-1  |                       AND field_name IN (
+table-dependency-viewer-api-1  |                     WHERE field_name IN (
 table-dependency-viewer-api-1  |                           'Тип карточки',
 table-dependency-viewer-api-1  |                           'Тип внерелиза',
 table-dependency-viewer-api-1  |                           'Фактическая дата релиза',
@@ -91,18 +105,7 @@ table-dependency-viewer-api-1  |                             WHEN lower(COALESCE
 table-dependency-viewer-api-1  |                             ELSE NULL
 table-dependency-viewer-api-1  |                         END AS custom_bucket
 table-dependency-viewer-api-1  |                     FROM task_custom
-table-dependency-viewer-api-1  |                 ),
-table-dependency-viewer-api-1  |                 release_match_by_task AS (
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         rt.release_id,
-table-dependency-viewer-api-1  |                         MAX(tc.release_slot_number) AS release_slot_number,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'release') AS release_slot_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'hotfix') AS hotfix_count,
-table-dependency-viewer-api-1  |                         COUNT(*) FILTER (WHERE tc.custom_bucket = 'outside_release') AS outside_release_count
-table-dependency-viewer-api-1  |                     FROM release_tasks rt
-table-dependency-viewer-api-1  |                     JOIN task_custom_norm tc
-table-dependency-viewer-api-1  |                       ON tc.issue_id = rt.task_id
-table-dependency-viewer-api-1  |                     GROUP BY rt.release_id
+table-dependency-viewer-api-1  |                     WHERE lower(COALESCE(card_type, '')) IN ('release slot', 'внерелиз')
 table-dependency-viewer-api-1  |                 ),
 table-dependency-viewer-api-1  |                 release_match_by_date AS (
 table-dependency-viewer-api-1  |                     SELECT
@@ -121,7 +124,7 @@ table-dependency-viewer-api-1  |                 rel AS (
 table-dependency-viewer-api-1  |                     SELECT
 table-dependency-viewer-api-1  |                         rr.release_id,
 table-dependency-viewer-api-1  |                         COALESCE(
-table-dependency-viewer-api-1  |                             NULLIF(COALESCE(rmt.release_slot_number, rmd.release_slot_number), ''),
+table-dependency-viewer-api-1  |                             NULLIF(rmd.release_slot_number, ''),
 table-dependency-viewer-api-1  |                             rr.release_type
 table-dependency-viewer-api-1  |                         ) AS release_type,
 table-dependency-viewer-api-1  |                         rr.initiated_by,
@@ -131,17 +134,12 @@ table-dependency-viewer-api-1  |                         rr.status,
 table-dependency-viewer-api-1  |                         rr.total_objects,
 table-dependency-viewer-api-1  |                         rr.ready_to_release,
 table-dependency-viewer-api-1  |                         CASE
-table-dependency-viewer-api-1  |                             WHEN COALESCE(rmt.release_slot_count, 0) > 0 THEN 'release'
-table-dependency-viewer-api-1  |                             WHEN COALESCE(rmt.hotfix_count, 0) > 0 THEN 'hotfix'
-table-dependency-viewer-api-1  |                             WHEN COALESCE(rmt.outside_release_count, 0) > 0 THEN 'outside_release'
 table-dependency-viewer-api-1  |                             WHEN COALESCE(rmd.release_slot_count, 0) > 0 THEN 'release'
 table-dependency-viewer-api-1  |                             WHEN COALESCE(rmd.hotfix_count, 0) > 0 THEN 'hotfix'
 table-dependency-viewer-api-1  |                             WHEN COALESCE(rmd.outside_release_count, 0) > 0 THEN 'outside_release'
 table-dependency-viewer-api-1  |                             ELSE rr.fallback_release_bucket
 table-dependency-viewer-api-1  |                         END AS release_bucket
 table-dependency-viewer-api-1  |                     FROM raw_rel rr
-table-dependency-viewer-api-1  |                     LEFT JOIN release_match_by_task rmt
-table-dependency-viewer-api-1  |                       ON rmt.release_id = rr.release_id
 table-dependency-viewer-api-1  |                     LEFT JOIN release_match_by_date rmd
 table-dependency-viewer-api-1  |                       ON rmd.release_id = rr.release_id
 table-dependency-viewer-api-1  |                 ),
@@ -250,5 +248,4 @@ table-dependency-viewer-api-1  |                     ]
 table-dependency-viewer-api-1  | [parameters: {'days': 180}]
 table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:42932 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error
-[root@rgm-s-dwhapp01 table-dependency-viewer]#
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:44918 - "GET /api/admin/reports/releases?days=180 HTTP/1.1" 500 Internal Server Error

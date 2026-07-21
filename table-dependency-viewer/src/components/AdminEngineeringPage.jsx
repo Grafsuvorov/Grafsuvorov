@@ -233,8 +233,13 @@ export default function AdminEngineeringPage() {
                 {option} дн
               </button>
             ))}
-            <button type="button" className="btn btn-secondary reports-print-btn" onClick={handlePrintReports}>
-              Сохранить PDF
+            <button
+              type="button"
+              className="btn btn-secondary reports-print-btn"
+              onClick={handlePrintReports}
+              title="Откроется системный диалог, где можно выбрать Сохранить в PDF"
+            >
+              PDF / Печать
             </button>
           </div>
         </div>

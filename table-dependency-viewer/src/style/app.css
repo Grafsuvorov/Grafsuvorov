@@ -14355,8 +14355,17 @@ html[data-theme="light"] .engineering-table-head.release-report-exception-row {
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  html,
   body {
     background: #08111f !important;
+    color: #f8fbff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   body * {
@@ -14368,18 +14377,69 @@ html[data-theme="light"] .engineering-table-head.release-report-exception-row {
     visibility: visible !important;
   }
 
+  .container,
   .reports-page {
-    position: absolute !important;
-    left: 16px !important;
-    top: 16px !important;
-    width: calc(100% - 32px) !important;
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
     background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
   }
 
+  .cc-page,
+  .reports-page,
+  .engineering-page {
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  .reports-header,
+  .reports-tabs,
+  .reports-subtabs,
   .reports-print-btn {
     display: none !important;
+  }
+
+  .engineering-toolbar .btn,
+  .engineering-toolbar .muted {
+    display: none !important;
+  }
+
+  .release-report-kpis,
+  .release-report-focus,
+  .reports-grid-primary,
+  .reports-grid-secondary,
+  .release-report-exception-grid,
+  .release-report-exception-story-grid,
+  .release-entity-focus-grid,
+  .release-report-type-grid,
+  .release-system-strip {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .reports-entity-chips,
+  .release-report-stream-meta,
+  .release-report-anomaly-head,
+  .release-report-anomaly-badges,
+  .release-report-anomaly-metrics,
+  .release-report-timeline-body,
+  .release-report-timeline-metrics,
+  .release-report-timeline-meta {
+    display: flex !important;
+    flex-wrap: wrap !important;
+  }
+
+  .engineering-chart,
+  .release-report-chart-wide,
+  .release-report-chart-compact {
+    height: auto !important;
+    min-height: 220px !important;
+    page-break-inside: avoid !important;
   }
 
   .release-report-block,
@@ -14397,6 +14457,27 @@ html[data-theme="light"] .engineering-table-head.release-report-exception-row {
 
   .release-report-chart-scroll {
     overflow: visible !important;
+  }
+
+  .release-report-stream-row,
+  .release-report-story-card,
+  .release-report-anomaly-card,
+  .engineering-table,
+  .engineering-chart {
+    background: rgba(15, 23, 42, 0.96) !important;
+    border-color: rgba(148, 163, 184, 0.18) !important;
+  }
+
+  .engineering-table-head {
+    display: grid !important;
+  }
+
+  .release-report-table-row,
+  .release-report-users-row,
+  .release-report-exception-row,
+  .release-report-initiators-row,
+  .engineering-table-row {
+    grid-template-columns: 1fr !important;
   }
 
   .recharts-wrapper,

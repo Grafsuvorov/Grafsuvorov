@@ -2181,6 +2181,11 @@ main.content {
   background: rgba(56, 189, 248, 0.06);
 }
 
+.release-report-filter-active {
+  border-color: rgba(56, 189, 248, 0.34);
+  background: rgba(56, 189, 248, 0.1);
+}
+
 .release-report-stream-button {
   width: 100%;
   text-align: left;

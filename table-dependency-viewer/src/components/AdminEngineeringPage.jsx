@@ -274,6 +274,8 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
   const [activeSubtab, setActiveSubtab] = useState("overview");
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [selectedExceptionDirection, setSelectedExceptionDirection] = useState("Все направления");
+  const [selectedExceptionType, setSelectedExceptionType] = useState("Все типы");
+  const [selectedExceptionEntity, setSelectedExceptionEntity] = useState("Все сущности");
   const cadence = data?.cadence || [];
   const summary = data?.summary || {};
   const topEntities = data?.top_entities || [];
@@ -362,10 +364,69 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
   const normalizedSelectedExceptionDirection =
     selectedExceptionDirection === "Все направления" ? null : selectedExceptionDirection;
 
-  const filteredExceptionRows = useMemo(() => {
+  const exceptionRowsByDirection = useMemo(() => {
     if (!normalizedSelectedExceptionDirection) return filteredExceptions;
     return filteredExceptions.filter((row) => (row.direction || "Не указано") === normalizedSelectedExceptionDirection);
   }, [filteredExceptions, normalizedSelectedExceptionDirection]);
+
+  const exceptionTypeOptions = useMemo(() => {
+    const seen = new Set();
+    const items = [];
+    exceptionRowsByDirection.forEach((row) => {
+      const releaseType = row.release_type || releaseBucketLabel(row.release_bucket);
+      if (!seen.has(releaseType)) {
+        seen.add(releaseType);
+        items.push(releaseType);
+      }
+    });
+    return ["Все типы", ...items.sort((a, b) => a.localeCompare(b, "ru"))];
+  }, [exceptionRowsByDirection]);
+
+  useEffect(() => {
+    if (exceptionTypeOptions.includes(selectedExceptionType)) return;
+    setSelectedExceptionType("Все типы");
+  }, [exceptionTypeOptions, selectedExceptionType]);
+
+  const normalizedSelectedExceptionType =
+    selectedExceptionType === "Все типы" ? null : selectedExceptionType;
+
+  const exceptionRowsByType = useMemo(() => {
+    if (!normalizedSelectedExceptionType) return exceptionRowsByDirection;
+    return exceptionRowsByDirection.filter(
+      (row) => (row.release_type || releaseBucketLabel(row.release_bucket)) === normalizedSelectedExceptionType
+    );
+  }, [exceptionRowsByDirection, normalizedSelectedExceptionType]);
+
+  const exceptionEntityOptions = useMemo(() => {
+    const seen = new Set();
+    const items = [];
+    exceptionRowsByType.forEach((row) => {
+      const names = row.entity_names?.length ? row.entity_names : ["Без сущности"];
+      names.forEach((entityName) => {
+        const key = entityName || "Без сущности";
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(key);
+        }
+      });
+    });
+    return ["Все сущности", ...items.sort((a, b) => a.localeCompare(b, "ru"))];
+  }, [exceptionRowsByType]);
+
+  useEffect(() => {
+    if (exceptionEntityOptions.includes(selectedExceptionEntity)) return;
+    setSelectedExceptionEntity("Все сущности");
+  }, [exceptionEntityOptions, selectedExceptionEntity]);
+
+  const normalizedSelectedExceptionEntity =
+    selectedExceptionEntity === "Все сущности" ? null : selectedExceptionEntity;
+
+  const filteredExceptionRows = useMemo(() => {
+    if (!normalizedSelectedExceptionEntity) return exceptionRowsByType;
+    return exceptionRowsByType.filter((row) =>
+      (row.entity_names?.length ? row.entity_names : ["Без сущности"]).includes(normalizedSelectedExceptionEntity)
+    );
+  }, [exceptionRowsByType, normalizedSelectedExceptionEntity]);
 
   const filteredExceptionByDay = useMemo(() => {
     const stats = new Map();
@@ -952,6 +1013,8 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       Исключения из штатного релизного контура.
                       {normalizedSelectedEntity ? ` Сущность: ${normalizedSelectedEntity}.` : ""}
                       {normalizedSelectedExceptionDirection ? ` Направление: ${normalizedSelectedExceptionDirection}.` : ""}
+                      {normalizedSelectedExceptionType ? ` Тип: ${normalizedSelectedExceptionType}.` : ""}
+                      {normalizedSelectedExceptionEntity ? ` Exception-сущность: ${normalizedSelectedExceptionEntity}.` : ""}
                     </div>
                   </div>
                 </div>
@@ -966,6 +1029,36 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                         onClick={() => setSelectedExceptionDirection(direction)}
                       >
                         {direction}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="release-report-filter-row">
+                  <span className="release-report-filter-caption">Тип исключения</span>
+                  <div className="reports-entity-chips">
+                    {exceptionTypeOptions.map((releaseType) => (
+                      <button
+                        key={releaseType}
+                        type="button"
+                        className={`reports-entity-chip ${selectedExceptionType === releaseType ? "active" : ""}`}
+                        onClick={() => setSelectedExceptionType(releaseType)}
+                      >
+                        {releaseType}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="release-report-filter-row">
+                  <span className="release-report-filter-caption">Сущность в исключениях</span>
+                  <div className="reports-entity-chips">
+                    {exceptionEntityOptions.map((entityName) => (
+                      <button
+                        key={entityName}
+                        type="button"
+                        className={`reports-entity-chip ${selectedExceptionEntity === entityName ? "active" : ""}`}
+                        onClick={() => setSelectedExceptionEntity(entityName)}
+                      >
+                        {entityName}
                       </button>
                     ))}
                   </div>
@@ -1082,12 +1175,19 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       <span>Часы</span>
                     </div>
                     {filteredExceptionByType.map((row) => (
-                      <div key={row.release_type} className="engineering-table-row release-report-exception-row">
+                      <button
+                        key={row.release_type}
+                        type="button"
+                        className={`engineering-table-row release-report-exception-row release-report-table-link ${
+                          selectedExceptionType === row.release_type ? "release-report-filter-active" : ""
+                        }`}
+                        onClick={() => setSelectedExceptionType(row.release_type)}
+                      >
                         <span className="engineering-primary" title={row.release_type}>{row.release_type}</span>
                         <span>{row.count}</span>
                         <span>{row.objects_count}</span>
                         <span>{formatHours(row.hours_total)}</span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                   <div className="engineering-table">
@@ -1098,12 +1198,19 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       <span>Часы</span>
                     </div>
                     {filteredExceptionByDirection.map((row) => (
-                      <div key={row.direction} className="engineering-table-row release-report-exception-row">
+                      <button
+                        key={row.direction}
+                        type="button"
+                        className={`engineering-table-row release-report-exception-row release-report-table-link ${
+                          selectedExceptionDirection === row.direction ? "release-report-filter-active" : ""
+                        }`}
+                        onClick={() => setSelectedExceptionDirection(row.direction)}
+                      >
                         <span className="engineering-primary" title={row.direction}>{row.direction}</span>
                         <span>{row.count}</span>
                         <span>{row.objects_count}</span>
                         <span>{formatHours(row.hours_total)}</span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1132,11 +1239,18 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                     <span>Объекты</span>
                   </div>
                   {filteredExceptionByEntity.map((row) => (
-                    <div key={row.entity_name} className="engineering-table-row release-report-exception-row">
+                    <button
+                      key={row.entity_name}
+                      type="button"
+                      className={`engineering-table-row release-report-exception-row release-report-table-link ${
+                        selectedExceptionEntity === row.entity_name ? "release-report-filter-active" : ""
+                      }`}
+                      onClick={() => setSelectedExceptionEntity(row.entity_name)}
+                    >
                       <span className="engineering-primary" title={row.entity_name}>{row.entity_name}</span>
                       <span>{row.count}</span>
                       <span>{row.objects_count}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </section>

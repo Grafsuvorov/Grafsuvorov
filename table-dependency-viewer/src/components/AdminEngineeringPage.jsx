@@ -273,6 +273,7 @@ export default function AdminEngineeringPage() {
 function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease }) {
   const [activeSubtab, setActiveSubtab] = useState("overview");
   const [selectedEntity, setSelectedEntity] = useState(null);
+  const [selectedExceptionDirection, setSelectedExceptionDirection] = useState("Все направления");
   const cadence = data?.cadence || [];
   const summary = data?.summary || {};
   const topEntities = data?.top_entities || [];
@@ -339,6 +340,111 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
     if (!normalizedSelectedEntity) return exceptionReleases;
     return exceptionReleases.filter((row) => (row.entity_names || []).includes(normalizedSelectedEntity));
   }, [exceptionReleases, normalizedSelectedEntity]);
+
+  const exceptionDirectionOptions = useMemo(() => {
+    const seen = new Set();
+    const items = [];
+    filteredExceptions.forEach((row) => {
+      const direction = row.direction || "Не указано";
+      if (!seen.has(direction)) {
+        seen.add(direction);
+        items.push(direction);
+      }
+    });
+    return ["Все направления", ...items.sort((a, b) => a.localeCompare(b, "ru"))];
+  }, [filteredExceptions]);
+
+  useEffect(() => {
+    if (exceptionDirectionOptions.includes(selectedExceptionDirection)) return;
+    setSelectedExceptionDirection("Все направления");
+  }, [exceptionDirectionOptions, selectedExceptionDirection]);
+
+  const normalizedSelectedExceptionDirection =
+    selectedExceptionDirection === "Все направления" ? null : selectedExceptionDirection;
+
+  const filteredExceptionRows = useMemo(() => {
+    if (!normalizedSelectedExceptionDirection) return filteredExceptions;
+    return filteredExceptions.filter((row) => (row.direction || "Не указано") === normalizedSelectedExceptionDirection);
+  }, [filteredExceptions, normalizedSelectedExceptionDirection]);
+
+  const filteredExceptionByDay = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const key = (row.started_at || "").slice(0, 10);
+      if (!key) return;
+      const bucket = stats.get(key) || {
+        day: key,
+        count: 0,
+        hotfix_count: 0,
+        outside_release_count: 0,
+        objects_count: 0,
+      };
+      bucket.count += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      if (row.release_bucket === "hotfix") bucket.hotfix_count += 1;
+      if (row.release_bucket === "outside_release") bucket.outside_release_count += 1;
+      stats.set(key, bucket);
+    });
+    return [...stats.values()].sort((a, b) => String(a.day).localeCompare(String(b.day))).slice(-20);
+  }, [filteredExceptionRows]);
+
+  const filteredExceptionByType = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const key = row.release_type || releaseBucketLabel(row.release_bucket);
+      const bucket = stats.get(key) || { release_type: key, count: 0, objects_count: 0, hours_total: 0 };
+      bucket.count += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      bucket.hours_total += Number(row.hours_total || 0);
+      stats.set(key, bucket);
+    });
+    return [...stats.values()].sort((a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a.release_type).localeCompare(String(b.release_type), "ru"));
+  }, [filteredExceptionRows]);
+
+  const filteredExceptionByDirection = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const key = row.direction || "Не указано";
+      const bucket = stats.get(key) || { direction: key, count: 0, objects_count: 0, hours_total: 0 };
+      bucket.count += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      bucket.hours_total += Number(row.hours_total || 0);
+      stats.set(key, bucket);
+    });
+    return [...stats.values()].sort((a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a.direction).localeCompare(String(b.direction), "ru"));
+  }, [filteredExceptionRows]);
+
+  const filteredExceptionByCreator = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const key = row.initiated_by || "Не указан";
+      const bucket = stats.get(key) || { creator: key, count: 0, objects_count: 0, hours_total: 0 };
+      bucket.count += 1;
+      bucket.objects_count += Number(row.objects_count || 0);
+      bucket.hours_total += Number(row.hours_total || 0);
+      stats.set(key, bucket);
+    });
+    return [...stats.values()].sort((a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a.creator).localeCompare(String(b.creator), "ru"));
+  }, [filteredExceptionRows]);
+
+  const filteredExceptionByEntity = useMemo(() => {
+    const stats = new Map();
+    filteredExceptionRows.forEach((row) => {
+      const names = row.entity_names?.length ? row.entity_names : ["Без сущности"];
+      names.forEach((entityName) => {
+        const key = entityName || "Без сущности";
+        const bucket = stats.get(key) || { entity_name: key, count: 0, objects_count: 0 };
+        bucket.count += 1;
+        bucket.objects_count += Number(row.objects_count || 0);
+        stats.set(key, bucket);
+      });
+    });
+    return [...stats.values()].sort((a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a.entity_name).localeCompare(String(b.entity_name), "ru"));
+  }, [filteredExceptionRows]);
+
+  const selectedExceptionTopType = filteredExceptionByType[0] || null;
+  const selectedExceptionTopCreator = filteredExceptionByCreator[0] || null;
+  const selectedExceptionTopEntity = filteredExceptionByEntity[0] || null;
 
   const selectedEntitySummary = useMemo(() => {
     if (!normalizedSelectedEntity) return null;
@@ -842,26 +948,45 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                 <div className="engineering-block-head">
                   <div>
                     <div className="section-subtitle">Хотфиксы и внерелизы</div>
-                    <div className="muted">Исключения из штатного релизного контура.</div>
+                    <div className="muted">
+                      Исключения из штатного релизного контура.
+                      {normalizedSelectedEntity ? ` Сущность: ${normalizedSelectedEntity}.` : ""}
+                      {normalizedSelectedExceptionDirection ? ` Направление: ${normalizedSelectedExceptionDirection}.` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="release-report-filter-row">
+                  <span className="release-report-filter-caption">Направление</span>
+                  <div className="reports-entity-chips">
+                    {exceptionDirectionOptions.map((direction) => (
+                      <button
+                        key={direction}
+                        type="button"
+                        className={`reports-entity-chip ${selectedExceptionDirection === direction ? "active" : ""}`}
+                        onClick={() => setSelectedExceptionDirection(direction)}
+                      >
+                        {direction}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div className="release-report-focus release-report-focus-exceptions">
                   <div className="release-report-focus-card">
-                    <div className="section-subtitle">Доля внеплановых поставок</div>
-                    <div className="release-report-focus-title">{Number(exceptionInsights.share_of_unplanned || 0).toFixed(1)}%</div>
+                    <div className="section-subtitle">Карточек в срезе</div>
+                    <div className="release-report-focus-title">{filteredExceptionRows.length}</div>
                     <div className="release-report-focus-meta">
-                      <span>{summary.hotfix_count || 0} хотфиксов</span>
-                      <span>{summary.outside_release_count || 0} внерелизов</span>
+                      <span>{filteredExceptionRows.filter((row) => row.release_bucket === "hotfix").length} хотфиксов</span>
+                      <span>{filteredExceptionRows.filter((row) => row.release_bucket === "outside_release").length} внерелизов</span>
                     </div>
                   </div>
                   <div className="release-report-focus-card">
                     <div className="section-subtitle">Главный тип исключений</div>
-                    {exceptionInsights.top_type ? (
+                    {selectedExceptionTopType ? (
                       <>
-                        <div className="release-report-focus-title">{exceptionInsights.top_type.release_type}</div>
+                        <div className="release-report-focus-title">{selectedExceptionTopType.release_type}</div>
                         <div className="release-report-focus-meta">
-                          <span>{exceptionInsights.top_type.count} карточек</span>
-                          <span>{exceptionInsights.top_type.objects_count} объектов</span>
+                          <span>{selectedExceptionTopType.count} карточек</span>
+                          <span>{selectedExceptionTopType.objects_count} объектов</span>
                         </div>
                       </>
                     ) : (
@@ -869,13 +994,13 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                     )}
                   </div>
                   <div className="release-report-focus-card">
-                    <div className="section-subtitle">Чаще всего инициировал</div>
-                    {exceptionInsights.top_creator ? (
+                    <div className="section-subtitle">Лидирующая сущность</div>
+                    {selectedExceptionTopEntity ? (
                       <>
-                        <div className="release-report-focus-title">{exceptionInsights.top_creator.creator}</div>
+                        <div className="release-report-focus-title">{selectedExceptionTopEntity.entity_name}</div>
                         <div className="release-report-focus-meta">
-                          <span>{exceptionInsights.top_creator.count} карточек</span>
-                          <span>{formatHours(exceptionInsights.top_creator.hours_total)}</span>
+                          <span>{selectedExceptionTopEntity.count} карточек</span>
+                          <span>{selectedExceptionTopEntity.objects_count} объектов</span>
                         </div>
                       </>
                     ) : (
@@ -884,10 +1009,10 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                   </div>
                 </div>
 
-                {exceptionByDay.length ? (
+                {filteredExceptionByDay.length ? (
                   <div className="engineering-chart release-report-chart-compact">
                     <ResponsiveContainer width="100%" height={220}>
-                      <ComposedChart data={exceptionByDay} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+                      <ComposedChart data={filteredExceptionByDay} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
                         <XAxis dataKey="day" stroke="#94a3b8" tickFormatter={(value) => formatShortDate(value)} />
                         <YAxis stroke="#94a3b8" />
@@ -913,7 +1038,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                 ) : null}
 
                 <div className="release-report-stream">
-                  {filteredExceptions.map((row) => (
+                  {filteredExceptionRows.map((row) => (
                     <button
                       key={`${row.release_id}-${row.release_bucket}`}
                       type="button"
@@ -937,7 +1062,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       </div>
                     </button>
                   ))}
-                  {filteredExceptions.length === 0 ? <div className="muted">Исключений в выбранном срезе нет.</div> : null}
+                  {filteredExceptionRows.length === 0 ? <div className="muted">Исключений в выбранном срезе нет.</div> : null}
                 </div>
               </section>
 
@@ -956,7 +1081,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       <span>Объекты</span>
                       <span>Часы</span>
                     </div>
-                    {exceptionByType.map((row) => (
+                    {filteredExceptionByType.map((row) => (
                       <div key={row.release_type} className="engineering-table-row release-report-exception-row">
                         <span className="engineering-primary" title={row.release_type}>{row.release_type}</span>
                         <span>{row.count}</span>
@@ -972,7 +1097,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       <span>Объекты</span>
                       <span>Часы</span>
                     </div>
-                    {exceptionByDirection.map((row) => (
+                    {filteredExceptionByDirection.map((row) => (
                       <div key={row.direction} className="engineering-table-row release-report-exception-row">
                         <span className="engineering-primary" title={row.direction}>{row.direction}</span>
                         <span>{row.count}</span>
@@ -990,7 +1115,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       <span>Объекты</span>
                       <span>Часы</span>
                     </div>
-                    {exceptionByCreator.map((row) => (
+                    {filteredExceptionByCreator.map((row) => (
                       <div key={row.creator} className="engineering-table-row release-report-exception-row">
                         <span className="engineering-primary" title={row.creator}>{row.creator}</span>
                         <span>{row.count}</span>
@@ -1006,7 +1131,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                     <span>Карточки</span>
                     <span>Объекты</span>
                   </div>
-                  {exceptionByEntity.map((row) => (
+                  {filteredExceptionByEntity.map((row) => (
                     <div key={row.entity_name} className="engineering-table-row release-report-exception-row">
                       <span className="engineering-primary" title={row.entity_name}>{row.entity_name}</span>
                       <span>{row.count}</span>

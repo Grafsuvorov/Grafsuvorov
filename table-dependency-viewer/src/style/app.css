@@ -1969,6 +1969,18 @@ main.content {
   height: 220px;
 }
 
+.release-report-filter-row {
+  display: grid;
+  gap: 10px;
+}
+
+.release-report-filter-caption {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(191, 219, 254, 0.62);
+}
+
 .release-report-chart-scroll {
   height: 100%;
   min-width: 0;

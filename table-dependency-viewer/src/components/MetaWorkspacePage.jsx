@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import DevMetaAdminPage from "./DevMetaAdminPage.jsx";
 import EntityDevMetaWorkspace from "./EntityDevMetaWorkspace.jsx";
 import { metaWorkspaceApi } from "../api/metaWorkspace.js";
@@ -40,6 +40,8 @@ function groupClickObjects(items) {
 }
 
 export default function MetaWorkspacePage({ userProfile }) {
+  const stopValidationRef = useRef(false);
+  const progressListRef = useRef(null);
   const [mode, setMode] = useState("gp");
   const [taskId, setTaskId] = useState("");
   const [releaseBranch, setReleaseBranch] = useState("");
@@ -85,6 +87,15 @@ export default function MetaWorkspacePage({ userProfile }) {
       { total: 0, valid: 0, invalid: 0, warnings: 0, infos: 0 },
     );
     return { summary, gp_results: gpResults, click_results: clickResults };
+  };
+
+  const resolveProgressState = (item) => {
+    if (!item) return "pending";
+    if (item.stopped) return "stopped";
+    if (item.running) return "running";
+    if (!item.valid) return "error";
+    if ((item.warnings?.length || 0) > 0) return "warning";
+    return "ok";
   };
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
@@ -141,6 +152,13 @@ export default function MetaWorkspacePage({ userProfile }) {
       setMode("gp");
     }
   }, [branchScopedActive, mode, showClickTab, showGpTab]);
+
+  useEffect(() => {
+    if (!branchValidationProgress?.items?.length) return;
+    const root = progressListRef.current;
+    const last = root?.querySelector(".meta-workspace-progress-item:first-child");
+    last?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [branchValidationProgress?.items?.length]);
 
   const loadBranchCatalog = async (selectedBranch, options = {}) => {
     const silent = Boolean(options?.silent);
@@ -272,6 +290,7 @@ export default function MetaWorkspacePage({ userProfile }) {
       return;
     }
     setValidatingBranch(true);
+    stopValidationRef.current = false;
     setBranchValidation(null);
     setBranchValidationProgress({
       total: queue.length,
@@ -281,13 +300,29 @@ export default function MetaWorkspacePage({ userProfile }) {
       current: queue[0]?.object_key || queue[0]?.file_name || null,
       items: [],
       done: false,
+      stopped: false,
     });
     setError(null);
     setMessage(null);
     try {
       const progressItems = [];
       for (let index = 0; index < queue.length; index += 1) {
+        if (stopValidationRef.current) {
+          setBranchValidationProgress((prev) => prev ? ({
+            ...prev,
+            done: true,
+            stopped: true,
+            current: null,
+          }) : prev);
+          setMessage(`Проверка остановлена пользователем: ${progressItems.length}/${queue.length}`);
+          break;
+        }
         const item = queue[index];
+        setBranchValidationProgress((prev) => prev ? ({
+          ...prev,
+          current: item.object_key || item.file_name || null,
+          items: [{ ...item, running: true }, ...progressItems],
+        }) : prev);
         let result;
         if (item.domain === "gp") {
           const bundle = await metaWorkspaceApi.branchGpBundle({
@@ -336,16 +371,23 @@ export default function MetaWorkspacePage({ userProfile }) {
           current: queue[index + 1]?.object_key || queue[index + 1]?.file_name || null,
           items: [...progressItems],
           done: index + 1 === queue.length,
+          stopped: false,
         });
         setMessage(`Проверка продолжается: ${index + 1}/${queue.length}. Последний объект: ${item.object_key || item.file_name}`);
       }
-      setMessage("Проверка всех объектов ветки завершена.");
+      if (!stopValidationRef.current) {
+        setMessage("Проверка всех объектов ветки завершена.");
+      }
     } catch (err) {
       setError(err.message || "Не удалось проверить объекты ветки");
     } finally {
       setBranchValidationProgress((prev) => (prev ? { ...prev, done: true, current: null } : prev));
       setValidatingBranch(false);
     }
+  };
+
+  const handleStopValidation = () => {
+    stopValidationRef.current = true;
   };
 
   const handleSyncBranch = async () => {
@@ -671,7 +713,9 @@ export default function MetaWorkspacePage({ userProfile }) {
                 <div>
                   <div className="section-subtitle">Статус проверки ветки</div>
                   <div className="muted">
-                    {branchValidationProgress.done
+                    {branchValidationProgress.stopped
+                      ? `Проверка остановлена: ${branchValidationProgress.checked}/${branchValidationProgress.total}`
+                      : branchValidationProgress.done
                       ? `Проверка завершена: ${branchValidationProgress.checked}/${branchValidationProgress.total}`
                       : `Проверка продолжается: ${branchValidationProgress.checked}/${branchValidationProgress.total}`}
                   </div>
@@ -679,6 +723,11 @@ export default function MetaWorkspacePage({ userProfile }) {
                 <div className="meta-workspace-progress-metrics">
                   <span className="meta-workspace-progress-pill ok">OK: {branchValidationProgress.valid}</span>
                   <span className="meta-workspace-progress-pill bad">Ошибки: {branchValidationProgress.invalid}</span>
+                  {validatingBranch ? (
+                    <button type="button" className="btn btn-secondary" onClick={handleStopValidation}>
+                      Остановить
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="meta-workspace-progress-bar">
@@ -688,14 +737,24 @@ export default function MetaWorkspacePage({ userProfile }) {
                 />
               </div>
               <div className="meta-workspace-progress-current">
-                {branchValidationProgress.current ? `Сейчас проверяем: ${branchValidationProgress.current}` : "Все объекты проверены"}
+                {branchValidationProgress.current ? `Сейчас проверяем: ${branchValidationProgress.current}` : branchValidationProgress.stopped ? "Проверка остановлена" : "Все объекты проверены"}
               </div>
               {branchValidationProgress.items?.length ? (
-                <div className="meta-workspace-progress-list">
+                <div className="meta-workspace-progress-list" ref={progressListRef}>
                   {branchValidationProgress.items.slice().reverse().map((item) => (
-                    <div key={`${item.object_key || item.file_path}:${item.domain}`} className={`meta-workspace-progress-item ${item.valid ? "ok" : "bad"}`}>
+                    <div key={`${item.object_key || item.file_path}:${item.domain}`} className={`meta-workspace-progress-item ${resolveProgressState(item)}`}>
                       <span className="meta-workspace-progress-item-name">{item.object_key || item.file_name}</span>
-                      <span className="meta-workspace-progress-item-state">{item.valid ? "OK" : "Ошибка"}</span>
+                      <span className="meta-workspace-progress-item-state">
+                        {resolveProgressState(item) === "running"
+                          ? "В работе"
+                          : resolveProgressState(item) === "warning"
+                            ? "Warning"
+                            : resolveProgressState(item) === "ok"
+                              ? "OK"
+                              : resolveProgressState(item) === "stopped"
+                                ? "Остановлено"
+                                : "Ошибка"}
+                      </span>
                     </div>
                   ))}
                 </div>

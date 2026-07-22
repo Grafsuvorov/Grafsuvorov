@@ -2158,6 +2158,20 @@ main.content {
   grid-template-columns: minmax(0, 1.8fr) 0.65fr 0.7fr 0.8fr;
 }
 
+.incident-report-wide-row {
+  grid-template-columns: minmax(0, 2.5fr) 0.6fr 0.7fr 0.8fr;
+}
+
+.incident-report-linked-row {
+  grid-template-columns: minmax(0, 2.6fr) 0.7fr;
+}
+
+.incident-report-wide-row .engineering-primary,
+.incident-report-linked-row .engineering-primary {
+  white-space: normal;
+  line-height: 1.35;
+}
+
 .release-report-focus-exceptions {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

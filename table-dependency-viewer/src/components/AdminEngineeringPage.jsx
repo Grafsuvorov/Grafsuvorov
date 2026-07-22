@@ -54,16 +54,24 @@ const STATUS_CLASS = {
 };
 
 function formatHours(value) {
-  return `${Number(value || 0).toFixed(1)} ч`;
+  return `${Number(value || 0).toFixed(2)} ч`;
 }
 
 function formatMinutes(value) {
   const numeric = Number(value || 0);
   if (!numeric) return "0 мин";
   if (numeric >= 60) {
-    return `${(numeric / 60).toFixed(1)} ч`;
+    return `${(numeric / 60).toFixed(2)} ч`;
   }
   return `${Math.round(numeric)} мин`;
+}
+
+function formatNumber(value, digits = 2) {
+  return Number(value || 0).toFixed(digits);
+}
+
+function formatPercent(value, digits = 2) {
+  return `${formatNumber(value, digits)}%`;
 }
 
 function shortLabel(value, limit = 18) {
@@ -259,7 +267,7 @@ export default function AdminEngineeringPage() {
               type="button"
               className="btn btn-secondary reports-print-btn"
               onClick={handlePrintReports}
-              title="Откроется системный диалог экспорта в PDF"
+              title="Откроется системный диалог браузера: выберите Сохранить как PDF"
             >
               Экспорт в PDF
             </button>
@@ -627,12 +635,12 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
       hotfixShare >= outsideShare ? "Хотфиксы" : "Внерелизы";
     const narrative =
       status === "surge"
-        ? `Последняя неделя ускорилась: ${latestCount} карточек против среднего ${previousAvg.toFixed(1)} за предыдущие недели.`
+        ? `Последняя неделя ускорилась: ${latestCount} карточек против среднего ${formatNumber(previousAvg)} за предыдущие недели.`
         : status === "cooldown"
-          ? `Последняя неделя тише обычного: ${latestCount} карточек против среднего ${previousAvg.toFixed(1)}.`
+          ? `Последняя неделя тише обычного: ${latestCount} карточек против среднего ${formatNumber(previousAvg)}.`
           : status === "quiet"
             ? "В последнюю неделю исключения не зафиксированы."
-            : `Последняя неделя идёт близко к норме: ${latestCount} карточек при среднем ${previousAvg.toFixed(1)}.`;
+            : `Последняя неделя идёт близко к норме: ${latestCount} карточек при среднем ${formatNumber(previousAvg)}.`;
     return {
       latest,
       previousAvg,
@@ -763,7 +771,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
             <div className="release-report-kpi cube-objects">
               <div className="label">Объекты</div>
               <div className="value">{summary.objects_count ?? 0}</div>
-              <div className="hint">{Number(summary.avg_objects_per_release || 0).toFixed(1)} на релиз</div>
+              <div className="hint">{formatNumber(summary.avg_objects_per_release)} на релиз</div>
             </div>
             <div className="release-report-kpi cube-hotfix">
               <div className="label">Хотфиксы</div>
@@ -1320,15 +1328,15 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
                       </div>
                       <div className="release-report-anomaly-metric">
                         <span>Среднее до неё</span>
-                        <strong>{exceptionTrendSummary.previousAvg.toFixed(1)}</strong>
+                        <strong>{formatNumber(exceptionTrendSummary.previousAvg)}</strong>
                       </div>
                       <div className="release-report-anomaly-metric">
                         <span>Доля хотфиксов</span>
-                        <strong>{exceptionTrendSummary.hotfixShare.toFixed(0)}%</strong>
+                        <strong>{formatPercent(exceptionTrendSummary.hotfixShare)}</strong>
                       </div>
                       <div className="release-report-anomaly-metric">
                         <span>Доля внерелизов</span>
-                        <strong>{exceptionTrendSummary.outsideShare.toFixed(0)}%</strong>
+                        <strong>{formatPercent(exceptionTrendSummary.outsideShare)}</strong>
                       </div>
                     </div>
                   </div>
@@ -1770,24 +1778,24 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
               <div className="hint">{summary.open} в работе / вне завершения</div>
             </div>
             <div className="release-report-kpi cube-hours">
-              <div className="label">Средний MTTR</div>
+              <div className="label">Среднее время восстановления (MTTR)</div>
               <div className="value">{formatHours(summary.avgDurationHours)}</div>
               <div className="hint">{formatHours(summary.effortHours)} прямых трудозатрат</div>
             </div>
             <div className="release-report-kpi cube-objects">
-              <div className="label">Охват</div>
+              <div className="label">Охват инцидентов</div>
               <div className="value">{summary.entities}</div>
-              <div className="hint">{summary.tables} таблиц под ударом</div>
+              <div className="hint">{summary.tables} затронутых таблиц</div>
             </div>
             <div className="release-report-kpi cube-users">
-              <div className="label">Delivery-context</div>
+              <div className="label">Связи с delivery</div>
               <div className="value">{summary.linkedCount}</div>
-              <div className="hint">{summary.preventiveShare.toFixed(1)}% с профилактикой</div>
+              <div className="hint">{formatPercent(summary.preventiveShare)} с профилактикой</div>
             </div>
             <div className="release-report-kpi cube-outside">
-              <div className="label">AI saving</div>
+              <div className="label">Экономия от AI</div>
               <div className="value">{formatHours(summary.aiSavingHours)}</div>
-              <div className="hint">из карточек инцидентов</div>
+              <div className="hint">из полей инцидентных карточек</div>
             </div>
           </div>
 
@@ -1799,19 +1807,19 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
                   <div className="release-report-focus-title">{focus.topReason.reason}</div>
                   <div className="release-report-focus-meta">
                     <span>{focus.topReason.count} инцидентов</span>
-                    <span>{focus.topReason.avg_duration_hours.toFixed(1)} ч MTTR</span>
+                    <span>{formatHours(focus.topReason.avg_duration_hours)} MTTR</span>
                   </div>
                 </>
               ) : <div className="muted">Нет данных.</div>}
             </div>
             <div className="release-report-focus-card">
-              <div className="section-subtitle">Шумное направление</div>
+              <div className="section-subtitle">Направление с наибольшим числом инцидентов</div>
               {focus.topDirection ? (
                 <>
                   <div className="release-report-focus-title">{focus.topDirection.direction}</div>
                   <div className="release-report-focus-meta">
                     <span>{focus.topDirection.count} инцидентов</span>
-                    <span>{focus.topDirection.effort_hours.toFixed(1)} ч труда</span>
+                    <span>{formatHours(focus.topDirection.effort_hours)} труда</span>
                   </div>
                 </>
               ) : <div className="muted">Нет данных.</div>}
@@ -1820,7 +1828,15 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
               <div className="section-subtitle">Самый длинный кейс</div>
               {focus.longest ? (
                 <>
-                  <div className="release-report-focus-title">{focus.longest.issue_id}</div>
+                  <div className="release-report-focus-title">
+                    {focus.longest.link ? (
+                      <a href={focus.longest.link} target="_blank" rel="noreferrer" className="yt-link">
+                        {focus.longest.issue_id}
+                      </a>
+                    ) : (
+                      focus.longest.issue_id
+                    )}
+                  </div>
                   <div className="release-report-focus-meta">
                     <span>{formatMinutes(focus.longest.duration_minutes)}</span>
                     <span>{shortLabel(focus.longest.summary, 28)}</span>
@@ -1893,21 +1909,21 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
 
             <section className="engineering-block release-report-block">
               <div className="engineering-block-head">
-                <div>
-                  <div className="section-subtitle">Delivery и источники</div>
-                  <div className="muted">Откуда приходят сигналы и в какой delivery-контекст они чаще связаны.</div>
+                  <div>
+                  <div className="section-subtitle">Связи с delivery и источники сигналов</div>
+                  <div className="muted">Откуда приходят инциденты и с какими типами delivery-задач они чаще связаны.</div>
                 </div>
               </div>
               <div className="release-report-exception-grid">
                 <div className="engineering-table">
-                  <div className="engineering-table-head release-report-exception-row">
+                  <div className="engineering-table-head release-report-exception-row incident-report-wide-row">
                     <span>Источник</span>
                     <span>Кейсы</span>
                     <span>Таблицы</span>
                     <span>MTTR</span>
                   </div>
                   {sourceBreakdown.map((row) => (
-                    <div key={row.source} className="engineering-table-row release-report-exception-row">
+                    <div key={row.source} className="engineering-table-row release-report-exception-row incident-report-wide-row">
                       <span className="engineering-primary" title={row.source}>{row.source}</span>
                       <span>{row.count}</span>
                       <span>{row.objects_count}</span>
@@ -1916,18 +1932,14 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
                   ))}
                 </div>
                 <div className="engineering-table">
-                  <div className="engineering-table-head release-report-exception-row">
-                    <span>Linked issue type</span>
+                  <div className="engineering-table-head release-report-exception-row incident-report-linked-row">
+                    <span>Тип связанной delivery-задачи</span>
                     <span>Связей</span>
-                    <span></span>
-                    <span></span>
                   </div>
                   {linkedIssueTypeBreakdown.map((row) => (
-                    <div key={row.linked_issue_type} className="engineering-table-row release-report-exception-row">
+                    <div key={row.linked_issue_type} className="engineering-table-row release-report-exception-row incident-report-linked-row">
                       <span className="engineering-primary" title={row.linked_issue_type}>{row.linked_issue_type}</span>
                       <span>{row.count}</span>
-                      <span></span>
-                      <span></span>
                     </div>
                   ))}
                 </div>
@@ -2033,8 +2045,16 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
               {recentIncidents.map((incident) => (
                 <article key={incident.issue_id} className="incident-card incident-report-card">
                   <header className="incident-card-header">
-                    <div>
-                      <div className="mono incident-card-id">{incident.issue_id}</div>
+                      <div>
+                      <div className="mono incident-card-id">
+                        {incident.link ? (
+                          <a href={incident.link} target="_blank" rel="noreferrer" className="yt-link">
+                            {incident.issue_id}
+                          </a>
+                        ) : (
+                          incident.issue_id
+                        )}
+                      </div>
                       <div className="incident-title">{incident.summary}</div>
                     </div>
                     <div className="incident-actions">

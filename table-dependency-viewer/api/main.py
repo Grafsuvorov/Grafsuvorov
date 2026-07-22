@@ -2301,6 +2301,7 @@ def get_admin_incident_reports(
             incidents.append(
                 {
                     "issue_id": issue_id,
+                    "link": _build_ytrack_link(issue_id),
                     "issue_type": row.get("issue_type"),
                     "project_name": row.get("project_name"),
                     "summary": str(row.get("summary") or "").strip(),
@@ -2382,8 +2383,8 @@ def get_admin_incident_reports(
                 result.append(
                     {
                         **bucket,
-                        "avg_duration_hours": round((bucket["duration_minutes"] / count) / 60.0, 1),
-                        "effort_hours": round(bucket["effort_minutes"] / 60.0, 1),
+                        "avg_duration_hours": round((bucket["duration_minutes"] / count) / 60.0, 2),
+                        "effort_hours": round(bucket["effort_minutes"] / 60.0, 2),
                     }
                 )
             result.sort(key=lambda row: (-row["count"], -row["objects_count"], str(row[label_field])))
@@ -2450,8 +2451,8 @@ def get_admin_incident_reports(
             [
                 {
                     **bucket,
-                    "avg_duration_hours": round((bucket["duration_minutes"] / max(bucket["count"], 1)) / 60.0, 1),
-                    "effort_hours": round(bucket["effort_minutes"] / 60.0, 1),
+                    "avg_duration_hours": round((bucket["duration_minutes"] / max(bucket["count"], 1)) / 60.0, 2),
+                    "effort_hours": round(bucket["effort_minutes"] / 60.0, 2),
                 }
                 for bucket in entity_stats.values()
             ],
@@ -2485,12 +2486,12 @@ def get_admin_incident_reports(
             "open_count": open_count,
             "unique_entities": len(unique_entities),
             "unique_tables": len(unique_tables),
-            "hours_spent_total": round(sum(effort_values) / 60.0, 1),
-            "hours_saved_total": round(sum(saving_values) / 60.0, 1),
-            "avg_resolution_hours": round((sum(duration_values) / max(len(duration_values), 1)) / 60.0, 1) if duration_values else 0,
+            "hours_spent_total": round(sum(effort_values) / 60.0, 2),
+            "hours_saved_total": round(sum(saving_values) / 60.0, 2),
+            "avg_resolution_hours": round((sum(duration_values) / max(len(duration_values), 1)) / 60.0, 2) if duration_values else 0,
             "linked_count": linked_count,
             "preventive_count": preventive_count,
-            "preventive_share": round((preventive_count / max(len(incidents), 1)) * 100, 1) if incidents else 0,
+            "preventive_share": round((preventive_count / max(len(incidents), 1)) * 100, 2) if incidents else 0,
         }
 
         return {

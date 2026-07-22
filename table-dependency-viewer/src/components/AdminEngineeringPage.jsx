@@ -19,6 +19,7 @@ import { formatLocalDateTime } from "../utils/datetime.js";
 const DAY_OPTIONS = [30, 60, 90, 180, 365];
 const REPORT_TABS = [
   { id: "releases", label: "Релизы" },
+  { id: "incidents", label: "Инциденты" },
   { id: "team", label: "Команда" },
 ];
 const RELEASE_SUBTABS = [
@@ -69,6 +70,13 @@ function shortLabel(value, limit = 18) {
   if (!value) return "—";
   if (value.length <= limit) return value;
   return `${value.slice(0, limit - 1)}…`;
+}
+
+function shortText(value, limit = 140) {
+  const text = String(value || "").trim();
+  if (!text) return "—";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit - 1)}…`;
 }
 
 function formatDateTime(value) {
@@ -146,6 +154,10 @@ export default function AdminEngineeringPage() {
   const [releaseLoading, setReleaseLoading] = useState(false);
   const [releaseError, setReleaseError] = useState(null);
 
+  const [incidentData, setIncidentData] = useState(null);
+  const [incidentLoading, setIncidentLoading] = useState(false);
+  const [incidentError, setIncidentError] = useState(null);
+
   const [teamData, setTeamData] = useState(null);
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState(null);
@@ -159,6 +171,16 @@ export default function AdminEngineeringPage() {
       .catch((err) => setReleaseError(err.message || "Не удалось загрузить релизную аналитику"))
       .finally(() => setReleaseLoading(false));
   }, [days]);
+
+  useEffect(() => {
+    if (activeTab !== "incidents") return;
+    setIncidentLoading(true);
+    setIncidentError(null);
+    adminApi.incidentReports(days)
+      .then((payload) => setIncidentData(payload || null))
+      .catch((err) => setIncidentError(err.message || "Не удалось загрузить аналитику инцидентов"))
+      .finally(() => setIncidentLoading(false));
+  }, [activeTab, days]);
 
   useEffect(() => {
     if (activeTab !== "team") return;
@@ -264,6 +286,18 @@ export default function AdminEngineeringPage() {
             error={releaseError}
             onOpenTable={(schema, table) => navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`)}
             onOpenRelease={(releaseId) => navigate("/releases", { state: { releaseId } })}
+          />
+        ) : activeTab === "incidents" ? (
+          <IncidentReportsTab
+            data={incidentData}
+            loading={incidentLoading}
+            error={incidentError}
+            onOpenTable={(tableFqn) => {
+              if (!tableFqn) return;
+              const [schema, ...rest] = tableFqn.split(".");
+              if (!schema || !rest.length) return;
+              navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(rest.join("."))}`);
+            }}
           />
         ) : (
           <TeamEfficiencyTab
@@ -1515,6 +1549,555 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
               </section>
             </div>
           )}
+        </>
+      )}
+    </>
+  );
+}
+
+function IncidentReportsTab({ data, loading, error, onOpenTable }) {
+  const [selectedDirection, setSelectedDirection] = useState("Все направления");
+  const [selectedReason, setSelectedReason] = useState("Все причины");
+  const [selectedEntity, setSelectedEntity] = useState("Все сущности");
+
+  const incidentRows = data?.incidents || [];
+
+  const directionOptions = useMemo(() => {
+    const items = [...new Set(incidentRows.map((row) => row.direction_name || "Не указано"))];
+    return ["Все направления", ...items.sort((a, b) => a.localeCompare(b, "ru"))];
+  }, [incidentRows]);
+
+  const filteredByDirection = useMemo(() => {
+    if (selectedDirection === "Все направления") return incidentRows;
+    return incidentRows.filter((row) => (row.direction_name || "Не указано") === selectedDirection);
+  }, [incidentRows, selectedDirection]);
+
+  const reasonOptions = useMemo(() => {
+    const items = [...new Set(filteredByDirection.map((row) => row.incident_reason_name || "Не указана"))];
+    return ["Все причины", ...items.sort((a, b) => a.localeCompare(b, "ru"))];
+  }, [filteredByDirection]);
+
+  useEffect(() => {
+    if (reasonOptions.includes(selectedReason)) return;
+    setSelectedReason("Все причины");
+  }, [reasonOptions, selectedReason]);
+
+  const filteredByReason = useMemo(() => {
+    if (selectedReason === "Все причины") return filteredByDirection;
+    return filteredByDirection.filter((row) => (row.incident_reason_name || "Не указана") === selectedReason);
+  }, [filteredByDirection, selectedReason]);
+
+  const entityOptions = useMemo(() => {
+    const items = new Set();
+    filteredByReason.forEach((row) => (row.entity_names || ["Без сущности"]).forEach((item) => items.add(item || "Без сущности")));
+    return ["Все сущности", ...[...items].sort((a, b) => a.localeCompare(b, "ru"))];
+  }, [filteredByReason]);
+
+  useEffect(() => {
+    if (entityOptions.includes(selectedEntity)) return;
+    setSelectedEntity("Все сущности");
+  }, [entityOptions, selectedEntity]);
+
+  const filteredRows = useMemo(() => {
+    if (selectedEntity === "Все сущности") return filteredByReason;
+    return filteredByReason.filter((row) => (row.entity_names || ["Без сущности"]).includes(selectedEntity));
+  }, [filteredByReason, selectedEntity]);
+
+  const aggregateBy = (rows, getter, labelField) => {
+    const stats = new Map();
+    rows.forEach((row) => {
+      const label = getter(row);
+      const bucket = stats.get(label) || {
+        [labelField]: label,
+        count: 0,
+        duration_minutes: 0,
+        effort_minutes: 0,
+        resolved_count: 0,
+        open_count: 0,
+        objects_count: 0,
+      };
+      bucket.count += 1;
+      bucket.duration_minutes += Number(row.duration_minutes || 0);
+      bucket.effort_minutes += Number(row.actual_effort_minutes || 0);
+      bucket.objects_count += Number(row.affected_tables_count || 0);
+      if (row.status_bucket === "resolved") bucket.resolved_count += 1;
+      else bucket.open_count += 1;
+      stats.set(label, bucket);
+    });
+    return [...stats.values()]
+      .map((row) => ({
+        ...row,
+        avg_duration_hours: row.count ? row.duration_minutes / row.count / 60 : 0,
+        effort_hours: row.effort_minutes / 60,
+      }))
+      .sort((a, b) => b.count - a.count || b.objects_count - a.objects_count || String(a[labelField]).localeCompare(String(b[labelField]), "ru"));
+  };
+
+  const summary = useMemo(() => {
+    const total = filteredRows.length;
+    const resolved = filteredRows.filter((row) => row.status_bucket === "resolved").length;
+    const open = total - resolved;
+    const entities = new Set();
+    const tables = new Set();
+    let effortMinutes = 0;
+    let durationMinutes = 0;
+    let linkedCount = 0;
+    let preventiveCount = 0;
+    let aiSavingMinutes = 0;
+    filteredRows.forEach((row) => {
+      (row.entity_names || []).forEach((item) => entities.add(item));
+      (row.table_fqns || []).forEach((item) => tables.add(item));
+      effortMinutes += Number(row.actual_effort_minutes || 0);
+      durationMinutes += Number(row.duration_minutes || 0);
+      aiSavingMinutes += Number(row.ai_saving_minutes || 0);
+      if (row.linked_issues_count) linkedCount += 1;
+      if (row.preventive_filled) preventiveCount += 1;
+    });
+    return {
+      total,
+      resolved,
+      open,
+      entities: entities.size,
+      tables: tables.size,
+      effortHours: effortMinutes / 60,
+      avgDurationHours: total ? durationMinutes / total / 60 : 0,
+      linkedCount,
+      preventiveShare: total ? (preventiveCount / total) * 100 : 0,
+      aiSavingHours: aiSavingMinutes / 60,
+    };
+  }, [filteredRows]);
+
+  const weeklyTimeline = useMemo(() => {
+    const stats = new Map();
+    filteredRows.forEach((row) => {
+      const weekStart = weekStartKey(row.incident_start_dttm);
+      if (!weekStart) return;
+      const bucket = stats.get(weekStart) || {
+        week_start: weekStart,
+        week_label: formatShortDate(weekStart),
+        count: 0,
+        resolved_count: 0,
+        open_count: 0,
+        duration_hours: 0,
+      };
+      bucket.count += 1;
+      bucket.duration_hours += Number(row.duration_minutes || 0) / 60;
+      if (row.status_bucket === "resolved") bucket.resolved_count += 1;
+      else bucket.open_count += 1;
+      stats.set(weekStart, bucket);
+    });
+    return [...stats.values()].sort((a, b) => String(a.week_start).localeCompare(String(b.week_start))).slice(-16);
+  }, [filteredRows]);
+
+  const dailyTimeline = useMemo(() => {
+    const stats = new Map();
+    filteredRows.forEach((row) => {
+      const day = String(row.incident_start_dttm || "").slice(0, 10);
+      if (!day) return;
+      const bucket = stats.get(day) || { day, count: 0, duration_hours: 0, resolved_count: 0, open_count: 0 };
+      bucket.count += 1;
+      bucket.duration_hours += Number(row.duration_minutes || 0) / 60;
+      if (row.status_bucket === "resolved") bucket.resolved_count += 1;
+      else bucket.open_count += 1;
+      stats.set(day, bucket);
+    });
+    return [...stats.values()].sort((a, b) => String(a.day).localeCompare(String(b.day))).slice(-20);
+  }, [filteredRows]);
+
+  const reasonBreakdown = useMemo(() => aggregateBy(filteredRows, (row) => row.incident_reason_name || "Не указана", "reason").slice(0, 8), [filteredRows]);
+  const sourceBreakdown = useMemo(() => aggregateBy(filteredRows, (row) => row.alert_source || "Не указан", "source").slice(0, 8), [filteredRows]);
+  const directionBreakdown = useMemo(() => aggregateBy(filteredRows, (row) => row.direction_name || "Не указано", "direction").slice(0, 8), [filteredRows]);
+  const assigneeBreakdown = useMemo(() => aggregateBy(filteredRows, (row) => row.assignee_name || "Не указан", "assignee").slice(0, 8), [filteredRows]);
+  const linkedIssueTypeBreakdown = useMemo(() => {
+    const stats = new Map();
+    filteredRows.forEach((row) => {
+      (row.linked_issue_types || []).forEach((item) => {
+        const key = item || "Не указано";
+        stats.set(key, (stats.get(key) || 0) + 1);
+      });
+    });
+    return [...stats.entries()].map(([linked_issue_type, count]) => ({ linked_issue_type, count })).sort((a, b) => b.count - a.count || a.linked_issue_type.localeCompare(b.linked_issue_type, "ru")).slice(0, 8);
+  }, [filteredRows]);
+  const entityBreakdown = useMemo(() => {
+    const stats = new Map();
+    filteredRows.forEach((row) => {
+      (row.entity_names || ["Без сущности"]).forEach((entityName) => {
+        const key = entityName || "Без сущности";
+        const bucket = stats.get(key) || { entity_name: key, count: 0, duration_minutes: 0, effort_minutes: 0, objects_count: 0 };
+        bucket.count += 1;
+        bucket.duration_minutes += Number(row.duration_minutes || 0);
+        bucket.effort_minutes += Number(row.actual_effort_minutes || 0);
+        bucket.objects_count += Number(row.affected_tables_count || 0);
+        stats.set(key, bucket);
+      });
+    });
+    return [...stats.values()]
+      .map((row) => ({ ...row, avg_duration_hours: row.count ? row.duration_minutes / row.count / 60 : 0, effort_hours: row.effort_minutes / 60 }))
+      .sort((a, b) => b.count - a.count || b.objects_count - a.objects_count || a.entity_name.localeCompare(b.entity_name, "ru"))
+      .slice(0, 10);
+  }, [filteredRows]);
+
+  const focus = useMemo(() => ({
+    topReason: reasonBreakdown[0] || null,
+    topDirection: directionBreakdown[0] || null,
+    longest: [...filteredRows].sort((a, b) => Number(b.duration_minutes || 0) - Number(a.duration_minutes || 0))[0] || null,
+    topEntity: entityBreakdown[0] || null,
+  }), [reasonBreakdown, directionBreakdown, filteredRows, entityBreakdown]);
+
+  const recentIncidents = useMemo(
+    () => [...filteredRows].sort((a, b) => String(b.incident_start_dttm || "").localeCompare(String(a.incident_start_dttm || ""))).slice(0, 14),
+    [filteredRows]
+  );
+
+  const dataSourceLabel = data?.source === "dev" ? "DEV источник" : "Источник";
+
+  return (
+    <>
+      {error ? <div className="dev-meta-feedback error">{error}</div> : null}
+      {loading ? <div className="muted">Загрузка аналитики инцидентов...</div> : null}
+
+      {!loading && data && (
+        <>
+          <div className="release-report-kpis incident-report-kpis">
+            <div className="release-report-kpi cube-hotfix">
+              <div className="label">Инциденты</div>
+              <div className="value">{summary.total}</div>
+              <div className="hint">{dataSourceLabel}</div>
+            </div>
+            <div className="release-report-kpi cube-release">
+              <div className="label">Закрыто</div>
+              <div className="value">{summary.resolved}</div>
+              <div className="hint">{summary.open} в работе / вне завершения</div>
+            </div>
+            <div className="release-report-kpi cube-hours">
+              <div className="label">Средний MTTR</div>
+              <div className="value">{formatHours(summary.avgDurationHours)}</div>
+              <div className="hint">{formatHours(summary.effortHours)} прямых трудозатрат</div>
+            </div>
+            <div className="release-report-kpi cube-objects">
+              <div className="label">Охват</div>
+              <div className="value">{summary.entities}</div>
+              <div className="hint">{summary.tables} таблиц под ударом</div>
+            </div>
+            <div className="release-report-kpi cube-users">
+              <div className="label">Delivery-context</div>
+              <div className="value">{summary.linkedCount}</div>
+              <div className="hint">{summary.preventiveShare.toFixed(1)}% с профилактикой</div>
+            </div>
+            <div className="release-report-kpi cube-outside">
+              <div className="label">AI saving</div>
+              <div className="value">{formatHours(summary.aiSavingHours)}</div>
+              <div className="hint">из карточек инцидентов</div>
+            </div>
+          </div>
+
+          <div className="release-report-focus incident-report-focus">
+            <div className="release-report-focus-card">
+              <div className="section-subtitle">Главная причина</div>
+              {focus.topReason ? (
+                <>
+                  <div className="release-report-focus-title">{focus.topReason.reason}</div>
+                  <div className="release-report-focus-meta">
+                    <span>{focus.topReason.count} инцидентов</span>
+                    <span>{focus.topReason.avg_duration_hours.toFixed(1)} ч MTTR</span>
+                  </div>
+                </>
+              ) : <div className="muted">Нет данных.</div>}
+            </div>
+            <div className="release-report-focus-card">
+              <div className="section-subtitle">Шумное направление</div>
+              {focus.topDirection ? (
+                <>
+                  <div className="release-report-focus-title">{focus.topDirection.direction}</div>
+                  <div className="release-report-focus-meta">
+                    <span>{focus.topDirection.count} инцидентов</span>
+                    <span>{focus.topDirection.effort_hours.toFixed(1)} ч труда</span>
+                  </div>
+                </>
+              ) : <div className="muted">Нет данных.</div>}
+            </div>
+            <div className="release-report-focus-card">
+              <div className="section-subtitle">Самый длинный кейс</div>
+              {focus.longest ? (
+                <>
+                  <div className="release-report-focus-title">{focus.longest.issue_id}</div>
+                  <div className="release-report-focus-meta">
+                    <span>{formatMinutes(focus.longest.duration_minutes)}</span>
+                    <span>{shortLabel(focus.longest.summary, 28)}</span>
+                  </div>
+                </>
+              ) : <div className="muted">Нет данных.</div>}
+            </div>
+          </div>
+
+          <div className="release-report-filter-row">
+            <span className="release-report-filter-caption">Фильтры инцидентов</span>
+            <div className="reports-entity-chips">
+              {directionOptions.map((item) => (
+                <button key={item} type="button" className={`reports-entity-chip ${selectedDirection === item ? "active" : ""}`} onClick={() => setSelectedDirection(item)}>
+                  {item}
+                </button>
+              ))}
+            </div>
+            <div className="reports-entity-chips">
+              {reasonOptions.map((item) => (
+                <button key={item} type="button" className={`reports-entity-chip ${selectedReason === item ? "active" : ""}`} onClick={() => setSelectedReason(item)}>
+                  {item}
+                </button>
+              ))}
+            </div>
+            <div className="reports-entity-chips">
+              {entityOptions.map((item) => (
+                <button key={item} type="button" className={`reports-entity-chip ${selectedEntity === item ? "active" : ""}`} onClick={() => setSelectedEntity(item)}>
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="engineering-grid reports-grid-primary">
+            <section className="engineering-block release-report-block">
+              <div className="engineering-block-head">
+                <div>
+                  <div className="section-subtitle">Ритм инцидентов по неделям</div>
+                  <div className="muted">Количество кейсов, закрытие и средняя длительность в текущем срезе.</div>
+                </div>
+              </div>
+              <div className="engineering-chart release-report-chart-wide">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={weeklyTimeline} margin={{ top: 10, right: 12, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
+                    <XAxis dataKey="week_label" stroke="#94a3b8" />
+                    <YAxis yAxisId="count" stroke="#94a3b8" allowDecimals={false} />
+                    <YAxis yAxisId="hours" orientation="right" stroke="#94a3b8" />
+                    <Tooltip
+                      {...CHART_TOOLTIP_PROPS}
+                      formatter={(value, key) => {
+                        const labels = {
+                          count: "Инциденты",
+                          resolved_count: "Закрыто",
+                          open_count: "Открыто",
+                          duration_hours: "Часы MTTR",
+                        };
+                        return [key === "duration_hours" ? formatHours(value) : value, labels[key] || key];
+                      }}
+                    />
+                    <Legend />
+                    <Bar yAxisId="count" dataKey="resolved_count" stackId="inc" name="Закрыто" fill="#38bdf8" radius={[5, 5, 0, 0]} />
+                    <Bar yAxisId="count" dataKey="open_count" stackId="inc" name="Открыто" fill="#fb7185" radius={[5, 5, 0, 0]} />
+                    <Line yAxisId="hours" type="monotone" dataKey="duration_hours" name="Часы MTTR" stroke="#f59e0b" strokeWidth={2.4} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="engineering-block release-report-block">
+              <div className="engineering-block-head">
+                <div>
+                  <div className="section-subtitle">Delivery и источники</div>
+                  <div className="muted">Откуда приходят сигналы и в какой delivery-контекст они чаще связаны.</div>
+                </div>
+              </div>
+              <div className="release-report-exception-grid">
+                <div className="engineering-table">
+                  <div className="engineering-table-head release-report-exception-row">
+                    <span>Источник</span>
+                    <span>Кейсы</span>
+                    <span>Таблицы</span>
+                    <span>MTTR</span>
+                  </div>
+                  {sourceBreakdown.map((row) => (
+                    <div key={row.source} className="engineering-table-row release-report-exception-row">
+                      <span className="engineering-primary" title={row.source}>{row.source}</span>
+                      <span>{row.count}</span>
+                      <span>{row.objects_count}</span>
+                      <span>{formatHours(row.avg_duration_hours)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="engineering-table">
+                  <div className="engineering-table-head release-report-exception-row">
+                    <span>Linked issue type</span>
+                    <span>Связей</span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  {linkedIssueTypeBreakdown.map((row) => (
+                    <div key={row.linked_issue_type} className="engineering-table-row release-report-exception-row">
+                      <span className="engineering-primary" title={row.linked_issue_type}>{row.linked_issue_type}</span>
+                      <span>{row.count}</span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="release-report-anomaly-card">
+                <div className="release-report-anomaly-head">
+                  <div>
+                    <div className="section-subtitle">Наблюдение по срезу</div>
+                    <div className="muted">
+                      {focus.topEntity
+                        ? `${focus.topEntity.entity_name} чаще других попадает в инциденты: ${focus.topEntity.count} кейсов и ${focus.topEntity.objects_count} затронутых таблиц.`
+                        : "Пока нет выраженного лидера по сущностям."}
+                    </div>
+                  </div>
+                  <div className="release-report-anomaly-badges">
+                    {summary.open > 0 ? <span className="release-report-anomaly-badge tone-surge">Есть незакрытые</span> : null}
+                    {summary.linkedCount > 0 ? <span className="release-report-anomaly-badge tone-peak">Есть delivery-связи</span> : null}
+                    {summary.preventiveShare >= 50 ? <span className="release-report-anomaly-badge tone-cooldown">Хорошая профилактика</span> : null}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="engineering-grid reports-grid-secondary">
+            <section className="engineering-block release-report-block">
+              <div className="section-subtitle">Причины и направления</div>
+              <div className="engineering-chart">
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={reasonBreakdown} layout="vertical" margin={{ top: 10, right: 18, left: 18, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
+                    <XAxis type="number" stroke="#94a3b8" />
+                    <YAxis type="category" dataKey="reason" width={220} stroke="#94a3b8" tickFormatter={(value) => shortLabel(value, 32)} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(value, key) => [value, key === "count" ? "Инциденты" : key]} />
+                    <Bar dataKey="count" name="Инциденты" fill="#f97316" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="engineering-table">
+                <div className="engineering-table-head release-report-exception-row">
+                  <span>Направление</span>
+                  <span>Кейсы</span>
+                  <span>Труд</span>
+                  <span>MTTR</span>
+                </div>
+                {directionBreakdown.map((row) => (
+                  <div key={row.direction} className="engineering-table-row release-report-exception-row">
+                    <span className="engineering-primary" title={row.direction}>{row.direction}</span>
+                    <span>{row.count}</span>
+                    <span>{formatHours(row.effort_hours)}</span>
+                    <span>{formatHours(row.avg_duration_hours)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="engineering-block release-report-block">
+              <div className="section-subtitle">Сущности и исполнители</div>
+              <div className="engineering-table">
+                <div className="engineering-table-head release-report-exception-row">
+                  <span>Сущность</span>
+                  <span>Кейсы</span>
+                  <span>Таблицы</span>
+                  <span>MTTR</span>
+                </div>
+                {entityBreakdown.map((row) => (
+                  <div key={row.entity_name} className="engineering-table-row release-report-exception-row">
+                    <span className="engineering-primary" title={row.entity_name}>{row.entity_name}</span>
+                    <span>{row.count}</span>
+                    <span>{row.objects_count}</span>
+                    <span>{formatHours(row.avg_duration_hours)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="engineering-table">
+                <div className="engineering-table-head release-report-exception-row">
+                  <span>Исполнитель</span>
+                  <span>Кейсы</span>
+                  <span>Труд</span>
+                  <span>MTTR</span>
+                </div>
+                {assigneeBreakdown.map((row) => (
+                  <div key={row.assignee} className="engineering-table-row release-report-exception-row">
+                    <span className="engineering-primary" title={row.assignee}>{row.assignee}</span>
+                    <span>{row.count}</span>
+                    <span>{formatHours(row.effort_hours)}</span>
+                    <span>{formatHours(row.avg_duration_hours)}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <section className="engineering-block release-report-block">
+            <div className="engineering-block-head">
+              <div>
+                <div className="section-subtitle">Поток инцидентов</div>
+                <div className="muted">Последние кейсы с причиной, действиями, профилактикой и delivery-связями.</div>
+              </div>
+            </div>
+            <div className="incident-card-list incident-report-card-list">
+              {recentIncidents.map((incident) => (
+                <article key={incident.issue_id} className="incident-card incident-report-card">
+                  <header className="incident-card-header">
+                    <div>
+                      <div className="mono incident-card-id">{incident.issue_id}</div>
+                      <div className="incident-title">{incident.summary}</div>
+                    </div>
+                    <div className="incident-actions">
+                      <span className={`release-report-badge bucket-${incident.status_bucket === "resolved" ? "release" : "outside"}`}>
+                        {incident.state_name || "Статус"}
+                      </span>
+                      {incident.primary_table_fqn ? (
+                        <button type="button" className="incident-action-button" onClick={() => onOpenTable(incident.primary_table_fqn)}>
+                          Таблица
+                        </button>
+                      ) : null}
+                    </div>
+                  </header>
+
+                  <div className="incident-card-body">
+                    <div className="incident-card-main">
+                      <div className="incident-card-meta">
+                        <div className="meta-label">Причина</div>
+                        <div>{shortText(incident.root_cause || incident.incident_reason_name, 220)}</div>
+                      </div>
+                      <div className="incident-card-meta">
+                        <div className="meta-label">Действия</div>
+                        <div>{shortText(incident.fix_actions, 220)}</div>
+                      </div>
+                      {incident.preventive_actions ? (
+                        <div className="incident-card-meta">
+                          <div className="meta-label">Профилактика</div>
+                          <div>{shortText(incident.preventive_actions, 220)}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="incident-card-meta">
+                      <div className="meta-label">Контекст</div>
+                      <div>{incident.direction_name || "Не указано"}</div>
+                      <div className="muted">{incident.alert_source || "Не указан источник"}</div>
+                      <div className="muted">{(incident.entity_names || []).join(", ")}</div>
+                      <div className="muted">{incident.linked_issue_types?.length ? `Связи: ${incident.linked_issue_types.join(", ")}` : "Без связей с delivery"}</div>
+                    </div>
+                  </div>
+
+                  <div className="incident-card-times">
+                    <div>
+                      <div className="meta-label">Старт</div>
+                      <div>{formatDateTime(incident.incident_start_dttm)}</div>
+                    </div>
+                    <div>
+                      <div className="meta-label">Длительность</div>
+                      <div>{formatMinutes(incident.duration_minutes)}</div>
+                    </div>
+                    <div>
+                      <div className="meta-label">Труд</div>
+                      <div>{formatHours((incident.actual_effort_minutes || 0) / 60)}</div>
+                    </div>
+                    <div>
+                      <div className="meta-label">Таблицы</div>
+                      <div>{incident.affected_tables_count || 0}</div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {recentIncidents.length === 0 ? <div className="muted">В выбранном срезе инцидентов нет.</div> : null}
+            </div>
+          </section>
         </>
       )}
     </>

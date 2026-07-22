@@ -27,6 +27,7 @@ import json
 import hashlib
 import subprocess
 import tempfile
+from html import unescape
 from itertools import combinations
 from zoneinfo import ZoneInfo
 
@@ -2163,6 +2164,363 @@ def get_admin_release_reports(
         print("❌ /api/admin/reports/releases error:", e)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось получить аналитику релизов")
+
+
+@router.get("/api/admin/reports/incidents")
+def get_admin_incident_reports(
+    request: Request,
+    days: int = Query(180, ge=1, le=3650),
+):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        with dev_engine.connect() as conn:
+            incident_rows = conn.execute(
+                text(
+                    """
+                    SELECT
+                        issue_id,
+                        issue_type,
+                        project_name,
+                        summary,
+                        description_text,
+                        state_name,
+                        priority_name,
+                        author_name,
+                        assignee_name,
+                        team_name,
+                        direction_name,
+                        dashboard_name,
+                        component_name,
+                        trigger_dttm,
+                        incident_start_dttm,
+                        detected_dttm,
+                        incident_reason_name,
+                        work_finished_dttm,
+                        entity_name,
+                        table_name_raw,
+                        table_schema,
+                        table_name,
+                        event_description,
+                        alert_source,
+                        root_cause,
+                        fix_actions,
+                        preventive_actions,
+                        spent_time_text,
+                        actual_effort_text,
+                        estimated_effort_text,
+                        ai_saving_text,
+                        created_at_yt,
+                        updated_at_yt,
+                        resolved_at_yt
+                    FROM tech_etl.yt_incidents
+                    WHERE COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt, dttm_loaded)
+                          >= (now() - (:days || ' days')::interval)
+                    ORDER BY COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt) DESC NULLS LAST,
+                             issue_id DESC
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+
+            incident_ids = [row["issue_id"] for row in incident_rows if row.get("issue_id")]
+            link_rows = []
+            history_rows = []
+            if incident_ids:
+                link_query = text(
+                    """
+                    SELECT
+                        issue_id,
+                        linked_issue_id,
+                        linked_issue_type,
+                        linked_issue_summary,
+                        link_type,
+                        dttm_loaded
+                    FROM tech_etl.yt_incident_links
+                    WHERE issue_id IN :issue_ids
+                    ORDER BY issue_id, linked_issue_id
+                    """
+                ).bindparams(bindparam("issue_ids", expanding=True))
+                link_rows = conn.execute(link_query, {"issue_ids": incident_ids}).mappings().all()
+
+                history_query = text(
+                    """
+                    SELECT
+                        issue_id,
+                        event_dttm,
+                        author_name,
+                        event_type,
+                        field_name,
+                        old_value,
+                        new_value,
+                        comment_text,
+                        dttm_loaded
+                    FROM tech_etl.yt_incident_history
+                    WHERE issue_id IN :issue_ids
+                    ORDER BY issue_id, event_dttm
+                    """
+                ).bindparams(bindparam("issue_ids", expanding=True))
+                history_rows = conn.execute(history_query, {"issue_ids": incident_ids}).mappings().all()
+
+        links_by_issue: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in link_rows:
+            links_by_issue[str(row.get("issue_id"))].append(dict(row))
+
+        history_by_issue: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in history_rows:
+            history_by_issue[str(row.get("issue_id"))].append(dict(row))
+
+        incidents = []
+        for row in incident_rows:
+            issue_id = str(row.get("issue_id") or "")
+            start_at = row.get("incident_start_dttm") or row.get("detected_dttm") or row.get("trigger_dttm") or row.get("created_at_yt")
+            end_at = row.get("work_finished_dttm") or row.get("resolved_at_yt") or row.get("updated_at_yt")
+            duration_minutes = 0
+            if start_at and end_at and isinstance(start_at, datetime) and isinstance(end_at, datetime) and end_at >= start_at:
+                duration_minutes = int(round((end_at - start_at).total_seconds() / 60.0))
+
+            actual_effort_minutes = _parse_effort_minutes(row.get("actual_effort_text")) or _parse_effort_minutes(row.get("spent_time_text"))
+            estimated_effort_minutes = _parse_effort_minutes(row.get("estimated_effort_text"))
+            ai_saving_minutes = _parse_effort_minutes(row.get("ai_saving_text"))
+
+            entity_names = _split_rich_multivalue(row.get("entity_name")) or ["Без сущности"]
+            table_names = _split_rich_multivalue(row.get("table_name")) or _split_rich_multivalue(row.get("table_name_raw"))
+            table_schema = str(row.get("table_schema") or "").strip() or None
+            table_fqns = [f"{table_schema}.{name}" for name in table_names] if table_schema and table_names else table_names
+
+            link_items = links_by_issue.get(issue_id, [])
+            history_items = history_by_issue.get(issue_id, [])
+            linked_issue_types = sorted({str(item.get("linked_issue_type") or "Не указано").strip() or "Не указано" for item in link_items})
+            link_types = sorted({str(item.get("link_type") or "Не указано").strip() or "Не указано" for item in link_items})
+            state_changes_count = sum(1 for item in history_items if str(item.get("event_type") or "").lower() == "state_change")
+            assignee_changes_count = sum(1 for item in history_items if str(item.get("event_type") or "").lower() == "assignee_change")
+            comments_count = sum(1 for item in history_items if str(item.get("comment_text") or "").strip())
+            preventive_filled = bool(_normalize_rich_text(row.get("preventive_actions")))
+
+            incidents.append(
+                {
+                    "issue_id": issue_id,
+                    "issue_type": row.get("issue_type"),
+                    "project_name": row.get("project_name"),
+                    "summary": str(row.get("summary") or "").strip(),
+                    "description_text": _normalize_rich_text(row.get("description_text")),
+                    "state_name": row.get("state_name"),
+                    "status_bucket": _incident_status_bucket(row.get("state_name")),
+                    "priority_name": row.get("priority_name") or "Normal",
+                    "author_name": row.get("author_name") or "Не указан",
+                    "assignee_name": row.get("assignee_name") or row.get("author_name") or "Не указан",
+                    "team_name": row.get("team_name") or "Не указана",
+                    "direction_name": row.get("direction_name") or "Не указано",
+                    "dashboard_name": row.get("dashboard_name") or "Не указан",
+                    "component_name": row.get("component_name") or "Не указан",
+                    "trigger_dttm": serialize_datetime(row.get("trigger_dttm")),
+                    "incident_start_dttm": serialize_datetime(start_at),
+                    "detected_dttm": serialize_datetime(row.get("detected_dttm")),
+                    "incident_reason_name": row.get("incident_reason_name") or "Не указана",
+                    "work_finished_dttm": serialize_datetime(end_at),
+                    "entity_names": entity_names,
+                    "table_schema": table_schema,
+                    "table_names": table_names,
+                    "table_fqns": table_fqns,
+                    "primary_table_fqn": table_fqns[0] if len(table_fqns) == 1 else None,
+                    "affected_tables_count": len(table_fqns),
+                    "event_description": _normalize_rich_text(row.get("event_description")),
+                    "alert_source": row.get("alert_source") or "Не указан",
+                    "root_cause": _normalize_rich_text(row.get("root_cause")) or _normalize_rich_text(row.get("incident_reason_name")),
+                    "fix_actions": _normalize_rich_text(row.get("fix_actions")),
+                    "preventive_actions": _normalize_rich_text(row.get("preventive_actions")),
+                    "actual_effort_minutes": actual_effort_minutes,
+                    "estimated_effort_minutes": estimated_effort_minutes,
+                    "ai_saving_minutes": ai_saving_minutes,
+                    "duration_minutes": duration_minutes,
+                    "created_at_yt": serialize_datetime(row.get("created_at_yt")),
+                    "updated_at_yt": serialize_datetime(row.get("updated_at_yt")),
+                    "resolved_at_yt": serialize_datetime(row.get("resolved_at_yt")),
+                    "linked_issues_count": len(link_items),
+                    "linked_issue_types": linked_issue_types,
+                    "link_types": link_types,
+                    "history_events_count": len(history_items),
+                    "state_changes_count": state_changes_count,
+                    "assignee_changes_count": assignee_changes_count,
+                    "comments_count": comments_count,
+                    "preventive_filled": preventive_filled,
+                }
+            )
+
+        incidents.sort(key=lambda row: row.get("incident_start_dttm") or "", reverse=True)
+
+        unique_entities = set()
+        unique_tables = set()
+        resolved_count = 0
+        open_count = 0
+        linked_count = 0
+        preventive_count = 0
+        duration_values = []
+        effort_values = []
+        saving_values = []
+        timeline_day = defaultdict(lambda: {"day": "", "count": 0, "resolved_count": 0, "open_count": 0, "duration_minutes": 0})
+        timeline_week = defaultdict(lambda: {"week_start": "", "week_label": "", "count": 0, "resolved_count": 0, "open_count": 0, "duration_minutes": 0})
+
+        def _agg(rows: list[dict[str, Any]], key_name: str, label_field: str) -> list[dict[str, Any]]:
+            stats = defaultdict(lambda: {label_field: "Не указано", "count": 0, "duration_minutes": 0, "effort_minutes": 0, "open_count": 0, "resolved_count": 0, "objects_count": 0})
+            for item in rows:
+                label = str(item.get(key_name) or "Не указано").strip() or "Не указано"
+                bucket = stats[label]
+                bucket[label_field] = label
+                bucket["count"] += 1
+                bucket["duration_minutes"] += int(item.get("duration_minutes") or 0)
+                bucket["effort_minutes"] += int(item.get("actual_effort_minutes") or 0)
+                bucket["objects_count"] += int(item.get("affected_tables_count") or 0)
+                if item.get("status_bucket") == "resolved":
+                    bucket["resolved_count"] += 1
+                else:
+                    bucket["open_count"] += 1
+            result = []
+            for bucket in stats.values():
+                count = max(bucket["count"], 1)
+                result.append(
+                    {
+                        **bucket,
+                        "avg_duration_hours": round((bucket["duration_minutes"] / count) / 60.0, 1),
+                        "effort_hours": round(bucket["effort_minutes"] / 60.0, 1),
+                    }
+                )
+            result.sort(key=lambda row: (-row["count"], -row["objects_count"], str(row[label_field])))
+            return result
+
+        for item in incidents:
+            unique_entities.update(item.get("entity_names") or [])
+            unique_tables.update(item.get("table_fqns") or [])
+            if item.get("status_bucket") == "resolved":
+                resolved_count += 1
+            else:
+                open_count += 1
+            if item.get("linked_issues_count"):
+                linked_count += 1
+            if item.get("preventive_filled"):
+                preventive_count += 1
+            if item.get("duration_minutes"):
+                duration_values.append(int(item["duration_minutes"]))
+            if item.get("actual_effort_minutes"):
+                effort_values.append(int(item["actual_effort_minutes"]))
+            if item.get("ai_saving_minutes"):
+                saving_values.append(int(item["ai_saving_minutes"]))
+
+            start_iso = str(item.get("incident_start_dttm") or "")[:10]
+            if start_iso:
+                day_bucket = timeline_day[start_iso]
+                day_bucket["day"] = start_iso
+                day_bucket["count"] += 1
+                day_bucket["duration_minutes"] += int(item.get("duration_minutes") or 0)
+                if item.get("status_bucket") == "resolved":
+                    day_bucket["resolved_count"] += 1
+                else:
+                    day_bucket["open_count"] += 1
+
+            week_start = _incident_week_start(item.get("incident_start_dttm"))
+            if week_start:
+                week_bucket = timeline_week[week_start]
+                week_bucket["week_start"] = week_start
+                week_bucket["week_label"] = week_start[5:]
+                week_bucket["count"] += 1
+                week_bucket["duration_minutes"] += int(item.get("duration_minutes") or 0)
+                if item.get("status_bucket") == "resolved":
+                    week_bucket["resolved_count"] += 1
+                else:
+                    week_bucket["open_count"] += 1
+
+        reason_rows = _agg(incidents, "incident_reason_name", "reason")
+        source_rows = _agg(incidents, "alert_source", "source")
+        direction_rows = _agg(incidents, "direction_name", "direction")
+        assignee_rows = _agg(incidents, "assignee_name", "assignee")
+        dashboard_rows = _agg(incidents, "dashboard_name", "dashboard")
+        component_rows = _agg(incidents, "component_name", "component")
+
+        entity_stats = defaultdict(lambda: {"entity_name": "Без сущности", "count": 0, "duration_minutes": 0, "effort_minutes": 0, "objects_count": 0})
+        for item in incidents:
+            for entity_name in item.get("entity_names") or ["Без сущности"]:
+                bucket = entity_stats[entity_name]
+                bucket["entity_name"] = entity_name
+                bucket["count"] += 1
+                bucket["duration_minutes"] += int(item.get("duration_minutes") or 0)
+                bucket["effort_minutes"] += int(item.get("actual_effort_minutes") or 0)
+                bucket["objects_count"] += int(item.get("affected_tables_count") or 0)
+        entity_rows = sorted(
+            [
+                {
+                    **bucket,
+                    "avg_duration_hours": round((bucket["duration_minutes"] / max(bucket["count"], 1)) / 60.0, 1),
+                    "effort_hours": round(bucket["effort_minutes"] / 60.0, 1),
+                }
+                for bucket in entity_stats.values()
+            ],
+            key=lambda row: (-row["count"], -row["objects_count"], row["entity_name"]),
+        )
+
+        link_type_stats = defaultdict(lambda: {"link_type": "Не указано", "count": 0})
+        linked_issue_type_stats = defaultdict(lambda: {"linked_issue_type": "Не указано", "count": 0})
+        for row in link_rows:
+            link_type = str(row.get("link_type") or "Не указано").strip() or "Не указано"
+            linked_issue_type = str(row.get("linked_issue_type") or "Не указано").strip() or "Не указано"
+            link_type_stats[link_type]["link_type"] = link_type
+            link_type_stats[link_type]["count"] += 1
+            linked_issue_type_stats[linked_issue_type]["linked_issue_type"] = linked_issue_type
+            linked_issue_type_stats[linked_issue_type]["count"] += 1
+
+        link_type_rows = sorted(link_type_stats.values(), key=lambda row: (-row["count"], row["link_type"]))
+        linked_issue_type_rows = sorted(linked_issue_type_stats.values(), key=lambda row: (-row["count"], row["linked_issue_type"]))
+        week_rows = sorted(timeline_week.values(), key=lambda row: row["week_start"])[-12:]
+        day_rows = sorted(timeline_day.values(), key=lambda row: row["day"])[-24:]
+
+        longest_incident = max(
+            incidents,
+            key=lambda row: (int(row.get("duration_minutes") or 0), int(row.get("actual_effort_minutes") or 0)),
+            default=None,
+        )
+
+        summary = {
+            "total_incidents": len(incidents),
+            "resolved_count": resolved_count,
+            "open_count": open_count,
+            "unique_entities": len(unique_entities),
+            "unique_tables": len(unique_tables),
+            "hours_spent_total": round(sum(effort_values) / 60.0, 1),
+            "hours_saved_total": round(sum(saving_values) / 60.0, 1),
+            "avg_resolution_hours": round((sum(duration_values) / max(len(duration_values), 1)) / 60.0, 1) if duration_values else 0,
+            "linked_count": linked_count,
+            "preventive_count": preventive_count,
+            "preventive_share": round((preventive_count / max(len(incidents), 1)) * 100, 1) if incidents else 0,
+        }
+
+        return {
+            "days": days,
+            "source": "dev",
+            "summary": summary,
+            "weekly_timeline": week_rows,
+            "daily_timeline": day_rows,
+            "reason_breakdown": reason_rows[:10],
+            "source_breakdown": source_rows[:8],
+            "direction_breakdown": direction_rows[:8],
+            "entity_breakdown": entity_rows[:10],
+            "assignee_breakdown": assignee_rows[:8],
+            "dashboard_breakdown": dashboard_rows[:8],
+            "component_breakdown": component_rows[:8],
+            "link_type_breakdown": link_type_rows[:8],
+            "linked_issue_type_breakdown": linked_issue_type_rows[:8],
+            "focus": {
+                "top_reason": reason_rows[0] if reason_rows else None,
+                "top_source": source_rows[0] if source_rows else None,
+                "top_direction": direction_rows[0] if direction_rows else None,
+                "top_entity": entity_rows[0] if entity_rows else None,
+                "longest_incident": longest_incident,
+            },
+            "incidents": incidents,
+        }
+    except Exception as e:
+        print("❌ /api/admin/reports/incidents error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить аналитику инцидентов")
 
 
 @router.get("/api/admin/dev-meta/status")
@@ -6333,6 +6691,90 @@ def _round_minutes(value):
         return round(float(value), 2)
     except Exception:
         return None
+
+
+def _normalize_rich_text(value: Any) -> str:
+    text_value = str(value or "")
+    if not text_value:
+        return ""
+    text_value = unescape(text_value)
+    text_value = re.sub(r"<br\s*/?>", "\n", text_value, flags=re.I)
+    text_value = re.sub(r"</p\s*>", "\n", text_value, flags=re.I)
+    text_value = re.sub(r"<[^>]+>", " ", text_value)
+    text_value = re.sub(r"[ \t]+\n", "\n", text_value)
+    text_value = re.sub(r"\n{3,}", "\n\n", text_value)
+    text_value = re.sub(r"[ \t]{2,}", " ", text_value)
+    return text_value.strip()
+
+
+def _split_rich_multivalue(value: Any) -> list[str]:
+    normalized = _normalize_rich_text(value)
+    if not normalized:
+        return []
+    parts = []
+    for raw in re.split(r"\n|;", normalized):
+        item = raw.strip().strip(",")
+        if item:
+            parts.append(item)
+    seen = set()
+    dedup = []
+    for item in parts:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(item)
+    return dedup
+
+
+def _parse_effort_minutes(value: Any) -> int:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return 0
+    normalized = raw.replace(",", ".")
+    total = 0.0
+    patterns = [
+        (r"(\d+(?:\.\d+)?)\s*(?:d|day|days|д|дн|день|дня|дней)", 24 * 60),
+        (r"(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours|ч|час|часа|часов)", 60),
+        (r"(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes|м|мин|минута|минуты|минут)", 1),
+    ]
+    matched = False
+    for pattern, factor in patterns:
+        for number in re.findall(pattern, normalized):
+            total += float(number) * factor
+            matched = True
+    if matched:
+        return int(round(total))
+    plain = re.search(r"(\d+(?:\.\d+)?)", normalized)
+    if plain:
+        return int(round(float(plain.group(1)) * 60))
+    return 0
+
+
+def _incident_status_bucket(state_name: Any) -> str:
+    state = str(state_name or "").strip().lower()
+    if not state:
+        return "unknown"
+    if "заверш" in state or "resolved" in state or "done" in state or "closed" in state:
+        return "resolved"
+    if "нов" in state or "зарегистр" in state or "open" in state:
+        return "open"
+    if "работ" in state or "progress" in state or "исправ" in state:
+        return "in_progress"
+    return "other"
+
+
+def _incident_week_start(value: Any) -> Optional[str]:
+    if not value:
+        return None
+    dt_value = value if isinstance(value, datetime) else None
+    if dt_value is None:
+        try:
+            dt_value = datetime.fromisoformat(str(value))
+        except Exception:
+            return None
+    week_start = dt_value - timedelta(days=dt_value.weekday())
+    return week_start.date().isoformat()
 
 
 def _clickhouse_run_metrics(row):

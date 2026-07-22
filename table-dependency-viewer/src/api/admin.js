@@ -6,6 +6,7 @@ export const adminApi = {
   ciCdStatus: () => apiClient.get("/api/admin/ci-cd/status"),
   engineeringEfficiency: (days) => apiClient.get("/api/admin/engineering-efficiency", { params: { days } }),
   releaseReports: (days) => apiClient.get("/api/admin/reports/releases", { params: { days } }),
+  incidentReports: (days) => apiClient.get("/api/admin/reports/incidents", { params: { days } }),
   feedback: (params) => apiClient.get("/api/admin/feedback", { params }),
   refreshCache: () => apiClient.post("/api/admin/refresh-cache"),
   runCiCd: () => apiClient.post("/api/admin/run-ci-cd"),

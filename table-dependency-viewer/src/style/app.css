@@ -2162,6 +2162,21 @@ main.content {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.incident-report-kpis,
+.incident-report-focus {
+  margin-bottom: 14px;
+}
+
+.incident-report-card-list {
+  gap: 14px;
+}
+
+.incident-report-card {
+  background:
+    radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), transparent 26%),
+    rgba(15, 23, 42, 0.72);
+}
+
 .release-report-exception-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

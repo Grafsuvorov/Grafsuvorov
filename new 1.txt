@@ -1,189 +1,93 @@
-select issue_id, issue_type, project_name, summary, description_text, state_name, priority_name, author_name, assignee_name, team_name, direction_name, dashboard_name, component_name, trigger_dttm, incident_start_dttm, detected_dttm, incident_reason_name, work_finished_dttm, entity_name, table_name_raw, table_schema, table_name, event_description, alert_source, root_cause, fix_actions, preventive_actions, spent_time_text, actual_effort_text, estimated_effort_text, ai_saving_text, created_at_yt, updated_at_yt, resolved_at_yt, raw_json, dttm_loaded, dttm_updated from tech_etl.yt_incidents
-order by issue_id;
 
-DWH-10023	Incident	КХД	Упала загрузка сущности STG_LOADER	| Название | Описание |
-| --- | --- |
-| Время триггера | **30.01.2026 02:01** |
-| Название сущности | STG_LOADER |
-| Название таблицы |  |
-| Описание события | При запуске загрузки сущности на таске check_locks_on_tables произошла ошибка:<br/>*ERROR - Failed to execute job 6038612 for task check_locks_on_tables (Table dds.sales_bundle_and_delivery_relationship is locked; 1377845)*  |
-| Откуда алерт | Алертинг пульс |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Блокировка таблицы *dds.sales_bundle_and_delivery_relationship*   |
-| Действия по устранению | Перезапуск загрузки сущности |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-01-30 02:01:00.000	2026-01-30 02:01:00.000	2026-01-30 02:01:00.000	2026-01-30 02:25:00.000
-DWH-10113	Incident	КХД	Зависла загрузка таблицы stg."/RUSAL/ALMER_HIM"	| Название | Описание |
-| --- | --- |
-| Время триггера | **04.02.2026 02:30** |
-| Название сущности | BI_SB_WUC |
-| Название таблицы | stg."/RUSAL/ALMER_HIM" |
-| Описание события | Зависла загрузка таблицы. Загрузка таблицы длилась более 60 минут. <br />Среднее время загрузки 10 минут. |
-| Откуда алерт | Заметил Калиниченко Никита |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Зависание загрузки через PXF из Oracle |
-| Действия по устранению | Перезагрузка таблицы |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-04 02:30:00.000	2026-02-04 02:30:00.000	2026-02-04 02:30:00.000	2026-02-04 02:40:00.000
-DWH-10160	Incident	КХД	Упала загрузка таблиц в Clickhouse 	| Название | Описание |
-| --- | --- |
-| Время триггера | **05.02.2026 05:36** |
-| Название сущности | BI_FI<br />LOGISTICS |
-| Название таблицы | dm.account_turnover_by_counterparty<br />dm.transportation_service_invoice_approvement_history_pivot |
-| Описание события | Ошибка:<br />*DB::Exception: Memory limit (total) exceeded: would use 94.72 GiB (attempt to allocate chunk of 4587520 bytes), maximum: 84.83 GiB. OvercommitTracker decision: Query was selected to stop by OvercommitTracker.. Stack trace: 0.*<br /><br />*DB::Exception: Memory limit (total) exceeded: would use 93.82 GiB (attempt to allocate chunk of 4361616 bytes), maximum: 84.83 GiB. OvercommitTracker decision: Query was selected to stop by OvercommitTracker.. Stack trace: 0.* |
-| Откуда алерт | Алертинг почта |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Превышение лимита памяти на момент загрузки таблиц |
-| Действия по устранению | Перезагрузка таблицы |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-05 05:36:00.000	2026-02-05 05:36:00.000	2026-02-05 05:36:00.000	2026-02-05 05:53:00.000
-DWH-10195	Incident	КХД	Зависла загрузка таблицы STG."/RUSAL/MK_TR_VES"	| Название | Описание |
-| --- | --- |
-| Время триггера | **06.02.2026 02:50** |
-| Название сущности | STG_LOADER |
-| Название таблицы | STG."/RUSAL/MK_TR_VES" |
-| Описание события | Зависла загрузка таблицы. Загрузка таблицы длилась более 50 минут. На oracle не было сессий. <br />Среднее время загрузки 2 минуты. |
-| Откуда алерт | Заметил Калиниченко Никита |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Зависание загрузки через PXF из Oracle |
-| Действия по устранению | Перезагрузка таблицы |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-06 02:50:00.000	2026-02-06 02:50:00.000	2026-02-06 02:50:00.000	2026-02-06 03:11:00.000
-DWH-10223	Incident	КХД	Упала загрузка таблиц dict_dds.counterparty_td и dict_dds.counterparty	| Название | Описание |
-| --- | --- |
-| Время триггера | **08.02.2026 23:52** |
-| Название сущности | DICT_LOADER |
-| Название таблицы | dict_dds.counterparty_td<br/>dict_dds.counterparty |
-| Описание события | Ошибка: Sensor has timed out; run duration of 7215.375317 seconds exceeds the specified timeout of 7200.0.<br/>После перезапуска загрузки в аирфлоу, статус таски прыгал с up_for_reschedule на queued и обратно, расчет не запускался. |
-| Откуда алерт | Алертинг в пульс |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения |  |
-| Действия по устранению | Загрузил таблицу руками. Даты в tables_meta сдвинул у таблиц. |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-08 23:52:00.000	2026-02-08 23:52:00.000	2026-02-08 23:52:00.000	2026-02-09 00:24:00.000
-DWH-10224	Incident	КХД	Не прогружены таблицы в Clickhouse	"| Название | Описание |
-| --- | --- |
-| Время триггера | **09.02.2026 03:00** |
-| Название сущности |  |
-| Название таблицы | transportation_services_purchase_price_agreement<br />transportation_vehicle_capacity_average_utilization<br />purchase_contract_limits_and_current_balances<br />asuzdc_container_and_platform_availability_at_plant_dkp<br />sales_shipment_from_russian_port_actual_vs_plan_dob_dkp<br />raw_materials_shipment_and_arrival<br />transportation_aluminium_shipment_from_plant<br />sales_unplanned_metal_stock_at_plant<br />accounts_receivable_sales_aggregated<br />accounts_receivable_sales_detailed <br />transportation_own_container_movement<br />transportation_service_invoice_approvement_history_pivot<br />account_turnover_inc  <br />invoice_to_act_of_material_acceptence  <br />purchase_documents_main_data <br />material_price_calculation<br />otif_daily<br />demand_planning_purchase_request_analysis <br />purchase_lead_time  <br />material_raw_stock_balance_for_purchase_planning<br />demand_planning_material_reservations  <br />demand_planning_material_reservation_adjustments<br />otif<br />demand_planning_material_reservations_by_status <br />purchase_documents_supply_schedule  <br />invoice_to_act_of_completed_work<br />demand_planning_material_reservation_financials <br />demand_planning_purchase_request_analysis_by_status<br />accounts_receivaible_sales_alverse  <br />account_turnover_by_counterparty_virtual  <br />general_ledger_balances<br />payment_request_approvement_history_dob_dtil <br />accounting_documents_leading_to_debt<br />account_turnover_by_counterparty<br />demand_planning_material_reservation_financials <br />demand_planning_purchase_request_analysis_by_status<br />sales_stock_balance_with_forecast<br />transportation_external_location_metal_stock  <br />sb_wuc  <br />accounting_bank_statements <br />transportation_external_location_metal_stock_aggregated<br />sales_carbon_footprint_by_delivery  <br />material_stock_balance  <br />account_debt_for_working_capital_1c <br />counterparties_and_organizations_relations<br />account_debt_penalty<br />general_ledger_balance_sheet_structure <br />account_debt  <br />accounting_exchange_rate_revaluation													<br />sales_storage_registration_vs_storage_movement<br />sales_delivery_tracking_domestic <br />sales_material_turnover_detailed <br />sd_sales_to_india_scm<br />sales_delivery_tracking_normative_check <br />sales_delivery_estimated_business_location_by_date  <br />sales_stock_balance_by_production_bundle<br />sales_forwarder_metal_acceptance_delays <br />sales_delivery_tracking_dob_dkp  <br />sales_scanned_documents_analysis <br />sales_alverse_mlc<br />material_purchase_document_approvement_history_dob_dtil<br />sales_statement_report |
-| Описание события | В связи с проблемами с БД в воскресенье 08.02.2026, загрузка таблиц в Clickhouse началась сразу, не дожидаясь загрузку на Greenplum, т.к. в предыдущий день была пропущена загрузка. |
-| Откуда алерт | Заметил Калиниченко Никита |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения |  |
-| Действия по устранению | Перезагрузка таблиц |
-| Описание проактивных мероприятий |  |
-"	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-09 03:00:00.000	2026-02-09 03:00:00.000	2026-02-09 03:00:00.000	2026-02-09 06:55:00.000
-DWH-10370	Incident	КХД	Зависла загрузка таблицы stg."EKBE"	| Название | Описание |
-| --- | --- |
-| Время триггера | **13.02.2026 02:50** |
-| Название сущности | STG_LOADER |
-| Название таблицы | stg.EKBE |
-| Описание события | Зависла загрузка таблицы. Загрузка таблицы длилась более 50 минут. <br />Среднее время загрузки 8-10 минут. |
-| Откуда алерт | Заметил Калиниченко Никита |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Зависание загрузки через PXF из Oracle |
-| Действия по устранению | Перезагрузка таблицы |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-13 02:50:00.000	2026-02-13 02:50:00.000	2026-02-13 02:50:00.000	2026-02-13 03:06:00.000
-DWH-10648	Incident	КХД	Упали 2 таблицы при загрузке в Clickhouse	| Название | Описание |
-| --- | --- |
-| Время триггера | **20.02.2026 05:40** |
-| Название сущности | LOGISTICS<br/>BI_FI |
-| Название таблицы | dm."transportation_service_invoice_approvement_history_pivot"<br/>dm."account_turnover_by_counterparty" |
-| Описание события | Упала загрузка таблиц<br/>dm."transportation_service_invoice_approvement_history_pivot"<br/>dm."account_turnover_by_counterparty" с ошбкой:<br/>*DB::Exception: Memory limit (total) exceeded: would use 88.70 GiB (attempt to allocate chunk of 4361648 bytes), maximum: 84.83 GiB. OvercommitTracker decision: Query was selected to stop by OvercommitTracker* |
-| Откуда алерт | Мониторинг почта |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Высокая нагрузка на БД в момент попытки загрузки таблиц |
-| Действия по устранению | Перезапуск таблиц после падения нагрузки на БД |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Инфраструктурный сбой	2026-02-20 05:40:00.000	2026-02-20 05:40:00.000	2026-02-20 05:40:00.000	2026-02-20 06:05:00.000
-DWH-10750	Incident	КХД	Упала загрузка таблицы dm_calc.account_debt_for_working_capital_1c	| Название | Описание |
-| --- | --- |
-| Время триггера | **27.02.2026 04:55** |
-| Название сущности | 1C_FI |
-| Название таблицы | dm_calc.account_debt_for_working_capital_1c |
-| Описание события | Упала загрузка таблицы dm_calc.account_debt_for_working_capital_1c.<br/>С ошибкой: *null value in column "posting_uid_code_1c" violates not-null constraint* |
-| Откуда алерт | Алертинг почта |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Наличие null записей в поле "posting_uid_code_1c"   |
-| Действия по устранению | Разрешил вставку null значений в таблицу dm_calc.account_debt_for_working_capital_1c и продолжил загрузку.<br/>В таблице **dm**.account_debt_for_working_capital_1c вставка null значений в поле posting_uid_code_1c была разрешена. |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Ошибка в скриптах	2026-02-27 04:55:00.000	2026-02-27 04:55:00.000	2026-02-27 04:55:00.000	2026-02-27 05:15:00.000
-DWH-10937	Incident	КХД	Упала загрузка таблицы dm_view.exp_transportation_railcar_at_plant_normative_vs_actual	| Название | Описание |
-| --- | --- |
-| Время триггера | **10.03.2026 08:18** |
-| Название сущности | SALES_SHIPMENT_FROM_PLANT_4 |
-| Название таблицы | dm_view.exp_transportation_railcar_at_plant_normative_vs_actual |
-| Описание события | Упала загрузка таблицы dm_view.exp_transportation_railcar_at_plant_normative_vs_actual.<br />Ошибка:<br />*view userdata.exp_transportation_railcar_at_plant_normative_vs_actual_copy depends on view dm_view.exp_transportation_railcar_at_plant_normative_vs_actual* |
-| Откуда алерт | Мониторинг пульс |
-
-## **Анализ**
-
-| Название | Описание |
-| --- | --- |
-| Причина возникновения | Из-за зависимости от *userdata.exp_transportation_railcar_at_plant_normative_vs_actual_copy* не удалось выполнить drop *dm_view.exp_transportation_railcar_at_plant_normative_vs_actual* |
-| Действия по устранению | Выполнено каскадное удаление *dm_view.exp_transportation_railcar_at_plant_normative_vs_actual* |
-| Описание проактивных мероприятий |  |
-	Завершена	Normal	KalinichenkoNA	KalinichenkoNA	DE (Data Engineer)				Архитектурное противоречие	2026-03-10 08:18:00.000	2026-03-10 08:18:00.000	2026-03-10 08:18:00.000	2026-03-10 08:25:00.000
-
-
-
-select issue_id, linked_issue_id, linked_issue_type, linked_issue_summary, link_type, dttm_loaded from tech_etl.yt_incident_links
-order by issue_id;
-
-DWH-12217	DWH-9940	Feature	Управление остатками на счетах RSET	Subtask	2026-07-22 13:32:22.148
-DWH-12235	DWH-12246	Task	Исправить все скрипты query_recreate_init, в которых используется не основная функция загрузки, поменятьт all на конкретные поля	Subtask	2026-07-22 13:32:21.233
-DWH-12408	DWH-11486	Feature	SD-0023 Analysis of supply chain / график Эйджинга	Subtask	2026-07-22 13:32:17.804
-DWH-12408	DWH-12409	Внерелиз	Перенести изменения по витрине эйджинга (dm) на PROD GP	Subtask	2026-07-22 13:32:17.757
-DWH-12414	DWH-11279	Feature	Metal in supply chain / техдолг и корректировки	Subtask	2026-07-22 13:32:14.397
-
-
-select issue_id, event_dttm, author_name, event_type, field_name, old_value, new_value, comment_text, dttm_loaded from tech_etl.yt_incident_history
-order by issue_id;
-
-DWH-10023	2026-03-19 13:33:59.000	custom_fields_user_322382619	assignee_change	Assignee	KalinichenkoNA			2026-07-22 12:50:24.585
-DWH-10023	2026-01-30 02:48:27.000	KalinichenkoNA	state_change	Состояние	Зарегистрирована	Завершена		2026-07-22 12:50:24.416
-DWH-10023	2026-03-19 13:33:59.000	custom_fields_user_322382619	assignee_change	Исполнитель		KalinichenkoNA		2026-07-22 12:50:24.505
-DWH-10113	2026-03-19 13:34:04.000	custom_fields_user_322382619	assignee_change	Исполнитель		KalinichenkoNA		2026-07-22 12:50:24.930
-DWH-10113	2026-03-19 13:34:04.000	custom_fields_user_322382619	assignee_change	Assignee	KalinichenkoNA			2026-07-22 12:50:25.008
-DWH-10113	2026-02-04 02:43:53.000	KalinichenkoNA	state_change	Состояние	Зарегистрирована	Завершена		2026-07-22 12:50:24.849
-DWH-10160	2026-03-19 13:34:04.000	custom_fields_user_322382619	assignee_change	Исполнитель		KalinichenkoNA		2026-07-22 12:50:25.399
-DWH-10160	2026-02-05 05:54:57.000	KalinichenkoNA	state_change	Состояние	Зарегистрирована	Завершена		2026-07-22 12:50:25.300
-DWH-10160	2026-03-19 13:34:04.000	custom_fields_user_322382619	assignee_change	Assignee	KalinichenkoNA			2026-07-22 12:50:25.482
-DWH-10195	2026-03-19 13:34:09.000	custom_fields_user_322382619	assignee_change	Исполнитель		KalinichenkoNA		2026-07-22 12:50:25.852
+ ⠿ Container table-dependency-viewer-api-1       Started                                                    11.1s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache api frontend
+[+] Building 107.5s (31/31) FINISHED
+ => [table-dependency-viewer_api internal] load build definition from Dockerfile                             0.0s
+ => => transferring dockerfile: 1.74kB                                                                       0.0s
+ => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                        0.0s
+ => => transferring dockerfile: 668B                                                                         0.0s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine           2.9s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim              3.1s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                  6.7s
+ => [table-dependency-viewer_frontend internal] load .dockerignore                                           0.0s
+ => => transferring context: 162B                                                                            0.0s
+ => [table-dependency-viewer_frontend build 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee0  0.0s
+ => [table-dependency-viewer_frontend internal] load build context                                           0.9s
+ => => transferring context: 6.46MB                                                                          0.8s
+ => CACHED [table-dependency-viewer_frontend build 2/6] WORKDIR /app                                         0.0s
+ => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                       0.4s
+ => [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.  7.3s
+ => [table-dependency-viewer_api internal] load .dockerignore                                                0.0s
+ => => transferring context: 162B                                                                            0.0s
+ => [table-dependency-viewer_api internal] load build context                                                0.0s
+ => => transferring context: 2.12kB                                                                          0.0s
+ => [table-dependency-viewer_api stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:db3ff2e1800a  0.0s
+ => => resolve docker.io/library/python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627  0.0s
+ => CACHED [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5  0.0s
+ => CACHED [table-dependency-viewer_api stage-1  2/10] WORKDIR /app                                          0.0s
+ => [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /va  69.5s
+ => [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:101  2.8s
+ => [table-dependency-viewer_frontend build 5/6] COPY . .                                                    3.3s
+ => [table-dependency-viewer_frontend build 6/6] RUN npm run build                                           5.5s
+ => [table-dependency-viewer_frontend stage-1 3/4] COPY --from=build /app/dist /app/dist                     0.5s
+ => [table-dependency-viewer_frontend stage-1 4/4] COPY frontend-server.mjs /app/frontend-server.mjs         0.3s
+ => [table-dependency-viewer_frontend] exporting to image                                                    0.0s
+ => => exporting layers                                                                                      0.0s
+ => => writing image sha256:83fad5d9d19eb2abf75eacbd9b34b1d11fd6c169f09e2ef4dee54e650c593994                 0.0s
+ => => naming to docker.io/library/table-dependency-viewer_frontend                                          0.0s
+ => [table-dependency-viewer_api stage-1  4/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node     0.6s
+ => [table-dependency-viewer_api stage-1  5/10] COPY --from=node /usr/local/bin/npm /usr/local/bin/npm       0.5s
+ => [table-dependency-viewer_api stage-1  6/10] COPY --from=node /usr/local/bin/npx /usr/local/bin/npx       0.5s
+ => [table-dependency-viewer_api stage-1  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib  0.9s
+ => [table-dependency-viewer_api stage-1  8/10] COPY api/ /app/api/                                          0.3s
+ => [table-dependency-viewer_api stage-1  9/10] RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=   pi  20.4s
+ => [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-r  7.3s
+ => [table-dependency-viewer_api] exporting to image                                                         0.7s
+ => => exporting layers                                                                                      0.7s
+ => => writing image sha256:f6d90ea69257892e513d404ce5caf3093ac68baa04075e0ccd2ea4ae7ff667f9                 0.0s
+ => => naming to docker.io/library/table-dependency-viewer_api                                               0.0s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d --force-recreate api frontend
+[+] Running 2/2
+ ⠿ Container table-dependency-viewer-frontend-1  Started                                                    11.1s
+ ⠿ Container table-dependency-viewer-api-1       Started                                                    11.1s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=250
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1569, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1490, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1353, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 907, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 440, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 609, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 427, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 22, in import_from_string
+table-dependency-viewer-api-1  |     raise exc from None
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 35, in <module>
+table-dependency-viewer-api-1  |     from PIL import Image, ImageDraw, ImageFont
+table-dependency-viewer-api-1  | ModuleNotFoundError: No module named 'PIL'

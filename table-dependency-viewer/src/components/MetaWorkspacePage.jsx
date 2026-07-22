@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import DevMetaAdminPage from "./DevMetaAdminPage.jsx";
 import EntityDevMetaWorkspace from "./EntityDevMetaWorkspace.jsx";
 import { metaWorkspaceApi } from "../api/metaWorkspace.js";
+import { devMetaApi, entityMetaApi } from "../api/devMeta.js";
 
 function groupGpObjects(items) {
   const tree = new Map();
@@ -56,6 +57,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [activeSelection, setActiveSelection] = useState(null);
   const [branchValidation, setBranchValidation] = useState(null);
   const [validatingBranch, setValidatingBranch] = useState(false);
+  const [branchValidationProgress, setBranchValidationProgress] = useState(null);
   const [syncingBranch, setSyncingBranch] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchTree, setBranchTree] = useState({ gp_entities: [], click_schemas: [] });
@@ -67,6 +69,23 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [editorVisible, setEditorVisible] = useState(false);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
   const branchHasInvalidObjects = Number(branchValidation?.summary?.invalid || 0) > 0;
+
+  const buildBranchValidationResult = (items) => {
+    const gpResults = items.filter((item) => item.domain === "gp");
+    const clickResults = items.filter((item) => item.domain === "click");
+    const summary = items.reduce(
+      (acc, item) => {
+        acc.total += 1;
+        if (item.valid) acc.valid += 1;
+        else acc.invalid += 1;
+        acc.warnings += item.warnings?.length || 0;
+        acc.infos += item.infos?.length || 0;
+        return acc;
+      },
+      { total: 0, valid: 0, invalid: 0, warnings: 0, infos: 0 },
+    );
+    return { summary, gp_results: gpResults, click_results: clickResults };
+  };
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
   const suggestedBranchName = useMemo(
@@ -245,19 +264,86 @@ export default function MetaWorkspacePage({ userProfile }) {
       setError("Укажите ветку и base-ветку");
       return;
     }
+    const gpItems = (branchCatalog.gp_objects || []).map((item) => ({ ...item, domain: "gp" }));
+    const clickItems = (branchCatalog.click_objects || []).map((item) => ({ ...item, domain: "click" }));
+    const queue = [...gpItems, ...clickItems];
+    if (!queue.length) {
+      setError("В выбранной ветке нет объектов для проверки");
+      return;
+    }
     setValidatingBranch(true);
+    setBranchValidation(null);
+    setBranchValidationProgress({
+      total: queue.length,
+      checked: 0,
+      valid: 0,
+      invalid: 0,
+      current: queue[0]?.object_key || queue[0]?.file_name || null,
+      items: [],
+      done: false,
+    });
     setError(null);
     setMessage(null);
     try {
-      const data = await metaWorkspaceApi.validateAll({
-        branch_name: branchName.trim(),
-        base_branch: baseBranch.trim(),
-      });
-      setBranchValidation(data || null);
+      const progressItems = [];
+      for (let index = 0; index < queue.length; index += 1) {
+        const item = queue[index];
+        let result;
+        if (item.domain === "gp") {
+          const bundle = await metaWorkspaceApi.branchGpBundle({
+            branch_name: branchName.trim(),
+            entity_name: item.entity_name,
+            schema_name: item.schema_name,
+            table_name: item.table_name,
+          });
+          result = await entityMetaApi.validate({
+            entity_name: item.entity_name,
+            schema_name: item.schema_name,
+            table_name: item.table_name,
+            task_id: taskId || "DWH-00000",
+            key_attributes: bundle?.key_attributes || [],
+            source_object_key: bundle?.source_object_key || null,
+            yaml_content: bundle?.yaml_content || "",
+            recreate_sql: bundle?.recreate_sql || "",
+            insert_sql: bundle?.insert_sql || "",
+            truncate_sql: bundle?.truncate_sql || "",
+          });
+        } else {
+          const branchFile = await metaWorkspaceApi.branchFile({
+            branch_name: branchName.trim(),
+            file_path: item.file_path || `${item.schema_name}/${item.file_name}`,
+          });
+          result = await devMetaApi.validate({
+            schema_name: item.schema_name,
+            file_name: item.file_name,
+            content: branchFile?.content || "",
+          });
+        }
+        const normalizedResult = {
+          ...item,
+          ...result,
+          domain: item.domain,
+          skipped: false,
+        };
+        progressItems.push(normalizedResult);
+        const snapshot = buildBranchValidationResult(progressItems);
+        setBranchValidation(snapshot);
+        setBranchValidationProgress({
+          total: queue.length,
+          checked: index + 1,
+          valid: snapshot.summary.valid,
+          invalid: snapshot.summary.invalid,
+          current: queue[index + 1]?.object_key || queue[index + 1]?.file_name || null,
+          items: [...progressItems],
+          done: index + 1 === queue.length,
+        });
+        setMessage(`Проверка продолжается: ${index + 1}/${queue.length}. Последний объект: ${item.object_key || item.file_name}`);
+      }
       setMessage("Проверка всех объектов ветки завершена.");
     } catch (err) {
       setError(err.message || "Не удалось проверить объекты ветки");
     } finally {
+      setBranchValidationProgress((prev) => (prev ? { ...prev, done: true, current: null } : prev));
       setValidatingBranch(false);
     }
   };
@@ -579,6 +665,43 @@ export default function MetaWorkspacePage({ userProfile }) {
             </button>
             <span className="muted">GP: {branchSummary.gp} · Click: {branchSummary.click}</span>
           </div>
+          {branchValidationProgress ? (
+            <div className="meta-workspace-progress">
+              <div className="meta-workspace-progress-head">
+                <div>
+                  <div className="section-subtitle">Статус проверки ветки</div>
+                  <div className="muted">
+                    {branchValidationProgress.done
+                      ? `Проверка завершена: ${branchValidationProgress.checked}/${branchValidationProgress.total}`
+                      : `Проверка продолжается: ${branchValidationProgress.checked}/${branchValidationProgress.total}`}
+                  </div>
+                </div>
+                <div className="meta-workspace-progress-metrics">
+                  <span className="meta-workspace-progress-pill ok">OK: {branchValidationProgress.valid}</span>
+                  <span className="meta-workspace-progress-pill bad">Ошибки: {branchValidationProgress.invalid}</span>
+                </div>
+              </div>
+              <div className="meta-workspace-progress-bar">
+                <div
+                  className="meta-workspace-progress-fill"
+                  style={{ width: `${branchValidationProgress.total ? (branchValidationProgress.checked / branchValidationProgress.total) * 100 : 0}%` }}
+                />
+              </div>
+              <div className="meta-workspace-progress-current">
+                {branchValidationProgress.current ? `Сейчас проверяем: ${branchValidationProgress.current}` : "Все объекты проверены"}
+              </div>
+              {branchValidationProgress.items?.length ? (
+                <div className="meta-workspace-progress-list">
+                  {branchValidationProgress.items.slice().reverse().map((item) => (
+                    <div key={`${item.object_key || item.file_path}:${item.domain}`} className={`meta-workspace-progress-item ${item.valid ? "ok" : "bad"}`}>
+                      <span className="meta-workspace-progress-item-name">{item.object_key || item.file_name}</span>
+                      <span className="meta-workspace-progress-item-state">{item.valid ? "OK" : "Ошибка"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="meta-workspace-branch-picker">
             {String(branchName || "").trim() ? (
               filteredBranchOptions.length ? filteredBranchOptions.map((item) => (

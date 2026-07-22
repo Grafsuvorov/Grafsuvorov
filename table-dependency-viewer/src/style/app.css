@@ -9714,6 +9714,111 @@ body.custom-hover-label-active * {
   background: rgba(15, 23, 42, 0.34);
 }
 
+.meta-workspace-progress {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 26%),
+    rgba(15, 23, 42, 0.42);
+}
+
+.meta-workspace-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.meta-workspace-progress-metrics {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.meta-workspace-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.meta-workspace-progress-pill.ok {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.meta-workspace-progress-pill.bad {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.16);
+}
+
+.meta-workspace-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.meta-workspace-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+  transition: width 0.22s ease;
+}
+
+.meta-workspace-progress-current {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.meta-workspace-progress-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.meta-workspace-progress-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(2, 6, 23, 0.48);
+}
+
+.meta-workspace-progress-item.ok {
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.meta-workspace-progress-item.bad {
+  border-color: rgba(248, 113, 113, 0.24);
+}
+
+.meta-workspace-progress-item-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #eff6ff;
+}
+
+.meta-workspace-progress-item-state {
+  flex: none;
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
 .meta-workspace-validation-head {
   display: flex;
   justify-content: space-between;

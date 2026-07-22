@@ -2172,6 +2172,26 @@ main.content {
   line-height: 1.35;
 }
 
+.incident-report-source-grid {
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  align-items: start;
+}
+
+.incident-report-source-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(8, 17, 31, 0.44);
+}
+
+.incident-report-source-title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #cbd5e1;
+  letter-spacing: 0.01em;
+}
+
 .release-report-focus-exceptions {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

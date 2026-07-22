@@ -10873,8 +10873,8 @@ def _draw_pdf_text_block(draw, x: int, y: int, text_value: Any, font, fill: str,
 
 
 def _render_report_pdf(report: dict[str, Any]) -> bytes:
-    page_width, page_height = 1240, 1754
-    margin_x, margin_y = 72, 72
+    page_width, page_height = 2480, 3508
+    margin_x, margin_y = 132, 132
     content_width = page_width - margin_x * 2
     background = "#08111f"
     surface = "#0f172a"
@@ -10884,13 +10884,13 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
     muted = "#93a4bd"
     accent = "#38bdf8"
 
-    title_font = _load_pdf_font(34, bold=True)
-    subtitle_font = _load_pdf_font(20)
-    section_font = _load_pdf_font(24, bold=True)
-    body_font = _load_pdf_font(18)
-    small_font = _load_pdf_font(15)
-    kpi_value_font = _load_pdf_font(26, bold=True)
-    card_value_font = _load_pdf_font(22, bold=True)
+    title_font = _load_pdf_font(58, bold=True)
+    subtitle_font = _load_pdf_font(30)
+    section_font = _load_pdf_font(38, bold=True)
+    body_font = _load_pdf_font(26)
+    small_font = _load_pdf_font(22)
+    kpi_value_font = _load_pdf_font(42, bold=True)
+    card_value_font = _load_pdf_font(34, bold=True)
 
     pages: list[Image.Image] = []
 
@@ -10917,14 +10917,14 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
 
     def draw_kpis(items: list[dict[str, Any]], section_title: Optional[str]):
         nonlocal current_y
-        ensure_space(260)
+        ensure_space(420)
         if section_title:
             current_y = _draw_pdf_text_block(draw, margin_x, current_y, section_title, section_font, text, content_width)
             current_y += 12
         columns = 2
-        gap = 18
+        gap = 28
         card_width = (content_width - gap) // columns
-        card_height = 142
+        card_height = 250
         for index, item in enumerate(items):
             if index and index % columns == 0:
                 current_y += card_height + gap
@@ -10933,25 +10933,25 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             x = margin_x + col * (card_width + gap)
             y = current_y
             draw.rounded_rectangle((x, y, x + card_width, y + card_height), radius=24, fill=surface, outline=line_color, width=2)
-            draw.text((x + 22, y + 18), str(item.get("label") or "Показатель"), font=small_font, fill=muted)
-            draw.text((x + 22, y + 52), str(item.get("value") or "—"), font=kpi_value_font, fill=text)
+            draw.text((x + 30, y + 26), str(item.get("label") or "Показатель"), font=small_font, fill=muted)
+            draw.text((x + 30, y + 92), str(item.get("value") or "—"), font=kpi_value_font, fill=text)
             hint = str(item.get("hint") or "").strip()
             if hint:
-                _draw_pdf_text_block(draw, x + 22, y + 92, hint, small_font, accent, card_width - 44, line_gap=3)
+                _draw_pdf_text_block(draw, x + 30, y + 164, hint, small_font, accent, card_width - 60, line_gap=6)
         current_y += card_height + 28
 
     def draw_cards(items: list[dict[str, Any]], section_title: Optional[str]):
         nonlocal current_y
         if not items:
             return
-        ensure_space(240)
+        ensure_space(360)
         if section_title:
             current_y = _draw_pdf_text_block(draw, margin_x, current_y, section_title, section_font, text, content_width)
             current_y += 12
-        gap = 18
+        gap = 24
         columns = min(3, max(1, len(items)))
         card_width = (content_width - gap * (columns - 1)) // columns
-        card_height = 138
+        card_height = 220
         start_y = current_y
         for index, item in enumerate(items):
             col = index % columns
@@ -10959,12 +10959,12 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             x = margin_x + col * (card_width + gap)
             y = start_y + row * (card_height + gap)
             draw.rounded_rectangle((x, y, x + card_width, y + card_height), radius=24, fill=surface_alt, outline=line_color, width=2)
-            draw.text((x + 20, y + 18), str(item.get("title") or "Фокус"), font=small_font, fill=muted)
-            value_bottom = _draw_pdf_text_block(draw, x + 20, y + 46, item.get("value") or "—", card_value_font, text, card_width - 40, line_gap=4)
+            draw.text((x + 28, y + 24), str(item.get("title") or "Фокус"), font=small_font, fill=muted)
+            value_bottom = _draw_pdf_text_block(draw, x + 28, y + 74, item.get("value") or "—", card_value_font, text, card_width - 56, line_gap=5)
             meta_lines = item.get("meta") or []
-            meta_y = value_bottom + 6
+            meta_y = value_bottom + 10
             for meta in meta_lines[:3]:
-                meta_y = _draw_pdf_text_block(draw, x + 20, meta_y, meta, small_font, accent, card_width - 40, line_gap=3)
+                meta_y = _draw_pdf_text_block(draw, x + 28, meta_y, meta, small_font, accent, card_width - 56, line_gap=5)
         rows = ((len(items) - 1) // columns) + 1
         current_y = start_y + rows * card_height + max(0, rows - 1) * gap + 28
 
@@ -10976,7 +10976,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             return
         title = section.get("title")
         subtitle = section.get("subtitle")
-        estimate = 120 + max(1, len(rows)) * 52
+        estimate = 220 + max(1, len(rows)) * 84
         ensure_space(min(max(estimate, 220), 1000))
         if title:
             current_y = _draw_pdf_text_block(draw, margin_x, current_y, title, section_font, text, content_width)
@@ -10987,41 +10987,48 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         table_top = current_y
         col_count = len(columns)
         col_widths = []
-        flexible = content_width - 120 * (col_count - 1)
-        first_col_width = max(260, flexible)
-        for idx in range(col_count):
-            col_widths.append(first_col_width if idx == 0 else 120)
+        if col_count == 2:
+            col_widths = [int(content_width * 0.76), int(content_width * 0.24)]
+        elif col_count == 4:
+            col_widths = [int(content_width * 0.5), int(content_width * 0.16), int(content_width * 0.16), int(content_width * 0.18)]
+        elif col_count == 5:
+            col_widths = [int(content_width * 0.34), int(content_width * 0.24), int(content_width * 0.14), int(content_width * 0.14), int(content_width * 0.14)]
+        else:
+            flexible = content_width - 210 * (col_count - 1)
+            first_col_width = max(560, flexible)
+            for idx in range(col_count):
+                col_widths.append(first_col_width if idx == 0 else 210)
         total_width = sum(col_widths)
         if total_width > content_width:
             scale = content_width / total_width
             col_widths = [int(width * scale) for width in col_widths]
-        header_height = 40
+        header_height = 62
         draw.rounded_rectangle((margin_x, table_top, margin_x + content_width, table_top + header_height), radius=14, fill=surface, outline=line_color, width=2)
         x = margin_x
         for idx, col in enumerate(columns):
-            draw.text((x + 12, table_top + 10), str(col), font=small_font, fill=accent)
+            draw.text((x + 18, table_top + 16), str(col), font=small_font, fill=accent)
             x += col_widths[idx]
         current_y = table_top + header_height
         for row_index, row in enumerate(rows[:18]):
             values = list(row)[:col_count]
             wrapped_cells = []
-            row_height = 24
+            row_height = 42
             for idx, value in enumerate(values):
-                lines = _pdf_wrap_text(draw, value, small_font, col_widths[idx] - 24)
+                lines = _pdf_wrap_text(draw, value, body_font, col_widths[idx] - 36)
                 wrapped_cells.append(lines)
-                row_height = max(row_height, len(lines) * 22 + 12)
+                row_height = max(row_height, len(lines) * 30 + 18)
             ensure_space(row_height + 8)
             fill = surface_alt if row_index % 2 == 0 else background
             draw.rounded_rectangle((margin_x, current_y, margin_x + content_width, current_y + row_height), radius=12, fill=fill, outline=line_color, width=1)
             x = margin_x
             for idx, lines in enumerate(wrapped_cells):
-                cell_y = current_y + 8
+                cell_y = current_y + 12
                 for line in lines:
-                    draw.text((x + 12, cell_y), line, font=small_font, fill=text)
-                    cell_y += 22
+                    draw.text((x + 18, cell_y), line, font=body_font, fill=text)
+                    cell_y += 30
                 x += col_widths[idx]
-            current_y += row_height + 6
-        current_y += 18
+            current_y += row_height + 10
+        current_y += 24
 
     draw_title_block()
     for section in report.get("sections") or []:

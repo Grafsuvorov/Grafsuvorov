@@ -1818,7 +1818,10 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
       else bucket.open_count += 1;
       stats.set(weekStart, bucket);
     });
-    return [...stats.values()].sort((a, b) => String(a.week_start).localeCompare(String(b.week_start))).slice(-16);
+    return [...stats.values()]
+      .map((row) => ({ ...row, duration_hours: Number(row.duration_hours || 0).toFixed(2) * 1 }))
+      .sort((a, b) => String(a.week_start).localeCompare(String(b.week_start)))
+      .slice(-16);
   }, [filteredRows]);
 
   const dailyTimeline = useMemo(() => {
@@ -1914,22 +1917,25 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
         buildExportTableSection(
           "Причины",
           ["Причина", "Кейсы", "Таблицы", "MTTR", "Труд"],
-          reasonBreakdown.slice(0, 12).map((row) => [row.reason, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
+          reasonBreakdown.slice(0, 8).map((row) => [row.reason, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
         ),
         buildExportTableSection(
           "Направления",
           ["Направление", "Кейсы", "Таблицы", "MTTR", "Труд"],
-          directionBreakdown.slice(0, 12).map((row) => [row.direction, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
+          directionBreakdown.slice(0, 8).map((row) => [row.direction, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
         ),
         buildExportTableSection(
-          "Источники сигналов",
-          ["Источник", "Кейсы", "Таблицы", "MTTR"],
-          sourceBreakdown.slice(0, 12).map((row) => [row.source, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours)]),
+          "Источники и связи с delivery",
+          ["Источник / тип связи", "Кейсы / связи", "Таблицы / —", "MTTR / —"],
+          [
+            ...sourceBreakdown.slice(0, 6).map((row) => [row.source, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours)]),
+            ...linkedIssueTypeBreakdown.slice(0, 6).map((row) => [`Связь: ${row.linked_issue_type}`, String(row.count), "—", "—"]),
+          ],
         ),
         buildExportTableSection(
           "Поток инцидентов",
           ["Задача YT", "Сводка", "Старт", "Длительность", "Труд"],
-          recentIncidents.slice(0, 14).map((incident) => [
+          recentIncidents.slice(0, 10).map((incident) => [
             incident.link ? `${incident.issue_id} (${incident.link})` : incident.issue_id,
             shortText(incident.summary, 72),
             formatDateTime(incident.incident_start_dttm),
@@ -1939,7 +1945,7 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
         ),
       ],
     };
-  }, [data, days, summary, dataSourceLabel, focus, reasonBreakdown, directionBreakdown, sourceBreakdown, recentIncidents]);
+  }, [data, days, summary, dataSourceLabel, focus, reasonBreakdown, directionBreakdown, sourceBreakdown, linkedIssueTypeBreakdown, recentIncidents]);
 
   useEffect(() => {
     onExportModelChange(exportModel);
@@ -2071,7 +2077,7 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.14)" />
                     <XAxis dataKey="week_label" stroke="#94a3b8" />
                     <YAxis yAxisId="count" stroke="#94a3b8" allowDecimals={false} />
-                    <YAxis yAxisId="hours" orientation="right" stroke="#94a3b8" />
+                    <YAxis yAxisId="hours" orientation="right" stroke="#94a3b8" tickFormatter={(value) => formatNumber(value)} />
                     <Tooltip
                       {...CHART_TOOLTIP_PROPS}
                       formatter={(value, key) => {
@@ -2100,8 +2106,9 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
                   <div className="muted">Откуда приходят инциденты и с какими типами delivery-задач они чаще связаны.</div>
                 </div>
               </div>
-              <div className="release-report-exception-grid">
-                <div className="engineering-table">
+              <div className="release-report-exception-grid incident-report-source-grid">
+                <div className="engineering-table incident-report-source-card">
+                  <div className="incident-report-source-title">Источники сигналов</div>
                   <div className="engineering-table-head release-report-exception-row incident-report-wide-row">
                     <span>Источник</span>
                     <span>Кейсы</span>
@@ -2117,7 +2124,8 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
                     </div>
                   ))}
                 </div>
-                <div className="engineering-table">
+                <div className="engineering-table incident-report-source-card">
+                  <div className="incident-report-source-title">Типы связей с delivery</div>
                   <div className="engineering-table-head release-report-exception-row incident-report-linked-row">
                     <span>Тип связанной delivery-задачи</span>
                     <span>Связей</span>

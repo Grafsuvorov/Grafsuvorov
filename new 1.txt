@@ -1,93 +1,17 @@
- WITH raw_rel AS (
-      SELECT
-          r.release_id,
-          r.release_type,
-          r.initiated_by,
-          r.started_at,
-          r.finished_at,
-          r.status,
-          r.total_objects,
-          r.ready_to_release,
-          CASE
-              WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%hotfix%' THEN 'hotfix'
-              WHEN lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%внерел%'
-                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%vnerelease%'
-                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%vne release%'
-                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out_of_release%'
-                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%out of release%'
-                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%nonrelease%'
-                OR lower(COALESCE(r.release_type, '') || ' ' || COALESCE(r.release_id, '')) LIKE '%non-release%'
-              THEN 'outside_release'
-              ELSE 'release'
-          END AS fallback_release_bucket
-      FROM tech_etl.release_log r
-      WHERE r.started_at >= (now() - ('180 days')::interval)
-  ),
-  raw_ro AS (
-      SELECT ro.*
-      FROM tech_etl.release_objects ro
-      JOIN raw_rel
-        ON raw_rel.release_id = ro.release_id
-  ),
-  release_tasks AS (
-      SELECT DISTINCT release_id, task_id
-      FROM raw_ro
-      WHERE task_id IS NOT NULL
-        AND task_id <> ''
-  ),
-  task_ids AS (
-      SELECT DISTINCT task_id
-      FROM release_tasks
-  ),
-  task_custom_base AS (
-      SELECT
-          issue_id,
-          field_name,
-          NULLIF(BTRIM(field_value), '') AS field_value
-      FROM tech_etl.yt_issue_custom_field
-      WHERE field_name IN (
-          'Тип карточки',
-          'Тип внерелиза',
-          'Фактическая дата релиза',
-          'Дата выкатки',
-          'Номер релиза КХД'
-      )
-  ),
-  task_custom AS (
-      SELECT
-          issue_id,
-          MAX(CASE WHEN field_name = 'Тип карточки' THEN field_value END) AS card_type,
-          MAX(CASE WHEN field_name = 'Тип внерелиза' THEN field_value END) AS outside_type,
-          MAX(CASE WHEN field_name = 'Номер релиза КХД' THEN field_value END) AS release_slot_number,
-          MAX(CASE WHEN field_name = 'Фактическая дата релиза' THEN field_value END) AS actual_release_at_text,
-          MAX(CASE WHEN field_name = 'Дата выкатки' THEN field_value END) AS rollout_at_text
-      FROM task_custom_base
-      GROUP BY issue_id
-  ),
-  task_custom_norm AS (
-      SELECT
-          issue_id,
-          card_type,
-          outside_type,
-          release_slot_number,
-          LEFT(COALESCE(actual_release_at_text, rollout_at_text), 10) AS effective_release_at_key,
-          CASE
-              WHEN lower(COALESCE(card_type, '')) = 'release slot' THEN 'release'
-              WHEN lower(COALESCE(card_type, '')) = 'внерелиз'
-               AND (
-                   lower(COALESCE(outside_type, '')) LIKE '%хотфикс%'
-                   OR lower(COALESCE(outside_type, '')) LIKE '%hotfix%'
-               )
-              THEN 'hotfix'
-              WHEN lower(COALESCE(card_type, '')) = 'внерелиз' THEN 'outside_release'
-              ELSE NULL
-          END AS custom_bucket
-      FROM task_custom
-      WHERE lower(COALESCE(card_type, '')) IN ('release slot', 'внерелиз')
-  )select * from task_custom_norm where effective_release_at_key>'2026-06-21'
-  and outside_type is not null 
+Описание:
 
-DWH-13956	Внерелиз	Хотфикс		2026-06-24	hotfix
-DWH-14363	Внерелиз	Хотфикс		2026-07-08	hotfix
-DWH-14110	Внерелиз	Хотфикс		2026-06-29	hotfix
-DWH-14134	Внерелиз	Хотфикс		2026-06-29	hotfix
+При переносе расчетов всех направлений на DBT, необходимо будет выполнить сверку всех таблиц и убедиться, что расхождений нет или они разумно объясняются.
+
+
+
+Цель:
+
+Проверить работоспособность фунции сравнения данных по таблицам и предоставит
+
+
+
+Функция plpgsq проверки таблиц
+
+Входные параметры - схема + таблица 1,  схема + таблица 2
+
+Результат - в виде json result-Общее заключение  - SUCCESS или ERROR с пояснением почему count_1, count_2 - кол-во в 1й и второй diff_count - Проверки по колонкам кроме систtмных полей через except или агрегат

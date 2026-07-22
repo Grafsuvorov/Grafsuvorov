@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from typing import List, Dict, Tuple, Set, Union, Any
 from collections import deque, defaultdict
 from pydantic import BaseModel
@@ -30,6 +30,9 @@ import tempfile
 from html import unescape
 from itertools import combinations
 from zoneinfo import ZoneInfo
+from io import BytesIO
+
+from PIL import Image, ImageDraw, ImageFont
 
 from fastapi import APIRouter, HTTPException
 
@@ -2522,6 +2525,27 @@ def get_admin_incident_reports(
         print("❌ /api/admin/reports/incidents error:", e)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось получить аналитику инцидентов")
+
+
+@router.post("/api/admin/reports/export-pdf")
+async def export_admin_report_pdf(request: Request):
+    _require_admin(request)
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="Некорректный payload для PDF")
+        pdf_bytes = _render_report_pdf(payload)
+        filename = str(payload.get("filename") or "reports-export.pdf").strip() or "reports-export.pdf"
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+        return StreamingResponse(BytesIO(pdf_bytes), media_type="application/pdf", headers=headers)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ /api/admin/reports/export-pdf error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось экспортировать PDF")
 
 
 @router.get("/api/admin/dev-meta/status")
@@ -10799,6 +10823,222 @@ def _build_ytrack_link(task_id: Optional[str]) -> Optional[str]:
     if not base:
         return None
     return base.replace("{task_id}", task_id).replace("{id}", task_id)
+
+
+def _load_pdf_font(size: int, bold: bool = False):
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size=size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def _pdf_wrap_text(draw, text_value: Any, font, max_width: int) -> list[str]:
+    text = str(text_value or "").strip()
+    if not text:
+        return ["—"]
+    lines: list[str] = []
+    for paragraph in text.splitlines() or [""]:
+        words = paragraph.split()
+        if not words:
+            lines.append("")
+            continue
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            bbox = draw.textbbox((0, 0), candidate, font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+    return lines or ["—"]
+
+
+def _draw_pdf_text_block(draw, x: int, y: int, text_value: Any, font, fill: str, max_width: int, line_gap: int = 5):
+    lines = _pdf_wrap_text(draw, text_value, font, max_width)
+    line_height = font.size + line_gap if hasattr(font, "size") else 20
+    for index, line in enumerate(lines):
+        draw.text((x, y + index * line_height), line, font=font, fill=fill)
+    return y + max(len(lines), 1) * line_height
+
+
+def _render_report_pdf(report: dict[str, Any]) -> bytes:
+    page_width, page_height = 1240, 1754
+    margin_x, margin_y = 72, 72
+    content_width = page_width - margin_x * 2
+    background = "#08111f"
+    surface = "#0f172a"
+    surface_alt = "#111c31"
+    line_color = "#243247"
+    text = "#f8fbff"
+    muted = "#93a4bd"
+    accent = "#38bdf8"
+
+    title_font = _load_pdf_font(34, bold=True)
+    subtitle_font = _load_pdf_font(20)
+    section_font = _load_pdf_font(24, bold=True)
+    body_font = _load_pdf_font(18)
+    small_font = _load_pdf_font(15)
+    kpi_value_font = _load_pdf_font(26, bold=True)
+    card_value_font = _load_pdf_font(22, bold=True)
+
+    pages: list[Image.Image] = []
+
+    def new_page():
+        image = Image.new("RGB", (page_width, page_height), background)
+        draw = ImageDraw.Draw(image)
+        return image, draw, margin_y
+
+    image, draw, current_y = new_page()
+
+    def ensure_space(required_height: int):
+        nonlocal image, draw, current_y
+        if current_y + required_height <= page_height - margin_y:
+            return
+        pages.append(image)
+        image, draw, current_y = new_page()
+
+    def draw_title_block():
+        nonlocal current_y
+        current_y = _draw_pdf_text_block(draw, margin_x, current_y, report.get("title") or "Отчёт", title_font, text, content_width)
+        current_y += 6
+        current_y = _draw_pdf_text_block(draw, margin_x, current_y, report.get("subtitle") or "", subtitle_font, muted, content_width)
+        current_y += 20
+
+    def draw_kpis(items: list[dict[str, Any]], section_title: Optional[str]):
+        nonlocal current_y
+        ensure_space(260)
+        if section_title:
+            current_y = _draw_pdf_text_block(draw, margin_x, current_y, section_title, section_font, text, content_width)
+            current_y += 12
+        columns = 2
+        gap = 18
+        card_width = (content_width - gap) // columns
+        card_height = 142
+        for index, item in enumerate(items):
+            if index and index % columns == 0:
+                current_y += card_height + gap
+                ensure_space(card_height + 40)
+            col = index % columns
+            x = margin_x + col * (card_width + gap)
+            y = current_y
+            draw.rounded_rectangle((x, y, x + card_width, y + card_height), radius=24, fill=surface, outline=line_color, width=2)
+            draw.text((x + 22, y + 18), str(item.get("label") or "Показатель"), font=small_font, fill=muted)
+            draw.text((x + 22, y + 52), str(item.get("value") or "—"), font=kpi_value_font, fill=text)
+            hint = str(item.get("hint") or "").strip()
+            if hint:
+                _draw_pdf_text_block(draw, x + 22, y + 92, hint, small_font, accent, card_width - 44, line_gap=3)
+        current_y += card_height + 28
+
+    def draw_cards(items: list[dict[str, Any]], section_title: Optional[str]):
+        nonlocal current_y
+        if not items:
+            return
+        ensure_space(240)
+        if section_title:
+            current_y = _draw_pdf_text_block(draw, margin_x, current_y, section_title, section_font, text, content_width)
+            current_y += 12
+        gap = 18
+        columns = min(3, max(1, len(items)))
+        card_width = (content_width - gap * (columns - 1)) // columns
+        card_height = 138
+        start_y = current_y
+        for index, item in enumerate(items):
+            col = index % columns
+            row = index // columns
+            x = margin_x + col * (card_width + gap)
+            y = start_y + row * (card_height + gap)
+            draw.rounded_rectangle((x, y, x + card_width, y + card_height), radius=24, fill=surface_alt, outline=line_color, width=2)
+            draw.text((x + 20, y + 18), str(item.get("title") or "Фокус"), font=small_font, fill=muted)
+            value_bottom = _draw_pdf_text_block(draw, x + 20, y + 46, item.get("value") or "—", card_value_font, text, card_width - 40, line_gap=4)
+            meta_lines = item.get("meta") or []
+            meta_y = value_bottom + 6
+            for meta in meta_lines[:3]:
+                meta_y = _draw_pdf_text_block(draw, x + 20, meta_y, meta, small_font, accent, card_width - 40, line_gap=3)
+        rows = ((len(items) - 1) // columns) + 1
+        current_y = start_y + rows * card_height + max(0, rows - 1) * gap + 28
+
+    def draw_table(section: dict[str, Any]):
+        nonlocal current_y
+        rows = section.get("rows") or []
+        columns = section.get("columns") or []
+        if not columns:
+            return
+        title = section.get("title")
+        subtitle = section.get("subtitle")
+        estimate = 120 + max(1, len(rows)) * 52
+        ensure_space(min(max(estimate, 220), 1000))
+        if title:
+            current_y = _draw_pdf_text_block(draw, margin_x, current_y, title, section_font, text, content_width)
+            current_y += 6
+        if subtitle:
+            current_y = _draw_pdf_text_block(draw, margin_x, current_y, subtitle, small_font, muted, content_width)
+            current_y += 10
+        table_top = current_y
+        col_count = len(columns)
+        col_widths = []
+        flexible = content_width - 120 * (col_count - 1)
+        first_col_width = max(260, flexible)
+        for idx in range(col_count):
+            col_widths.append(first_col_width if idx == 0 else 120)
+        total_width = sum(col_widths)
+        if total_width > content_width:
+            scale = content_width / total_width
+            col_widths = [int(width * scale) for width in col_widths]
+        header_height = 40
+        draw.rounded_rectangle((margin_x, table_top, margin_x + content_width, table_top + header_height), radius=14, fill=surface, outline=line_color, width=2)
+        x = margin_x
+        for idx, col in enumerate(columns):
+            draw.text((x + 12, table_top + 10), str(col), font=small_font, fill=accent)
+            x += col_widths[idx]
+        current_y = table_top + header_height
+        for row_index, row in enumerate(rows[:18]):
+            values = list(row)[:col_count]
+            wrapped_cells = []
+            row_height = 24
+            for idx, value in enumerate(values):
+                lines = _pdf_wrap_text(draw, value, small_font, col_widths[idx] - 24)
+                wrapped_cells.append(lines)
+                row_height = max(row_height, len(lines) * 22 + 12)
+            ensure_space(row_height + 8)
+            fill = surface_alt if row_index % 2 == 0 else background
+            draw.rounded_rectangle((margin_x, current_y, margin_x + content_width, current_y + row_height), radius=12, fill=fill, outline=line_color, width=1)
+            x = margin_x
+            for idx, lines in enumerate(wrapped_cells):
+                cell_y = current_y + 8
+                for line in lines:
+                    draw.text((x + 12, cell_y), line, font=small_font, fill=text)
+                    cell_y += 22
+                x += col_widths[idx]
+            current_y += row_height + 6
+        current_y += 18
+
+    draw_title_block()
+    for section in report.get("sections") or []:
+        section_type = section.get("type")
+        if section_type == "kpis":
+            draw_kpis(section.get("items") or [], section.get("title"))
+        elif section_type == "cards":
+            draw_cards(section.get("items") or [], section.get("title"))
+        elif section_type == "table":
+            draw_table(section)
+
+    pages.append(image)
+    pdf_buffer = BytesIO()
+    first_page, rest = pages[0], pages[1:]
+    first_page.save(pdf_buffer, format="PDF", save_all=True, append_images=rest)
+    pdf_buffer.seek(0)
+    return pdf_buffer.getvalue()
 
 
 def _resolve_date_window(date_from: Optional[str], date_to: Optional[str], days: int):

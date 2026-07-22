@@ -7,6 +7,7 @@ export const adminApi = {
   engineeringEfficiency: (days) => apiClient.get("/api/admin/engineering-efficiency", { params: { days } }),
   releaseReports: (days) => apiClient.get("/api/admin/reports/releases", { params: { days } }),
   incidentReports: (days) => apiClient.get("/api/admin/reports/incidents", { params: { days } }),
+  exportReportPdf: (body) => apiClient.post("/api/admin/reports/export-pdf", body, { expect: "response" }),
   feedback: (params) => apiClient.get("/api/admin/feedback", { params }),
   refreshCache: () => apiClient.post("/api/admin/refresh-cache"),
   runCiCd: () => apiClient.post("/api/admin/run-ci-cd"),

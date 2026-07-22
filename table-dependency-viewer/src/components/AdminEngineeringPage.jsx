@@ -74,6 +74,21 @@ function formatPercent(value, digits = 2) {
   return `${formatNumber(value, digits)}%`;
 }
 
+function buildExportTableSection(title, columns, rows, subtitle) {
+  return { type: "table", title, subtitle, columns, rows };
+}
+
+function downloadBlobFile(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 function shortLabel(value, limit = 18) {
   if (!value) return "—";
   if (value.length <= limit) return value;
@@ -156,7 +171,8 @@ export default function AdminEngineeringPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("releases");
   const [days, setDays] = useState(180);
-  const handlePrintReports = () => window.print();
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [exportModel, setExportModel] = useState(null);
 
   const [releaseData, setReleaseData] = useState(null);
   const [releaseLoading, setReleaseLoading] = useState(false);
@@ -244,6 +260,23 @@ export default function AdminEngineeringPage() {
     [teamData?.dashboard_report]
   );
 
+  const handleExportReports = async () => {
+    if (!exportModel || pdfExporting) return;
+    setPdfExporting(true);
+    try {
+      const response = await adminApi.exportReportPdf(exportModel);
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^"]+)"?/i);
+      const filename = match?.[1] || exportModel.filename || `reports-${activeTab}-${days}d.pdf`;
+      downloadBlobFile(blob, filename);
+    } catch (err) {
+      window.alert(err.message || "Не удалось экспортировать PDF");
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
   return (
     <div className="container cc-page">
       <section className="card engineering-page reports-page">
@@ -266,10 +299,11 @@ export default function AdminEngineeringPage() {
             <button
               type="button"
               className="btn btn-secondary reports-print-btn"
-              onClick={handlePrintReports}
-              title="Откроется системный диалог браузера: выберите Сохранить как PDF"
+              onClick={handleExportReports}
+              title={exportModel ? "Скачать текущий отчёт в PDF" : "Для этого таба PDF пока недоступен"}
+              disabled={!exportModel || pdfExporting}
             >
-              Экспорт в PDF
+              {pdfExporting ? "Готовим PDF..." : "Экспорт в PDF"}
             </button>
           </div>
         </div>
@@ -292,6 +326,8 @@ export default function AdminEngineeringPage() {
             data={releaseData}
             loading={releaseLoading}
             error={releaseError}
+            days={days}
+            onExportModelChange={setExportModel}
             onOpenTable={(schema, table) => navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`)}
             onOpenRelease={(releaseId) => navigate("/releases", { state: { releaseId } })}
           />
@@ -300,6 +336,8 @@ export default function AdminEngineeringPage() {
             data={incidentData}
             loading={incidentLoading}
             error={incidentError}
+            days={days}
+            onExportModelChange={setExportModel}
             onOpenTable={(tableFqn) => {
               if (!tableFqn) return;
               const [schema, ...rest] = tableFqn.split(".");
@@ -312,6 +350,7 @@ export default function AdminEngineeringPage() {
             data={teamData}
             loading={teamLoading}
             error={teamError}
+            onExportModelChange={setExportModel}
             selectedEngineer={selectedEngineer}
             setSelectedEngineer={setSelectedEngineer}
             selectedEngineerRow={selectedEngineerRow}
@@ -326,7 +365,7 @@ export default function AdminEngineeringPage() {
   );
 }
 
-function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease }) {
+function ReleaseReportsTab({ data, loading, error, days, onExportModelChange, onOpenTable, onOpenRelease }) {
   const [activeSubtab, setActiveSubtab] = useState("overview");
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [selectedExceptionDirection, setSelectedExceptionDirection] = useState("Все направления");
@@ -741,6 +780,91 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
     if (!normalizedSelectedEntity) return [];
     return entityTimeline.filter((row) => row.entity_name === normalizedSelectedEntity).slice(-6);
   }, [entityTimeline, normalizedSelectedEntity]);
+
+  const exportModel = useMemo(() => {
+    if (!data) return null;
+    const kpis = [
+      { label: "Релизы", value: String(summary.releases_count ?? 0), hint: `${summary.release_days_count ?? 0} дней с релизами` },
+      { label: "Объекты", value: String(summary.objects_count ?? 0), hint: `${formatNumber(summary.avg_objects_per_release)} на релиз` },
+      { label: "Хотфиксы", value: String(summary.hotfix_count ?? 0), hint: "оперативные поставки" },
+      { label: "Внерелизы", value: String(summary.outside_release_count ?? 0), hint: "отдельный поток" },
+      { label: "Трудозатраты", value: formatHours(summary.hours_total), hint: `${summary.tasks_count ?? 0} задач в поставках` },
+      { label: "Люди", value: String(summary.initiators_count ?? 0), hint: `${formatMinutes(summary.avg_duration_minutes)} средний цикл релиза` },
+    ];
+    const focusCards = [
+      peakWeek ? { title: "Пик частоты", value: peakWeek.week_label, meta: [`${peakWeek.releases_count} релизов`, `${peakWeek.objects_count} объектов`] } : null,
+      focus.top_entity ? { title: "Самая изменяемая сущность", value: focus.top_entity.entity_name, meta: [`${focus.top_entity.objects_count} объектов`, `${focus.top_entity.releases_count} релизов`] } : null,
+      focus.top_user ? { title: "Лидер по трудозатратам", value: focus.top_user.engineer, meta: [formatHours(focus.top_user.hours_total), `${focus.top_user.releases_count} релизов`] } : null,
+    ].filter(Boolean);
+    const overviewSections = [
+      buildExportTableSection(
+        "Типы поставок",
+        ["Тип", "Поставки", "Объекты", "Задачи", "Часы"],
+        typeBreakdown.map((row) => [releaseBucketLabel(row.release_bucket), String(row.releases_count), String(row.objects_count), String(row.tasks_count), formatHours(row.hours_total)]),
+      ),
+      buildExportTableSection(
+        normalizedSelectedEntity ? `Топ таблиц: ${normalizedSelectedEntity}` : "Топ таблиц по изменениям",
+        ["Таблица", "Релизы", "Объекты", "Задачи", "Последнее изменение"],
+        filteredTables.slice(0, 12).map((row) => [`${row.schema_name}.${row.table_name}`, String(row.releases_count), String(row.objects_count), String(row.tasks_count), formatShortDate(row.last_change_at)]),
+      ),
+      buildExportTableSection(
+        "Исполнители",
+        ["Исполнитель", "Часы", "Релизы", "Хотфиксы", "Внерелизы", "Задачи"],
+        topUsers.slice(0, 12).map((row) => [row.engineer, formatHours(row.hours_total), String(row.releases_count), String(row.hotfix_count), String(row.outside_release_count), String(row.tasks_count)]),
+      ),
+      buildExportTableSection(
+        "Последние поставки",
+        ["Поставка", "ID", "Тип", "Объекты", "Часы"],
+        recentReleases.slice(0, 12).map((row) => [formatReleaseHeadline(row), row.release_id, releaseBucketLabel(row.release_bucket), String(row.objects_count), formatHours(row.hours_total)]),
+      ),
+    ];
+    const exceptionSections = [
+      buildExportTableSection(
+        "Исключения по типам",
+        ["Тип", "Карточки", "Объекты", "Часы"],
+        filteredExceptionByType.slice(0, 12).map((row) => [row.release_type, String(row.count), String(row.objects_count), formatHours(row.hours_total)]),
+      ),
+      buildExportTableSection(
+        "Исключения по направлениям",
+        ["Направление", "Карточки", "Объекты", "Часы"],
+        filteredExceptionByDirection.slice(0, 12).map((row) => [row.direction, String(row.count), String(row.objects_count), formatHours(row.hours_total)]),
+      ),
+      buildExportTableSection(
+        "Поток исключений",
+        ["Поставка", "Дата", "Тип", "Объекты", "Часы"],
+        filteredExceptionRows.slice(0, 14).map((row) => [formatReleaseHeadline(row), formatDateTime(row.started_at), releaseBucketLabel(row.release_bucket), String(row.objects_count), formatHours(row.hours_total)]),
+      ),
+    ];
+    return {
+      title: activeSubtab === "overview" ? "Репорты: Релизы" : "Репорты: Хотфиксы и Внерелизы",
+      subtitle: `Окно анализа: ${days} дней`,
+      filename: activeSubtab === "overview" ? `reports-releases-${days}d.pdf` : `reports-exceptions-${days}d.pdf`,
+      sections: [
+        { type: "kpis", title: "Ключевые показатели", items: kpis },
+        { type: "cards", title: "Фокус", items: focusCards },
+        ...(activeSubtab === "overview" ? overviewSections : exceptionSections),
+      ],
+    };
+  }, [
+    data,
+    summary,
+    peakWeek,
+    focus,
+    typeBreakdown,
+    filteredTables,
+    topUsers,
+    recentReleases,
+    filteredExceptionByType,
+    filteredExceptionByDirection,
+    filteredExceptionRows,
+    activeSubtab,
+    normalizedSelectedEntity,
+    days,
+  ]);
+
+  useEffect(() => {
+    onExportModelChange(exportModel);
+  }, [exportModel, onExportModelChange]);
 
   return (
     <>
@@ -1563,7 +1687,7 @@ function ReleaseReportsTab({ data, loading, error, onOpenTable, onOpenRelease })
   );
 }
 
-function IncidentReportsTab({ data, loading, error, onOpenTable }) {
+function IncidentReportsTab({ data, loading, error, days, onExportModelChange, onOpenTable }) {
   const [selectedDirection, setSelectedDirection] = useState("Все направления");
   const [selectedReason, setSelectedReason] = useState("Все причины");
   const [selectedEntity, setSelectedEntity] = useState("Все сущности");
@@ -1758,6 +1882,68 @@ function IncidentReportsTab({ data, loading, error, onOpenTable }) {
   );
 
   const dataSourceLabel = data?.source === "dev" ? "DEV источник" : "Источник";
+
+  const exportModel = useMemo(() => {
+    if (!data) return null;
+    return {
+      title: "Репорты: Инциденты",
+      subtitle: `Окно анализа: ${days} дней`,
+      filename: `reports-incidents-${days}d.pdf`,
+      sections: [
+        {
+          type: "kpis",
+          title: "Ключевые показатели",
+          items: [
+            { label: "Инциденты", value: String(summary.total), hint: dataSourceLabel },
+            { label: "Закрыто", value: String(summary.resolved), hint: `${summary.open} в работе / вне завершения` },
+            { label: "Среднее время восстановления (MTTR)", value: formatHours(summary.avgDurationHours), hint: `${formatHours(summary.effortHours)} прямых трудозатрат` },
+            { label: "Охват инцидентов", value: String(summary.entities), hint: `${summary.tables} затронутых таблиц` },
+            { label: "Связи с delivery", value: String(summary.linkedCount), hint: `${formatPercent(summary.preventiveShare)} с профилактикой` },
+            { label: "Экономия от AI", value: formatHours(summary.aiSavingHours), hint: "из полей инцидентных карточек" },
+          ],
+        },
+        {
+          type: "cards",
+          title: "Фокус",
+          items: [
+            focus.topReason ? { title: "Главная причина", value: focus.topReason.reason, meta: [`${focus.topReason.count} инцидентов`, `${formatHours(focus.topReason.avg_duration_hours)} MTTR`] } : null,
+            focus.topDirection ? { title: "Направление с наибольшим числом инцидентов", value: focus.topDirection.direction, meta: [`${focus.topDirection.count} инцидентов`, `${formatHours(focus.topDirection.effort_hours)} труда`] } : null,
+            focus.longest ? { title: "Самый длинный кейс", value: `${focus.longest.issue_id} ${focus.longest.link ? `(${focus.longest.link})` : ""}`, meta: [formatMinutes(focus.longest.duration_minutes), shortText(focus.longest.summary, 64)] } : null,
+          ].filter(Boolean),
+        },
+        buildExportTableSection(
+          "Причины",
+          ["Причина", "Кейсы", "Таблицы", "MTTR", "Труд"],
+          reasonBreakdown.slice(0, 12).map((row) => [row.reason, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
+        ),
+        buildExportTableSection(
+          "Направления",
+          ["Направление", "Кейсы", "Таблицы", "MTTR", "Труд"],
+          directionBreakdown.slice(0, 12).map((row) => [row.direction, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
+        ),
+        buildExportTableSection(
+          "Источники сигналов",
+          ["Источник", "Кейсы", "Таблицы", "MTTR"],
+          sourceBreakdown.slice(0, 12).map((row) => [row.source, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours)]),
+        ),
+        buildExportTableSection(
+          "Поток инцидентов",
+          ["Задача YT", "Сводка", "Старт", "Длительность", "Труд"],
+          recentIncidents.slice(0, 14).map((incident) => [
+            incident.link ? `${incident.issue_id} (${incident.link})` : incident.issue_id,
+            shortText(incident.summary, 72),
+            formatDateTime(incident.incident_start_dttm),
+            formatMinutes(incident.duration_minutes),
+            formatHours((incident.actual_effort_minutes || 0) / 60),
+          ]),
+        ),
+      ],
+    };
+  }, [data, days, summary, dataSourceLabel, focus, reasonBreakdown, directionBreakdown, sourceBreakdown, recentIncidents]);
+
+  useEffect(() => {
+    onExportModelChange(exportModel);
+  }, [exportModel, onExportModelChange]);
 
   return (
     <>
@@ -2128,6 +2314,7 @@ function TeamEfficiencyTab({
   data,
   loading,
   error,
+  onExportModelChange,
   selectedEngineer,
   setSelectedEngineer,
   selectedEngineerRow,
@@ -2136,6 +2323,9 @@ function TeamEfficiencyTab({
   schemaChart,
   dashboardChart,
 }) {
+  useEffect(() => {
+    onExportModelChange(null);
+  }, [onExportModelChange]);
   const engineers = data?.engineers || [];
 
   return (

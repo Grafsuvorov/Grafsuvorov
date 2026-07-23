@@ -10976,6 +10976,8 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             return
         title = section.get("title")
         subtitle = section.get("subtitle")
+        table_body_font = _load_pdf_font(23)
+        table_header_font = _load_pdf_font(21, bold=True)
         estimate = 220 + max(1, len(rows)) * 84
         ensure_space(min(max(estimate, 220), 1000))
         if title:
@@ -10998,6 +11000,18 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             first_col_width = max(560, flexible)
             for idx in range(col_count):
                 col_widths.append(first_col_width if idx == 0 else 210)
+        if title == "Источники сигналов":
+            col_widths = [
+                int(content_width * 0.48),
+                int(content_width * 0.12),
+                int(content_width * 0.16),
+                int(content_width * 0.24),
+            ]
+        elif title == "Связи с delivery":
+            col_widths = [
+                int(content_width * 0.78),
+                int(content_width * 0.22),
+            ]
         total_width = sum(col_widths)
         if total_width > content_width:
             scale = content_width / total_width
@@ -11006,7 +11020,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         draw.rounded_rectangle((margin_x, table_top, margin_x + content_width, table_top + header_height), radius=14, fill=surface, outline=line_color, width=2)
         x = margin_x
         for idx, col in enumerate(columns):
-            draw.text((x + 18, table_top + 16), str(col), font=small_font, fill=accent)
+            draw.text((x + 18, table_top + 18), str(col), font=table_header_font, fill=accent)
             x += col_widths[idx]
         current_y = table_top + header_height
         for row_index, row in enumerate(rows[:14]):
@@ -11014,7 +11028,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             wrapped_cells = []
             row_height = 42
             for idx, value in enumerate(values):
-                lines = _pdf_wrap_text(draw, value, body_font, col_widths[idx] - 36)
+                lines = _pdf_wrap_text(draw, value, table_body_font, col_widths[idx] - 36)
                 wrapped_cells.append(lines)
                 row_height = max(row_height, len(lines) * 30 + 18)
             ensure_space(row_height + 8)
@@ -11024,7 +11038,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             for idx, lines in enumerate(wrapped_cells):
                 cell_y = current_y + 12
                 for line in lines:
-                    draw.text((x + 18, cell_y), line, font=body_font, fill=text)
+                    draw.text((x + 18, cell_y), line, font=table_body_font, fill=text)
                     cell_y += 30
                 x += col_widths[idx]
             current_y += row_height + 10

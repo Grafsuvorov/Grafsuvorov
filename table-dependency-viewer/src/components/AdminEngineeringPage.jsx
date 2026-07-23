@@ -2126,14 +2126,14 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
               <div className="release-report-exception-grid incident-report-source-grid">
                 <div className="engineering-table incident-report-source-card">
                   <div className="incident-report-source-title">Источники сигналов</div>
-                  <div className="engineering-table-head release-report-exception-row incident-report-wide-row">
+                  <div className="engineering-table-head incident-report-source-row">
                     <span>Источник</span>
                     <span>Кейсы</span>
                     <span>Таблицы</span>
                     <span>MTTR</span>
                   </div>
                   {sourceBreakdown.map((row) => (
-                    <div key={row.source} className="engineering-table-row release-report-exception-row incident-report-wide-row">
+                    <div key={row.source} className="engineering-table-row incident-report-source-row">
                       <span className="engineering-primary" title={row.source}>{row.source}</span>
                       <span>{row.count}</span>
                       <span>{row.objects_count}</span>
@@ -2143,12 +2143,12 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
                 </div>
                 <div className="engineering-table incident-report-source-card">
                   <div className="incident-report-source-title">Типы связей с delivery</div>
-                  <div className="engineering-table-head release-report-exception-row incident-report-linked-row">
+                  <div className="engineering-table-head incident-report-linked-source-row">
                     <span>Тип связанной delivery-задачи</span>
                     <span>Связей</span>
                   </div>
                   {linkedIssueTypeBreakdown.map((row) => (
-                    <div key={row.linked_issue_type} className="engineering-table-row release-report-exception-row incident-report-linked-row">
+                    <div key={row.linked_issue_type} className="engineering-table-row incident-report-linked-source-row">
                       <span className="engineering-primary" title={row.linked_issue_type}>{row.linked_issue_type}</span>
                       <span>{row.count}</span>
                     </div>

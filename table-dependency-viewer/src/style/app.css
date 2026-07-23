@@ -2166,8 +2166,18 @@ main.content {
   grid-template-columns: minmax(0, 1fr) minmax(84px, 0.28fr);
 }
 
+.incident-report-source-row {
+  grid-template-columns: minmax(0, 1.7fr) minmax(64px, 0.42fr) minmax(78px, 0.52fr) minmax(116px, 0.66fr);
+}
+
+.incident-report-linked-source-row {
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 0.3fr);
+}
+
 .incident-report-wide-row .engineering-primary,
-.incident-report-linked-row .engineering-primary {
+.incident-report-linked-row .engineering-primary,
+.incident-report-source-row .engineering-primary,
+.incident-report-linked-source-row .engineering-primary {
   white-space: normal;
   line-height: 1.35;
 }
@@ -2197,6 +2207,21 @@ main.content {
 .incident-report-source-card .engineering-table-head,
 .incident-report-source-card .engineering-table-row {
   min-width: 0;
+}
+
+.incident-report-source-card .engineering-table-head,
+.incident-report-source-card .engineering-table-row {
+  font-size: 12px;
+}
+
+.incident-report-source-card .engineering-table-head span,
+.incident-report-source-card .engineering-table-row span {
+  min-width: 0;
+}
+
+.incident-report-source-row span:last-child,
+.incident-report-linked-source-row span:last-child {
+  white-space: nowrap;
 }
 
 .release-report-focus-exceptions {

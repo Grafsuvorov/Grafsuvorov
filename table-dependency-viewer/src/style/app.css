@@ -1913,7 +1913,7 @@ main.content {
 }
 
 .reports-grid-primary {
-  grid-template-columns: minmax(0, 1.18fr) minmax(330px, 0.82fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
 }
 
 .reports-grid-secondary {
@@ -2159,11 +2159,11 @@ main.content {
 }
 
 .incident-report-wide-row {
-  grid-template-columns: minmax(0, 2.5fr) 0.6fr 0.7fr 0.8fr;
+  grid-template-columns: minmax(0, 1.8fr) minmax(72px, 0.45fr) minmax(82px, 0.55fr) minmax(96px, 0.6fr);
 }
 
 .incident-report-linked-row {
-  grid-template-columns: minmax(0, 2.6fr) 0.7fr;
+  grid-template-columns: minmax(0, 1fr) minmax(84px, 0.28fr);
 }
 
 .incident-report-wide-row .engineering-primary,
@@ -2173,15 +2173,17 @@ main.content {
 }
 
 .incident-report-source-grid {
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
 }
 
 .incident-report-source-card {
+  min-width: 0;
   padding: 14px;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(8, 17, 31, 0.44);
+  overflow: hidden;
 }
 
 .incident-report-source-title {
@@ -2190,6 +2192,11 @@ main.content {
   font-weight: 700;
   color: #cbd5e1;
   letter-spacing: 0.01em;
+}
+
+.incident-report-source-card .engineering-table-head,
+.incident-report-source-card .engineering-table-row {
+  min-width: 0;
 }
 
 .release-report-focus-exceptions {
@@ -8633,9 +8640,13 @@ body.custom-hover-label-active * {
 .incident-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.incident-card-header > * {
+  min-width: 0;
 }
 
 .incident-card-id {
@@ -8656,8 +8667,8 @@ body.custom-hover-label-active * {
 
 .incident-card-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(260px, 0.82fr);
+  gap: 20px;
   align-items: flex-start;
 }
 
@@ -8668,18 +8679,42 @@ body.custom-hover-label-active * {
 }
 
 .incident-card-main {
-  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
   color: #f8fafc;
 }
 
 .incident-card-meta {
-  min-width: 220px;
-  max-width: 320px;
+  min-width: 0;
+  max-width: none;
   color: #f8fafc;
+}
+
+.incident-card-main .incident-card-meta {
+  padding-right: 6px;
 }
 
 .incident-card-meta .mono {
   margin-top: 4px;
+  word-break: break-word;
+}
+
+.incident-card-context {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(8, 17, 31, 0.44);
+  overflow: hidden;
+}
+
+.incident-card-context .muted,
+.incident-card-main .incident-card-meta > div:last-child,
+.incident-title {
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 

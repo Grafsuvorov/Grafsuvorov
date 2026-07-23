@@ -10921,10 +10921,10 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         if section_title:
             current_y = _draw_pdf_text_block(draw, margin_x, current_y, section_title, section_font, text, content_width)
             current_y += 12
-        columns = 2
+        columns = 3 if len(items) >= 6 else 2
         gap = 28
         card_width = (content_width - gap) // columns
-        card_height = 250
+        card_height = 208
         for index, item in enumerate(items):
             if index and index % columns == 0:
                 current_y += card_height + gap
@@ -10934,10 +10934,10 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             y = current_y
             draw.rounded_rectangle((x, y, x + card_width, y + card_height), radius=24, fill=surface, outline=line_color, width=2)
             draw.text((x + 30, y + 26), str(item.get("label") or "Показатель"), font=small_font, fill=muted)
-            draw.text((x + 30, y + 92), str(item.get("value") or "—"), font=kpi_value_font, fill=text)
+            draw.text((x + 30, y + 76), str(item.get("value") or "—"), font=kpi_value_font, fill=text)
             hint = str(item.get("hint") or "").strip()
             if hint:
-                _draw_pdf_text_block(draw, x + 30, y + 164, hint, small_font, accent, card_width - 60, line_gap=6)
+                _draw_pdf_text_block(draw, x + 30, y + 136, hint, small_font, accent, card_width - 60, line_gap=6)
         current_y += card_height + 28
 
     def draw_cards(items: list[dict[str, Any]], section_title: Optional[str]):
@@ -10951,7 +10951,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         gap = 24
         columns = min(3, max(1, len(items)))
         card_width = (content_width - gap * (columns - 1)) // columns
-        card_height = 220
+        card_height = 196
         start_y = current_y
         for index, item in enumerate(items):
             col = index % columns
@@ -10988,11 +10988,11 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         col_count = len(columns)
         col_widths = []
         if col_count == 2:
-            col_widths = [int(content_width * 0.76), int(content_width * 0.24)]
+            col_widths = [int(content_width * 0.74), int(content_width * 0.26)]
         elif col_count == 4:
-            col_widths = [int(content_width * 0.5), int(content_width * 0.16), int(content_width * 0.16), int(content_width * 0.18)]
+            col_widths = [int(content_width * 0.44), int(content_width * 0.16), int(content_width * 0.16), int(content_width * 0.24)]
         elif col_count == 5:
-            col_widths = [int(content_width * 0.34), int(content_width * 0.24), int(content_width * 0.14), int(content_width * 0.14), int(content_width * 0.14)]
+            col_widths = [int(content_width * 0.16), int(content_width * 0.36), int(content_width * 0.16), int(content_width * 0.16), int(content_width * 0.16)]
         else:
             flexible = content_width - 210 * (col_count - 1)
             first_col_width = max(560, flexible)
@@ -11009,7 +11009,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
             draw.text((x + 18, table_top + 16), str(col), font=small_font, fill=accent)
             x += col_widths[idx]
         current_y = table_top + header_height
-        for row_index, row in enumerate(rows[:18]):
+        for row_index, row in enumerate(rows[:14]):
             values = list(row)[:col_count]
             wrapped_cells = []
             row_height = 42
@@ -11043,7 +11043,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
     pages.append(image)
     pdf_buffer = BytesIO()
     first_page, rest = pages[0], pages[1:]
-    first_page.save(pdf_buffer, format="PDF", save_all=True, append_images=rest)
+    first_page.save(pdf_buffer, format="PDF", save_all=True, append_images=rest, resolution=300.0)
     pdf_buffer.seek(0)
     return pdf_buffer.getvalue()
 

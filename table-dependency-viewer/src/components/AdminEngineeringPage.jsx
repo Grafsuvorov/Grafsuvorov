@@ -197,14 +197,13 @@ export default function AdminEngineeringPage() {
   }, [days]);
 
   useEffect(() => {
-    if (activeTab !== "incidents") return;
     setIncidentLoading(true);
     setIncidentError(null);
     adminApi.incidentReports(days)
       .then((payload) => setIncidentData(payload || null))
       .catch((err) => setIncidentError(err.message || "Не удалось загрузить аналитику инцидентов"))
       .finally(() => setIncidentLoading(false));
-  }, [activeTab, days]);
+  }, [days]);
 
   useEffect(() => {
     if (activeTab !== "team") return;
@@ -236,6 +235,22 @@ export default function AdminEngineeringPage() {
     () => engineers.slice(0, 8).map((row) => row.engineer),
     [engineers]
   );
+
+  const activeReportLoading = activeTab === "releases"
+    ? releaseLoading
+    : activeTab === "incidents"
+      ? incidentLoading
+      : teamLoading;
+  const activeTabSupportsPdf = activeTab !== "team";
+  const exportReady = Boolean(exportModel);
+  const exportButtonTitle = !activeTabSupportsPdf
+    ? "Экспорт PDF пока доступен только для релизов и инцидентов"
+    : activeReportLoading
+      ? "Загружаем данные отчёта для PDF"
+      : exportReady
+        ? "Скачать текущий отчёт в PDF"
+        : "Экспорт станет доступен после загрузки данных";
+  const exportDisabled = pdfExporting || !activeTabSupportsPdf || (!exportReady && !activeReportLoading);
 
   const dailyChart = useMemo(() => {
     const daysMap = new Map();
@@ -300,8 +315,8 @@ export default function AdminEngineeringPage() {
               type="button"
               className="btn btn-secondary reports-print-btn"
               onClick={handleExportReports}
-              title={exportModel ? "Скачать текущий отчёт в PDF" : "Для этого таба PDF пока недоступен"}
-              disabled={!exportModel || pdfExporting}
+              title={exportButtonTitle}
+              disabled={exportDisabled}
             >
               {pdfExporting ? "Готовим PDF..." : "Экспорт в PDF"}
             </button>
@@ -1917,26 +1932,28 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
         buildExportTableSection(
           "Причины",
           ["Причина", "Кейсы", "Таблицы", "MTTR", "Труд"],
-          reasonBreakdown.slice(0, 8).map((row) => [row.reason, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
+          reasonBreakdown.slice(0, 6).map((row) => [row.reason, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
         ),
         buildExportTableSection(
           "Направления",
           ["Направление", "Кейсы", "Таблицы", "MTTR", "Труд"],
-          directionBreakdown.slice(0, 8).map((row) => [row.direction, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
+          directionBreakdown.slice(0, 6).map((row) => [row.direction, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours), formatHours(row.effort_hours)]),
         ),
         buildExportTableSection(
-          "Источники и связи с delivery",
-          ["Источник / тип связи", "Кейсы / связи", "Таблицы / —", "MTTR / —"],
-          [
-            ...sourceBreakdown.slice(0, 6).map((row) => [row.source, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours)]),
-            ...linkedIssueTypeBreakdown.slice(0, 6).map((row) => [`Связь: ${row.linked_issue_type}`, String(row.count), "—", "—"]),
-          ],
+          "Источники сигналов",
+          ["Источник", "Кейсы", "Таблицы", "MTTR"],
+          sourceBreakdown.slice(0, 6).map((row) => [row.source, String(row.count), String(row.objects_count), formatHours(row.avg_duration_hours)]),
+        ),
+        buildExportTableSection(
+          "Связи с delivery",
+          ["Тип связанной задачи", "Связей"],
+          linkedIssueTypeBreakdown.slice(0, 6).map((row) => [row.linked_issue_type, String(row.count)]),
         ),
         buildExportTableSection(
           "Поток инцидентов",
           ["Задача YT", "Сводка", "Старт", "Длительность", "Труд"],
-          recentIncidents.slice(0, 10).map((incident) => [
-            incident.link ? `${incident.issue_id} (${incident.link})` : incident.issue_id,
+          recentIncidents.slice(0, 8).map((incident) => [
+            incident.issue_id,
             shortText(incident.summary, 72),
             formatDateTime(incident.incident_start_dttm),
             formatMinutes(incident.duration_minutes),
@@ -2280,7 +2297,7 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
                         </div>
                       ) : null}
                     </div>
-                    <div className="incident-card-meta">
+                    <div className="incident-card-meta incident-card-context">
                       <div className="meta-label">Контекст</div>
                       <div>{incident.direction_name || "Не указано"}</div>
                       <div className="muted">{incident.alert_source || "Не указан источник"}</div>

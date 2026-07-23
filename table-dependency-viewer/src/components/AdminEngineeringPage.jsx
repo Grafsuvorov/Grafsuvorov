@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { adminApi } from "../api/admin.js";
-import { formatLocalDateTime } from "../utils/datetime.js";
+import { formatLocalDateTime, formatRuDateTime } from "../utils/datetime.js";
 
 const DAY_OPTIONS = [30, 60, 90, 180, 365];
 const REPORT_TABS = [
@@ -109,7 +109,11 @@ function formatDateTime(value) {
 
 function formatShortDate(value) {
   if (!value) return "—";
-  return formatLocalDateTime(value, { dateStyle: "short", timeStyle: undefined });
+  return formatRuDateTime(value, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function releaseBucketLabel(value) {

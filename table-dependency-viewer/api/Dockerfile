@@ -6,12 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash git openssh-client sshpass \
+    && apt-get install -y --no-install-recommends bash git openssh-client sshpass fonts-dejavu-core \
     && groupadd -r airflow \
     && useradd -r -g airflow airflow \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl python-dotenv pillow
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl python-dotenv pillow reportlab
 
 COPY api/ /app/api/
 COPY scripts/ /app/scripts/

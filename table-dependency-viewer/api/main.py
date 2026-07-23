@@ -10872,7 +10872,7 @@ def _draw_pdf_text_block(draw, x: int, y: int, text_value: Any, font, fill: str,
     return y + max(len(lines), 1) * line_height
 
 
-def _render_report_pdf(report: dict[str, Any]) -> bytes:
+def _render_report_pdf_raster(report: dict[str, Any]) -> bytes:
     page_width, page_height = 2480, 3508
     margin_x, margin_y = 132, 132
     content_width = page_width - margin_x * 2
@@ -11060,6 +11060,254 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
     first_page.save(pdf_buffer, format="PDF", save_all=True, append_images=rest, resolution=300.0)
     pdf_buffer.seek(0)
     return pdf_buffer.getvalue()
+
+
+def _render_report_pdf(report: dict[str, Any]) -> bytes:
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except Exception:
+        return _render_report_pdf_raster(report)
+
+    font_regular_path = None
+    font_bold_path = None
+    font_candidates = [
+        (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        ),
+        (
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        ),
+    ]
+    for regular_path, bold_path in font_candidates:
+        if os.path.exists(regular_path) and os.path.exists(bold_path):
+            font_regular_path = regular_path
+            font_bold_path = bold_path
+            break
+    if not font_regular_path or not font_bold_path:
+        return _render_report_pdf_raster(report)
+
+    regular_font_name = "ReportsPdfRegular"
+    bold_font_name = "ReportsPdfBold"
+    registered_fonts = set(pdfmetrics.getRegisteredFontNames())
+    if regular_font_name not in registered_fonts:
+        pdfmetrics.registerFont(TTFont(regular_font_name, font_regular_path))
+    if bold_font_name not in registered_fonts:
+        pdfmetrics.registerFont(TTFont(bold_font_name, font_bold_path))
+
+    def pdf_text(value: Any) -> str:
+        text_value = str(value or "").strip()
+        if not text_value:
+            return "—"
+        return (
+            text_value.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\n", "<br/>")
+        )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportsTitle",
+        parent=styles["Heading1"],
+        fontName=bold_font_name,
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor("#0f172a"),
+        spaceAfter=8,
+    )
+    subtitle_style = ParagraphStyle(
+        "ReportsSubtitle",
+        parent=styles["Normal"],
+        fontName=regular_font_name,
+        fontSize=10,
+        leading=13,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=10,
+    )
+    section_title_style = ParagraphStyle(
+        "ReportsSectionTitle",
+        parent=styles["Heading2"],
+        fontName=bold_font_name,
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor("#0f172a"),
+        spaceBefore=8,
+        spaceAfter=6,
+    )
+    section_subtitle_style = ParagraphStyle(
+        "ReportsSectionSubtitle",
+        parent=styles["Normal"],
+        fontName=regular_font_name,
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#64748b"),
+        spaceAfter=5,
+    )
+    card_label_style = ParagraphStyle(
+        "ReportsCardLabel",
+        parent=styles["Normal"],
+        fontName=bold_font_name,
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#0f172a"),
+    )
+    card_value_style = ParagraphStyle(
+        "ReportsCardValue",
+        parent=styles["Normal"],
+        fontName=bold_font_name,
+        fontSize=15,
+        leading=18,
+        textColor=colors.HexColor("#0f172a"),
+    )
+    card_hint_style = ParagraphStyle(
+        "ReportsCardHint",
+        parent=styles["Normal"],
+        fontName=regular_font_name,
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#475569"),
+    )
+    table_header_style = ParagraphStyle(
+        "ReportsTableHeader",
+        parent=styles["Normal"],
+        fontName=bold_font_name,
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+    )
+    table_cell_style = ParagraphStyle(
+        "ReportsTableCell",
+        parent=styles["Normal"],
+        fontName=regular_font_name,
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#0f172a"),
+    )
+
+    page_width, page_height = landscape(A4)
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=(page_width, page_height),
+        leftMargin=12 * mm,
+        rightMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=10 * mm,
+    )
+
+    story = [
+        Paragraph(pdf_text(report.get("title") or "Отчёт"), title_style),
+        Paragraph(pdf_text(report.get("subtitle") or ""), subtitle_style),
+        Spacer(1, 4),
+    ]
+
+    usable_width = page_width - doc.leftMargin - doc.rightMargin
+
+    def chunk_items(items: list[dict[str, Any]], size: int):
+        for start in range(0, len(items), size):
+            yield items[start:start + size]
+
+    def build_card_table(items: list[dict[str, Any]], *, columns: int = 3):
+        rows = []
+        for chunk in chunk_items(items, columns):
+            row = []
+            for item in chunk:
+                parts = [
+                    Paragraph(pdf_text(item.get("label") or item.get("title") or "Показатель"), card_label_style),
+                    Spacer(1, 2),
+                    Paragraph(pdf_text(item.get("value") or "—"), card_value_style),
+                ]
+                hint = item.get("hint")
+                if not hint and item.get("meta"):
+                    hint = " • ".join(str(part) for part in item.get("meta") if part)
+                if hint:
+                    parts.extend([Spacer(1, 4), Paragraph(pdf_text(hint), card_hint_style)])
+                row.append(parts)
+            while len(row) < columns:
+                row.append("")
+            rows.append(row)
+        widths = [usable_width / columns] * columns
+        table = Table(rows, colWidths=widths, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eff6ff")),
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#bfdbfe")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.6, colors.HexColor("#dbeafe")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        return table
+
+    def build_section_table(title: str, columns: list[str], rows: list[list[Any]]):
+        if not columns:
+            return None
+        if title == "Источники сигналов":
+            col_widths = [usable_width * 0.48, usable_width * 0.12, usable_width * 0.16, usable_width * 0.24]
+        elif title == "Связи с delivery":
+            col_widths = [usable_width * 0.78, usable_width * 0.22]
+        elif len(columns) == 5:
+            col_widths = [usable_width * 0.14, usable_width * 0.38, usable_width * 0.16, usable_width * 0.16, usable_width * 0.16]
+        elif len(columns) == 4:
+            col_widths = [usable_width * 0.48, usable_width * 0.14, usable_width * 0.16, usable_width * 0.22]
+        elif len(columns) == 2:
+            col_widths = [usable_width * 0.76, usable_width * 0.24]
+        else:
+            col_widths = [usable_width / len(columns)] * len(columns)
+        table_rows = [[Paragraph(pdf_text(col), table_header_style) for col in columns]]
+        for row in rows:
+            table_rows.append([Paragraph(pdf_text(cell), table_cell_style) for cell in row[:len(columns)]])
+        table = Table(table_rows, colWidths=col_widths, repeatRows=1, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#cbd5e1")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2e8f0")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        return table
+
+    for section in report.get("sections") or []:
+        section_type = section.get("type")
+        section_title = section.get("title")
+        section_subtitle = section.get("subtitle")
+        if section_title:
+            story.append(Paragraph(pdf_text(section_title), section_title_style))
+        if section_subtitle:
+            story.append(Paragraph(pdf_text(section_subtitle), section_subtitle_style))
+        if section_type == "kpis":
+            items = section.get("items") or []
+            if items:
+                story.append(build_card_table(items, columns=3 if len(items) >= 6 else 2))
+                story.append(Spacer(1, 8))
+        elif section_type == "cards":
+            items = section.get("items") or []
+            if items:
+                story.append(build_card_table(items, columns=min(3, max(1, len(items)))))
+                story.append(Spacer(1, 8))
+        elif section_type == "table":
+            table = build_section_table(section_title or "", section.get("columns") or [], (section.get("rows") or [])[:12])
+            if table:
+                story.append(table)
+                story.append(Spacer(1, 8))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 def _resolve_date_window(date_from: Optional[str], date_to: Optional[str], days: int):

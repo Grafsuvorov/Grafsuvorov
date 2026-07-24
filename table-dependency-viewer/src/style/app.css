@@ -2166,18 +2166,9 @@ main.content {
   grid-template-columns: minmax(0, 1fr) minmax(84px, 0.28fr);
 }
 
-.incident-report-source-row {
-  grid-template-columns: minmax(0, 1.7fr) minmax(64px, 0.42fr) minmax(78px, 0.52fr) minmax(116px, 0.66fr);
-}
-
-.incident-report-linked-source-row {
-  grid-template-columns: minmax(0, 1fr) minmax(88px, 0.3fr);
-}
-
 .incident-report-wide-row .engineering-primary,
 .incident-report-linked-row .engineering-primary,
-.incident-report-source-row .engineering-primary,
-.incident-report-linked-source-row .engineering-primary {
+.incident-report-source-name {
   white-space: normal;
   line-height: 1.35;
 }
@@ -2204,23 +2195,50 @@ main.content {
   letter-spacing: 0.01em;
 }
 
-.incident-report-source-card .engineering-table-head,
-.incident-report-source-card .engineering-table-row {
-  min-width: 0;
+.incident-report-source-card {
+  display: grid;
+  gap: 10px;
 }
 
-.incident-report-source-card .engineering-table-head,
-.incident-report-source-card .engineering-table-row {
+.incident-report-source-item,
+.incident-report-linked-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.incident-report-source-name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.incident-report-source-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  color: rgba(226, 232, 240, 0.76);
   font-size: 12px;
 }
 
-.incident-report-source-card .engineering-table-head span,
-.incident-report-source-card .engineering-table-row span {
-  min-width: 0;
+.incident-report-source-metrics strong,
+.incident-report-linked-count {
+  color: #7dd3fc;
+  font-weight: 700;
 }
 
-.incident-report-source-row span:last-child,
-.incident-report-linked-source-row span:last-child {
+.incident-report-linked-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.incident-report-linked-count {
   white-space: nowrap;
 }
 

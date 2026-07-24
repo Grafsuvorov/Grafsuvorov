@@ -2128,33 +2128,25 @@ function IncidentReportsTab({ data, loading, error, days, onExportModelChange, o
                 </div>
               </div>
               <div className="release-report-exception-grid incident-report-source-grid">
-                <div className="engineering-table incident-report-source-card">
+                <div className="incident-report-source-card">
                   <div className="incident-report-source-title">Источники сигналов</div>
-                  <div className="engineering-table-head incident-report-source-row">
-                    <span>Источник</span>
-                    <span>Кейсы</span>
-                    <span>Таблицы</span>
-                    <span>MTTR</span>
-                  </div>
                   {sourceBreakdown.map((row) => (
-                    <div key={row.source} className="engineering-table-row incident-report-source-row">
-                      <span className="engineering-primary" title={row.source}>{row.source}</span>
-                      <span>{row.count}</span>
-                      <span>{row.objects_count}</span>
-                      <span>{formatHours(row.avg_duration_hours)}</span>
+                    <div key={row.source} className="incident-report-source-item">
+                      <div className="incident-report-source-name" title={row.source}>{row.source}</div>
+                      <div className="incident-report-source-metrics">
+                        <span><strong>{row.count}</strong> кейсов</span>
+                        <span><strong>{row.objects_count}</strong> таблиц</span>
+                        <span><strong>{formatHours(row.avg_duration_hours)}</strong> MTTR</span>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="engineering-table incident-report-source-card">
+                <div className="incident-report-source-card">
                   <div className="incident-report-source-title">Типы связей с delivery</div>
-                  <div className="engineering-table-head incident-report-linked-source-row">
-                    <span>Тип связанной delivery-задачи</span>
-                    <span>Связей</span>
-                  </div>
                   {linkedIssueTypeBreakdown.map((row) => (
-                    <div key={row.linked_issue_type} className="engineering-table-row incident-report-linked-source-row">
-                      <span className="engineering-primary" title={row.linked_issue_type}>{row.linked_issue_type}</span>
-                      <span>{row.count}</span>
+                    <div key={row.linked_issue_type} className="incident-report-linked-item">
+                      <span className="incident-report-source-name" title={row.linked_issue_type}>{row.linked_issue_type}</span>
+                      <span className="incident-report-linked-count">{row.count}</span>
                     </div>
                   ))}
                 </div>

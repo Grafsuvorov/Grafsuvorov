@@ -11070,7 +11070,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         from reportlab.lib.units import mm
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+        from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except Exception:
         return _render_report_pdf_raster(report)
 
@@ -11118,8 +11118,8 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         "ReportsTitle",
         parent=styles["Heading1"],
         fontName=bold_font_name,
-        fontSize=20,
-        leading=24,
+        fontSize=24,
+        leading=28,
         textColor=colors.HexColor("#0f172a"),
         spaceAfter=8,
     )
@@ -11127,8 +11127,8 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         "ReportsSubtitle",
         parent=styles["Normal"],
         fontName=regular_font_name,
-        fontSize=10,
-        leading=13,
+        fontSize=11,
+        leading=14,
         textColor=colors.HexColor("#475569"),
         spaceAfter=10,
     )
@@ -11136,8 +11136,8 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         "ReportsSectionTitle",
         parent=styles["Heading2"],
         fontName=bold_font_name,
-        fontSize=13,
-        leading=16,
+        fontSize=16,
+        leading=20,
         textColor=colors.HexColor("#0f172a"),
         spaceBefore=8,
         spaceAfter=6,
@@ -11146,8 +11146,8 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         "ReportsSectionSubtitle",
         parent=styles["Normal"],
         fontName=regular_font_name,
-        fontSize=9,
-        leading=12,
+        fontSize=10,
+        leading=13,
         textColor=colors.HexColor("#64748b"),
         spaceAfter=5,
     )
@@ -11155,40 +11155,40 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         "ReportsCardLabel",
         parent=styles["Normal"],
         fontName=bold_font_name,
-        fontSize=8,
-        leading=10,
+        fontSize=10,
+        leading=12,
         textColor=colors.HexColor("#0f172a"),
     )
     card_value_style = ParagraphStyle(
         "ReportsCardValue",
         parent=styles["Normal"],
         fontName=bold_font_name,
-        fontSize=15,
-        leading=18,
+        fontSize=18,
+        leading=21,
         textColor=colors.HexColor("#0f172a"),
     )
     card_hint_style = ParagraphStyle(
         "ReportsCardHint",
         parent=styles["Normal"],
         fontName=regular_font_name,
-        fontSize=8,
-        leading=10,
+        fontSize=9,
+        leading=11,
         textColor=colors.HexColor("#475569"),
     )
     table_header_style = ParagraphStyle(
         "ReportsTableHeader",
         parent=styles["Normal"],
         fontName=bold_font_name,
-        fontSize=8,
-        leading=10,
+        fontSize=10,
+        leading=12,
         textColor=colors.white,
     )
     table_cell_style = ParagraphStyle(
         "ReportsTableCell",
         parent=styles["Normal"],
         fontName=regular_font_name,
-        fontSize=8,
-        leading=10,
+        fontSize=10,
+        leading=12,
         textColor=colors.HexColor("#0f172a"),
     )
 
@@ -11215,7 +11215,7 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         for start in range(0, len(items), size):
             yield items[start:start + size]
 
-    def build_card_table(items: list[dict[str, Any]], *, columns: int = 3):
+    def build_card_table(items: list[dict[str, Any]], *, columns: int = 2):
         rows = []
         for chunk in chunk_items(items, columns):
             row = []
@@ -11285,6 +11285,15 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         section_type = section.get("type")
         section_title = section.get("title")
         section_subtitle = section.get("subtitle")
+        force_new_page = section_type == "table" and section_title in {
+            "Причины",
+            "Направления",
+            "Источники сигналов",
+            "Связи с delivery",
+            "Поток инцидентов",
+        }
+        if force_new_page:
+            story.append(PageBreak())
         if section_title:
             story.append(Paragraph(pdf_text(section_title), section_title_style))
         if section_subtitle:
@@ -11292,15 +11301,15 @@ def _render_report_pdf(report: dict[str, Any]) -> bytes:
         if section_type == "kpis":
             items = section.get("items") or []
             if items:
-                story.append(build_card_table(items, columns=3 if len(items) >= 6 else 2))
+                story.append(build_card_table(items, columns=2))
                 story.append(Spacer(1, 8))
         elif section_type == "cards":
             items = section.get("items") or []
             if items:
-                story.append(build_card_table(items, columns=min(3, max(1, len(items)))))
+                story.append(build_card_table(items, columns=min(2, max(1, len(items)))))
                 story.append(Spacer(1, 8))
         elif section_type == "table":
-            table = build_section_table(section_title or "", section.get("columns") or [], (section.get("rows") or [])[:12])
+            table = build_section_table(section_title or "", section.get("columns") or [], (section.get("rows") or [])[:8])
             if table:
                 story.append(table)
                 story.append(Spacer(1, 8))

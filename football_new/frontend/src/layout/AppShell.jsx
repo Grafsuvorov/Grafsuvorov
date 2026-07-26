@@ -1,17 +1,26 @@
 ﻿// src/layout/AppShell.jsx
+import { useEffect } from "react";
 import {
-  useEffect,
-} from "react";
-import {
+  NavLink,
   useLocation,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
 import clsx from "clsx";
+import {
+  BarChart3,
+  CalendarDays,
+  CircleDot,
+  LayoutDashboard,
+  ShieldCheck,
+  Sparkles,
+  Users2,
+} from "lucide-react";
 
 import LeagueTabsHeader, {
   LeagueQuickNavCard,
 } from "@/components/LeagueTabsHeader";
+import AuthIndicator from "@/components/auth/AuthIndicator";
 
 import { HOME_URL } from "@/routes/home";
 
@@ -114,6 +123,62 @@ const TIGHT_CONTENT_PREFIXES = [
 const usesTightContent = (pathname) =>
   TIGHT_CONTENT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
+const PRIMARY_NAV_ITEMS = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: false },
+  { to: "/matches-v3", label: "Live", icon: CircleDot, exact: false },
+  { to: "/schedule", label: "Schedule", icon: CalendarDays, exact: false },
+  { to: "/insights", label: "Insights", icon: BarChart3, exact: false },
+  { to: "/players", label: "Players", icon: Users2, exact: false },
+  { to: "/best-picks", label: "Picks", icon: ShieldCheck, exact: false },
+];
+
+function BrandCluster() {
+  return (
+    <div className="min-w-0">
+      <NavLink
+        to={HOME_URL}
+        className="group inline-flex items-center gap-3 text-white no-underline"
+      >
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_100%),radial-gradient(circle_at_top,rgba(167,139,250,0.35),rgba(167,139,250,0)_64%)] shadow-[0_12px_34px_rgba(0,0,0,0.38)]">
+          <Sparkles className="h-5 w-5 text-violet-200 transition group-hover:scale-110" />
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
+            EdgeScore
+          </div>
+          <div className="truncate text-[17px] font-semibold tracking-[-0.02em] text-white">
+            Football intelligence, not just scores
+          </div>
+        </div>
+      </NavLink>
+    </div>
+  );
+}
+
+function GlobalNav() {
+  return (
+    <nav className="flex flex-wrap items-center gap-2">
+      {PRIMARY_NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        <NavLink
+          key={to}
+          to={to}
+          className={({ isActive }) =>
+            clsx(
+              "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-medium transition sm:px-4 sm:text-[13px]",
+              isActive
+                ? "border-violet-300/30 bg-violet-500/12 text-violet-50 shadow-[0_10px_26px_rgba(76,29,149,0.22)]"
+                : "border-white/8 bg-white/[0.028] text-white/64 hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
+            )
+          }
+        >
+          <Icon className="h-3.5 w-3.5" />
+          <span>{label}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
 /* ===========================================
    MAIN APP SHELL
 =========================================== */
@@ -161,9 +226,6 @@ export default function AppShell({ children }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  /* ===========================================
-     CLEAN HEADER — ONLY LeagueTabsHeader
-  ============================================ */
   return (
     <div
       className="min-h-screen relative text-white overflow-x-hidden"
@@ -181,11 +243,26 @@ export default function AppShell({ children }) {
         <div className="absolute inset-0 bg-[rgba(4,7,15,0.65)] backdrop-blur-[2px]" />
       </div>
 
-      {/* HEADER — только выбор лиги/сезона, БЕЗ вкладок */}
       <header
         className="relative z-50 bg-[#040712] shadow-[0_16px_38px_rgba(0,0,0,0.58)]"
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
+        <div className="hidden border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))] sm:block">
+          <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:px-6 lg:py-4 xl:flex-row xl:items-center xl:justify-between">
+            <BrandCluster />
+            <div className="flex flex-col gap-3 xl:items-end">
+              <GlobalNav />
+              <div className="flex items-center justify-between gap-3 xl:justify-end">
+                <div className="hidden items-center gap-2 rounded-full border border-emerald-400/18 bg-emerald-400/8 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-100/80 md:inline-flex">
+                  <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.85)]" />
+                  Match intelligence layer
+                </div>
+                <AuthIndicator />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="w-full px-3 py-2 sm:px-4 lg:px-6 lg:pt-3 lg:pb-3">
           <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:gap-8">
             <div className="xl:col-span-3">
@@ -204,7 +281,15 @@ export default function AppShell({ children }) {
         <div className="mx-auto grid max-w-[1440px] grid-cols-1 items-start gap-4 px-3 sm:px-4 lg:px-6 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:gap-8">
           <aside className={clsx("hidden xl:block", hideLeftRail && "xl:hidden")}>
             <div className="sticky top-24 mt-8 space-y-5">
-              <div className="rounded-3xl bg-white/[0.032] p-4 shadow-[0_8px_35px_rgba(0,0,0,0.55)] backdrop-blur-xl ring-1 ring-white/[0.04]">
+              <div className="rounded-3xl border border-white/[0.07] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_48px_rgba(0,0,0,0.44)] backdrop-blur-xl">
+                <div className="mb-4 px-1">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/42">
+                    League flow
+                  </div>
+                  <div className="mt-1 text-sm font-semibold tracking-[-0.01em] text-white">
+                    Fast switch between active competitions
+                  </div>
+                </div>
                 <LeagueQuickNavCard
                   activeLeague={league}
                   onSelectLeague={handleChangeLeague}

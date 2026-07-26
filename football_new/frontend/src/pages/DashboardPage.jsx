@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext.jsx";
 import { authFetch } from "@/lib/authFetch";
 import SafeImg from "@/components/SafeImg";
@@ -322,10 +323,10 @@ export default function DashboardPage() {
 
   const quickActions = useMemo(
     () => [
-      { title: t("openResults"), to: buildPath("/matches-v3", league, season) },
-      { title: t("openSchedule"), to: buildPath("/schedule", league, season) },
-      { title: t("openPicks"), to: buildPath("/best-picks", league, season) },
-      { title: t("openTable"), to: buildPath("/table", league, season) },
+      { title: t("openResults"), to: buildPath("/matches-v3", league, season), accent: "Live and recent" },
+      { title: t("openSchedule"), to: buildPath("/schedule", league, season), accent: "Next fixtures" },
+      { title: t("openPicks"), to: buildPath("/best-picks", league, season), accent: "Model signals" },
+      { title: t("openTable"), to: buildPath("/table", league, season), accent: "Standings view" },
     ],
     [league, season, t]
   );
@@ -377,9 +378,19 @@ export default function DashboardPage() {
   }, [bestPicks, liveMatches, upcomingMatches, league, season, t]);
 
   return (
-    <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
+    <div className="type-page w-full min-w-0 overflow-x-hidden px-1 py-5 sm:px-4 sm:py-8">
       <div>
         <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/65 sm:px-3 sm:text-[11px] sm:tracking-[0.18em]">
+              <Sparkles className="h-3.5 w-3.5 text-violet-200" />
+              Matchday control room
+            </div>
+            <div className="inline-flex max-w-full items-center rounded-full border border-emerald-400/14 bg-emerald-400/8 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.16em] text-emerald-100/75 sm:px-3 sm:text-[11px] sm:tracking-[0.18em]">
+              {league}
+            </div>
+          </div>
+
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
               <div className="min-w-0 space-y-1.5">
@@ -396,15 +407,15 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:items-end">
+              <div className="flex w-full min-w-0 flex-row items-end justify-between gap-3 sm:w-auto sm:flex-col sm:items-end sm:justify-start">
                 <span className="mb-1 text-[10px] uppercase tracking-[0.18em] text-muted">
                   {t("seasonUpper")}
                 </span>
-                <span className="text-sm text-white/85">{season}</span>
+                <span className="text-sm text-white/85 sm:text-base">{season}</span>
                 <button
                   type="button"
                   onClick={() => setLeagueSaved(toggleFavoriteLeague(league, season))}
-                  className="surface-button px-3 py-1.5 text-xs font-medium"
+                  className="surface-button h-9 px-3 py-1.5 text-[11px] font-medium sm:h-10 sm:text-xs"
                 >
                   <span aria-hidden="true">{leagueSaved ? "★" : "☆"}</span>
                   {leagueSaved ? t("removeLeague") : t("saveLeague")}
@@ -439,25 +450,25 @@ export default function DashboardPage() {
       {heroMatch ? (
         <Link
           to={buildPath(`/match/${heroMatch.fixtureId}`, heroMatch.league, heroMatch.season)}
-          className="block rounded-[28px] bg-[linear-gradient(135deg,rgba(124,58,237,0.22),rgba(14,165,233,0.12),rgba(255,255,255,0.03))] p-5 shadow-[0_18px_46px_rgba(0,0,0,0.28)] ring-1 ring-white/[0.06] transition hover:bg-[linear-gradient(135deg,rgba(124,58,237,0.28),rgba(14,165,233,0.16),rgba(255,255,255,0.04))] sm:p-6"
+          className="block rounded-[26px] bg-[linear-gradient(135deg,rgba(124,58,237,0.22),rgba(14,165,233,0.12),rgba(255,255,255,0.03))] p-4 shadow-[0_18px_46px_rgba(0,0,0,0.28)] ring-1 ring-white/[0.06] transition hover:bg-[linear-gradient(135deg,rgba(124,58,237,0.28),rgba(14,165,233,0.16),rgba(255,255,255,0.04))] sm:p-6"
         >
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div className="space-y-2">
               <div className="text-[11px] uppercase tracking-[0.18em] text-white/45">
                 {heroMatch.label}
               </div>
-              <div className="text-xl font-semibold text-white sm:text-2xl">
+              <div className="text-lg font-semibold leading-tight text-white sm:text-2xl">
                 {heroMatch.homeTeam} vs {heroMatch.awayTeam}
               </div>
               <div className="text-sm text-white/65">
                 {heroMatch.league} · {heroMatch.sublabel}
               </div>
             </div>
-            <div className="flex flex-col items-start gap-3 lg:items-end">
-              <div className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-white/85">
+            <div className="flex flex-row items-center justify-between gap-3 lg:flex-col lg:items-end">
+              <div className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] font-semibold text-white/85 sm:text-xs">
                 {heroMatch.badge}
               </div>
-              <div className="text-sm font-medium text-violet-200">
+              <div className="text-[13px] font-medium text-violet-200 sm:text-sm">
                 {t("openMatchCenter")} →
               </div>
             </div>
@@ -474,9 +485,18 @@ export default function DashboardPage() {
             <Link
               key={item.to}
               to={item.to}
-              className="rounded-2xl bg-white/[0.035] px-4 py-4 text-sm font-medium text-white ring-1 ring-white/[0.04] transition hover:bg-white/[0.06]"
+              className="group rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.016))] px-4 py-4 text-white shadow-[0_14px_34px_rgba(0,0,0,0.28)] transition hover:border-white/[0.1] hover:bg-white/[0.06]"
             >
-              {item.title}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">{item.title}</div>
+                  <div className="mt-1 text-xs text-white/48">{item.accent}</div>
+                </div>
+                <ArrowRight className="mt-0.5 h-4 w-4 text-white/42 transition group-hover:translate-x-0.5 group-hover:text-white/78" />
+              </div>
+              <div className="mt-4 text-[11px] uppercase tracking-[0.16em] text-white/34">
+                {league} · {season}
+              </div>
             </Link>
           ))}
         </div>
@@ -644,7 +664,10 @@ export default function DashboardPage() {
       </Panel>
 
       <section className="glass-card px-5 py-5">
-        <div className="type-eyebrow">EdgeScore</div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-white/58">
+          <Sparkles className="h-3.5 w-3.5 text-violet-200" />
+          EdgeScore
+        </div>
         <div className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
           {t("productShortAbout")}
         </div>
@@ -657,7 +680,7 @@ function LeagueJumpCard({ item, season, subtitle, compact = false }) {
   return (
     <Link
       to={buildPath("/table", item, season)}
-      className={`flex items-center gap-3 rounded-2xl bg-white/[0.035] px-3 ring-1 ring-white/[0.04] transition hover:bg-white/[0.06] ${compact ? "py-2.5" : "py-3"}`}
+      className={`flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 shadow-[0_10px_24px_rgba(0,0,0,0.2)] transition hover:border-white/[0.1] hover:bg-white/[0.06] ${compact ? "py-2.5" : "py-3"}`}
     >
       <SafeImg
         src={leagueLogo(item)}
@@ -678,14 +701,14 @@ function LeagueJumpCard({ item, season, subtitle, compact = false }) {
 function StatTile({ label, value, tone, compact = false }) {
   const toneClass =
     tone === "rose"
-      ? "from-rose-500/20 to-rose-400/5"
+      ? "from-rose-500/22 to-rose-400/6"
       : tone === "cyan"
-      ? "from-cyan-500/20 to-cyan-400/5"
-      : "from-violet-500/20 to-violet-400/5";
+      ? "from-cyan-500/22 to-cyan-400/6"
+      : "from-violet-500/22 to-violet-400/6";
 
   return (
     <div
-      className={`rounded-2xl bg-gradient-to-br ${toneClass} ring-1 ring-white/[0.04] ${
+      className={`rounded-[24px] border border-white/[0.06] bg-gradient-to-br ${toneClass} shadow-[0_14px_34px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.04] ${
         compact ? "px-4 py-3.5 xl:min-h-[88px]" : "px-4 py-4"
       }`}
     >
@@ -701,10 +724,14 @@ function Panel({ title, actionTo, actionLabel, children }) {
   return (
     <section className="glass-card p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-white">{title}</div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-white/42">Section</div>
+          <div className="mt-1 text-sm font-semibold text-white">{title}</div>
+        </div>
         {actionTo ? (
-          <Link to={actionTo} className="text-xs font-medium text-white/55 transition hover:text-white">
+          <Link to={actionTo} className="inline-flex items-center gap-1 text-xs font-medium text-white/55 transition hover:text-white">
             {actionLabel}
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         ) : null}
       </div>

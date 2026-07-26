@@ -179,7 +179,7 @@ export default function LineupsTab({ data, loading, match, onPlayer }) {
     ric(() => photos.forEach(prefetchImage));
   }, [norm]);
 
-  if (loading) return <div className="py-6 text-muted">{t("lineupsLoading")}</div>;
+  if (loading) return <div className="surface-loading">{t("lineupsLoading")}</div>;
 
   const homeSubs = (norm?.home?.bench || []).map((p) => ({
     ...p,

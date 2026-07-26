@@ -42,12 +42,19 @@ export default function TeamFormGrid({ trends = [], teams = [], trendWindow = 10
 
   return (
     <div className="glass-card p-6">
-      <div className="mb-4 text-base font-semibold text-white">{isRu ? "Форма команд" : "Team form"}</div>
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/42">
+          Trendlines
+        </div>
+        <div className="mt-1 text-base font-semibold text-white">
+          {isRu ? "Форма команд" : "Team form"}
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {items.map((t) => (
           <div
             key={t.team}
-            className={`flex items-center gap-4 rounded-2xl px-3 py-3 ${highlightedTeam === t.team ? "bg-white/[0.05]" : "bg-white/[0.02]"}`}
+            className={`flex items-center gap-4 rounded-2xl border border-white/8 px-3 py-3 shadow-[0_10px_22px_rgba(0,0,0,0.18)] ${highlightedTeam === t.team ? "bg-white/[0.06]" : "bg-white/[0.025]"}`}
             onMouseEnter={() => onTeamHover?.(t.team)}
             onMouseLeave={() => onTeamHover?.(null)}
           >

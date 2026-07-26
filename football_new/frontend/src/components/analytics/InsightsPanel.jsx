@@ -57,10 +57,17 @@ export default function InsightsPanel({ teams = [] }) {
 
   return (
     <div className="glass-card p-5">
-      <div className="text-sm font-semibold text-white mb-3">{isRu ? "EdgeScore Инсайты" : "EdgeScore Insights"}</div>
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/42">
+          EdgeScore
+        </div>
+        <div className="mt-1 text-sm font-semibold text-white">
+          {isRu ? "Инсайты лиги" : "League insights"}
+        </div>
+      </div>
       <div className="space-y-3 text-sm text-white/80 leading-relaxed">
         {insightRows.map((item) => (
-          <div key={item.title} className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+          <div key={item.title} className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3.5 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
             <div className="flex items-center gap-2 text-white">
               <span>{item.icon}</span>
               <span className="font-semibold">{item.title}</span>

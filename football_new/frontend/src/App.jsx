@@ -1,6 +1,7 @@
 ﻿// src/App.jsx
 import { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { AuthProvider } from "./auth/AuthContext.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
@@ -32,9 +33,25 @@ const TeamPageaAll = lazy(() => import("./pages/TeamPageaAll"));
 
 const withShell = (node) => <AppShell>{node}</AppShell>;
 const RouteFallback = (
-  <div className="min-h-screen bg-[#04050d] text-white">
-    <div className="mx-auto flex max-w-[1440px] items-center px-4 py-8 text-sm text-white/60">
-      Loading...
+  <div className="min-h-screen bg-[#04050d] px-4 py-8 text-white">
+    <div className="mx-auto flex max-w-[1440px] items-center justify-center">
+      <div className="surface-loading flex min-h-[220px] w-full max-w-[720px] flex-col items-center justify-center gap-4 rounded-[32px] border border-white/10 px-8 py-10 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_12px_34px_rgba(0,0,0,0.34)]">
+          <Sparkles className="h-6 w-6 text-violet-200" />
+        </div>
+        <div className="space-y-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-white/42">
+            EdgeScore
+          </div>
+          <div className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+            Loading your football workspace
+          </div>
+          <div className="mx-auto max-w-[440px] text-sm text-white/58">
+            Preparing live context, league data and match intelligence.
+          </div>
+        </div>
+        <div className="surface-spinner" aria-hidden="true" />
+      </div>
     </div>
   </div>
 );
@@ -64,60 +81,44 @@ function AppRoutes() {
     <Router>
       <ActivityTracker />
       <Routes>
-          {/* �������� �������� */}
-          <Route path="/" element={<Navigate to={HOME_URL} replace />} />
-
-          {/* ���������� �������� (������ AppShell) */}
-          {/* �������: /leagues � /matches ��� �������� � �� ������ ������ ��� */}
-          {/* ������ ��� � ���������� ���������: */}
-          <Route path="/leagues" element={<Navigate to={HOME_URL} replace />} />
-          <Route path="/matches" element={<Navigate to="/matches-v3" replace />} />
-          {SHELL_ROUTES.map(({ path, element }) => (
-            <Route key={path} path={path} element={withSuspense(withShell(element))} />
-          ))}
-
-          {/* �������� ���� �� ��������� */}
-          <Route path="/favorites" element={<Navigate to="/table?view=favorites" replace />} />
-          <Route
-            path="/roi-admin"
-            element={
+        <Route path="/" element={<Navigate to={HOME_URL} replace />} />
+        <Route path="/leagues" element={<Navigate to={HOME_URL} replace />} />
+        <Route path="/matches" element={<Navigate to="/matches-v3" replace />} />
+        {SHELL_ROUTES.map(({ path, element }) => (
+          <Route key={path} path={path} element={withSuspense(withShell(element))} />
+        ))}
+        <Route path="/favorites" element={<Navigate to="/table?view=favorites" replace />} />
+        <Route
+          path="/roi-admin"
+          element={
+            <ProtectedRoute>
+              {withSuspense(withShell(<RoiAdminPage />))}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscriptions"
+          element={
+            hideMonetization ? (
+              <Navigate to="/profile" replace />
+            ) : (
               <ProtectedRoute>
-                {withSuspense(withShell(<RoiAdminPage />))}
+                {withSuspense(<SubscriptionsPage />)}
               </ProtectedRoute>
-            }
-          />
-          {/* onboarding/tour removed */}
-
-          {/* �������� � ��� shell (��� � auth-��������) */}
-          <Route
-            path="/subscriptions"
-            element={
-              hideMonetization ? (
-                <Navigate to="/profile" replace />
-              ) : (
-                <ProtectedRoute>
-                  {withSuspense(<SubscriptionsPage />)}
-                </ProtectedRoute>
-              )
-            }
-          />
-
-          {/* ����������� */}
-          <Route path="/login" element={withSuspense(<LoginPage />)} />
-          <Route path="/register" element={withSuspense(<RegisterPage />)} />
-
-          {/* ������� � ���������� ���� (������ AppShell) */}
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                {withSuspense(<ProfilePagePremium />)}
-              </ProtectedRoute>
-            }
-          />
-
-          {/* ������ */}
-          <Route path="*" element={<Navigate to={HOME_URL} replace />} />
+            )
+          }
+        />
+        <Route path="/login" element={withSuspense(<LoginPage />)} />
+        <Route path="/register" element={withSuspense(<RegisterPage />)} />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              {withSuspense(<ProfilePagePremium />)}
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to={HOME_URL} replace />} />
       </Routes>
     </Router>
   );

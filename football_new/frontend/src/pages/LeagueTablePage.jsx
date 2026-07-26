@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { Layers3, Sparkles } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -1274,10 +1275,20 @@ export default function LeagueTablePage() {
       : t("tableHint");
 
   return (
-    <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
+    <div className="type-page w-full min-w-0 overflow-x-hidden px-1 py-5 sm:px-4 sm:py-8">
       {/* HEADER */}
       <div>
         <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/65 sm:px-3 sm:text-[11px] sm:tracking-[0.18em]">
+              <Sparkles className="h-3.5 w-3.5 text-violet-200" />
+              Competition view
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/16 bg-cyan-400/8 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.16em] text-cyan-100/78 sm:px-3 sm:text-[11px] sm:tracking-[0.18em]">
+              <Layers3 className="h-3.5 w-3.5" />
+              {viewLabel(view, view)}
+            </div>
+          </div>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
             <div className="min-w-0 space-y-1.5">
               <div className="type-eyebrow">
@@ -1288,7 +1299,7 @@ export default function LeagueTablePage() {
                   : t("standingsEyebrow")}
               </div>
 
-              <div className="type-page-title text-xl sm:text-2xl">
+              <div className="type-page-title break-words text-xl sm:text-2xl">
                 {view === "scorers"
                   ? `${t("scorers")} · ${leagueParam}`
                   : view === "assists"
@@ -1302,14 +1313,14 @@ export default function LeagueTablePage() {
             </div>
 
             {!(isEuroCup && view === "playoff") && (
-              <div className="flex w-full min-w-0 flex-col sm:w-auto sm:items-end">
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:items-end">
                 <span className="text-[10px] uppercase tracking-[0.18em] text-muted mb-1">
                   {t("seasonUpper")}
                 </span>
                 <select
                   value={season}
                   onChange={(e) => setSeason(e.target.value)}
-                  className="surface-select h-8 text-[13px] text-white/80"
+                  className="surface-select h-9 w-full max-w-full text-[13px] text-white/80 sm:h-8 sm:w-auto"
                 >
                   {seasonOptions.map((s) => (
                     <option key={s} value={s} className="bg-slate-900">
@@ -1323,7 +1334,7 @@ export default function LeagueTablePage() {
 
           {/* tabs */}
           <SegmentedTabs
-            className="mt-5"
+            className="surface-toolbar mt-5 px-3 py-2 sm:px-4"
             items={availableViews.map((v) => ({ key: v.code, label: viewLabel(v.code, v.label) }))}
             value={view}
             onChange={setView}
@@ -1334,7 +1345,7 @@ export default function LeagueTablePage() {
 
       {/* loading */}
       {loading && (
-        <div className="text-sm text-white/45">{t("dataLoading")}</div>
+        <div className="surface-loading">{t("dataLoading")}</div>
       )}
 
       {/* content */}
@@ -1345,7 +1356,7 @@ export default function LeagueTablePage() {
         : view === "playoff"
         ? renderPlayoffBracket()
         : (
-          <div className="mt-4">
+          <div className="glass-card p-4 sm:p-5">
             {isIntlGroupedLeague ? renderGroupedTables() : (
               <>
                 {renderMainTableDesktop()}
@@ -1355,7 +1366,7 @@ export default function LeagueTablePage() {
 
             {/* legend */}
             {!isIntlGroupedLeague && (
-              <div className="mt-3 flex flex-wrap gap-6 text-xs text-white/45">
+              <div className="mt-5 flex flex-wrap gap-6 border-t border-white/6 pt-4 text-xs text-white/45">
                 {legendItems.map((item) => (
                   <div key={item.label} className="inline-flex items-center gap-2">
                     <span className={clsx("h-2 w-2 rounded-full", item.color)} />

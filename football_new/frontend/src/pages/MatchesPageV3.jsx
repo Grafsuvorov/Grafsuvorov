@@ -8,13 +8,14 @@ import React, {
   Suspense,
 } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import TeamLogoLink from "@/components/TeamLogoLink";
 import { format } from "date-fns";
 import clsx from "clsx";
+import { Radio, Sparkles } from "lucide-react";
 
-import SafeImg from "@/components/SafeImg";
 import PlayerCard from "@/components/PlayerCard";
 import FootballPitchPro from "@/components/FootballPitchPro";
+import MatchRowCompact from "@/components/match/MatchRowCompact";
+import MatchRoundSection from "@/components/match/MatchRoundSection";
 import { teamLogoMap } from "@/constants/teamLogoMap";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import { useLanguage } from "@/context/LanguageContext.jsx";
@@ -23,11 +24,8 @@ import { fetchMatchesV3, isInternationalLongCycleLeague } from "@/lib/matchesApi
 import {
   CANCELLED_STATUS_HINTS,
   FINISHED_STATUSES,
-  LIVE_STATUS_HINTS,
   POSTPONED_STATUS_HINTS,
-  estimateLiveElapsed,
   isLiveMatch,
-  isStaleLiveStatus,
   liveMinuteLabel,
 } from "@/lib/matchStatus";
 import {
@@ -827,118 +825,6 @@ function LineupsSection({
 }
 
 /* ================================
-   MATCH ROW COMPACT (как в календаре)
-================================ */
-function MatchRowCompact({ m, highlight, onOpen }) {
-  const { home, away } = extractGoals(m);
-  const semanticScoreClass = scoreStyleBySemantics(home, away);
-  const homeWin = home != null && away != null && home > away;
-  const awayWin = home != null && away != null && away > home;
-  const badge = getMatchStateBadge(m);
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onOpen?.();
-      }}
-      className={clsx(
-        "relative grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-[22px] px-3 py-3 text-left transition-all duration-200 ease-in-out sm:gap-4 sm:px-4 sm:py-3.5",
-        "bg-white/[0.022] hover:bg-white/[0.04]"
-      )}
-    >
-      {highlight && (
-        <span className="pointer-events-none absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[linear-gradient(180deg,#8b5cf6,#6d28d9)] shadow-[0_0_10px_rgba(123,92,255,0.35)]" />
-      )}
-      {/* LEFT — HOME */}
-      <div className="flex items-center gap-2 min-w-0 sm:gap-3">
-        <TeamLogoLink teamId={m.home_team_id} stopPropagation className="block">
-          <SafeImg
-            src={teamLogo(m.home_team, m.home_team_id)}
-            className="h-8 w-8 rounded-xl bg-surface-2 object-contain sm:h-9 sm:w-9"
-            fallbackSrc={teamLogoFallback(m.home_team_id)}
-          />
-        </TeamLogoLink>
-        <div className="min-w-0 text-left">
-          <div className={clsx("truncate text-[13px] text-white sm:text-sm", homeWin ? "font-semibold" : "font-medium")}>
-            {m.home_team}
-          </div>
-          <div className="truncate pt-0.5 text-[10px] text-muted sm:text-[11px]">
-            {badge ? (
-              <span className="inline-flex items-center gap-2">
-                <span className={`inline-flex h-5 items-center rounded-full border px-2 text-[9px] font-semibold uppercase tracking-[0.12em] ${badge.pillClass}`}>
-                  {badge.label}
-                </span>
-                {badge.sublabel ? (
-                  <span className={`tabular-nums ${badge.sublabelClass}`}>{badge.sublabel}</span>
-                ) : null}
-              </span>
-            ) : (
-              <>
-                {safeDateFormat(m.date)} {m.venue ? `· ${m.venue}` : ""}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* CENTER — SCORE (fixed width) */}
-      <div
-        className="flex w-[82px] items-center justify-center text-center sm:w-[94px]"
-      >
-        <div
-          className={clsx(
-            "flex items-center justify-center text-[18px] font-semibold tracking-[0.01em] text-white tabular-nums leading-none sm:text-[20px]",
-            semanticScoreClass
-          )}
-        >
-          {home == null || away == null ? (
-            "—"
-          ) : (
-            <>
-              <span className={homeWin ? "text-white" : awayWin ? "text-white/40" : "text-white"}>
-                {home}
-              </span>
-              <span className="px-1.5 text-white/38">:</span>
-              <span className={awayWin ? "text-white" : homeWin ? "text-white/40" : "text-white"}>
-                {away}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT — AWAY */}
-      <div className="flex items-center gap-2 min-w-0 justify-end sm:gap-3">
-        <div className="text-right min-w-0">
-          <div className={clsx("truncate text-[13px] text-white sm:text-sm", awayWin ? "font-semibold" : "font-medium")}>
-            {m.away_team}
-          </div>
-          <div className="truncate pt-0.5 text-[10px] text-white/38 sm:text-[11px]">
-            {safeDateFormat(m.date)}
-          </div>
-        </div>
-        <TeamLogoLink teamId={m.away_team_id} stopPropagation className="block">
-          <SafeImg
-            src={teamLogo(m.away_team, m.away_team_id)}
-            className="h-8 w-8 rounded-xl bg-surface-2 object-contain sm:h-9 sm:w-9"
-            fallbackSrc={teamLogoFallback(m.away_team_id)}
-          />
-        </TeamLogoLink>
-      </div>
-    </button>
-  );
-}
-
-
-/* ================================
-   PREDICTION BLOCK
-================================ */
-function PredictionBlock() {
-  return null;
-}
-
-/* ================================
    MATCH EXPANDED CONTENT
 ================================ */
 function MatchExpanded({ m }) {
@@ -1020,7 +906,17 @@ function MatchCard({ m, highlight, onOpen }) {
       id={`fixture-${m.fixture_id}`}
       className="transition-colors"
     >
-      <MatchRowCompact m={m} highlight={highlight} onOpen={onOpen} />
+      <MatchRowCompact
+        match={m}
+        highlight={highlight}
+        onOpen={onOpen}
+        extractGoals={extractGoals}
+        scoreStyleBySemantics={scoreStyleBySemantics}
+        getMatchStateBadge={getMatchStateBadge}
+        safeDateFormat={safeDateFormat}
+        teamLogo={teamLogo}
+        teamLogoFallback={teamLogoFallback}
+      />
     </div>
   );
 }
@@ -1235,10 +1131,20 @@ useEffect(() => {
   }, [grouped.length, visibleRoundCount]);
 
   return (
-    <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 space-y-6 sm:px-4 sm:py-8 sm:space-y-8">
+    <div className="type-page w-full min-w-0 overflow-x-hidden px-1 py-5 sm:px-4 sm:py-8">
       {/* HEADER */}
       <div>
         <div className="surface-hero p-4 sm:p-6 md:p-8">
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white/65 sm:px-3 sm:text-[11px] sm:tracking-[0.18em]">
+              <Sparkles className="h-3.5 w-3.5 text-violet-200" />
+              Match archive
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/16 bg-emerald-400/8 px-2.5 py-1.5 text-[10px] uppercase tracking-[0.16em] text-emerald-100/76 sm:px-3 sm:text-[11px] sm:tracking-[0.18em]">
+              <Radio className="h-3.5 w-3.5" />
+              {grouped.length} rounds indexed
+            </div>
+          </div>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
             <div className="min-w-0 space-y-1.5">
               <div className="type-eyebrow">
@@ -1254,7 +1160,7 @@ useEffect(() => {
               </p>
             </div>
 
-            <div className="flex w-full min-w-0 flex-col sm:w-auto sm:items-end">
+            <div className="flex w-full min-w-0 flex-row items-end justify-between gap-3 sm:w-auto sm:flex-col sm:items-end sm:justify-start">
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted mb-1">
                 {t("seasonUpper")}
               </span>
@@ -1286,7 +1192,7 @@ useEffect(() => {
       )}
 
       {!loading && !error && matches.length > 0 && showHint && (
-        <div className="text-xs text-slate-400">
+        <div className="surface-note text-xs sm:text-sm">
           {t("openMatchHint")}
         </div>
       )}
@@ -1295,43 +1201,34 @@ useEffect(() => {
       {!loading &&
         !error &&
         visibleGroups.map((g, idx) => (
-          <section key={g.label} className={clsx("space-y-3", idx > 0 && "mt-8")}>
-            {/* header */}
-            <div className="px-4 md:px-6 pt-5 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <div className="text-[13px] uppercase tracking-[0.15em] text-white/60 whitespace-nowrap">
-                  {humanRoundLabel(g.label, language)}
-                </div>
-                <span className="text-[11px] text-white/60 bg-white/5 px-3 py-1 rounded-full">
-                  {g.items.length} {t("matchesCount")}
-                </span>
-              </div>
-            </div>
-
-            {/* unified block — один блок с разделителями */}
-            <div className="bg-transparent space-y-3">
-              {g.items.map((m, idx) => (
-                <MatchCard
-                  key={m.fixture_id || idx}
-                  m={m}
-                  highlight={String(highlightId) === String(m.fixture_id)}
-                  onOpen={() => {
-                    if (showHint) {
-                      setShowHint(false);
-                      try {
-                        localStorage.setItem("results_hint_seen", "1");
-                      } catch {}
-                    }
-                    const q = new URLSearchParams({
-                      league,
-                      season,
-                    });
-                    navigate(`/match/${m.fixture_id}?${q.toString()}`);
-                  }}
-                />
-              ))}
-            </div>
-          </section>
+          <MatchRoundSection
+            key={g.label}
+            group={g}
+            index={idx}
+            language={language}
+            humanRoundLabel={humanRoundLabel}
+            matchesCountLabel={t("matchesCount")}
+            renderMatchCard={(m, matchIdx) => (
+              <MatchCard
+                key={m.fixture_id || matchIdx}
+                m={m}
+                highlight={String(highlightId) === String(m.fixture_id)}
+                onOpen={() => {
+                  if (showHint) {
+                    setShowHint(false);
+                    try {
+                      localStorage.setItem("results_hint_seen", "1");
+                    } catch {}
+                  }
+                  const q = new URLSearchParams({
+                    league,
+                    season,
+                  });
+                  navigate(`/match/${m.fixture_id}?${q.toString()}`);
+                }}
+              />
+            )}
+          />
         ))}
 
       {!loading && !error && visibleRoundCount < grouped.length && (

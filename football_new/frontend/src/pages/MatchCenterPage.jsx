@@ -3,11 +3,11 @@ import React, { useEffect, useState, useMemo, lazy, Suspense } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 
-import SafeImg from "@/components/SafeImg";
-import TeamLogoLink from "@/components/TeamLogoLink";
-import LineupsTab from "@/components/LineupsTab";
-import MatchInsightsPanelFull from "@/components/MatchInsightsPanelFull";
-import UnderstatShotHeatmap from "@/components/UnderstatShotHeatmap";
+import MatchCenterHero from "@/components/match/MatchCenterHero";
+import MatchFormSection from "@/components/match/MatchFormSection";
+import MatchLineupsSection from "@/components/match/MatchLineupsSection";
+import MatchOverviewAnalytics from "@/components/match/MatchOverviewAnalytics";
+import MatchTeamComparison from "@/components/match/MatchTeamComparison";
 import { teamLogoMap } from "@/constants/teamLogoMap";
 import { buildMatchPack } from "@/lib/matchInsights";
 import { LEAGUE_ID_BY_NAME, decideOutcomeTier, decideTotalsTierByValues } from "@/lib/policyDecision";
@@ -619,6 +619,16 @@ export default function MatchCenterPage() {
   const homeWin = homeGoals != null && awayGoals != null && homeGoals > awayGoals;
   const awayWin = homeGoals != null && awayGoals != null && awayGoals > homeGoals;
   const dt = formatDateTime(match);
+  const statusToneClass = matchLive
+    ? "border-rose-400/24 bg-rose-400/10 text-rose-100"
+    : matchFinished
+    ? "border-emerald-400/24 bg-emerald-400/10 text-emerald-100"
+    : "border-white/10 bg-white/[0.05] text-white/78";
+  const headerMeta = [
+    dt.date || null,
+    dt.time || null,
+    statusText || null,
+  ].filter(Boolean);
 
   const pickVal = (obj, keys) => {
     for (const k of keys) {
@@ -750,34 +760,6 @@ export default function MatchCenterPage() {
         under25: "Under 2.5",
       };
 
-  const outcomeSignal =
-    recDecision === "BET"
-      ? labels.play
-      : recDecision === "WATCH"
-      ? labels.careful
-      : labels.skip;
-  const outcomeLabel = outcomeSignal === labels.skip ? labels.noSignal : outcomeSignal;
-
-  const thresholdReason =
-    outcomeSignal === labels.play
-      ? language === "ru"
-        ? "Модель видит заметное преимущество — сигнал проходит фильтр."
-        : "The model sees a meaningful edge and the signal passes the filter."
-      : outcomeSignal === labels.careful
-      ? language === "ru"
-        ? "Преимущество есть, но запас умеренный — стоит быть осторожнее."
-        : "There is an edge, but the margin is moderate."
-      : language === "ru"
-      ? "Рынок почти совпадает с оценкой модели — выраженного value не обнаружено."
-      : "The market is close to the model estimate, so no strong value is detected.";
-
-  const signalTone =
-    outcomeSignal === labels.play
-      ? "emerald"
-      : outcomeSignal === labels.careful
-      ? "amber"
-      : "neutral";
-
   const matchPlayed = homeGoals != null && awayGoals != null;
 
   const hasModelData =
@@ -785,68 +767,6 @@ export default function MatchCenterPage() {
       Number.isFinite(v)
     ) || signalPick != null;
   const analyticsPending = !hasModelData && insightLoading && !insight;
-
-  const hAvg = pack?.homeAvg || null;
-  const aAvg = pack?.awayAvg || null;
-  const xgDiff =
-    hAvg && aAvg && Number.isFinite(hAvg.xg) && Number.isFinite(aAvg.xg)
-      ? hAvg.xg - aAvg.xg
-      : null;
-  const shotsDiff =
-    hAvg && aAvg && Number.isFinite(hAvg.shots) && Number.isFinite(aAvg.shots)
-      ? hAvg.shots - aAvg.shots
-      : null;
-  const possDiff =
-    hAvg && aAvg && Number.isFinite(hAvg.possession) && Number.isFinite(aAvg.possession)
-      ? hAvg.possession - aAvg.possession
-      : null;
-
-  const analysisText = (() => {
-    if (!hAvg || !aAvg) return null;
-    const h = hAvg;
-    const a = aAvg;
-    const lines = [];
-    const home = match?.home_team;
-    const away = match?.away_team;
-
-    if (xgDiff != null || shotsDiff != null || possDiff != null) {
-      let picture = language === "ru" ? "Картина матча выглядит сбалансированной." : "The match profile looks balanced.";
-      if (xgDiff != null && shotsDiff != null) {
-        if (xgDiff > 0.15 && shotsDiff > 1) {
-          picture = language === "ru" ? `${home} контролирует темп и создаёт больше качественных моментов.` : `${home} controls the tempo and creates the better chances.`;
-        } else if (xgDiff < -0.15 && shotsDiff < -1) {
-          picture = language === "ru" ? `${away} контролирует темп и создаёт больше качественных моментов.` : `${away} controls the tempo and creates the better chances.`;
-        } else if (xgDiff > 0.15 && shotsDiff <= 1) {
-          picture = language === "ru" ? `${home} создаёт более качественные моменты при сопоставимом объёме ударов.` : `${home} creates the higher-quality chances with a similar shot volume.`;
-        } else if (xgDiff < -0.15 && shotsDiff >= -1) {
-          picture = language === "ru" ? `${away} создаёт более качественные моменты при сопоставимом объёме ударов.` : `${away} creates the higher-quality chances with a similar shot volume.`;
-        }
-      } else if (xgDiff != null) {
-        picture = xgDiff > 0.15
-          ? language === "ru" ? `${home} выглядит предпочтительнее по качеству моментов.` : `${home} looks better on chance quality.`
-          : xgDiff < -0.15
-            ? language === "ru" ? `${away} выглядит предпочтительнее по качеству моментов.` : `${away} looks better on chance quality.`
-            : picture;
-      }
-      if (possDiff != null && Math.abs(possDiff) >= 6) {
-        picture += language === "ru"
-          ? ` По контролю мяча преимущество у ${possDiff > 0 ? home : away}.`
-          : ` Possession control also favors ${possDiff > 0 ? home : away}.`;
-      }
-      lines.push(picture);
-    }
-
-    if (xgDiff != null && shotsDiff != null) {
-      if (Math.abs(xgDiff) < 0.15 && Math.abs(shotsDiff) < 1) {
-        lines.push(language === "ru" ? "Контекст формы: команды создают схожий объём моментов, сценарий чувствителен к реализации." : "Form context: both sides create a similar volume of chances, so finishing variance matters.");
-      } else if (Math.abs(shotsDiff) >= 3 && Math.abs(xgDiff) < 0.2) {
-        lines.push(language === "ru" ? "Контекст формы: объём атак различается, но качество моментов близко — возможен разброс по реализации." : "Form context: attack volume differs, but chance quality stays close, so conversion can swing the outcome.");
-      }
-    }
-
-    lines.push(language === "ru" ? "Риск сценария: высокая вариативность реализации может изменить итог при равном объёме моментов." : "Scenario risk: high finishing variance can swing the final result even with similar chance volume.");
-    return lines.length ? lines : null;
-  })();
 
   const implied = (odds) => {
     const n = Number(odds);
@@ -1149,110 +1069,41 @@ export default function MatchCenterPage() {
   return (
     <div className="w-full min-w-0 overflow-x-hidden px-1 py-5 pb-24 mc-fade sm:px-4 sm:py-8">
       <div className="w-full max-w-[1240px] mx-auto space-y-8">
-      <div className="flex items-center">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                navigate(-1);
-              } else {
-                navigate(
-                  `/schedule?league=${encodeURIComponent(league || "")}&season=${encodeURIComponent(season || "")}`
-                );
-              }
-            }}
-            className="surface-button"
-          >
-            ← {mc.back}
-          </button>
-          <button
-            type="button"
-            onClick={toggleFavoriteMatch}
-            className={clsx(
-              "surface-button",
-              isFavoriteMatch
-                ? "surface-button-active"
-                : null
-            )}
-          >
-            {isFavoriteMatch ? `★ ${t("matchSaved")}` : `☆ ${t("saveMatch")}`}
-          </button>
-        </div>
-      </div>
-      {/* Header */}
-      <section className="text-slate-50">
-        <div className="surface-hero min-w-0 overflow-hidden p-4 sm:p-6 md:p-8">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-white/55 mb-3">
-            {league} / {season}
-            {match?.round ? ` / ${match.round}` : ""}
-          </div>
-
-            <div className="mx-auto mt-5 grid w-full min-w-0 grid-cols-[minmax(0,1fr)_88px_minmax(0,1fr)] items-center justify-center gap-2 sm:mt-6 sm:grid-cols-[180px_150px_180px] sm:gap-4 lg:grid-cols-[220px_180px_220px] lg:gap-5">
-              <div className="min-w-0 justify-self-stretch flex flex-col items-center gap-1.5 sm:w-[180px] sm:justify-self-end sm:gap-2 lg:w-[220px]">
-                <TeamLogoLink teamId={match?.home_team_id} className="block">
-                  <SafeImg
-                    src={teamLogo(match?.home_team, match?.home_team_id)}
-                    fallbackSrc={teamLogoFallback(match?.home_team_id)}
-                    className="h-10 w-10 translate-y-[2px] rounded-2xl border border-glass bg-surface-2/80 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)] transition-transform duration-200 hover:scale-[1.03] sm:h-16 sm:w-16 lg:h-[80px] lg:w-[80px]"
-                  />
-                </TeamLogoLink>
-                <div className="w-full min-w-0 truncate px-0.5 text-center text-[11px] font-medium tracking-[0.02em] text-white/95 sm:w-[140px] sm:px-1 sm:text-[16px] lg:w-[160px] lg:text-[18px]">
-                  {match?.home_team || "—"}
-                </div>
-              </div>
-
-            <div className="flex items-center justify-center">
-              <div className="whitespace-nowrap text-center text-[30px] font-medium leading-none tracking-[0.03em] tabular-nums drop-shadow-[0_0_24px_rgba(140,110,255,0.22)] sm:text-[54px] lg:text-[68px]">
-                <span className={clsx(homeWin ? "text-white/95" : awayWin ? "text-white/60" : "text-white/95")}>
-                  {homeGoals ?? "—"}
-                </span>
-                <span className="mx-1 text-white/70 sm:mx-2">–</span>
-                <span className={clsx(awayWin ? "text-white/95" : homeWin ? "text-white/60" : "text-white/95")}>
-                  {awayGoals ?? "—"}
-                </span>
-              </div>
-            </div>
-
-            <div className="min-w-0 justify-self-stretch flex flex-col items-center gap-1.5 sm:w-[180px] sm:justify-self-start sm:gap-2 lg:w-[220px]">
-                <TeamLogoLink teamId={match?.away_team_id} className="block">
-                  <SafeImg
-                    src={teamLogo(match?.away_team, match?.away_team_id)}
-                    fallbackSrc={teamLogoFallback(match?.away_team_id)}
-                    className="h-10 w-10 translate-y-[2px] rounded-2xl border border-glass bg-surface-2/80 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)] transition-transform duration-200 hover:scale-[1.03] sm:h-16 sm:w-16 lg:h-[80px] lg:w-[80px]"
-                  />
-                </TeamLogoLink>
-              <div className="w-full min-w-0 truncate px-0.5 text-center text-[11px] font-medium tracking-[0.02em] text-white/95 sm:w-[140px] sm:px-1 sm:text-[16px] lg:w-[160px] lg:text-[18px]">
-                {match?.away_team || "—"}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-2 text-center">
-            <div
-              className={clsx(
-                "text-[12px] leading-tight",
-                matchLive ? "text-rose-200" : "text-white/55"
-              )}
-            >
-              {dt.date}
-              {dt.time ? ` • ${dt.time}` : ""}
-              {statusText ? " • " : ""}
-              {statusText}
-            </div>
-            {match?.venue ? (
-              <div className="text-[11px] leading-tight text-white/45 mt-1">
-                {match.venue}
-              </div>
-            ) : null}
-          </div>
-
-        </div>
-      </section>
+        <MatchCenterHero
+          league={league}
+          season={season}
+          match={match}
+          matchLive={matchLive}
+          statusText={statusText}
+          statusToneClass={statusToneClass}
+          homeGoals={homeGoals}
+          awayGoals={awayGoals}
+          homeWin={homeWin}
+          awayWin={awayWin}
+          headerMeta={headerMeta}
+          isFavoriteMatch={isFavoriteMatch}
+          labels={{
+            back: mc.back,
+            save: t("saveMatch"),
+            saved: t("matchSaved"),
+          }}
+          onBack={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate(
+                `/schedule?league=${encodeURIComponent(league || "")}&season=${encodeURIComponent(season || "")}`
+              );
+            }
+          }}
+          onToggleFavorite={toggleFavoriteMatch}
+          teamLogo={teamLogo}
+          teamLogoFallback={teamLogoFallback}
+        />
 
       <div className="w-full pt-8">
         <SegmentedTabs
-          className="w-full mb-8"
+          className="surface-toolbar w-full mb-8 px-3 py-2 sm:px-4"
           size="md"
           items={[
             { key: "overview", label: mc.overview },
@@ -1262,278 +1113,72 @@ export default function MatchCenterPage() {
           ]}
           value={tab}
           onChange={setTab}
-          listClassName="gap-x-3 gap-y-2 sm:gap-8"
-          buttonClassName="tracking-[0.03em] sm:tracking-[0.1em]"
+          listClassName="gap-x-2 gap-y-2 sm:gap-8"
+          buttonClassName="text-[12px] tracking-[0.02em] sm:text-[14px] sm:tracking-[0.1em]"
           activeClassName="text-white"
           inactiveClassName="text-white/55"
         />
       </div>
 
       {loading && (
-        <div className="text-sm text-slate-400">{mc.loadingMatch}</div>
+        <div className="surface-loading">{mc.loadingMatch}</div>
       )}
       {error && (
-        <div className="text-sm text-rose-400">{mc.loadError}: {error}</div>
+        <div className="surface-error text-sm">{mc.loadError}: {error}</div>
       )}
 
       {!loading && !error && match && (
         <>
           {tab === "overview" && (
             <div className={MATCH_TAB_STACK}>
-              <div className="w-full min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#141824] to-[#0f1320] border border-white/5 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),_0_12px_35px_rgba(0,0,0,0.35)] space-y-6 sm:p-8">
-                <div className="flex min-w-0 items-start justify-between gap-4">
-                  <div className="min-w-0 break-words text-[17px] font-semibold tracking-[0.03em] text-white sm:text-[18px] sm:tracking-[0.04em]">{mc.analyticsTitle}</div>
-                </div>
+              <MatchOverviewAnalytics
+                title={mc.analyticsTitle}
+                analyticsPending={analyticsPending}
+                analyticsLoadingLabel={mc.analyticsLoading}
+                keyLine={analysisNarrative?.keyLine || mc.noEdge}
+                outcomeLabel={mc.byOutcome}
+                outcomeText={analysisNarrative?.context || mc.noOutcomeEdge}
+                totalLabel={mc.byTotal}
+                totalText={analysisNarrative?.totalLine || mc.noTotalEdge}
+                recommendation={analysisNarrative?.rec || mc.skipBet}
+                marketTab={marketTab}
+                onMarketTabChange={setMarketTab}
+                outcomeTabLabel={mc.outcome12}
+                totalTabLabel={mc.total25}
+                modelVsMarket={modelVsMarket}
+                implied={implied}
+                modelLabel={mc.model}
+                marketLabel={mc.market}
+                totalMarketRows={
+                  match?.avg_odds_over25 || match?.avg_odds_under25
+                    ? [
+                        { label: language === "ru" ? "ТБ" : "Over", model: over25, odds: match?.avg_odds_over25 },
+                        { label: language === "ru" ? "ТМ" : "Under", model: under25, odds: match?.avg_odds_under25 },
+                      ]
+                    : []
+                }
+                noTotalMarketData={mc.noTotalMarketData}
+                positiveGapHint={mc.positiveGapHint}
+              />
 
-                {analyticsPending ? (
-                  <div className="text-[13px] text-white/60">
-                    {mc.analyticsLoading}
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid w-full min-w-0 gap-6 md:grid-cols-[1fr]">
-                      <div className="relative min-w-0 pl-4 sm:pl-5">
-                        <div
-                          className={clsx(
-                            "absolute left-0 top-1 bottom-1 w-[3px] rounded-full",
-                            analysisNarrative?.resultTone === "green"
-                              ? "bg-violet-400/80 shadow-[0_0_12px_rgba(139,92,246,0.3)]"
-                              : analysisNarrative?.resultTone === "red"
-                              ? "bg-violet-300/70 shadow-[0_0_10px_rgba(139,92,246,0.22)]"
-                              : "bg-white/30 shadow-[0_0_10px_rgba(255,255,255,0.08)]"
-                          )}
-                        />
-                        <div className="w-full min-w-0">
-                          <div className="mb-4 break-words text-[18px] font-semibold leading-snug text-white sm:text-[20px]">
-                            {analysisNarrative?.keyLine || mc.noEdge}
-                          </div>
-                          <div className="text-[12px] uppercase tracking-[0.12em] text-white/60 mb-2">
-                            {mc.byOutcome}
-                          </div>
-                          <div className="mb-4 break-words text-[14px] leading-relaxed text-white/75">
-                            {analysisNarrative?.context || mc.noOutcomeEdge}
-                          </div>
-                          <div className="text-[12px] uppercase tracking-[0.12em] text-white/60 mb-2">
-                            {mc.byTotal}
-                          </div>
-                          <div className="mb-4 break-words text-[14px] leading-relaxed text-white/75">
-                            {analysisNarrative?.totalLine || mc.noTotalEdge}
-                          </div>
-                          <div className="break-words text-[14px] font-medium text-white/90 sm:text-[15px]">
-                            {analysisNarrative?.rec || mc.skipBet}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* narrative folded into the key block */}
-
-                    <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-white/4 p-4">
-                      <SegmentedTabs
-                        className="mb-3 min-w-0 overflow-hidden"
-                        size="xs"
-                        items={[
-                          { key: "outcome", label: mc.outcome12 },
-                          { key: "total", label: mc.total25 },
-                        ]}
-                        value={marketTab}
-                        onChange={setMarketTab}
-                        listClassName="min-w-0 gap-3 sm:gap-4"
-                        buttonClassName="min-w-0 max-w-full truncate"
-                        activeClassName="text-white"
-                        inactiveClassName="text-white/50"
-                      />
-
-                      {marketTab === "outcome" && (
-                        <div className="min-w-0 text-[12px] text-white/80">
-                          {modelVsMarket.map((row, idx) => {
-                            const modelPct = row.model != null ? row.model * 100 : null;
-                            const bookPct = implied(row.odds);
-                            const diff =
-                              modelPct != null && bookPct != null
-                                ? modelPct - bookPct
-                                : null;
-                            const diffLabel =
-                              diff == null ? "—" : `${diff > 0 ? "+" : ""}${Math.round(diff)}%`;
-                            return (
-                              <div key={row.label} className={clsx("py-3", idx > 0 && "border-t border-white/10")}>
-                                <div className="mb-2 flex min-w-0 items-center justify-between gap-3">
-                                  <div className="flex min-w-0 items-center gap-3">
-                                    <span className="truncate text-white/85">{row.label}</span>
-                                  </div>
-                                  <span className={clsx("shrink-0 text-[12px] font-semibold tabular-nums", diff != null && diff > 0 ? "text-emerald-300" : "text-white/70")}>
-                                    {diffLabel}
-                                  </span>
-                                </div>
-                                <div className="space-y-2">
-                                  <div>
-                                    <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-white/70">
-                                      <span className="truncate">{mc.model}</span>
-                                      <span className="shrink-0 tabular-nums font-semibold">{modelPct != null ? `${Math.round(modelPct)}%` : "—"}</span>
-                                    </div>
-                                    <div className="h-[5px] rounded-full bg-white/6 overflow-hidden">
-                                      <div
-                                        className="h-full rounded-full bg-gradient-to-r from-violet-500/70 to-violet-400/35"
-                                        style={{ width: `${modelPct ?? 0}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-white/70">
-                                      <span className="truncate">{mc.market}</span>
-                                      <span className="shrink-0 tabular-nums font-semibold">{bookPct != null ? `${Math.round(bookPct)}%` : "—"}</span>
-                                    </div>
-                                    <div className="h-[5px] rounded-full bg-white/6 overflow-hidden">
-                                      <div
-                                        className="h-full rounded-full bg-white/25 shadow-[0_0_10px_rgba(255,255,255,0.08)]"
-                                        style={{ width: `${bookPct ?? 0}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {marketTab === "total" && (
-                        (match?.avg_odds_over25 || match?.avg_odds_under25) ? (
-                          <div className="min-w-0 text-[12px] text-white/80">
-                            {[
-                              { label: language === "ru" ? "ТБ" : "Over", model: over25, odds: match?.avg_odds_over25 },
-                              { label: language === "ru" ? "ТМ" : "Under", model: under25, odds: match?.avg_odds_under25 },
-                            ].map((row, idx) => {
-                              const modelPct = row.model != null ? row.model * 100 : null;
-                              const bookPct = implied(row.odds);
-                              const diff =
-                                modelPct != null && bookPct != null
-                                  ? modelPct - bookPct
-                                  : null;
-                              const diffLabel =
-                                diff == null ? "—" : `${diff > 0 ? "+" : ""}${Math.round(diff)}%`;
-                              return (
-                                <div key={`tot-${row.label}`} className={clsx("py-3", idx > 0 && "border-t border-white/10")}>
-                                <div className="mb-2 flex min-w-0 items-center justify-between gap-3">
-                                  <div className="flex min-w-0 items-center gap-3">
-                                    <span className="truncate text-white/85">{row.label}</span>
-                                  </div>
-                                  <span className={clsx("shrink-0 text-[12px] font-semibold tabular-nums", diff != null && diff > 0 ? "text-emerald-300" : "text-white/70")}>
-                                    {diffLabel}
-                                  </span>
-                                </div>
-                                <div className="space-y-2">
-                                  <div>
-                                    <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-white/70">
-                                      <span className="truncate">{mc.model}</span>
-                                      <span className="shrink-0 tabular-nums font-semibold">{modelPct != null ? `${Math.round(modelPct)}%` : "—"}</span>
-                                    </div>
-                                    <div className="h-[5px] rounded-full bg-white/6 overflow-hidden">
-                                      <div
-                                        className="h-full rounded-full bg-gradient-to-r from-violet-500/70 to-violet-400/35"
-                                        style={{ width: `${modelPct ?? 0}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-white/70">
-                                      <span className="truncate">{mc.market}</span>
-                                      <span className="shrink-0 tabular-nums font-semibold">{bookPct != null ? `${Math.round(bookPct)}%` : "—"}</span>
-                                    </div>
-                                    <div className="h-[5px] rounded-full bg-white/6 overflow-hidden">
-                                      <div
-                                        className="h-full rounded-full bg-white/25 shadow-[0_0_10px_rgba(255,255,255,0.08)]"
-                                        style={{ width: `${bookPct ?? 0}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="text-[12px] text-white/50">
-                            {mc.noTotalMarketData}
-                          </div>
-                        )
-                      )}
-
-                      <div className="pt-2 text-[11px] text-white/55">
-                        {mc.positiveGapHint}
-                      </div>
-                    </div>
-
-                    {/* expanded info removed in favor of narrative */}
-                  </>
-                )}
-              </div>
-
-              <div className="w-full min-w-0 overflow-hidden space-y-4 rounded-2xl border border-white/5 bg-gradient-to-br from-[#121827] via-[#101624] to-[#0b111e] p-4 shadow-[0_16px_45px_rgba(8,12,22,0.6)] sm:p-5">
-                <div className="min-w-0">
-                  <div className="break-words text-[16px] font-semibold text-white">{mc.teamComparison}</div>
-                  <div className="mt-1 break-words text-[12px] text-white/55">
-                    {mc.preMatchAvg}
-                  </div>
-                </div>
-
-                {Number.isFinite(Number(match?.home_understat_xg)) || Number.isFinite(Number(match?.away_understat_xg)) ? (
-                  <MiniCompareRow
-                    label={mc.matchXg}
-                    left={match?.home_understat_xg}
-                    right={match?.away_understat_xg}
-                    format={(v) => Number(v).toFixed(2)}
-                  />
-                ) : null}
-                <MiniCompareRow label={mc.formXg} left={pack?.homeAvg?.xg} right={pack?.awayAvg?.xg} format={(v) => Number(v).toFixed(2)} />
-                <MiniCompareRow label="xGA" left={pack?.homeAvg?.xga} right={pack?.awayAvg?.xga} format={(v) => Number(v).toFixed(2)} />
-                <MiniCompareRow label="ΔxG" left={pack?.homeAvg?.xg_diff} right={pack?.awayAvg?.xg_diff} format={(v) => Number(v).toFixed(2)} />
-                <MiniCompareRow label={mc.shots} left={pack?.homeAvg?.shots} right={pack?.awayAvg?.shots} format={(v) => Number(v).toFixed(1)} />
-                <MiniCompareRow label={mc.shotsOn} left={pack?.homeAvg?.shots_on} right={pack?.awayAvg?.shots_on} format={(v) => Number(v).toFixed(1)} />
-                <MiniCompareRow label={mc.possession} left={pack?.homeAvg?.possession} right={pack?.awayAvg?.possession} format={(v) => `${Number(v).toFixed(0)}%`} />
-                <MiniCompareRow label={mc.corners} left={pack?.homeAvg?.corners} right={pack?.awayAvg?.corners} format={(v) => Number(v).toFixed(1)} />
-
-                {(Array.isArray(match?.understat_top_players_home) && match.understat_top_players_home.length > 0) ||
-                (Array.isArray(match?.understat_top_players_away) && match.understat_top_players_away.length > 0) ? (
-                  <div className="pt-2 border-t border-white/10">
-                    <div className="text-[12px] text-white/55 mb-2">{mc.playerXg}</div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <div className="text-[12px] text-white/75 mb-1">{match?.home_team || mc.homeFallback}</div>
-                        <div className="space-y-1">
-                          {(match?.understat_top_players_home || []).slice(0, 4).map((p) => (
-                            <div key={`uh-${p.player_id}-${p.player_name}`} className="flex items-center justify-between text-[12px] text-white/80">
-                              <span className="truncate pr-2">{p.player_name}</span>
-                              <span className="tabular-nums text-violet-300">{Number(p.xg || 0).toFixed(2)} xG</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[12px] text-white/75 mb-1">{match?.away_team || mc.awayFallback}</div>
-                        <div className="space-y-1">
-                          {(match?.understat_top_players_away || []).slice(0, 4).map((p) => (
-                            <div key={`ua-${p.player_id}-${p.player_name}`} className="flex items-center justify-between text-[12px] text-white/80">
-                              <span className="truncate pr-2">{p.player_name}</span>
-                              <span className="tabular-nums text-sky-300">{Number(p.xg || 0).toFixed(2)} xG</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {Array.isArray(match?.understat_shots) && match.understat_shots.length > 0 ? (
-                  <div className="pt-2 border-t border-white/10">
-                    <UnderstatShotHeatmap
-                      shots={match.understat_shots}
-                      homeTeam={match?.home_team || mc.homeFallback}
-                      awayTeam={match?.away_team || mc.awayFallback}
-                    />
-                  </div>
-                ) : null}
-              </div>
+              <MatchTeamComparison
+                title={mc.teamComparison}
+                subtitle={mc.preMatchAvg}
+                match={match}
+                labels={{
+                  matchXg: mc.matchXg,
+                  formXg: mc.formXg,
+                  shots: mc.shots,
+                  shotsOn: mc.shotsOn,
+                  possession: mc.possession,
+                  corners: mc.corners,
+                  playerXg: mc.playerXg,
+                  homeFallback: mc.homeFallback,
+                  awayFallback: mc.awayFallback,
+                }}
+                pack={pack}
+                MiniCompareRow={MiniCompareRow}
+              />
 
             </div>
           )}
@@ -1557,59 +1202,39 @@ export default function MatchCenterPage() {
           )}
 
           {tab === "lineups" && (
-            <div className={MATCH_TAB_WRAP}>
-              {lineupsError ? (
-                <div className={`${MATCH_TAB_PANEL} text-sm text-white/60`}>
-                  {lineupsError}
-                </div>
-              ) : lineupsLoading ? (
-                <div className={`${MATCH_TAB_PANEL} text-sm text-white/60`}>
-                  {mc.lineupsLoading}
-                </div>
-              ) : lineupsData ? (
-                <div className="w-full">
-                  <LineupsTab
-                    data={lineupsData}
-                    loading={lineupsLoading}
-                    match={match}
-                    onPlayer={(player) => {
-                      const playerId = player?.player_id || player?.id;
-                      if (!playerId) return;
-                      navigate(`/player/${playerId}?league=${encodeURIComponent(league)}&season=${season}`);
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className={`${MATCH_TAB_PANEL} text-sm text-white/60`}>
-                  {mc.lineupsUnavailable}
-                </div>
-              )}
-            </div>
+            <MatchLineupsSection
+              wrapClassName={MATCH_TAB_WRAP}
+              panelClassName={MATCH_TAB_PANEL}
+              error={lineupsError}
+              loading={lineupsLoading}
+              loadingLabel={mc.lineupsLoading}
+              lineupsData={lineupsData}
+              match={match}
+              emptyLabel={mc.lineupsUnavailable}
+              onPlayerOpen={(player) => {
+                const playerId = player?.player_id || player?.id;
+                if (!playerId) return;
+                navigate(`/player/${playerId}?league=${encodeURIComponent(league)}&season=${season}`);
+              }}
+            />
           )}
 
           {/* events tab removed; events shown in lineups */}
 
           {tab === "form" && (
-            <div className={MATCH_TAB_STACK}>
-              {packLoading && (
-                <div className={`${MATCH_TAB_PANEL} text-sm text-slate-400`}>{mc.formLoading}</div>
-              )}
-              {!packLoading && (
-                <div className={MATCH_TAB_PANEL}>
-                  <MatchInsightsPanelFull
-                    pack={pack}
-                    home={match?.home_team}
-                    away={match?.away_team}
-                    variant="flat"
-                    hideAvgs
-                    onOpenMatchModal={(fixtureId) => {
-                      const params = new URLSearchParams({ league, season, fixture_id: String(fixtureId) });
-                      navigate(`/match/${fixtureId}?${params.toString()}`);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <MatchFormSection
+              wrapClassName={MATCH_TAB_STACK}
+              panelClassName={MATCH_TAB_PANEL}
+              loading={packLoading}
+              loadingLabel={mc.formLoading}
+              pack={pack}
+              homeTeam={match?.home_team}
+              awayTeam={match?.away_team}
+              onOpenMatchModal={(fixtureId) => {
+                const params = new URLSearchParams({ league, season, fixture_id: String(fixtureId) });
+                navigate(`/match/${fixtureId}?${params.toString()}`);
+              }}
+            />
           )}
 
         </>

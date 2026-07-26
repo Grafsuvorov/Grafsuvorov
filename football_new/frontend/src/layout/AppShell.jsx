@@ -247,6 +247,20 @@ export default function AppShell({ children }) {
         className="relative z-50 bg-[#040712] shadow-[0_16px_38px_rgba(0,0,0,0.58)]"
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
+        <div className="border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.008))] sm:hidden">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-3 py-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
+                EdgeScore
+              </div>
+              <div className="truncate pt-1 text-[13px] font-semibold tracking-[-0.01em] text-white">
+                Football intelligence
+              </div>
+            </div>
+            <AuthIndicator compact />
+          </div>
+        </div>
+
         <div className="hidden border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))] sm:block">
           <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:px-6 lg:py-4 xl:flex-row xl:items-center xl:justify-between">
             <BrandCluster />

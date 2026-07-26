@@ -8,7 +8,6 @@ import clsx from "clsx";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 
-import AuthIndicator from "@/components/auth/AuthIndicator";
 import { shouldHideMonetization } from "@/lib/pilotAccess.js";
 import LanguageSwitcher from "@/components/LanguageSwitcher.jsx";
 import { useLanguage } from "@/context/LanguageContext.jsx";
@@ -387,18 +386,6 @@ export default function LeagueTabsHeader({
 
       <div className="relative flex min-w-0 flex-col gap-2 select-none">
         <div className="sm:hidden space-y-3">
-          <div className="flex items-center justify-between gap-3 pt-2">
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-200/72">
-                EDGESCORE
-              </div>
-              <div className="truncate pt-1 text-[10px] uppercase tracking-[0.18em] text-slate-500/80">
-                {t("footballAnalytics")}
-              </div>
-            </div>
-            <AuthIndicator compact />
-          </div>
-
           <button
             type="button"
             onClick={() => setOpenAll(true)}
@@ -452,21 +439,7 @@ export default function LeagueTabsHeader({
           )}
         </div>
 
-        <div className="hidden sm:grid grid-cols-1 items-center gap-2 px-0 pt-2 sm:gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 xl:pt-4">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 xl:pl-6">
-            <span className="text-[12px] font-semibold uppercase tracking-[0.22em] text-slate-200/70">
-              EDGESCORE
-            </span>
-            <span className="truncate text-[10px] uppercase tracking-[0.14em] text-slate-500/70 sm:text-[11px] sm:tracking-[0.18em]">
-              {t("footballAnalytics")}
-            </span>
-          </div>
-          <div className="flex min-w-0 items-center justify-start gap-2 sm:justify-end sm:gap-3 sm:pr-2">
-            <AuthIndicator />
-          </div>
-        </div>
-
-        <div className="hidden sm:grid grid-cols-1 items-center gap-2 px-0 pb-1 pt-1 sm:gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 xl:pb-2 xl:pt-2">
+        <div className="hidden sm:grid grid-cols-1 items-center gap-2 px-0 pb-1 pt-2 sm:gap-3 xl:grid-cols-[260px_minmax(0,1120px)] xl:gap-6 xl:pb-2 xl:pt-3">
           <div className="min-w-0 xl:pl-6">
             <button
               type="button"

@@ -38,6 +38,7 @@ const makeSeasonList = (startYear = 2010) => {
 };
 
 const SEASONS = makeSeasonList(2010);
+const pageDataCache = new Map();
 
 const TAB_OPTIONS = [
   { key: "attack", label: "Attack" },
@@ -192,6 +193,15 @@ const renderAnalyticsFallback = (language = "ru") => (
   </div>
 );
 
+async function fetchJsonCached(url, { force = false } = {}) {
+  if (!force && pageDataCache.has(url)) return pageDataCache.get(url);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  pageDataCache.set(url, data);
+  return data;
+}
+
 export default function LeagueInsightsPage() {
   const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -277,8 +287,7 @@ export default function LeagueInsightsPage() {
     });
     if (window && window !== "season") params.set("window", window);
     if (isUcl) params.set("ucl_stage", uclStage);
-    fetch(`/api/insights?${params.toString()}`)
-      .then((r) => r.json())
+    fetchJsonCached(`/api/insights?${params.toString()}`)
       .then((data) => {
         setRows(Array.isArray(data?.teams) ? data.teams : []);
         setCards(data?.cards || {});
@@ -302,8 +311,7 @@ export default function LeagueInsightsPage() {
     qs.set("trend_window", String(trendWindow));
     qs.set("min_minutes", String(minMinutes));
     qs.set("min_shots", String(minShots));
-    fetch(`/api/league-analytics?${qs.toString()}`)
-      .then((r) => r.json())
+    fetchJsonCached(`/api/league-analytics?${qs.toString()}`)
       .then((data) => {
         setAnalytics({
           teams: Array.isArray(data?.teams) ? data.teams : [],
@@ -337,16 +345,16 @@ export default function LeagueInsightsPage() {
     if (window && window !== "season") qs.set("window", window);
     if (isUcl) qs.set("ucl_stage", uclStage);
     Promise.all([
-      fetch(`/api/top-scorers?${qs.toString()}`).then((r) => r.json()),
-      fetch(`/api/top-assists?${qs.toString()}`).then((r) => r.json()),
-      fetch(`/api/players/mvp?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/shots?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/key-passes?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/tackles?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/dribbles?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/duels-won?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/interceptions?${qs.toString()}&limit=5`).then((r) => r.json()),
-      fetch(`/api/players/minutes?${qs.toString()}&limit=5`).then((r) => r.json()),
+      fetchJsonCached(`/api/top-scorers?${qs.toString()}`),
+      fetchJsonCached(`/api/top-assists?${qs.toString()}`),
+      fetchJsonCached(`/api/players/mvp?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/shots?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/key-passes?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/tackles?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/dribbles?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/duels-won?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/interceptions?${qs.toString()}&limit=5`),
+      fetchJsonCached(`/api/players/minutes?${qs.toString()}&limit=5`),
     ])
       .then(([sc, as, mv, sh, kp, tk, dr, dw, it, mn]) => {
         setTopScorers(Array.isArray(sc) ? sc.slice(0, 5) : []);

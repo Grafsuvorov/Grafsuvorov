@@ -786,6 +786,24 @@ export default function MatchCenterPage() {
     { label: labels.draw, model: px, odds: oddsDraw },
     { label: labels.awayWin, model: p2, odds: oddsAway },
   ];
+  const xgDiff =
+    Number.isFinite(Number(match?.home_understat_xg)) &&
+    Number.isFinite(Number(match?.away_understat_xg))
+      ? Number(match.home_understat_xg) - Number(match.away_understat_xg)
+      : Number.isFinite(Number(pack?.homeAvg?.xg_diff)) &&
+          Number.isFinite(Number(pack?.awayAvg?.xg_diff))
+        ? Number(pack.homeAvg.xg_diff) - Number(pack.awayAvg.xg_diff)
+        : null;
+  const shotsDiff =
+    Number.isFinite(Number(pack?.homeAvg?.shots)) &&
+    Number.isFinite(Number(pack?.awayAvg?.shots))
+      ? Number(pack.homeAvg.shots) - Number(pack.awayAvg.shots)
+      : null;
+  const possDiff =
+    Number.isFinite(Number(pack?.homeAvg?.possession)) &&
+    Number.isFinite(Number(pack?.awayAvg?.possession))
+      ? Number(pack.homeAvg.possession) - Number(pack.awayAvg.possession)
+      : null;
 
   const savedBetOutcome = String(match?.best_bet_outcome || "").trim();
   const savedBetType = String(match?.best_bet_type || "").trim().toUpperCase();

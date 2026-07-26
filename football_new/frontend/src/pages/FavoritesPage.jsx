@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import LeagueTabsHeader from "@/components/LeagueTabsHeader";
 import { useLanguage } from "@/context/LanguageContext.jsx";
 
 const FALLBACK_SVG = {
@@ -264,8 +263,6 @@ export default function FavoritesPage() {
 
   return (
     <div className="p-4 space-y-4 max-w-5xl mx-auto text-slate-200">
-      <LeagueTabsHeader league={league} season={season} onLeagueChange={setLeague} onSeasonChange={setSeason} />
-
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-100">{language === "ru" ? "Избранное" : "Favorites"}</h1>
         {ids.length > 0 && (

@@ -6,6 +6,7 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
+import clsx from "clsx";
 import { Sparkles } from "lucide-react";
 
 import LeagueTabsHeader, {

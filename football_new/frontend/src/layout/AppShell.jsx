@@ -6,16 +6,7 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import clsx from "clsx";
-import {
-  BarChart3,
-  CalendarDays,
-  CircleDot,
-  LayoutDashboard,
-  ShieldCheck,
-  Sparkles,
-  Users2,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import LeagueTabsHeader, {
   LeagueQuickNavCard,
@@ -123,15 +114,6 @@ const TIGHT_CONTENT_PREFIXES = [
 const usesTightContent = (pathname) =>
   TIGHT_CONTENT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-const PRIMARY_NAV_ITEMS = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: false },
-  { to: "/matches-v3", label: "Live", icon: CircleDot, exact: false },
-  { to: "/schedule", label: "Schedule", icon: CalendarDays, exact: false },
-  { to: "/insights", label: "Insights", icon: BarChart3, exact: false },
-  { to: "/players", label: "Players", icon: Users2, exact: false },
-  { to: "/best-picks", label: "Picks", icon: ShieldCheck, exact: false },
-];
-
 function BrandCluster() {
   return (
     <div className="min-w-0">
@@ -152,30 +134,6 @@ function BrandCluster() {
         </div>
       </NavLink>
     </div>
-  );
-}
-
-function GlobalNav() {
-  return (
-    <nav className="flex flex-wrap items-center gap-2">
-      {PRIMARY_NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          className={({ isActive }) =>
-            clsx(
-              "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-medium transition sm:px-4 sm:text-[13px]",
-              isActive
-                ? "border-violet-300/30 bg-violet-500/12 text-violet-50 shadow-[0_10px_26px_rgba(76,29,149,0.22)]"
-                : "border-white/8 bg-white/[0.028] text-white/64 hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
-            )
-          }
-        >
-          <Icon className="h-3.5 w-3.5" />
-          <span>{label}</span>
-        </NavLink>
-      ))}
-    </nav>
   );
 }
 
@@ -264,15 +222,12 @@ export default function AppShell({ children }) {
         <div className="hidden border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.008))] sm:block">
           <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:px-6 lg:py-4 xl:flex-row xl:items-center xl:justify-between">
             <BrandCluster />
-            <div className="flex flex-col gap-3 xl:items-end">
-              <GlobalNav />
-              <div className="flex items-center justify-between gap-3 xl:justify-end">
-                <div className="hidden items-center gap-2 rounded-full border border-emerald-400/18 bg-emerald-400/8 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-100/80 md:inline-flex">
-                  <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.85)]" />
-                  Match intelligence layer
-                </div>
-                <AuthIndicator />
+            <div className="flex items-center justify-between gap-3 xl:justify-end">
+              <div className="hidden items-center gap-2 rounded-full border border-emerald-400/18 bg-emerald-400/8 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-100/80 md:inline-flex">
+                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.85)]" />
+                Match intelligence layer
               </div>
+              <AuthIndicator />
             </div>
           </div>
         </div>

@@ -168,7 +168,7 @@ export default function ReleasesPage() {
   };
 
   return (
-    <div className="page releases-page">
+    <div className="container cc-page releases-page">
       <div className="page-header">
         <div>
           <h1>Релизы</h1>

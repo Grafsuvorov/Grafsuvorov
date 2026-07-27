@@ -421,7 +421,7 @@ export default function App() {
   }, [location.pathname, location.search]);
 
   return (
-    <div className="app">
+    <div className="app-container">
       <GlobalHoverLabel enabled={useCustomHoverLabel} />
       <Sidebar
         currentPath={location.pathname}

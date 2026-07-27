@@ -33,8 +33,15 @@ export default function SearchPage({ onSelectTable }) {
   }, [query, tables]);
 
   return (
-    <div className="page">
-      <div className="card">
+    <div className="container cc-page search-page-shell">
+      <div className="page-header search-page-header">
+        <div>
+          <h1>Каталог таблиц</h1>
+          <div className="muted">Быстрый вход в объект по имени таблицы, описанию или сущности.</div>
+        </div>
+      </div>
+
+      <div className="card search-page-card">
         <div className="card-title">Поиск зависимостей</div>
 
         <input

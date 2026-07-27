@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import SafeImg from "@/components/SafeImg";
@@ -200,6 +200,55 @@ async function fetchJsonCached(url, { force = false } = {}) {
   const data = await response.json();
   pageDataCache.set(url, data);
   return data;
+}
+
+function DeferredSection({
+  children,
+  language = "ru",
+  minHeight = 320,
+  rootMargin = "240px 0px",
+  className = "",
+}) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) return;
+    const node = ref.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible, rootMargin]);
+
+  return (
+    <section ref={ref} className={className}>
+      {visible ? (
+        children
+      ) : (
+        <div
+          className="surface-loading"
+          style={{ minHeight }}
+        >
+          {language === "ru"
+            ? "Подготавливаем аналитический блок…"
+            : "Preparing analytics block..."}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function LeagueInsightsPage() {
@@ -1813,87 +1862,97 @@ export default function LeagueInsightsPage() {
           </div>
 
           {insightsSection === "teams" && hasTeamMap && (
-            <Suspense fallback={renderAnalyticsFallback(language)}>
-              <>
-                <div className="space-y-1">
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-[#9aa3b2]">{language === "ru" ? "Ключевой график" : "Key chart"}</div>
-                  <div className="text-lg font-semibold text-white">{language === "ru" ? "Карта силы команд" : "Team strength map"}</div>
-                </div>
-                <LeaguePerformanceMap
-                  teams={analytics.teams}
-                  height={480}
-                  highlightedTeam={highlightedTeam}
-                  onTeamHover={setHighlightedTeam}
-                />
-              </>
-            </Suspense>
+            <DeferredSection language={language} minHeight={560}>
+              <Suspense fallback={renderAnalyticsFallback(language)}>
+                <>
+                  <div className="space-y-1">
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-[#9aa3b2]">{language === "ru" ? "Ключевой график" : "Key chart"}</div>
+                    <div className="text-lg font-semibold text-white">{language === "ru" ? "Карта силы команд" : "Team strength map"}</div>
+                  </div>
+                  <LeaguePerformanceMap
+                    teams={analytics.teams}
+                    height={480}
+                    highlightedTeam={highlightedTeam}
+                    onTeamHover={setHighlightedTeam}
+                  />
+                </>
+              </Suspense>
+            </DeferredSection>
           )}
 
           {insightsSection === "teams" && (hasOverperformance || hasShotEfficiency) && (
-            <Suspense fallback={renderAnalyticsFallback(language)}>
-              <div className="space-y-6">
-                {hasOverperformance && (
-                  <OverperformanceChart
-                    teams={analytics.teams}
-                    highlightedTeam={highlightedTeam}
-                    onTeamHover={setHighlightedTeam}
-                  />
-                )}
-                {hasShotEfficiency && (
-                  <ShotEfficiencyChart
-                    teams={analytics.teams}
-                    highlightedTeam={highlightedTeam}
-                    onTeamHover={setHighlightedTeam}
-                  />
-                )}
-              </div>
-            </Suspense>
+            <DeferredSection language={language} minHeight={720}>
+              <Suspense fallback={renderAnalyticsFallback(language)}>
+                <div className="space-y-6">
+                  {hasOverperformance && (
+                    <OverperformanceChart
+                      teams={analytics.teams}
+                      highlightedTeam={highlightedTeam}
+                      onTeamHover={setHighlightedTeam}
+                    />
+                  )}
+                  {hasShotEfficiency && (
+                    <ShotEfficiencyChart
+                      teams={analytics.teams}
+                      highlightedTeam={highlightedTeam}
+                      onTeamHover={setHighlightedTeam}
+                    />
+                  )}
+                </div>
+              </Suspense>
+            </DeferredSection>
           )}
 
           {insightsSection === "players" && (hasPlayerFinishing || hasChanceCreators) && (
-            <Suspense fallback={renderAnalyticsFallback(language)}>
-              <div className="space-y-6">
-                {hasPlayerFinishing && (
-                  <PlayerFinishingChart
-                    players={analytics.players}
-                    minMinutes={minMinutes}
-                    minShots={minShots}
-                    teamFilter={teamFilter}
-                    onPlayerSelect={openPlayerCard}
-                  />
-                )}
-                {hasChanceCreators && (
-                  <ChanceCreatorsChart
-                    players={analytics.players}
-                    teamFilter={teamFilter}
-                    onPlayerSelect={openPlayerCard}
-                  />
-                )}
-              </div>
-            </Suspense>
+            <DeferredSection language={language} minHeight={720}>
+              <Suspense fallback={renderAnalyticsFallback(language)}>
+                <div className="space-y-6">
+                  {hasPlayerFinishing && (
+                    <PlayerFinishingChart
+                      players={analytics.players}
+                      minMinutes={minMinutes}
+                      minShots={minShots}
+                      teamFilter={teamFilter}
+                      onPlayerSelect={openPlayerCard}
+                    />
+                  )}
+                  {hasChanceCreators && (
+                    <ChanceCreatorsChart
+                      players={analytics.players}
+                      teamFilter={teamFilter}
+                      onPlayerSelect={openPlayerCard}
+                    />
+                  )}
+                </div>
+              </Suspense>
+            </DeferredSection>
           )}
 
           {insightsSection === "teams" && (hasTrends || hasLeaders) && (
-            <Suspense fallback={renderAnalyticsFallback(language)}>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {hasTrends && (
-                  <TeamFormGrid
-                    trends={analytics.trends}
-                    teams={analytics.teams}
-                    trendWindow={trendWindow}
-                    highlightedTeam={highlightedTeam}
-                    onTeamHover={setHighlightedTeam}
-                  />
-                )}
-                {hasLeaders && <HistoricalLeaders leaders={analytics.leaders} />}
-              </div>
-            </Suspense>
+            <DeferredSection language={language} minHeight={620}>
+              <Suspense fallback={renderAnalyticsFallback(language)}>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {hasTrends && (
+                    <TeamFormGrid
+                      trends={analytics.trends}
+                      teams={analytics.teams}
+                      trendWindow={trendWindow}
+                      highlightedTeam={highlightedTeam}
+                      onTeamHover={setHighlightedTeam}
+                    />
+                  )}
+                  {hasLeaders && <HistoricalLeaders leaders={analytics.leaders} />}
+                </div>
+              </Suspense>
+            </DeferredSection>
           )}
 
           {insightsSection === "teams" && filteredTeamsForInsights.length > 0 && (
-            <Suspense fallback={renderAnalyticsFallback(language)}>
-              <InsightsPanel teams={filteredTeamsForInsights} />
-            </Suspense>
+            <DeferredSection language={language} minHeight={320}>
+              <Suspense fallback={renderAnalyticsFallback(language)}>
+                <InsightsPanel teams={filteredTeamsForInsights} />
+              </Suspense>
+            </DeferredSection>
           )}
         </div>
       )}

@@ -7,8 +7,6 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import clsx from "clsx";
-import { Sparkles } from "lucide-react";
-
 import LeagueTabsHeader, {
   LeagueQuickNavCard,
 } from "@/components/LeagueTabsHeader";
@@ -122,15 +120,19 @@ function BrandCluster() {
         to={HOME_URL}
         className="group inline-flex items-center gap-3 text-white no-underline"
       >
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_100%),radial-gradient(circle_at_top,rgba(167,139,250,0.35),rgba(167,139,250,0)_64%)] shadow-[0_12px_34px_rgba(0,0,0,0.38)]">
-          <Sparkles className="h-5 w-5 text-violet-200 transition group-hover:scale-110" />
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.02)_100%)] shadow-[0_12px_34px_rgba(0,0,0,0.32)]">
+          <div className="flex items-end gap-1">
+            <span className="h-3 w-1.5 rounded-full bg-white/70 transition group-hover:bg-white/90" />
+            <span className="h-5 w-1.5 rounded-full bg-violet-300/90 transition group-hover:bg-violet-200" />
+            <span className="h-4 w-1.5 rounded-full bg-white/45 transition group-hover:bg-white/70" />
+          </div>
         </div>
         <div className="min-w-0">
           <div className="truncate text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
             EdgeScore
           </div>
-          <div className="truncate text-[17px] font-semibold tracking-[-0.02em] text-white">
-            Football intelligence, not just scores
+          <div className="truncate text-[16px] font-semibold tracking-[-0.02em] text-white">
+            Football analytics
           </div>
         </div>
       </NavLink>
@@ -213,7 +215,7 @@ export default function AppShell({ children }) {
                 EdgeScore
               </div>
               <div className="truncate pt-1 text-[13px] font-semibold tracking-[-0.01em] text-white">
-                Football intelligence
+                Football analytics
               </div>
             </div>
             <AuthIndicator compact />
@@ -224,10 +226,6 @@ export default function AppShell({ children }) {
           <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:px-6 lg:py-4 xl:flex-row xl:items-center xl:justify-between">
             <BrandCluster />
             <div className="flex items-center justify-between gap-3 xl:justify-end">
-              <div className="hidden items-center gap-2 rounded-full border border-emerald-400/18 bg-emerald-400/8 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-emerald-100/80 md:inline-flex">
-                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.85)]" />
-                Match intelligence layer
-              </div>
               <AuthIndicator />
             </div>
           </div>

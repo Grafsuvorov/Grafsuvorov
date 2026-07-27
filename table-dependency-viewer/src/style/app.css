@@ -15145,3 +15145,167 @@ html[data-theme="light"] .engineering-table-head.release-report-exception-row {
     align-items: flex-start;
   }
 }
+
+html[data-theme="light"] .app-container {
+  color: var(--text);
+}
+
+html[data-theme="light"] .topnav-brand-mark {
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.16);
+}
+
+html[data-theme="light"] .topnav-brand-title,
+html[data-theme="light"] .nav-section-label,
+html[data-theme="light"] .page-header h1,
+html[data-theme="light"] .table-title,
+html[data-theme="light"] .release-summary-card .value,
+html[data-theme="light"] .meta-workspace-progress-pill,
+html[data-theme="light"] .meta-workspace-progress-current,
+html[data-theme="light"] .search-item strong,
+html[data-theme="light"] .search-item b,
+html[data-theme="light"] .release-list-row a,
+html[data-theme="light"] .release-objects-row a {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .topnav-brand-subtitle,
+html[data-theme="light"] .nav-section-muted,
+html[data-theme="light"] .page-header .muted,
+html[data-theme="light"] .search-item span,
+html[data-theme="light"] .release-summary-card .label,
+html[data-theme="light"] .release-list-row span,
+html[data-theme="light"] .release-objects-row span,
+html[data-theme="light"] .meta-workspace-progress-item-state,
+html[data-theme="light"] .meta-workspace-progress-item-name,
+html[data-theme="light"] .meta-workspace-selection-label {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .cc-hero,
+html[data-theme="light"] .table-header,
+html[data-theme="light"] .meta-workspace-hero {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 254, 0.95)) !important;
+  border: 1px solid rgba(140, 160, 183, 0.16) !important;
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.07) !important;
+}
+
+html[data-theme="light"] .cc-hero-title,
+html[data-theme="light"] .table-title {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .cc-hero-subtitle,
+html[data-theme="light"] .cc-hero-copy,
+html[data-theme="light"] .table-subtitle {
+  color: #526277 !important;
+}
+
+html[data-theme="light"] .health-card,
+html[data-theme="light"] .home-route-card,
+html[data-theme="light"] .entity-card,
+html[data-theme="light"] .dq-entity-card,
+html[data-theme="light"] .entity-schedule-card,
+html[data-theme="light"] .dashboard-panel,
+html[data-theme="light"] .release-summary-card,
+html[data-theme="light"] .release-list-row,
+html[data-theme="light"] .release-objects-row,
+html[data-theme="light"] .table-info-card,
+html[data-theme="light"] .table-health-card,
+html[data-theme="light"] .table-action-bar,
+html[data-theme="light"] .meta-workspace-selection-bar,
+html[data-theme="light"] .meta-workspace-progress,
+html[data-theme="light"] .meta-workspace-validation-card,
+html[data-theme="light"] .search-item {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.95)) !important;
+  border: 1px solid rgba(140, 160, 183, 0.16) !important;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .home-route-card:hover,
+html[data-theme="light"] .search-item:hover,
+html[data-theme="light"] .release-list-row:hover,
+html[data-theme="light"] .release-objects-row:hover {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.1) !important;
+}
+
+html[data-theme="light"] .table-status,
+html[data-theme="light"] .status-pill,
+html[data-theme="light"] .meta-workspace-progress-pill {
+  background: #f8fbff !important;
+  border-color: rgba(140, 160, 183, 0.2) !important;
+  color: #36506d !important;
+}
+
+html[data-theme="light"] .meta-workspace-progress-pill.ok,
+html[data-theme="light"] .meta-workspace-progress-item.ok,
+html[data-theme="light"] .table-status.ok {
+  background: rgba(22, 163, 74, 0.12) !important;
+  border-color: rgba(22, 163, 74, 0.18) !important;
+  color: #0f7a43 !important;
+}
+
+html[data-theme="light"] .meta-workspace-progress-pill.bad,
+html[data-theme="light"] .meta-workspace-progress-item.bad,
+html[data-theme="light"] .meta-workspace-progress-item.error,
+html[data-theme="light"] .table-status.risk {
+  background: rgba(220, 38, 38, 0.12) !important;
+  border-color: rgba(220, 38, 38, 0.18) !important;
+  color: #b42318 !important;
+}
+
+html[data-theme="light"] .meta-workspace-progress-item.warning,
+html[data-theme="light"] .meta-workspace-progress-item.running,
+html[data-theme="light"] .table-status.warn {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+  color: #a15c07 !important;
+}
+
+html[data-theme="light"] .meta-workspace-progress-fill {
+  background: linear-gradient(90deg, #2563eb, #0ea5e9) !important;
+}
+
+html[data-theme="light"] .release-list-head,
+html[data-theme="light"] .release-objects-head {
+  color: #617286 !important;
+}
+
+html[data-theme="light"] .search-item,
+html[data-theme="light"] .release-list-row,
+html[data-theme="light"] .release-objects-row,
+html[data-theme="light"] .meta-workspace-progress-item {
+  backdrop-filter: none !important;
+}
+
+html[data-theme="light"] .home-route-title,
+html[data-theme="light"] .table-health-value,
+html[data-theme="light"] .table-info-title,
+html[data-theme="light"] .meta-workspace-progress-metrics strong,
+html[data-theme="light"] .meta-workspace-validation-title {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .home-route-desc,
+html[data-theme="light"] .table-health-label,
+html[data-theme="light"] .table-health-note,
+html[data-theme="light"] .table-info-hint,
+html[data-theme="light"] .meta-workspace-validation-meta {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .btn:hover,
+html[data-theme="light"] .btn-ghost:hover,
+html[data-theme="light"] .btn-secondary:hover,
+html[data-theme="light"] .auth-logout:hover {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .search-page-card .card-title,
+html[data-theme="light"] .releases-page .page-header h1,
+html[data-theme="light"] .meta-workspace-page .section-title {
+  color: var(--text-strong) !important;
+}

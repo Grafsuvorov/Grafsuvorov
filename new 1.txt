@@ -1,6 +1,48 @@
-http://rgm-s-dwhapp01.hq.root.ad:15312/
+2. curl -I для этого кейса не лучший тест. Нужен обычный GET, и лучше ещё проверить изнутри контейнера.
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -I http://localhost:5312/openapi.json
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
+  Сделайте по порядку.
+
+  1. Проверка изнутри контейнера
+
+  docker compose exec api curl -i http://localhost:8000/openapi.json
+  docker compose exec api curl -i http://localhost:8000/docs
+
+  Если здесь 200 OK, значит само приложение Swagger отдаёт нормально.
+
+  2. Проверка с хоста
+
+  curl -i http://localhost:5312/openapi.json
+  curl -i http://localhost:5312/docs
+
+  Важно:
+
+  - именно curl -i, не -I
+  - нам нужен полный ответ, не только заголовки
+
+  3. Если всё ок, открывать с компьютера надо так
+
+  - http://rgm-s-dwhapp01.hq.root.ad:5312/docs
+
+  У вас frontend открыт на:
+
+  - http://rgm-s-dwhapp01.hq.root.ad:15312/
+
+  Но Swagger к нему не привязан. Он отдельно живёт на api:
+
+  - 5312
+
+  Почему сейчас неясно
+  403 text/html не похож на ответ вашего FastAPI middleware.
+  Ваш middleware при auth должен вернуть JSON, а не HTML.
+  То есть очень похоже, что ответ идёт не от самого приложения, а от чего-то перед ним или сбоку.
+
+  Что мне нужно от вас сейчас:
+
+  - вывод docker compose exec api curl -i http://localhost:8000/openapi.json
+  - вывод curl -i http://localhost:5312/openapi.json
+
+  После этого я сразу скажу:
+
+  - Swagger реально жив
+  - или у вас на сервере 5312 тоже перехватывается чем-то посторонним.
+

@@ -1,34 +1,6 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -I http://localhost:8000/docs
+http://rgm-s-dwhapp01.hq.root.ad:15312/
+
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -I http://localhost:5312/openapi.json
 HTTP/1.1 403 Forbidden
 Content-Type: text/html; charset=utf-8
 Content-Length: 99
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -I http://localhost:8000/openapi.json
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# ss -ltnp | grep 8000
-LISTEN     0      1024         *:18000                    *:*                   users:(("docker-proxy",pid=66775,fd=4))
-LISTEN     0      128    10.66.129.242:8000                     *:*                   users:(("jupyter-lab",pid=86267,fd=6))
-
-
-в compose
-services:
-    frontend:
-      build: .
-      ports:
-        - "15312:8080"
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/meta_info:/app/meta_info
-        - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
-        - /root/table-dependency-viewer/config_files:/app/config_files
-        - /root/git_dir:/root/git_dir
-        - /var/lib/table-dependency-viewer/meta-workspaces:/var/lib/table-dependency-viewer/meta-workspaces
-      ports:
-        - "5312:8000"

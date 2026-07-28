@@ -58,8 +58,11 @@ export default function LoginPage({ onLogin }) {
   return (
     <div className="login-page">
       <div className="login-card">
+        <div className="login-eyebrow">DWH Контроль</div>
         <div className="login-title">Вход в систему</div>
-        <div className="login-subtitle">Контроль DWH и мониторинг загрузок</div>
+        <div className="login-subtitle">
+          Операционная панель контроля платформы, загрузок и релизного контура.
+        </div>
         {sessionExpired && !error && (
           <div className="login-error">
             Сессия истекла. Войдите снова, чтобы продолжить работу.
@@ -96,7 +99,7 @@ export default function LoginPage({ onLogin }) {
           </button>
         </form>
         <div className="login-help">
-          Если доступа нет — запросите учётную запись у администратора.
+          <strong>Нет доступа?</strong> Запросите учётную запись у администратора.
         </div>
       </div>
     </div>

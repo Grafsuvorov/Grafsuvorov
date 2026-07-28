@@ -12,6 +12,39 @@ export default function Sidebar({
 }) {
   const navigate = useNavigate();
   const isActive = (path) => currentPath === path;
+  const primaryNav = [
+    { path: "/", label: "Обзор", action: () => onChangeView(null) },
+    { path: "/tables", label: "Каталог", action: () => onChangeView("table_search") },
+  ];
+  const secondaryNav = [
+    { path: "/slow-tables", label: "Производительность", action: () => onChangeView("__slowest_tables__") },
+    { path: "/night-ops", label: "Мониторинг", action: () => onChangeView("night_ops") },
+    { path: "/entities", label: "Сущности", action: () => onChangeView("__entity_schedule__") },
+    { path: "/releases", label: "Релизы", action: () => onChangeView("releases") },
+    ...(authEnabled && userProfile ? [{ path: "/account", label: "Профиль", action: () => onChangeView("/account") }] : []),
+    ...(authEnabled && userProfile?.role === "admin"
+      ? [{ path: "/admin/users", label: "Админка", action: () => onChangeView("/admin/users") }]
+      : []),
+    ...(authEnabled && userProfile ? [{ path: "/admin/dev-meta", label: "DEV Meta", action: () => onChangeView("/admin/dev-meta") }] : []),
+    ...(authEnabled && (userProfile?.role === "admin" || userProfile?.role === "engineer")
+      ? [{ path: "/admin/meta-workspace", label: "Meta Workspace", action: () => onChangeView("/admin/meta-workspace") }]
+      : []),
+    ...(authEnabled && userProfile ? [{ path: "/admin/dev-copy", label: "DEV Copy", action: () => onChangeView("/admin/dev-copy") }] : []),
+    ...(authEnabled && userProfile?.role === "admin"
+      ? [{
+          path: "/admin/engineering",
+          label: "Репорты",
+          action: () => {
+            console.log("[Sidebar] open /admin/engineering");
+            navigate("/admin/engineering");
+          },
+        }]
+      : []),
+    ...(authEnabled && userProfile?.role === "admin"
+      ? [{ path: "/admin/feedback", label: "Фидбек", action: () => onChangeView("/admin/feedback") }]
+      : []),
+    { path: "/onboarding", label: "Гид", action: () => onChangeView("onboarding") },
+  ];
   const roleLabel = userProfile?.role === "admin"
     ? "Админ"
     : userProfile?.role === "engineer"
@@ -25,10 +58,10 @@ export default function Sidebar({
         {/* LEFT */}
         <div className="topnav-left">
           <div className="topnav-brand">
-            <div className="topnav-brand-mark">DN</div>
+            <div className="topnav-brand-mark">DW</div>
             <div className="topnav-brand-copy">
               <div className="topnav-brand-title">DWH Контроль</div>
-              <div className="topnav-brand-subtitle">операционный навигатор платформы</div>
+              <div className="topnav-brand-subtitle">операционная панель платформы</div>
             </div>
           </div>
 
@@ -37,128 +70,32 @@ export default function Sidebar({
               <div className="nav-section">
                 <div className="nav-section-label">Основное</div>
                 <div className="nav-primary">
-                  <button
-                    type="button"
-                    className={isActive("/") ? "active" : ""}
-                    onClick={() => onChangeView(null)}
-                  >
-                    Обзор
-                  </button>
-
-                  <button
-                    type="button"
-                    className={isActive("/tables") ? "active" : ""}
-                    onClick={() => onChangeView("table_search")}
-                  >
-                    Каталог
-                  </button>
+                  {primaryNav.map((item) => (
+                    <button
+                      key={item.path}
+                      type="button"
+                      className={isActive(item.path) ? "active" : ""}
+                      onClick={item.action}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="nav-section nav-section-muted">
                 <div className="nav-section-label">Контуры</div>
                 <div className="nav-secondary">
-                  <button
-                    type="button"
-                    className={isActive("/slow-tables") ? "active" : ""}
-                    onClick={() => onChangeView("__slowest_tables__")}
-                  >
-                    Производительность
-                  </button>
-                  <button
-                    type="button"
-                    className={isActive("/night-ops") ? "active" : ""}
-                    onClick={() => onChangeView("night_ops")}
-                  >
-                    Мониторинг
-                  </button>
-                  <button
-                    type="button"
-                    className={isActive("/entities") ? "active" : ""}
-                    onClick={() => onChangeView("__entity_schedule__")}
-                  >
-                    Сущности
-                  </button>
-                  <button
-                    type="button"
-                    className={isActive("/releases") ? "active" : ""}
-                    onClick={() => onChangeView("releases")}
-                  >
-                    Релизы
-                  </button>
-                  {authEnabled && userProfile && (
+                  {secondaryNav.map((item) => (
                     <button
+                      key={item.path}
                       type="button"
-                      className={isActive("/account") ? "active" : ""}
-                      onClick={() => onChangeView("/account")}
+                      className={isActive(item.path) ? "active" : ""}
+                      onClick={item.action}
                     >
-                      Профиль
+                      {item.label}
                     </button>
-                  )}
-                  {authEnabled && userProfile?.role === "admin" && (
-                    <button
-                      type="button"
-                      className={isActive("/admin/users") ? "active" : ""}
-                      onClick={() => onChangeView("/admin/users")}
-                    >
-                      Админка
-                    </button>
-                  )}
-                  {authEnabled && userProfile && (
-                    <button
-                      type="button"
-                      className={isActive("/admin/dev-meta") ? "active" : ""}
-                      onClick={() => onChangeView("/admin/dev-meta")}
-                    >
-                      DEV Meta
-                    </button>
-                  )}
-                  {authEnabled && (userProfile?.role === "admin" || userProfile?.role === "engineer") && (
-                    <button
-                      type="button"
-                      className={isActive("/admin/meta-workspace") ? "active" : ""}
-                      onClick={() => onChangeView("/admin/meta-workspace")}
-                    >
-                      Meta Workspace
-                    </button>
-                  )}
-                  {authEnabled && userProfile && (
-                    <button
-                      type="button"
-                      className={isActive("/admin/dev-copy") ? "active" : ""}
-                      onClick={() => onChangeView("/admin/dev-copy")}
-                    >
-                      DEV Copy
-                    </button>
-                  )}
-                  {authEnabled && userProfile?.role === "admin" && (
-                    <button
-                      type="button"
-                      className={isActive("/admin/engineering") ? "active" : ""}
-                      onClick={() => {
-                        console.log("[Sidebar] open /admin/engineering");
-                        navigate("/admin/engineering");
-                      }}
-                    >
-                      Репорты
-                    </button>
-                  )}
-                  {authEnabled && userProfile?.role === "admin" && (
-                    <button
-                      type="button"
-                      className={isActive("/admin/feedback") ? "active" : ""}
-                      onClick={() => onChangeView("/admin/feedback")}
-                    >
-                      Фидбек
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={isActive("/onboarding") ? "active" : ""}
-                    onClick={() => onChangeView("onboarding")}
-                  >
-                    Гид
-                  </button>
+                  ))}
                 </div>
               </div>
             </div>

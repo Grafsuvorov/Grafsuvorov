@@ -15366,3 +15366,414 @@ html[data-theme="light"] .releases-page .page-header h1,
 html[data-theme="light"] .meta-workspace-page .section-title {
   color: var(--text-strong) !important;
 }
+
+/* --- Service/admin pages refinement --- */
+.cc-header-zone {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  margin-bottom: 18px;
+}
+
+.cc-header-zone .btn {
+  justify-self: start;
+}
+
+.cc-header-zone h1 {
+  margin: 0;
+  font-size: 36px;
+  line-height: 1.04;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
+}
+
+.cc-header-zone .cc-subtitle {
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.account-shell,
+.dev-meta-page,
+.feedback-admin-page,
+.logic-audit-card,
+.logic-audit-detail-card,
+.logic-audit-compare-card,
+.about-summary-card,
+.onboarding-flow-card,
+.onboarding-map-card,
+.onboarding-area-card,
+.incident-card,
+.slow-summary-card,
+.slow-criteria-card,
+.night-panel,
+.night-kpi-card,
+.night-focus-card,
+.analytics-block,
+.admin-analytics-card,
+.admin-mini-card,
+.admin-spotlight-card {
+  border-radius: 22px;
+}
+
+.account-hero,
+.dev-meta-toolbar,
+.dev-meta-editor-head,
+.dev-meta-file-head,
+.dev-meta-runbook-head {
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.account-avatar {
+  box-shadow: 0 16px 34px rgba(14, 116, 144, 0.18);
+}
+
+.account-hero-name,
+.about-summary-title,
+.about-article-title,
+.onboarding-card-title,
+.onboarding-flow-title,
+.onboarding-map-title,
+.dev-meta-runbook-title,
+.dev-meta-feedback-title,
+.dev-meta-dag-card strong,
+.dev-meta-editor-title,
+.night-panel-title,
+.night-focus-value,
+.slow-summary-value,
+.admin-primary,
+.admin-mini-value {
+  color: var(--text-strong);
+}
+
+.account-stats,
+.admin-analytics-overview,
+.dev-meta-runbook-grid,
+.dev-meta-dag-grid,
+.onboarding-area-grid,
+.onboarding-flow-grid,
+.onboarding-map-grid {
+  gap: 16px;
+}
+
+.account-stat-card,
+.about-summary-card,
+.about-article-block,
+.onboarding-step,
+.onboarding-flow-card,
+.onboarding-map-card,
+.onboarding-area-card,
+.dev-meta-runbook-card,
+.dev-meta-dag-card,
+.dev-copy-failed-item,
+.admin-activity-item,
+.account-favorite-row,
+.incident-card,
+.night-row,
+.slow-night-item,
+.analytics-run-row,
+.analytics-bar-row,
+.analytics-compare-row,
+.analytics-plain-table .analytics-row,
+.entity-table-row,
+.yt-analytics-row,
+.yt-analytics-task-row {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(16, 24, 38, 0.88), rgba(8, 12, 22, 0.96));
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
+}
+
+.account-stat-card,
+.about-summary-card,
+.about-article-block,
+.onboarding-flow-card,
+.onboarding-map-card,
+.dev-meta-runbook-card,
+.dev-meta-dag-card,
+.slow-summary-card,
+.slow-criteria-card,
+.night-kpi-card,
+.night-focus-card,
+.admin-mini-card,
+.admin-spotlight-card {
+  padding: 18px;
+}
+
+.onboarding-area-card,
+.account-favorite-row,
+.incident-card {
+  padding: 18px;
+}
+
+.dev-meta-generator,
+.dev-meta-file-block,
+.dev-meta-editor-shell,
+.dev-meta-validation,
+.dev-meta-dag-status,
+.admin-ci-output,
+.feedback-admin-card,
+.feedback-admin-kpi {
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(16, 24, 38, 0.9), rgba(8, 12, 22, 0.98));
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.18);
+}
+
+.dev-meta-generator,
+.dev-meta-file-block,
+.dev-meta-editor-shell,
+.dev-meta-dag-status,
+.dev-meta-validation,
+.feedback-admin-card {
+  padding: 18px;
+}
+
+.dev-meta-tabs,
+.about-tabs {
+  gap: 8px;
+}
+
+.dev-meta-tab,
+.about-tab {
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.dev-meta-file,
+.meta-workspace-file-button,
+.dev-meta-file-list.compact .dev-meta-file {
+  border-radius: 14px;
+}
+
+.dev-meta-file.active,
+.meta-workspace-file-button.active {
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
+.dev-meta-feedback,
+.login-error {
+  border-radius: 14px;
+}
+
+.dev-meta-editor,
+.entity-dev-editor,
+.admin-ci-pre,
+.dev-copy-failed-log {
+  border-radius: 16px;
+}
+
+.night-kpis {
+  gap: 14px;
+}
+
+.night-kpi-card {
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(16, 24, 38, 0.92), rgba(8, 12, 22, 0.98));
+}
+
+.night-kpi-label,
+.night-kpi-delta,
+.night-panel-sub,
+.onboarding-card-desc,
+.onboarding-area-when,
+.about-summary-text,
+.about-article-text,
+.account-favorite-meta,
+.account-stat-label,
+.incident-card-meta,
+.incident-card-times,
+.slow-summary-label,
+.slow-summary-hint,
+.admin-event-meta {
+  color: var(--muted);
+}
+
+.night-row,
+.analytics-run-row,
+.analytics-bar-row,
+.analytics-compare-row,
+.analytics-plain-table .analytics-row,
+.entity-table-row,
+.yt-analytics-row,
+.yt-analytics-task-row,
+.admin-activity-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.night-row:hover,
+.analytics-run-row:hover,
+.analytics-bar-row:hover,
+.analytics-compare-row:hover,
+.analytics-plain-table .analytics-row:hover,
+.entity-table-row:hover,
+.yt-analytics-row:hover,
+.yt-analytics-task-row:hover,
+.admin-activity-item:hover,
+.account-favorite-row:hover,
+.incident-card:hover,
+.onboarding-area-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.24);
+  box-shadow: 0 20px 36px rgba(2, 6, 23, 0.18);
+}
+
+.incident-card-header,
+.account-favorite-actions,
+.dev-meta-generator-actions,
+.dev-meta-actions,
+.about-feedback-actions {
+  gap: 10px;
+}
+
+.incident-card-context,
+.about-feedback-hint,
+.dev-meta-feedback-text,
+.dev-meta-validation-meta,
+.onboarding-map-text {
+  line-height: 1.6;
+}
+
+.about-feedback-form,
+.logic-audit-filters,
+.admin-form,
+.dev-meta-generator-grid {
+  gap: 14px;
+}
+
+.logic-audit-filters,
+.about-feedback-form {
+  margin-top: 14px;
+}
+
+.logic-audit-field,
+.admin-field {
+  gap: 8px;
+}
+
+.logic-audit-field select,
+.logic-audit-field input,
+.admin-field input,
+.admin-field select,
+.about-feedback-textarea,
+.dev-meta-file-search {
+  border-radius: 14px;
+}
+
+.about-article,
+.onboarding-steps {
+  display: grid;
+  gap: 14px;
+}
+
+.onboarding-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(16, 24, 38, 0.88), rgba(8, 12, 22, 0.96));
+}
+
+.onboarding-step-index {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(56, 189, 248, 0.12);
+  color: #d8f4ff;
+  font-weight: 800;
+}
+
+.onboarding-card-action {
+  color: #8ddcff;
+}
+
+.about-summary-grid {
+  gap: 16px;
+}
+
+html[data-theme="light"] .cc-header-zone h1 {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .account-stat-card,
+html[data-theme="light"] .about-summary-card,
+html[data-theme="light"] .about-article-block,
+html[data-theme="light"] .onboarding-step,
+html[data-theme="light"] .onboarding-flow-card,
+html[data-theme="light"] .onboarding-map-card,
+html[data-theme="light"] .onboarding-area-card,
+html[data-theme="light"] .dev-meta-runbook-card,
+html[data-theme="light"] .dev-meta-dag-card,
+html[data-theme="light"] .dev-copy-failed-item,
+html[data-theme="light"] .admin-activity-item,
+html[data-theme="light"] .account-favorite-row,
+html[data-theme="light"] .incident-card,
+html[data-theme="light"] .night-row,
+html[data-theme="light"] .slow-night-item,
+html[data-theme="light"] .analytics-run-row,
+html[data-theme="light"] .analytics-bar-row,
+html[data-theme="light"] .analytics-compare-row,
+html[data-theme="light"] .analytics-plain-table .analytics-row,
+html[data-theme="light"] .entity-table-row,
+html[data-theme="light"] .yt-analytics-row,
+html[data-theme="light"] .yt-analytics-task-row,
+html[data-theme="light"] .night-kpi-card,
+html[data-theme="light"] .night-focus-card,
+html[data-theme="light"] .slow-summary-card,
+html[data-theme="light"] .slow-criteria-card,
+html[data-theme="light"] .admin-mini-card,
+html[data-theme="light"] .admin-spotlight-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.95)) !important;
+  border-color: rgba(140, 160, 183, 0.16) !important;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .dev-meta-generator,
+html[data-theme="light"] .dev-meta-file-block,
+html[data-theme="light"] .dev-meta-editor-shell,
+html[data-theme="light"] .dev-meta-validation,
+html[data-theme="light"] .dev-meta-dag-status,
+html[data-theme="light"] .admin-ci-output,
+html[data-theme="light"] .feedback-admin-card,
+html[data-theme="light"] .feedback-admin-kpi {
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.05), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 254, 0.95)) !important;
+  border-color: rgba(140, 160, 183, 0.16) !important;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .onboarding-card-action {
+  color: #2563eb !important;
+}
+
+html[data-theme="light"] .onboarding-step-index {
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .night-row:hover,
+html[data-theme="light"] .analytics-run-row:hover,
+html[data-theme="light"] .analytics-bar-row:hover,
+html[data-theme="light"] .analytics-compare-row:hover,
+html[data-theme="light"] .analytics-plain-table .analytics-row:hover,
+html[data-theme="light"] .entity-table-row:hover,
+html[data-theme="light"] .yt-analytics-row:hover,
+html[data-theme="light"] .yt-analytics-task-row:hover,
+html[data-theme="light"] .admin-activity-item:hover,
+html[data-theme="light"] .account-favorite-row:hover,
+html[data-theme="light"] .incident-card:hover,
+html[data-theme="light"] .onboarding-area-card:hover {
+  border-color: rgba(37, 99, 235, 0.22) !important;
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.1) !important;
+}

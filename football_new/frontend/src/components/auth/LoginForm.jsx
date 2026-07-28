@@ -3,6 +3,7 @@ import { useAuth } from "@/auth/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext.jsx";
+import BrandLockup from "@/components/brand/BrandLockup";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -38,12 +39,10 @@ export default function LoginForm() {
       >
         {/* HEADER */}
         <div className="text-center mb-8">
+          <BrandLockup size="sm" compact align="center" className="justify-center" textClassName="text-center" />
           <h2 className="text-2xl font-bold text-white tracking-tight">
             {t("loginCardTitle")}
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            EdgeScore • {t("footballAnalytics")}
-          </p>
           <p className="mt-3 text-sm text-slate-400">
             {t("loginLead")}
           </p>

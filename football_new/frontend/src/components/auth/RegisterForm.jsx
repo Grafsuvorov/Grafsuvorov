@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from "@/context/LanguageContext.jsx";
+import BrandLockup from "@/components/brand/BrandLockup";
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -77,8 +78,8 @@ export default function RegisterForm() {
   return (
     <div className="surface-hero max-w-md mx-auto p-8 text-slate-100">
       <div className="text-center mb-8">
+        <BrandLockup size="sm" compact align="center" className="justify-center" textClassName="text-center" />
         <h2 className="text-2xl font-bold text-white">{t("registerTitle")}</h2>
-        <p className="text-sm text-slate-400 mt-1">EdgeScore • {t("footballAnalytics")}</p>
         <p className="mt-3 text-sm text-slate-400">{t("registerLead")}</p>
       </div>
 

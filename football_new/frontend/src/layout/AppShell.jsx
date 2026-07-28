@@ -11,6 +11,7 @@ import LeagueTabsHeader, {
   LeagueQuickNavCard,
 } from "@/components/LeagueTabsHeader";
 import AuthIndicator from "@/components/auth/AuthIndicator";
+import { BrandMark, BrandText } from "@/components/brand/BrandLockup";
 
 import { HOME_URL } from "@/routes/home";
 
@@ -120,21 +121,8 @@ function BrandCluster() {
         to={HOME_URL}
         className="group inline-flex items-center gap-3 text-white no-underline"
       >
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.02)_100%)] shadow-[0_12px_34px_rgba(0,0,0,0.32)]">
-          <div className="flex items-end gap-1">
-            <span className="h-3 w-1.5 rounded-full bg-white/70 transition group-hover:bg-white/90" />
-            <span className="h-5 w-1.5 rounded-full bg-violet-300/90 transition group-hover:bg-violet-200" />
-            <span className="h-4 w-1.5 rounded-full bg-white/45 transition group-hover:bg-white/70" />
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
-            EdgeScore
-          </div>
-          <div className="truncate text-[16px] font-semibold tracking-[-0.02em] text-white">
-            Football analytics
-          </div>
-        </div>
+        <BrandMark size="md" className="transition group-hover:border-white/18" />
+        <BrandText />
       </NavLink>
     </div>
   );
@@ -210,14 +198,7 @@ export default function AppShell({ children }) {
       >
         <div className="border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.008))] sm:hidden">
           <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-3 py-3">
-            <div className="min-w-0">
-              <div className="text-[10px] font-medium uppercase tracking-[0.28em] text-white/42">
-                EdgeScore
-              </div>
-              <div className="truncate pt-1 text-[13px] font-semibold tracking-[-0.01em] text-white">
-                Football analytics
-              </div>
-            </div>
+            <BrandText compact />
             <AuthIndicator compact />
           </div>
         </div>

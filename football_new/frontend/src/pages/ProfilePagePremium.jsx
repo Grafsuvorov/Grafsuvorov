@@ -793,7 +793,7 @@ export default function ProfilePagePremium() {
       <div className="type-page max-w-6xl mx-auto px-5 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="type-title-block">
-            <div className="type-eyebrow">EdgeScore • {t("account")}</div>
+            <div className="type-eyebrow">Football analytics</div>
             <h1 className="type-page-title text-slate-100">{t("account")}</h1>
           </div>
           <div className="flex items-center gap-2">

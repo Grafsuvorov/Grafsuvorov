@@ -1,4 +1,5 @@
 import React from "react";
+import BrandLockup from "@/components/brand/BrandLockup";
 import { useLanguage } from "@/context/LanguageContext.jsx";
 
 export default function AboutPage() {
@@ -25,9 +26,7 @@ export default function AboutPage() {
   return (
     <div className="type-page w-full min-w-0 overflow-x-hidden space-y-6 px-1 py-5 text-slate-100 sm:space-y-8 sm:px-4 sm:py-8">
       <section className="surface-hero p-4 sm:p-6 md:p-8">
-        <div className="type-eyebrow">
-          EdgeScore
-        </div>
+        <BrandLockup size="sm" compact />
         <h1 className="type-page-title mt-2 text-xl sm:text-2xl">
           {t("aboutProject")}
         </h1>

@@ -1,7 +1,6 @@
 ﻿// src/App.jsx
 import { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Sparkles } from "lucide-react";
 import { AuthProvider } from "./auth/AuthContext.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
@@ -9,6 +8,7 @@ import { HOME_URL } from "./routes/home";
 
 import AppShell from "@/layout/AppShell";
 import ActivityTracker from "@/components/ActivityTracker.jsx";
+import BrandLockup, { BrandMark } from "@/components/brand/BrandLockup";
 import { shouldHideMonetization } from "@/lib/pilotAccess.js";
 
 const MatchesPageV3 = lazy(() => import("./pages/MatchesPageV3"));
@@ -36,18 +36,14 @@ const RouteFallback = (
   <div className="min-h-screen bg-[#04050d] px-4 py-8 text-white">
     <div className="mx-auto flex max-w-[1440px] items-center justify-center">
       <div className="surface-loading flex min-h-[220px] w-full max-w-[720px] flex-col items-center justify-center gap-4 rounded-[32px] border border-white/10 px-8 py-10 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_12px_34px_rgba(0,0,0,0.34)]">
-          <Sparkles className="h-6 w-6 text-violet-200" />
-        </div>
+        <BrandMark size="lg" />
         <div className="space-y-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-white/42">
-            EdgeScore
-          </div>
+          <BrandLockup size="sm" compact align="center" className="justify-center" textClassName="text-center" />
           <div className="text-[22px] font-semibold tracking-[-0.02em] text-white">
             Loading your football workspace
           </div>
           <div className="mx-auto max-w-[440px] text-sm text-white/58">
-            Preparing live context, league data and match intelligence.
+            Preparing live context, league data and key match views.
           </div>
         </div>
         <div className="surface-spinner" aria-hidden="true" />

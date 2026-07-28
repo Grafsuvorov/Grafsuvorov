@@ -1,42 +1,34 @@
-2. Swagger открывается локально на сервере?
-     На сервере выполните:
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -I http://localhost:8000/docs
+HTTP/1.1 403 Forbidden
+Content-Type: text/html; charset=utf-8
+Content-Length: 99
 
-  curl -I http://localhost:8000/docs
-  curl -I http://localhost:8000/openapi.json
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -I http://localhost:8000/openapi.json
+HTTP/1.1 403 Forbidden
+Content-Type: text/html; charset=utf-8
+Content-Length: 99
 
-  Ожидаемо:
+[root@rgm-s-dwhapp01 table-dependency-viewer]# ss -ltnp | grep 8000
+LISTEN     0      1024         *:18000                    *:*                   users:(("docker-proxy",pid=66775,fd=4))
+LISTEN     0      128    10.66.129.242:8000                     *:*                   users:(("jupyter-lab",pid=86267,fd=6))
 
-  - не 404
-  - обычно 200 OK
 
-  Если тут уже 404, значит проблема не в сети, а в самом приложении/роутинге.
-  Но по коду Swagger не отключён: app = FastAPI() в api/main.py:161, значит /docs должен существовать.
-
-  3. Порт доступен снаружи?
-     На сервере:
-
-  ss -ltnp | grep 8000
-
-  И проверьте, что в docker compose порт проброшен:
-
-  - docker-compose.yml:18
-    8000:8000
-
-  Если на сервере curl http://localhost:8000/docs работает, а у вас с ноутбука http://server:8000/docs не открывается, значит почти наверняка:
-
-  - закрыт firewall
-  - или порт 8000 не доступен извне
-
-  Тогда используйте SSH-туннель:
-
-  ssh -L 8000:localhost:8000 <user>@<server>
-
-  И открывайте у себя:
-
-  - http://localhost:8000/docs
-
-  Если хотите, пришлите вывод этих 3 команд:
-
-  - docker compose ps
-  - curl -I http://localhost:8000/docs
-  - ss -ltnp | grep 8000
+в compose
+services:
+    frontend:
+      build: .
+      ports:
+        - "15312:8080"
+    api:
+      build:
+        context: .
+        dockerfile: api/Dockerfile
+      volumes:
+        - /root/table-dependency-viewer/scripts:/app/scripts:ro
+        - /root/table-dependency-viewer/meta_info:/app/meta_info
+        - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+        - /root/table-dependency-viewer/config_files:/app/config_files
+        - /root/git_dir:/root/git_dir
+        - /var/lib/table-dependency-viewer/meta-workspaces:/var/lib/table-dependency-viewer/meta-workspaces
+      ports:
+        - "5312:8000"

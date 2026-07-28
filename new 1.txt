@@ -1,13 +1,42 @@
-CREATE  TABLE dm.account_debt_overdue_notification_queue on cluster '{cluster}' 
-(
-    ```dt_report``` Date32 COMMENT 'Дата отчета',
-    ```debt_row_identifier_code``` String COMMENT 'Идентификатор строки задолженности'
-)
-ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/dm/"account_debt_overdue_notification_queue"', '{replica}') 
+2. Swagger открывается локально на сервере?
+     На сервере выполните:
 
-ORDER BY (dt_report,
- debt_row_identifier_code)
-SETTINGS index_granularity = 8192;
+  curl -I http://localhost:8000/docs
+  curl -I http://localhost:8000/openapi.json
 
-SQL Error [47] [07000]: Code: 47. DB::Exception: There was an error on [rgm-t-dwhclk02.hq.root.ad:9440]: Code: 47. DB::Exception: Missing columns: 'debt_row_identifier_code' 'dt_report' while processing query: 'dt_report, debt_row_identifier_code', required columns: 'dt_report' 'debt_row_identifier_code' 'dt_report' 'debt_row_identifier_code'. (UNKNOWN_IDENTIFIER) (version 24.3.3.102 (official build)). (UNKNOWN_IDENTIFIER) (version 24.3.3.102 (official build))
-, server ClickHouseNode(addr=http:dev.dbclk.dwh.rusal.com/<unresolved>:443, db=dwh)@-1203104069
+  Ожидаемо:
+
+  - не 404
+  - обычно 200 OK
+
+  Если тут уже 404, значит проблема не в сети, а в самом приложении/роутинге.
+  Но по коду Swagger не отключён: app = FastAPI() в api/main.py:161, значит /docs должен существовать.
+
+  3. Порт доступен снаружи?
+     На сервере:
+
+  ss -ltnp | grep 8000
+
+  И проверьте, что в docker compose порт проброшен:
+
+  - docker-compose.yml:18
+    8000:8000
+
+  Если на сервере curl http://localhost:8000/docs работает, а у вас с ноутбука http://server:8000/docs не открывается, значит почти наверняка:
+
+  - закрыт firewall
+  - или порт 8000 не доступен извне
+
+  Тогда используйте SSH-туннель:
+
+  ssh -L 8000:localhost:8000 <user>@<server>
+
+  И открывайте у себя:
+
+  - http://localhost:8000/docs
+
+  Если хотите, пришлите вывод этих 3 команд:
+
+  - docker compose ps
+  - curl -I http://localhost:8000/docs
+  - ss -ltnp | grep 8000

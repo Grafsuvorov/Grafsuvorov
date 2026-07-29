@@ -1,166 +1,89 @@
-Expression ((Project names + (Projection + DROP unused columns after JOIN)))
-  Join (JOIN FillRightFirst)
-    Expression ((JOIN actions + (Change column names to column identifiers + (Project names + (Projection + DROP unused columns after JOIN)))))
-      Join (JOIN FillRightFirst)
-        Expression ((JOIN actions + DROP unused columns after JOIN))
-          Join (JOIN FillRightFirst)
-            Expression ((JOIN actions + DROP unused columns after JOIN))
-              Join (JOIN FillRightFirst)
-                Expression ((JOIN actions + DROP unused columns after JOIN))
-                  Join (JOIN FillRightFirst)
-                    Expression ((JOIN actions + DROP unused columns after JOIN))
-                      Join (JOIN FillRightFirst)
-                        Expression ((JOIN actions + (Change column names to column identifiers + (Project names + Projection))))
-                          Expression
-                            ReadFromMergeTree (dm.account_debt_for_working_capital)
-                            Indexes:
-                              PrimaryKey
-                                Keys: 
-                                  is_data_for_monthly_reporting_code
-                                  is_account_for_working_capital_reporting_code
-                                  dt
-                                Condition: and((dt in [20483, +Inf)), and((is_account_for_working_capital_reporting_code in [1, 1]), (is_data_for_monthly_reporting_code in [1, 1])))
-                                Parts: 2/2
-                                Granules: 295/29470
-                        Expression ((JOIN actions + Change column names to column identifiers))
-                          ReadFromMergeTree (dm.counterparty)
-                          Indexes:
-                            PrimaryKey
-                              Condition: true
-                              Parts: 1/1
-                              Granules: 55/55
-                    Expression ((JOIN actions + Change column names to column identifiers))
-                      ReadFromMergeTree (dm.counterparty_relation_type_texts)
-                      Indexes:
-                        PrimaryKey
-                          Condition: true
-                          Parts: 1/1
-                          Granules: 1/1
-                Expression ((JOIN actions + Change column names to column identifiers))
-                  ReadFromMergeTree (dm.plant_and_subsidiary)
-                  Indexes:
-                    PrimaryKey
-                      Condition: true
-                      Parts: 1/1
-                      Granules: 1/1
-            Expression ((JOIN actions + Change column names to column identifiers))
-              ReadFromMergeTree (dm.unit_balance)
-              Indexes:
-                PrimaryKey
-                  Condition: true
-                  Parts: 1/1
-                  Granules: 1/1
-        Expression ((JOIN actions + Change column names to column identifiers))
-          ReadFromMergeTree (dm.account_debt_for_working_capital_contract_supervisor)
-          Indexes:
-            PrimaryKey
-              Condition: true
-              Parts: 1/1
-              Granules: 1/1
-    Expression ((JOIN actions + (Change column names to column identifiers + (Project names + Projection))))
-      Filter ((WHERE + (Change column names to column identifiers + (Project names + Projection))))
-        Window (Window step for window 'PARTITION BY __table11.debt_row_identifier_code')
-          Window (Window step for window 'PARTITION BY __table11.debt_row_identifier_code ORDER BY __table11.dt DESC, __table11.dttm_inserted DESC')
-            Sorting (Sorting for window 'PARTITION BY __table11.debt_row_identifier_code ORDER BY __table11.dt DESC, __table11.dttm_inserted DESC')
-              Expression (Before WINDOW)
-                Expression
-                  ReadFromMergeTree (dm.comments_fi)
-                  Indexes:
-                    PrimaryKey
-                      Condition: true
-                      Parts: 1/1
-                      Granules: 1/1
+SELECT
+    'counterparty' AS table_name,
+    count() AS rows_count,
+    uniqExact(counterparty_code) AS unique_keys,
+    rows_count - unique_keys AS extra_rows
+FROM dm.counterparty
 
+UNION ALL
 
+SELECT
+    'counterparty_relation_type_texts',
+    count(),
+    uniqExact(relation_type_code),
+    count() - uniqExact(relation_type_code)
+FROM dm.counterparty_relation_type_texts
 
-(Expression)
-ExpressionTransform × 10
-  (Join)
-  JoiningTransform × 10 2 → 1
-    (Expression)
-    ExpressionTransform × 10
-      (Join)
-      JoiningTransform × 10 2 → 1
-        (Expression)
-        ExpressionTransform × 10
-          (Join)
-          JoiningTransform × 10 2 → 1
-            (Expression)
-            ExpressionTransform × 10
-              (Join)
-              JoiningTransform × 10 2 → 1
-                (Expression)
-                ExpressionTransform × 10
-                  (Join)
-                  JoiningTransform × 10 2 → 1
-                    (Expression)
-                    ExpressionTransform × 10
-                      (Join)
-                      JoiningTransform × 10 2 → 1
-                        (Expression)
-                        ExpressionTransform × 10
-                          (Expression)
-                          ExpressionTransform × 10
-                            (ReadFromMergeTree)
-                            MergeTreeSelect(pool: ReadPool, algorithm: Thread) × 10 0 → 1
-                        (Expression)
-                        Resize 1 → 10
-                          FillingRightJoinSide
-                            Resize 9 → 1
-                              ExpressionTransform × 9
-                                (ReadFromMergeTree)
-                                MergeTreeSelect(pool: ReadPool, algorithm: Thread) × 9 0 → 1
-                    (Expression)
-                    Resize 1 → 10
-                      FillingRightJoinSide
-                        ExpressionTransform
-                          (ReadFromMergeTree)
-                          MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
-                (Expression)
-                Resize 1 → 10
-                  FillingRightJoinSide
-                    ExpressionTransform
-                      (ReadFromMergeTree)
-                      MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
-            (Expression)
-            Resize 1 → 10
-              FillingRightJoinSide
-                ExpressionTransform
-                  (ReadFromMergeTree)
-                  MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
-        (Expression)
-        Resize 1 → 10
-          FillingRightJoinSide
-            ExpressionTransform
-              (ReadFromMergeTree)
-              MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
-    (Expression)
-    Resize 1 → 10
-      FillingRightJoinSide
-        ExpressionTransform
-          (Filter)
-          FilterTransform
-            (Window)
-            WindowTransform
-              (Window)
-              WindowTransform
-                (Sorting)
-                MergeSortingTransform
-                  LimitsCheckingTransform
-                    PartialSortingTransform
-                      (Expression)
-                      ExpressionTransform
-                        (Expression)
-                        ExpressionTransform
-                          (ReadFromMergeTree)
-                          MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder) 0 → 1
+UNION ALL
 
+SELECT
+    'plant_and_subsidiary',
+    count(),
+    uniqExact(plant_code),
+    count() - uniqExact(plant_code)
+FROM dm.plant_and_subsidiary
 
+UNION ALL
 
-dm	comments_fi	1	8787	1
-dm	unit_balance	1	494	1
-dm	plant_and_subsidiary	1	632	1
-dm	account_debt_for_working_capital_contract_supervisor	1	4015	1
-dm	counterparty	1	441575	55
-dm	counterparty_relation_type_texts	1	16	1
-dm	account_debt_for_working_capital	2	1358033	295
+SELECT
+    'unit_balance',
+    count(),
+    uniqExact(unit_balance_code),
+    count() - uniqExact(unit_balance_code)
+FROM dm.unit_balance
+
+UNION ALL
+
+SELECT
+    'contract_supervisor',
+    count(),
+    uniqExact(fimsynckey_code),
+    count() - uniqExact(fimsynckey_code)
+FROM dm.account_debt_for_working_capital_contract_supervisor;
+
+WITH pre AS
+(
+    SELECT
+        debt_row_identifier_code,
+        counterparty_code,
+        unit_balance_code,
+        plant_code,
+        contract_supervisor_fimsynckey_code
+    FROM dm.account_debt_for_working_capital
+    WHERE is_data_for_monthly_reporting_code = true
+      AND is_account_for_working_capital_reporting_code = true
+      AND debit_or_credit = 'S'
+      AND dt >= today() - 180
+      AND overdue_days > 0
+)
+SELECT
+    '01_pre' AS stage,
+    count() AS rows_count
+FROM pre
+
+UNION ALL
+
+SELECT
+    '02_counterparty',
+    count()
+FROM pre AS pr
+LEFT JOIN dm.counterparty AS cn
+    ON cn.counterparty_code = pr.counterparty_code
+
+UNION ALL
+
+SELECT
+    '03_all_dimensions',
+    count()
+FROM pre AS pr
+LEFT JOIN dm.counterparty AS cn
+    ON cn.counterparty_code = pr.counterparty_code
+LEFT JOIN dm.counterparty_relation_type_texts AS crt
+    ON crt.relation_type_code = cn.relation_type_code
+LEFT JOIN dm.plant_and_subsidiary AS pl
+    ON pl.plant_code = pr.plant_code
+LEFT JOIN dm.unit_balance AS ub
+    ON ub.unit_balance_code = pr.unit_balance_code
+LEFT JOIN dm.account_debt_for_working_capital_contract_supervisor AS cs
+    ON cs.fimsynckey_code =
+       pr.contract_supervisor_fimsynckey_code;

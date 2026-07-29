@@ -1,48 +1,157 @@
-2. curl -I для этого кейса не лучший тест. Нужен обычный GET, и лучше ещё проверить изнутри контейнера.
-
-  Сделайте по порядку.
-
-  1. Проверка изнутри контейнера
-
-  docker compose exec api curl -i http://localhost:8000/openapi.json
-  docker compose exec api curl -i http://localhost:8000/docs
-
-  Если здесь 200 OK, значит само приложение Swagger отдаёт нормально.
-
-  2. Проверка с хоста
-
-  curl -i http://localhost:5312/openapi.json
-  curl -i http://localhost:5312/docs
-
-  Важно:
-
-  - именно curl -i, не -I
-  - нам нужен полный ответ, не только заголовки
-
-  3. Если всё ок, открывать с компьютера надо так
-
-  - http://rgm-s-dwhapp01.hq.root.ad:5312/docs
-
-  У вас frontend открыт на:
-
-  - http://rgm-s-dwhapp01.hq.root.ad:15312/
-
-  Но Swagger к нему не привязан. Он отдельно живёт на api:
-
-  - 5312
-
-  Почему сейчас неясно
-  403 text/html не похож на ответ вашего FastAPI middleware.
-  Ваш middleware при auth должен вернуть JSON, а не HTML.
-  То есть очень похоже, что ответ идёт не от самого приложения, а от чего-то перед ним или сбоку.
-
-  Что мне нужно от вас сейчас:
-
-  - вывод docker compose exec api curl -i http://localhost:8000/openapi.json
-  - вывод curl -i http://localhost:5312/openapi.json
-
-  После этого я сразу скажу:
-
-  - Swagger реально жив
-  - или у вас на сервере 5312 тоже перехватывается чем-то посторонним.
-
+create materialized view if not exists dm_view.account_debt_overdue_notification_queue
+refresh after never
+to dm.account_debt_overdue_notification_queue on cluster '{cluster}'
+as
+with cm as (
+	select
+		debt_row_identifier_code,
+		comment_text,
+		comment_reason,
+		comment_claim_status,
+		dttm_inserted,
+		cnt_cm
+	from
+		(
+		select
+			debt_row_identifier_code,
+			comment_text,
+			comment_reason,
+			comment_claim_status,
+			dttm_inserted,
+			count() over ( partition by debt_row_identifier_code ) as cnt_cm,
+			row_number() over ( partition by debt_row_identifier_code order by dt desc, dttm_inserted desc ) as rn
+		from
+			dm.comments_fi
+		where
+		    comment_text != '' ) as debt_com
+	where
+		debt_com.rn = 1 ),
+	pre as (
+	select
+		adwc.dt as dt_report,
+		adwc.debt_row_identifier_code,
+		adwc.unit_balance_code,
+		adwc.fiscal_year,
+		adwc.accounting_document_code,
+		adwc.position_line_item as accounting_document_position_code,
+		adwc.debt_subposition_number as debt_subposition_code,
+		adwc.external_contract_number,
+		adwc.responsibility_center_level1_name,
+		adwc.plant_code,
+		adwc.plant_name,
+		adwc.funds_center_code,
+		adwc.dt_accounting_document,
+		adwc.debt_balance_subposition_hfm_ifrs_revaluated_usd_amount,
+		adwc.overdue_days,
+		adwc.terms_of_payment_name,
+		adwc.debt_balance_subposition_document_currency_amount,
+		adwc.document_currency_amount,
+		adwc.document_currency_code,
+		adwc.reference_document_number,
+		adwc.dt_overdue,
+		adwc.counterparty_code,
+		adwc.contract_supervisor_fimsynckey_code
+	from
+		dm.account_debt_for_working_capital as adwc
+	where
+		is_data_for_monthly_reporting_code = true
+		and is_account_for_working_capital_reporting_code = true
+		and debit_or_credit = 'S'
+		and dt >= today() - 180
+		and overdue_days > 0
+	),
+	debt as (
+	select
+		pr.dt_report,
+		pr.debt_row_identifier_code,
+		pr.unit_balance_code as unit_balance_code,
+		pr.fiscal_year,
+		pr.accounting_document_code,
+		pr.accounting_document_position_code,
+		pr.debt_subposition_code,	
+		cn.counterparty_search_name as counterparty_search_name,
+		pr.external_contract_number,
+		pr.responsibility_center_level1_name,
+		cn.relation_type_code || ' ' || crt.relation_type_name AS relation_type_code_name,
+		ub.unit_balance_name,
+		pr.plant_code as plant_code,
+		pl.plant_full_name as plant_name,
+		pr.funds_center_code,
+		cs.contract_supervisor_full_name,
+		pr.dt_accounting_document,
+		cn.counterparty_full_name as counterparty_full_name,
+		pr.debt_balance_subposition_hfm_ifrs_revaluated_usd_amount,
+		pr.overdue_days,
+		pr.terms_of_payment_name,
+		pr.debt_balance_subposition_document_currency_amount,
+		pr.document_currency_amount,
+		pr.document_currency_code,
+		pr.reference_document_number,
+		pr.dt_overdue,
+		pr.counterparty_code as counterparty_code,
+		cs.email_code
+	from
+		pre as pr
+	left join dm.counterparty as cn on
+		cn.counterparty_code = pr.counterparty_code
+	left join dm.counterparty_relation_type_texts as crt on
+		crt.relation_type_code = cn.relation_type_code
+	left join dm.plant_and_subsidiary as pl on
+		pl.plant_code = pr.plant_code
+	left join dm.unit_balance as ub on
+		ub.unit_balance_code = pr.unit_balance_code
+	left join dm.account_debt_for_working_capital_contract_supervisor as cs on
+		cs.fimsynckey_code = pr.contract_supervisor_fimsynckey_code
+	)
+	select
+		db.dt_report,
+		db.debt_row_identifier_code,
+		db.unit_balance_code,
+		db.fiscal_year,
+		db.accounting_document_code,
+		db.accounting_document_position_code,
+		db.debt_subposition_code,
+		db.counterparty_search_name,
+		db.external_contract_number,
+		db.responsibility_center_level1_name,
+		db.relation_type_code_name,
+		db.unit_balance_code || ' ' || db.unit_balance_name AS unit_balance_code_name,
+		db.unit_balance_name,
+		db.plant_code,
+		db.plant_name,
+		db.contract_supervisor_full_name,
+		db.funds_center_code,
+		db.dt_accounting_document,
+		db.counterparty_full_name,
+		db.debt_balance_subposition_hfm_ifrs_revaluated_usd_amount,
+		db.overdue_days,
+		cm.comment_reason as debt_overdue_reason_name,
+		cm.comment_text,
+		cm.comment_claim_status as debt_overdue_status_name,
+		cm.dttm_inserted as dt_comment_inserted,
+		db.terms_of_payment_name,
+		db.debt_balance_subposition_document_currency_amount,
+		db.document_currency_amount,
+		db.document_currency_code,
+		db.reference_document_number,
+		db.dt_overdue,
+		db.counterparty_code,
+		(db.dt_report = yesterday()
+        and (
+            (toDayOfMonth(today()) = 1 and db.debt_balance_subposition_hfm_ifrs_revaluated_usd_amount > 0)
+            or db.debt_balance_subposition_hfm_ifrs_revaluated_usd_amount >= 100
+        )
+        and (
+            cm.comment_text is null
+            or (
+                (cm.cnt_cm = 1 and db.overdue_days > 8)
+                or (cm.cnt_cm > 1 and db.overdue_days between 9 and 23 and cm.comment_claim_status = '1')
+                or (cm.cnt_cm > 1 and db.overdue_days >= 24 and cm.comment_claim_status in ('1', '2'))
+            	)
+        	)
+    	) as is_receivable_overdue_email_required_code,	
+		db.email_code
+	from
+		debt as db
+	left join cm on
+		concat('key-',db.debt_row_identifier_code) = cm.debt_row_identifier_code;

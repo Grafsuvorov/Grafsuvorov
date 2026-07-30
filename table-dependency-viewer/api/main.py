@@ -234,6 +234,7 @@ class DevCopyDagPayload(BaseModel):
     source_table_name: str
     target_table_schema: str
     target_table_name: str
+    where: Optional[str] = ""
 
 
 class DevCopyDagStatusPayload(BaseModel):
@@ -3015,8 +3016,9 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
             "source_table_name": str(payload.source_table_name or "").strip(),
             "target_table_schema": str(payload.target_table_schema or "").strip(),
             "target_table_name": str(payload.target_table_name or "").strip(),
+            "where": str(payload.where or "").strip(),
         }
-        missing = [key for key, value in values.items() if not value]
+        missing = [key for key in ("source_table_schema", "source_table_name", "target_table_schema", "target_table_name") if not values[key]]
         if missing:
             raise ValueError("Нужно заполнить все параметры запуска DAG")
         data = trigger_airflow_parametrized_dag(

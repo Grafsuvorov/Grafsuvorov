@@ -12,6 +12,7 @@ export default function DevCopyDagPage({ userProfile }) {
     source_table_name: "",
     target_table_schema: "dm",
     target_table_name: "",
+    where: "",
   });
   const [schemaSyncForm, setSchemaSyncForm] = useState({
     run_mode: "self",
@@ -243,6 +244,17 @@ export default function DevCopyDagPage({ userProfile }) {
                       onChange={(e) => setForm((prev) => ({ ...prev, target_table_name: e.target.value }))}
                       placeholder="account_debt_dev"
                     />
+                  </label>
+                  <label className="admin-field dev-meta-generator-wide">
+                    <span>where</span>
+                    <input
+                      value={form.where}
+                      onChange={(e) => setForm((prev) => ({ ...prev, where: e.target.value }))}
+                      placeholder="dt_of_verification::date = '2026-07-29'"
+                    />
+                    <span className="muted">
+                      Фильтр. `WHERE` писать не нужно. Пример: `dt_of_verification::date = '2026-07-29'`
+                    </span>
                   </label>
                 </div>
                 <div className="dev-meta-generator-actions">

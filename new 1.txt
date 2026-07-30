@@ -1,89 +1,57 @@
-SELECT
-    'counterparty' AS table_name,
-    count() AS rows_count,
-    uniqExact(counterparty_code) AS unique_keys,
-    rows_count - unique_keys AS extra_rows
-FROM dm.counterparty
+select distinct
+       nv.nspname as view_schema,
+       v.relname  as view_name
+from pg_depend d
+join pg_rewrite r
+  on r.oid = d.objid
+join pg_class v
+  on v.oid = r.ev_class
+join pg_namespace nv
+  on nv.oid = v.relnamespace
+join pg_class t
+  on t.oid = d.refobjid
+join pg_namespace nt
+  on nt.oid = t.relnamespace
+where nt.nspname = 'dm'
+  and t.relname = 'my_table'
+  and v.relkind = 'v'
+order by 1, 2;
 
-UNION ALL
+Результат будет примерно такой:
 
-SELECT
-    'counterparty_relation_type_texts',
-    count(),
-    uniqExact(relation_type_code),
-    count() - uniqExact(relation_type_code)
-FROM dm.counterparty_relation_type_texts
+view_schema | view_name
+------------+-------------------
+dm          | my_view
+report      | account_report_v
+2. Получить SQL для пересоздания VIEW
+select distinct
+       nv.nspname as view_schema,
+       v.relname  as view_name,
+       'create or replace view '
+       || quote_ident(nv.nspname)
+       || '.'
+       || quote_ident(v.relname)
+       || ' as '
+       || pg_get_viewdef(v.oid, true)
+       || ';' as create_view_sql
+from pg_depend d
+join pg_rewrite r
+  on r.oid = d.objid
+join pg_class v
+  on v.oid = r.ev_class
+join pg_namespace nv
+  on nv.oid = v.relnamespace
+join pg_class t
+  on t.oid = d.refobjid
+join pg_namespace nt
+  on nt.oid = t.relnamespace
+where nt.nspname = 'dm'
+  and t.relname = 'my_table'
+  and v.relkind = 'v'
+order by 1, 2;
 
-UNION ALL
+Это вернёт готовые команды:
 
-SELECT
-    'plant_and_subsidiary',
-    count(),
-    uniqExact(plant_code),
-    count() - uniqExact(plant_code)
-FROM dm.plant_and_subsidiary
-
-UNION ALL
-
-SELECT
-    'unit_balance',
-    count(),
-    uniqExact(unit_balance_code),
-    count() - uniqExact(unit_balance_code)
-FROM dm.unit_balance
-
-UNION ALL
-
-SELECT
-    'contract_supervisor',
-    count(),
-    uniqExact(fimsynckey_code),
-    count() - uniqExact(fimsynckey_code)
-FROM dm.account_debt_for_working_capital_contract_supervisor;
-
-WITH pre AS
-(
-    SELECT
-        debt_row_identifier_code,
-        counterparty_code,
-        unit_balance_code,
-        plant_code,
-        contract_supervisor_fimsynckey_code
-    FROM dm.account_debt_for_working_capital
-    WHERE is_data_for_monthly_reporting_code = true
-      AND is_account_for_working_capital_reporting_code = true
-      AND debit_or_credit = 'S'
-      AND dt >= today() - 180
-      AND overdue_days > 0
-)
-SELECT
-    '01_pre' AS stage,
-    count() AS rows_count
-FROM pre
-
-UNION ALL
-
-SELECT
-    '02_counterparty',
-    count()
-FROM pre AS pr
-LEFT JOIN dm.counterparty AS cn
-    ON cn.counterparty_code = pr.counterparty_code
-
-UNION ALL
-
-SELECT
-    '03_all_dimensions',
-    count()
-FROM pre AS pr
-LEFT JOIN dm.counterparty AS cn
-    ON cn.counterparty_code = pr.counterparty_code
-LEFT JOIN dm.counterparty_relation_type_texts AS crt
-    ON crt.relation_type_code = cn.relation_type_code
-LEFT JOIN dm.plant_and_subsidiary AS pl
-    ON pl.plant_code = pr.plant_code
-LEFT JOIN dm.unit_balance AS ub
-    ON ub.unit_balance_code = pr.unit_balance_code
-LEFT JOIN dm.account_debt_for_working_capital_contract_supervisor AS cs
-    ON cs.fimsynckey_code =
-       pr.contract_supervisor_fimsynckey_code;
+create or replace view report.account_report_v as
+select ...
+from dm.my_table;

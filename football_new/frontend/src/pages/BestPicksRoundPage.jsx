@@ -136,9 +136,9 @@ function prettyRound(r) {
   return !r || r === "Unknown" ? "Все раунды" : r;
 }
 
-/* ================== Сезон 2025 ================== */
-function seasonRange2025() {
-  const y = 2025;
+/* ================== Сезон 2026 ================== */
+function seasonRange2026() {
+  const y = 2026;
   return { from: y + "-07-01", to: y + 1 + "-06-30" };
 }
 

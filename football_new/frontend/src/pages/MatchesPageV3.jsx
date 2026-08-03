@@ -925,7 +925,7 @@ function MatchCard({ m, highlight, onOpen }) {
    FETCH JSON SAFE
 ================================ */
 function seasonDateRangeGlobal(seasonStr) {
-  const y = Number(seasonStr) || 2025;
+  const y = Number(seasonStr) || 2026;
   return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
 }
 

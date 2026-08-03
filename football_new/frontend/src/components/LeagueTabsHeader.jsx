@@ -18,6 +18,13 @@ import SafeImg from "@/components/SafeImg.jsx";
 const DEFAULT_LEAGUE_ICON =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2310223a'/%3E%3Cpath fill='%23e5e7eb' d='M32 10 48 54h-8l-8-22-8 22h-8z'/%3E%3C/svg%3E";
 
+function defaultSeasonForLeague(name) {
+  const value = String(name || "");
+  if (value === "Euro Championship") return 2024;
+  if (value === "Euro Championship - Qualification") return 2023;
+  return 2026;
+}
+
 function safeGet(k, def) {
   try {
     const v = localStorage.getItem(k);
@@ -41,63 +48,63 @@ const TOP_LEAGUES_META = [
     name: "Premier League",
     country: "Англия",
     teams: 20,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Premier League"),
     logo: "/icons/leagues/premier_league.png",
   },
   {
     name: "La Liga",
     country: "Испания",
     teams: 20,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("La Liga"),
     logo: "/icons/leagues/la_liga.png",
   },
   {
     name: "Bundesliga",
     country: "Германия",
     teams: 18,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Bundesliga"),
     logo: "/icons/leagues/bundesliga.png",
   },
   {
     name: "Serie A",
     country: "Италия",
     teams: 20,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Serie A"),
     logo: "/icons/leagues/serie_a.png",
   },
   {
     name: "Ligue 1",
     country: "Франция",
     teams: 18,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Ligue 1"),
     logo: "/icons/leagues/ligue_1.png",
   },
   {
     name: "UEFA Champions League",
     country: "Европа",
     teams: 32,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("UEFA Champions League"),
     logo: "/icons/cups/champions_league.png",
   },
   {
     name: "UEFA Europa League",
     country: "Европа",
     teams: 36,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("UEFA Europa League"),
     logo: "/icons/cups/europa_league.png",
   },
   {
     name: "World Cup",
     country: "Сборные",
     teams: 32,
-    seasonYear: 2026,
+    seasonYear: defaultSeasonForLeague("World Cup"),
     logo: "/icons/World_Cup.png",
   },
   {
     name: "Euro Championship",
     country: "Сборные",
     teams: 24,
-    seasonYear: 2024,
+    seasonYear: defaultSeasonForLeague("Euro Championship"),
     logo: "/icons/Euro_Championship.png",
   },
 ];
@@ -131,77 +138,77 @@ const CATALOG_LEAGUES_META = [
     name: "Primeira Liga",
     country: "Португалия",
     teams: 18,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Primeira Liga"),
     logo: "/icons/Primeira_Liga.png",
   },
   {
     name: "Eredivisie",
     country: "Нидерланды",
     teams: 18,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Eredivisie"),
     logo: "/icons/Eredivisie.png",
   },
   {
     name: "Süper Lig",
     country: "Турция",
     teams: 20,
-    seasonYear: 2025,
+    seasonYear: defaultSeasonForLeague("Süper Lig"),
     logo: "/icons/Süper_Lig.png",
   },
   {
     name: "Euro Championship - Qualification",
     country: "Сборные",
     teams: 53,
-    seasonYear: 2023,
+    seasonYear: defaultSeasonForLeague("Euro Championship - Qualification"),
     logo: "/icons/Euro_Championship_Qualification.png",
   },
   {
     name: "World Cup - Qualification Europe",
     country: "Сборные",
     teams: 54,
-    seasonYear: 2024,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification Europe"),
     logo: "/icons/World_Cup_Qualification_Europe.png",
   },
   {
     name: "World Cup - Qualification Africa",
     country: "Сборные",
     teams: 54,
-    seasonYear: 2023,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification Africa"),
     logo: "/icons/World_Cup_Qualification_Africa.png",
   },
   {
     name: "World Cup - Qualification Asia",
     country: "Сборные",
     teams: 46,
-    seasonYear: 2026,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification Asia"),
     logo: "/icons/World_Cup_Qualification_Asia.png",
   },
   {
     name: "World Cup - Qualification CONCACAF",
     country: "Сборные",
     teams: 35,
-    seasonYear: 2026,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification CONCACAF"),
     logo: "/icons/World_Cup_Qualification_CONCACAF.png",
   },
   {
     name: "World Cup - Qualification South America",
     country: "Сборные",
     teams: 10,
-    seasonYear: 2026,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification South America"),
     logo: "/icons/World_Cup_Qualification_South_America.png",
   },
   {
     name: "World Cup - Qualification Oceania",
     country: "Сборные",
     teams: 11,
-    seasonYear: 2026,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification Oceania"),
     logo: "/icons/World_Cup_Qualification_Oceania.png",
   },
   {
     name: "World Cup - Qualification Intercontinental Play-offs",
     country: "Сборные",
     teams: 6,
-    seasonYear: 2026,
+    seasonYear: defaultSeasonForLeague("World Cup - Qualification Intercontinental Play-offs"),
     logo: "/icons/World_Cup_Qualification_Intercontinental_Play-offs.png",
   },
 ];

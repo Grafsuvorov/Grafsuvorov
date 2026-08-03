@@ -496,7 +496,7 @@ export default function ProfilePagePremium() {
                   item={team}
                   t={t}
                   language={language}
-                  onOpen={() => navigate(`/team/${team.id}?league=${encodeURIComponent(team.league || "Premier League")}&season=${team.season || "2025"}`)}
+                  onOpen={() => navigate(`/team/${team.id}?league=${encodeURIComponent(team.league || "Premier League")}&season=${team.season || "2026"}`)}
                   onRemove={() => {
                     const next = favTeams.filter((x) => x.id !== team.id);
                     setFavTeams(next);
@@ -527,7 +527,7 @@ export default function ProfilePagePremium() {
                   </div>
                   <div className="mt-3 flex items-center gap-3">
                     <button
-                      onClick={() => navigate(`/table?league=${encodeURIComponent(item.name)}&season=${item.season || "2025"}`)}
+                      onClick={() => navigate(`/table?league=${encodeURIComponent(item.name)}&season=${item.season || "2026"}`)}
                       className="text-sm font-medium text-violet-300 transition hover:text-violet-200"
                     >
                       {t("openCard")}
@@ -568,7 +568,7 @@ export default function ProfilePagePremium() {
                   </div>
                   <div className="mt-3 flex items-center gap-3">
                     <button
-                      onClick={() => navigate(`/match/${match.fixture_id}?league=${encodeURIComponent(match.league || "Premier League")}&season=${match.season || "2025"}`)}
+                      onClick={() => navigate(`/match/${match.fixture_id}?league=${encodeURIComponent(match.league || "Premier League")}&season=${match.season || "2026"}`)}
                       className="text-sm font-medium text-violet-300 transition hover:text-violet-200"
                     >
                       {t("openCard")}
@@ -606,7 +606,7 @@ export default function ProfilePagePremium() {
                   item={player}
                   t={t}
                   language={language}
-                  onOpen={() => navigate(`/player/${player.id}?league=${encodeURIComponent(player.league || "Premier League")}&season=${player.season || "2025"}`)}
+                  onOpen={() => navigate(`/player/${player.id}?league=${encodeURIComponent(player.league || "Premier League")}&season=${player.season || "2026"}`)}
                   onRemove={() => {
                     const next = favPlayers.filter((x) => x.id !== player.id);
                     setFavPlayers(next);

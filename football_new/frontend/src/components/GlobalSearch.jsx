@@ -65,7 +65,7 @@ export default function GlobalSearch({ league, season }) {
     navigate(
       `/team/${team.team_id}?league=${encodeURIComponent(
         league || "Premier League"
-      )}&season=${season || "2025"}`
+      )}&season=${season || "2026"}`
     );
     setOpen(false);
   };
@@ -75,7 +75,7 @@ export default function GlobalSearch({ league, season }) {
     navigate(
       `/player/${p.player_id}?league=${encodeURIComponent(
         league || "Premier League"
-      )}&season=${season || "2025"}`
+      )}&season=${season || "2026"}`
     );
     setOpen(false);
   };
@@ -85,7 +85,7 @@ export default function GlobalSearch({ league, season }) {
     navigate(
       `/match/${m.fixture_id}?league=${encodeURIComponent(
         m.league || league || "Premier League"
-      )}&season=${m.season || season || "2025"}`
+      )}&season=${m.season || season || "2026"}`
     );
     setOpen(false);
   };

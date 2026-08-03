@@ -94,7 +94,7 @@ export default function PlayerPage() {
   const { id } = useParams();
   const [search] = useSearchParams();
   const league = search.get("league") || "Premier League";
-  const season = search.get("season") || "2025";
+  const season = search.get("season") || "2026";
 
   const [ov, setOv] = useState(null);
   const [recent, setRecent] = useState([]);

@@ -229,7 +229,7 @@ export default function FavoritesPage() {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const [league, setLeague] = useState(searchParams.get("league") || "Premier League");
-  const [season, setSeason] = useState(searchParams.get("season") || "2025");
+  const [season, setSeason] = useState(searchParams.get("season") || "2026");
 
   const [ids, setIds] = useState(() => loadWatch());
   const [rows, setRows] = useState([]);

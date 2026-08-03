@@ -257,7 +257,7 @@ export default function LeagueInsightsPage() {
   const navigate = useNavigate();
   const leagueSlug = searchParams.get("league") || "Premier-League";
   const leagueParam = leagueSlug.replace(/-/g, " ");
-  const seasonParam = searchParams.get("season") || "2025";
+  const seasonParam = searchParams.get("season") || "2026";
   const isUcl = leagueParam === "UEFA Champions League";
   const isInternationalLeague = INTERNATIONAL_LEAGUES.has(leagueParam);
   const defaultTrendWindow = isInternationalLeague ? 5 : 10;

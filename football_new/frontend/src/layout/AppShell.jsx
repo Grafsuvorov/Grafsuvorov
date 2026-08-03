@@ -148,7 +148,7 @@ export default function AppShell({ children }) {
 
   const fallbackLeague = recent[0] || "Premier League";
   const league = leagueParam || fallbackLeague;
-  const season = seasonParam || "2025";
+  const season = seasonParam || "2026";
 
   const hideLeftRail = false;
   const tightContent = usesTightContent(location.pathname);

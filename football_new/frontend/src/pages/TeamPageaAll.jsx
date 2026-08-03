@@ -162,7 +162,7 @@ export default function TeamPageaAll() {
   const { user, checkAuth } = useAuth();
 
   const league = sp.get("league") || "Premier League";
-  const seasonParam = sp.get("season") || "2025";
+  const seasonParam = sp.get("season") || "2026";
   const tabParam = sp.get("tab") || "stats"; // stats | results | schedule
   const isInternationalTeamContext = INTERNATIONAL_LEAGUES.has(league);
 

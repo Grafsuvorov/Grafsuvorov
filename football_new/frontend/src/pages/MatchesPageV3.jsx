@@ -938,7 +938,7 @@ export default function MatchesPageV3() {
   const navigate = useNavigate();
 
   const DEFAULT_LEAGUE = "Premier League";
-  const DEFAULT_SEASON = "2025";
+  const DEFAULT_SEASON = "2026";
 
   const [league, setLeague] = useState(
     searchParams.get("league") || DEFAULT_LEAGUE

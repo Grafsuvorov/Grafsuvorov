@@ -137,7 +137,7 @@ export default function CompareTeamsPage() {
   const navigate = useNavigate();
   const [sp, setSp] = useSearchParams();
   const league = sp.get("league") || "Premier League";
-  const season = sp.get("season") || "2025";
+  const season = sp.get("season") || "2026";
   const qpA = sp.get("teamA") || sp.get("home") || "";
   const qpB = sp.get("teamB") || sp.get("away") || "";
 

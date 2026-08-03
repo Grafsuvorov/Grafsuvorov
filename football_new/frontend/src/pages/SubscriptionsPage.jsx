@@ -92,7 +92,7 @@ function SubscriptionsPage() {
   const { language } = useLanguage();
   const [searchParams] = useSearchParams();
   const leagueTitle = searchParams.get("league") || "Bundesliga";
-  const seasonTitle = searchParams.get("season") || "2025";
+  const seasonTitle = searchParams.get("season") || "2026";
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);

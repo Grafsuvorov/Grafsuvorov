@@ -352,7 +352,7 @@ export default function PlayerPage() {
               name: overview?.player || "Игрок",
               team: overview?.last_team || "",
               league: overview?.last_league || search.get("league") || "Premier League",
-              season: overview?.last_season || search.get("season") || "2025",
+              season: overview?.last_season || search.get("season") || "2026",
             },
           ];
       saveFavorites(favKey, next);
@@ -491,7 +491,7 @@ export default function PlayerPage() {
                   r.season_year ||
                   overview?.last_season ||
                   search.get("season") ||
-                  "2025";
+                  "2026";
                 navigate(
                   `/match/${r.fixture_id}?league=${encodeURIComponent(
                     league

@@ -1,5 +1,5 @@
 // src/pages/BestPicksRoundPage.jsx
-// 2025-only. Для каждого матча: ДВЕ ставки (Исход + Тотал 2.5) + объяснения.
+// 2026-only. Для каждого матча: ДВЕ ставки (Исход + Тотал 2.5) + объяснения.
 // EdgeScore Premium Dark (v5): более чистый, премиальный UI без легенды и статуса "зашло/не зашло".
 // Акцент на аккуратных карточках, ровных логотипах и мягком glow.
 
@@ -16,7 +16,7 @@ import { buildPolicyNarrative } from "@/lib/policyNarrative";
 import { useLanguage } from "@/context/LanguageContext.jsx";
 
 /* ====== метка сборки для дебага ====== */
-const BUILD_TAG = "BestPicks 2025 v5.0 EdgeScore Premium Dark";
+const BUILD_TAG = "BestPicks 2026 v5.0 EdgeScore Premium Dark";
 if (typeof window !== "undefined") {
   try {
     console.info("[BUILD]", BUILD_TAG);
@@ -24,7 +24,7 @@ if (typeof window !== "undefined") {
 }
 
 /* ================== Константы ================== */
-const FIXED_SEASON = "2025";
+const FIXED_SEASON = "2026";
 const USE_INSIGHTS = true;
 const INCLUDE_NO_BET = false;
 
@@ -166,7 +166,7 @@ function parseScheduleISO(datetimeDMHM, seasonStr) {
   if (dm.length < 2) return "";
   const dd = ("" + dm[0]).padStart(2, "0");
   const mm = ("" + dm[1]).padStart(2, "0");
-  const yyyy = String(seasonStr || "2025");
+  const yyyy = String(seasonStr || "2026");
   return yyyy + "-" + mm + "-" + dd + " " + hm;
 }
 

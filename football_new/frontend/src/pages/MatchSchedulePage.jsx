@@ -1563,7 +1563,7 @@ export default function MatchSchedulePage() {
   const location = useLocation();
 
   const league = search.get("league") || "Premier League";
-  const season = search.get("season") || "2025";
+  const season = search.get("season") || "2026";
   const seasonNum = Number(season) || new Date().getFullYear();
   const seasonOptions = [
     seasonNum - 1,

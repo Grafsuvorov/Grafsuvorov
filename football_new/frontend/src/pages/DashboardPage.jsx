@@ -195,7 +195,7 @@ export default function DashboardPage() {
   const { t } = useLanguage();
   const [search] = useSearchParams();
   const league = search.get("league") || "Premier League";
-  const season = search.get("season") || "2025";
+  const season = search.get("season") || "2026";
   const [loading, setLoading] = useState(true);
   const [liveMatches, setLiveMatches] = useState([]);
   const [upcomingMatches, setUpcomingMatches] = useState([]);

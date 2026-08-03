@@ -30,8 +30,8 @@ const makeSeasonList = (startYear = 2010) => {
 };
 const DEFAULT_SEASONS = makeSeasonList(2010);
 const LEAGUE_SEASONS = {
-  "UEFA Champions League": ["2025", "2024"],
-  "UEFA Europa League": ["2025", "2024"],
+  "UEFA Champions League": ["2026", "2025", "2024"],
+  "UEFA Europa League": ["2026", "2025", "2024"],
   "World Cup": ["2026", "2022"],
   "Euro Championship": ["2024", "2020"],
   "Euro Championship - Qualification": ["2023"],
@@ -239,7 +239,7 @@ export default function LeagueTablePage() {
   const navigate = useNavigate();
 
   const leagueParam = searchParams.get("league") || "Premier League";
-  const seasonParam = searchParams.get("season") || "2025";
+  const seasonParam = searchParams.get("season") || "2026";
   const viewParam = searchParams.get("view") || "total";
   const isEuroCup = EURO_CUP_LEAGUES.has(leagueParam);
   const isIntlBracketCup = INTL_BRACKET_LEAGUES.has(leagueParam);

@@ -313,7 +313,7 @@ export default function MatchCenterPage() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
   const league = sp.get("league") || "Premier League";
-  const season = sp.get("season") || "2025";
+  const season = sp.get("season") || "2026";
 
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(false);

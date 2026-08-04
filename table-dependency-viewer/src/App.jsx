@@ -24,6 +24,7 @@ import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
 import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
+import AdminArchitecturePage from "./components/AdminArchitecturePage.jsx";
 import AdminFeedbackPage from "./components/AdminFeedbackPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
@@ -529,6 +530,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : canUseMetaWorkspace ? (
               <Navigate to="/admin/meta-workspace" replace />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/architecture"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminArchitecturePage />
             ) : (
               <Navigate to="/" replace />
             )

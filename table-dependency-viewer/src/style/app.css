@@ -15777,3 +15777,219 @@ html[data-theme="light"] .onboarding-area-card:hover {
   border-color: rgba(37, 99, 235, 0.22) !important;
   box-shadow: 0 18px 34px rgba(37, 99, 235, 0.1) !important;
 }
+
+.architecture-page {
+  display: grid;
+  gap: 18px;
+}
+
+.architecture-intro-grid,
+.architecture-kpis,
+.architecture-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.architecture-intro-grid,
+.architecture-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.architecture-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+  align-items: start;
+}
+
+.architecture-block {
+  display: grid;
+  gap: 14px;
+}
+
+.architecture-intro-card,
+.architecture-kpi,
+.architecture-row-card,
+.architecture-family-card {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 24, 38, 0.9), rgba(8, 12, 22, 0.98));
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
+}
+
+.architecture-intro-card,
+.architecture-kpi,
+.architecture-family-card {
+  padding: 18px;
+}
+
+.architecture-row-card {
+  padding: 16px 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.architecture-row-card.compact {
+  gap: 10px;
+}
+
+.architecture-intro-title,
+.architecture-family-head strong,
+.architecture-pair,
+.architecture-link {
+  color: var(--text-strong);
+}
+
+.architecture-kpi .label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.architecture-kpi .value {
+  margin-top: 8px;
+  color: var(--text-strong);
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.architecture-list,
+.architecture-family-list {
+  display: grid;
+  gap: 12px;
+}
+
+.architecture-row-head,
+.architecture-family-head,
+.architecture-actions,
+.architecture-row-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.architecture-row-head {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.architecture-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.architecture-link:hover {
+  color: #8ddcff;
+}
+
+.architecture-row-meta,
+.architecture-family-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.architecture-badge,
+.architecture-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255,255,255,0.04);
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.architecture-badge {
+  padding: 6px 10px;
+}
+
+.architecture-badge.accent {
+  border-color: rgba(56, 189, 248, 0.22);
+  background: rgba(56, 189, 248, 0.12);
+  color: #bfeeff;
+}
+
+.architecture-tag {
+  padding: 5px 9px;
+  color: rgba(226, 232, 240, 0.84);
+}
+
+.architecture-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.architecture-actions {
+  margin-top: 2px;
+}
+
+.architecture-family-bar {
+  height: 8px;
+  margin: 12px 0 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.architecture-family-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0ea5e9, #2563eb);
+}
+
+html[data-theme="light"] .architecture-intro-card,
+html[data-theme="light"] .architecture-kpi,
+html[data-theme="light"] .architecture-row-card,
+html[data-theme="light"] .architecture-family-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.95)) !important;
+  border-color: rgba(140, 160, 183, 0.16) !important;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .architecture-link,
+html[data-theme="light"] .architecture-intro-title,
+html[data-theme="light"] .architecture-family-head strong,
+html[data-theme="light"] .architecture-pair,
+html[data-theme="light"] .architecture-kpi .value {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .architecture-link:hover {
+  color: #2563eb !important;
+}
+
+html[data-theme="light"] .architecture-row-meta,
+html[data-theme="light"] .architecture-family-meta,
+html[data-theme="light"] .architecture-kpi .label {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .architecture-badge,
+html[data-theme="light"] .architecture-tag {
+  background: #f8fbff !important;
+  border-color: rgba(140, 160, 183, 0.18) !important;
+  color: #36506d !important;
+}
+
+html[data-theme="light"] .architecture-badge.accent {
+  background: rgba(37, 99, 235, 0.1) !important;
+  border-color: rgba(37, 99, 235, 0.16) !important;
+  color: #1d4ed8 !important;
+}
+
+@media (max-width: 1120px) {
+  .architecture-grid {
+    grid-template-columns: 1fr;
+  }
+}

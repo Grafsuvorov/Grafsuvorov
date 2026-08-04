@@ -5,6 +5,10 @@ export const adminApi = {
   userAnalytics: (days) => apiClient.get("/auth/users/analytics", { params: { days } }),
   ciCdStatus: () => apiClient.get("/api/admin/ci-cd/status"),
   engineeringEfficiency: (days) => apiClient.get("/api/admin/engineering-efficiency", { params: { days } }),
+  architectureWorkbench: () => apiClient.getCached("/api/logic-audit", {
+    ttlMs: 10 * 60 * 1000,
+    params: { issue_type: "all", mode: "standard", min_score: 0.72, limit: 500 },
+  }),
   releaseReports: (days) => apiClient.get("/api/admin/reports/releases", { params: { days } }),
   incidentReports: (days) => apiClient.get("/api/admin/reports/incidents", { params: { days } }),
   exportReportPdf: (body) => apiClient.post("/api/admin/reports/export-pdf", body, { expect: "response" }),

@@ -423,6 +423,97 @@ function buildOwnerStats(candidates) {
     .slice(0, 8);
 }
 
+function buildRiskMatrix(candidates) {
+  const cells = new Map();
+  const riskBand = (item) => {
+    if ((item.pressureScore || 0) >= 75) return "Критичный";
+    if ((item.pressureScore || 0) >= 45) return "Высокий";
+    return "Средний";
+  };
+  const duplicateBand = (item) => {
+    if ((item.exactCount || 0) >= 2) return "Точные";
+    if ((item.highCount || 0) >= 2) return "Сильные";
+    return "Наблюдение";
+  };
+
+  candidates.forEach((item) => {
+    const row = riskBand(item);
+    const col = duplicateBand(item);
+    const key = `${row}|${col}`;
+    const current = cells.get(key) || { row, col, count: 0, items: [] };
+    current.count += 1;
+    if (current.items.length < 3) current.items.push(item.fqn);
+    cells.set(key, current);
+  });
+
+  const rowOrder = ["Критичный", "Высокий", "Средний"];
+  const colOrder = ["Точные", "Сильные", "Наблюдение"];
+  return rowOrder.flatMap((row) =>
+    colOrder.map((col) => cells.get(`${row}|${col}`) || { row, col, count: 0, items: [] }),
+  );
+}
+
+function buildOwnerAmbiguity(cluster, candidatesByFqn) {
+  if (!cluster) return null;
+  const rows = [cluster.fqn, ...cluster.peers.map((peer) => peer.fqn)]
+    .map((fqn) => candidatesByFqn.get(fqn))
+    .filter(Boolean);
+  const owners = [...new Set(rows.map((row) => row.lastChange?.actor).filter(Boolean))];
+  const incidentOwners = [...new Set(rows.filter((row) => row.incidentsCount > 0).map((row) => row.lastChange?.actor).filter(Boolean))];
+  return {
+    owners,
+    ownerCount: owners.length,
+    incidentOwners,
+    incidentOwnerCount: incidentOwners.length,
+    hasAmbiguity: owners.length >= 3,
+    rows,
+  };
+}
+
+function buildActivityTimeline(candidate) {
+  if (!candidate) return [];
+  const events = [];
+  if (candidate.lastChange?.changed_at) {
+    events.push({
+      id: `change-${candidate.fqn}`,
+      type: "delivery_change",
+      title: "Последний delivery-change",
+      actor: candidate.lastChange.actor || "Не указан",
+      at: candidate.lastChange.changed_at,
+      meta: candidate.lastChange.release_id || candidate.lastChange.task_id || "—",
+      text: candidate.lastChange.task_summary || "Последнее изменение через релизный контур.",
+      link: candidate.lastChange.task_link || null,
+    });
+  }
+  if (candidate.latestRelease?.started_at) {
+    events.push({
+      id: `release-${candidate.fqn}`,
+      type: "release",
+      title: "Последний релиз",
+      actor: candidate.latestRelease.initiated_by || candidate.latestRelease.actor || "Не указан",
+      at: candidate.latestRelease.started_at,
+      meta: candidate.latestRelease.release_id || "—",
+      text: candidate.latestRelease.task_summary || candidate.latestRelease.release_type || "Поставка объекта.",
+      link: candidate.latestRelease.task_link || null,
+    });
+  }
+  if (candidate.latestIncident?.incident_start_dttm) {
+    events.push({
+      id: `incident-${candidate.fqn}`,
+      type: "incident",
+      title: "Последний инцидент",
+      actor: candidate.latestIncident.assignee_name || candidate.latestIncident.author_name || "Не указан",
+      at: candidate.latestIncident.incident_start_dttm,
+      meta: candidate.latestIncident.issue_id || "—",
+      text: candidate.latestIncident.summary || candidate.latestIncident.incident_reason_name || "Инцидент по объекту.",
+      link: candidate.latestIncident.link || null,
+    });
+  }
+  return events
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, 5);
+}
+
 function downloadTextFile(content, filename, type = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = window.URL.createObjectURL(blob);
@@ -630,6 +721,22 @@ export default function AdminArchitecturePage() {
         (b.pressureScore - a.pressureScore)
       ))
       .slice(0, 8),
+    [topCandidates],
+  );
+  const candidatesByFqn = useMemo(
+    () => new Map(topCandidates.map((item) => [item.fqn, item])),
+    [topCandidates],
+  );
+  const selectedOwnerAmbiguity = useMemo(
+    () => buildOwnerAmbiguity(selectedCluster, candidatesByFqn),
+    [candidatesByFqn, selectedCluster],
+  );
+  const selectedTimeline = useMemo(
+    () => buildActivityTimeline(selectedCandidate),
+    [selectedCandidate],
+  );
+  const riskMatrix = useMemo(
+    () => buildRiskMatrix(topCandidates),
     [topCandidates],
   );
 
@@ -959,6 +1066,54 @@ export default function AdminArchitecturePage() {
             </section>
           </section>
 
+          <section className="architecture-grid">
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Risk Matrix</div>
+              <div className="section-subtitle">
+                Матрица приоритета: чем выше операционный риск и чем точнее дубли, тем раньше это имеет смысл разбирать архитектору.
+              </div>
+              <div className="architecture-matrix">
+                {riskMatrix.map((cell) => (
+                  <div
+                    key={`${cell.row}-${cell.col}`}
+                    className={`architecture-matrix-cell tone-${cell.row === "Критичный" ? "critical" : cell.row === "Высокий" ? "high" : "watch"}`}
+                  >
+                    <div className="architecture-matrix-head">
+                      <span>{cell.row}</span>
+                      <span>{cell.col}</span>
+                    </div>
+                    <div className="architecture-matrix-value">{cell.count}</div>
+                    <div className="architecture-matrix-sample">
+                      {cell.items.length ? cell.items.join(" · ") : "Пока пусто"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Owner Ambiguity</div>
+              <div className="section-subtitle">
+                Чем больше разных последних владельцев у похожих объектов, тем выше риск, что рефакторинг упрётся в рассинхрон ответственности.
+              </div>
+              <div className="architecture-owner-grid">
+                {ownerStats.map((item) => (
+                  <article key={`owner-signal-${item.actor}`} className="architecture-owner-card">
+                    <div className="architecture-row-head">
+                      <div className="architecture-pair">{item.actor}</div>
+                      <span className="architecture-badge accent">{Math.round(item.avgPressure)}</span>
+                    </div>
+                    <div className="architecture-row-meta">
+                      <span>{item.objectsCount} объектов</span>
+                      <span>{item.releasesCount} rel</span>
+                      <span>{item.incidentsCount} inc</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
+
           {selectedCluster ? (
             <section className="cc-surface architecture-block">
               <div className="section-title">Разбор кластера</div>
@@ -1069,6 +1224,23 @@ export default function AdminArchitecturePage() {
                   </div>
 
                   <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">Owner ambiguity</div>
+                    <div className="architecture-reco-title">
+                      {selectedOwnerAmbiguity?.ownerCount || 0} владельца в кластере
+                    </div>
+                    <div className="architecture-reco-text">
+                      {selectedOwnerAmbiguity?.hasAmbiguity
+                        ? "Ответственность размазана: перед схлопыванием нужен owner alignment и один контур решений."
+                        : "Кластер выглядит управляемым: контур владельцев ещё не слишком разросся."}
+                    </div>
+                    <div className="architecture-tags">
+                      {(selectedOwnerAmbiguity?.owners || []).map((owner) => (
+                        <span key={`owner-tag-${owner}`} className="architecture-tag">{owner}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="architecture-reco-card">
                     <div className="architecture-reco-kicker">Checklist</div>
                     <div className="architecture-checklist">
                       {checklist.map((item) => (
@@ -1102,6 +1274,34 @@ export default function AdminArchitecturePage() {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="architecture-timeline-block">
+                <div className="architecture-reco-kicker">Activity timeline</div>
+                <div className="architecture-timeline-list">
+                  {selectedTimeline.map((event) => (
+                    <article key={event.id} className={`architecture-timeline-card tone-${event.type}`}>
+                      <div className="architecture-timeline-dot" />
+                      <div className="architecture-timeline-body">
+                        <div className="architecture-row-head">
+                          <div className="architecture-pair">{event.title}</div>
+                          <span className="architecture-badge">{formatDateTime(event.at)}</span>
+                        </div>
+                        <div className="architecture-row-meta">
+                          <span>{event.actor}</span>
+                          <span>{event.meta}</span>
+                        </div>
+                        <div className="muted">{shortText(event.text, 180)}</div>
+                        {event.link ? (
+                          <div className="architecture-actions">
+                            <a className="btn btn-ghost" href={event.link} target="_blank" rel="noreferrer">Открыть</a>
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                  {!selectedTimeline.length ? <div className="muted">Для выбранного объекта пока нет событий в окне анализа.</div> : null}
                 </div>
               </div>
             </section>

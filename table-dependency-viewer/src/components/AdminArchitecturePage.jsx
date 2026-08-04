@@ -8,6 +8,14 @@ const ISSUE_LABELS = {
   similar_candidate: "Похожие блоки",
 };
 
+const RECOMMENDATION_FILTERS = [
+  { id: "all", label: "Все" },
+  { id: "shared", label: "Общий слой" },
+  { id: "collapse", label: "Схлопывание" },
+  { id: "semantic", label: "Семантический конфликт" },
+  { id: "manual", label: "Ручной разбор" },
+];
+
 function formatPercent(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
 }
@@ -158,24 +166,29 @@ function buildRecommendation(cluster) {
   const exactDominates = cluster.exactCount >= 2 || (cluster.exactCount >= 1 && cluster.avgScore >= 0.9);
   const highDominates = cluster.highCount >= 3 || (cluster.highCount >= 2 && cluster.avgScore >= 0.86);
   let title = "Нужен ручной разбор";
+  let kind = "manual";
   let action = "Проверить, не разошлась ли одна и та же бизнес-логика в нескольких объектах.";
   let rationale = "Похожесть есть, но паттерн ещё не выглядит как безопасный кандидат на прямое схлопывание.";
 
   if (exactDominates) {
     title = "Выносить в общий слой";
+    kind = "shared";
     action = "Кандидат на shared CTE, reusable model или единый вычислительный блок.";
     rationale = "Есть точные дубли или почти идентичные пары с очень высоким score.";
   } else if (highDominates && crossEntity) {
     title = "Проверить конфликт бизнес-логики";
+    kind = "semantic";
     action = "Сначала сравнить смысл расчёта между направлениями, потом решать вопрос консолидации.";
     rationale = "Высокая похожесть идёт через разные сущности, значит одинаковый расчёт мог разойтись семантически.";
   } else if (highDominates) {
     title = "Кандидат на схлопывание";
+    kind = "collapse";
     action = "Можно собирать family review и выносить повторяющиеся части в общий шаблон.";
     rationale = "Объект стабильно участвует в HIGH-парах и повторяется в одном логическом контуре.";
   }
 
   return {
+    kind,
     title,
     action,
     rationale,
@@ -193,12 +206,105 @@ function buildAiBrief(cluster, recommendation) {
   ].filter(Boolean).join(" ");
 }
 
+function buildChecklist(cluster, recommendation) {
+  if (!cluster || !recommendation) return [];
+  const items = [
+    "Проверить, совпадает ли бизнес-смысл расчёта у всех peer-объектов.",
+    "Сравнить поля SELECT и критичные фильтры в парных объектах.",
+    "Оценить, можно ли вынести общий CTE или intermediate model без изменения downstream-поведения.",
+    "Проверить релизы и недавние инциденты для этих объектов перед рефакторингом.",
+  ];
+  if (recommendation.kind === "shared") {
+    items.unshift("Выделить единый reusable block и определить одного владельца логики.");
+  }
+  if (recommendation.kind === "semantic") {
+    items.unshift("Согласовать определение метрики/правила между направлениями до схлопывания.");
+  }
+  if (cluster.exactCount > 0) {
+    items.push("Проверить, нет ли копий с различием только в именах витрин или схем.");
+  }
+  return items;
+}
+
+function buildAiPayload(cluster, recommendation, checklist) {
+  if (!cluster || !recommendation) return null;
+  return {
+    generated_at: new Date().toISOString(),
+    object_fqn: cluster.fqn,
+    entities: cluster.entities,
+    related_pairs_count: cluster.related.length,
+    avg_similarity_score: Number(cluster.avgScore.toFixed(4)),
+    exact_count: cluster.exactCount,
+    high_count: cluster.highCount,
+    recommendation,
+    hints: cluster.hints,
+    peers: cluster.peers.map((peer) => ({
+      fqn: peer.fqn,
+      entity: peer.entity,
+      issue_type: peer.issueType,
+      similarity_score: Number(peer.score.toFixed(4)),
+      expression_overlap_count: peer.overlap,
+      merge_potential: peer.mergePotential,
+      hints: peer.hints,
+    })),
+    checklist,
+  };
+}
+
+function buildMarkdownReport(cluster, recommendation, checklist, aiBrief) {
+  if (!cluster || !recommendation) return "";
+  const peerLines = cluster.peers.map((peer) =>
+    `- ${peer.fqn} | ${peer.entity} | ${ISSUE_LABELS[peer.issueType] || peer.issueType} | ${formatPercent(peer.score)} | expr ${peer.overlap} | ${peer.mergePotential}`
+  );
+  const checklistLines = checklist.map((item) => `- ${item}`);
+  return [
+    `# Архитектурный кластер: ${cluster.fqn}`,
+    "",
+    `- Средняя похожесть: ${formatPercent(cluster.avgScore)}`,
+    `- HIGH-пары: ${cluster.highCount}`,
+    `- Exact-пары: ${cluster.exactCount}`,
+    `- Сущности: ${cluster.entities.join(", ") || "Без сущности"}`,
+    "",
+    "## Рекомендация",
+    `**${recommendation.title}**`,
+    "",
+    recommendation.rationale,
+    "",
+    recommendation.action,
+    "",
+    "## AI-ready summary",
+    aiBrief,
+    "",
+    "## Peer-объекты",
+    ...peerLines,
+    "",
+    "## Checklist",
+    ...checklistLines,
+  ].join("\n");
+}
+
+function downloadTextFile(content, filename, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export default function AdminArchitecturePage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedObjectFqn, setSelectedObjectFqn] = useState(null);
+  const [search, setSearch] = useState("");
+  const [issueFilter, setIssueFilter] = useState("all");
+  const [recommendationFilter, setRecommendationFilter] = useState("all");
+  const [copyStatus, setCopyStatus] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -214,18 +320,37 @@ export default function AdminArchitecturePage() {
   const objectStats = useMemo(() => buildObjectStats(pairs), [pairs]);
   const entityStats = useMemo(() => buildEntityStats(pairs), [pairs]);
 
-  const topCandidates = useMemo(
-    () =>
-      [...objectStats]
-        .sort((a, b) => (
-          (b.highCount - a.highCount) ||
-          (b.exactCount - a.exactCount) ||
-          (b.hits - a.hits) ||
-          (b.avgScore - a.avgScore)
-        ))
-        .slice(0, 12),
-    [objectStats],
-  );
+  const topCandidates = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return [...objectStats]
+      .map((item) => ({
+        ...item,
+        recommendation: buildRecommendation({
+          fqn: item.fqn,
+          peers: [],
+          entities: item.entities,
+          exactCount: item.exactCount,
+          highCount: item.highCount,
+          avgScore: item.avgScore,
+        }),
+      }))
+      .filter((item) => {
+        if (issueFilter !== "all" && !item.issueTypes.includes(issueFilter)) return false;
+        if (recommendationFilter !== "all" && item.recommendation?.kind !== recommendationFilter) return false;
+        if (!term) return true;
+        return (
+          item.fqn.toLowerCase().includes(term) ||
+          item.entities.some((entity) => String(entity || "").toLowerCase().includes(term))
+        );
+      })
+      .sort((a, b) => (
+        (b.highCount - a.highCount) ||
+        (b.exactCount - a.exactCount) ||
+        (b.hits - a.hits) ||
+        (b.avgScore - a.avgScore)
+      ))
+      .slice(0, 18);
+  }, [issueFilter, objectStats, recommendationFilter, search]);
 
   useEffect(() => {
     if (!selectedObjectFqn && topCandidates.length) {
@@ -283,6 +408,18 @@ export default function AdminArchitecturePage() {
     () => buildAiBrief(selectedCluster, selectedRecommendation),
     [selectedCluster, selectedRecommendation],
   );
+  const checklist = useMemo(
+    () => buildChecklist(selectedCluster, selectedRecommendation),
+    [selectedCluster, selectedRecommendation],
+  );
+  const aiPayload = useMemo(
+    () => buildAiPayload(selectedCluster, selectedRecommendation, checklist),
+    [checklist, selectedCluster, selectedRecommendation],
+  );
+  const markdownReport = useMemo(
+    () => buildMarkdownReport(selectedCluster, selectedRecommendation, checklist, aiBrief),
+    [aiBrief, checklist, selectedCluster, selectedRecommendation],
+  );
 
   const openLogicAudit = (fqn) => {
     if (!fqn) return;
@@ -293,6 +430,21 @@ export default function AdminArchitecturePage() {
     if (!fqn || !fqn.includes(".")) return;
     const [schema, ...rest] = fqn.split(".");
     navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(rest.join("."))}`);
+  };
+
+  const copyAiPayload = async (mode = "json") => {
+    const content = mode === "json"
+      ? JSON.stringify(aiPayload, null, 2)
+      : markdownReport;
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopyStatus(mode === "json" ? "AI-context JSON скопирован." : "Markdown-отчёт скопирован.");
+      window.setTimeout(() => setCopyStatus(""), 2400);
+    } catch {
+      setCopyStatus("Не удалось скопировать. Используйте экспорт.");
+      window.setTimeout(() => setCopyStatus(""), 2400);
+    }
   };
 
   return (
@@ -350,6 +502,37 @@ export default function AdminArchitecturePage() {
             </div>
           </section>
 
+          <section className="cc-surface architecture-block">
+            <div className="section-title">Фокус и фильтры</div>
+            <div className="logic-audit-filters">
+              <label className="logic-audit-field logic-audit-field-wide">
+                Поиск
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="schema.table или сущность"
+                />
+              </label>
+              <label className="logic-audit-field">
+                Тип пары
+                <select value={issueFilter} onChange={(e) => setIssueFilter(e.target.value)}>
+                  <option value="all">Все</option>
+                  {Object.entries(ISSUE_LABELS).map(([id, label]) => (
+                    <option key={id} value={id}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="logic-audit-field">
+                Рекомендация
+                <select value={recommendationFilter} onChange={(e) => setRecommendationFilter(e.target.value)}>
+                  {RECOMMENDATION_FILTERS.map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+
           <section className="architecture-grid">
             <section className="cc-surface architecture-block">
               <div className="section-title">Кандидаты на схлопывание</div>
@@ -373,6 +556,7 @@ export default function AdminArchitecturePage() {
                     <div className="architecture-row-meta">
                       <span>{item.entities[0] || "Без сущности"}</span>
                       <span>{item.issueTypes.map((type) => ISSUE_LABELS[type] || type).join(" · ")}</span>
+                      <span>{item.recommendation?.title || "Ручной разбор"}</span>
                     </div>
                     <div className="architecture-tags">
                       {item.sampleHints.map((hint) => (
@@ -392,6 +576,7 @@ export default function AdminArchitecturePage() {
                     </div>
                   </article>
                 ))}
+                {!topCandidates.length ? <div className="muted">По текущим фильтрам кандидатов не найдено.</div> : null}
               </div>
             </section>
 
@@ -476,6 +661,50 @@ export default function AdminArchitecturePage() {
                   <div className="architecture-reco-card">
                     <div className="architecture-reco-kicker">AI-ready summary</div>
                     <div className="architecture-reco-text">{aiBrief}</div>
+                    <div className="architecture-actions">
+                      <button type="button" className="btn btn-secondary" onClick={() => copyAiPayload("markdown")}>
+                        Копировать brief
+                      </button>
+                      <button type="button" className="btn btn-ghost" onClick={() => copyAiPayload("json")}>
+                        Копировать JSON
+                      </button>
+                    </div>
+                    {copyStatus ? <div className="muted">{copyStatus}</div> : null}
+                  </div>
+
+                  <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">Checklist</div>
+                    <div className="architecture-checklist">
+                      {checklist.map((item) => (
+                        <div key={item} className="architecture-checklist-item">
+                          <span className="architecture-checkmark">•</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">Экспорт</div>
+                    <div className="architecture-reco-text">
+                      Этот пакет можно уже сейчас отдавать корпоративному агенту как structured context.
+                    </div>
+                    <div className="architecture-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => downloadTextFile(JSON.stringify(aiPayload, null, 2), `architecture-context-${selectedCluster.fqn.replaceAll(".", "_")}.json`, "application/json;charset=utf-8")}
+                      >
+                        Скачать JSON
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => downloadTextFile(markdownReport, `architecture-brief-${selectedCluster.fqn.replaceAll(".", "_")}.md`, "text/markdown;charset=utf-8")}
+                      >
+                        Скачать Markdown
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

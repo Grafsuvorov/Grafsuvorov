@@ -16013,6 +16013,25 @@ html[data-theme="light"] .onboarding-area-card:hover {
   font-weight: 600;
 }
 
+.architecture-checklist {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.architecture-checklist-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.architecture-checkmark {
+  color: #8ddcff;
+  font-weight: 800;
+}
+
 .architecture-family-bar {
   height: 8px;
   margin: 12px 0 10px;
@@ -16060,6 +16079,10 @@ html[data-theme="light"] .architecture-reco-kicker {
 
 html[data-theme="light"] .architecture-reco-action {
   color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .architecture-checkmark {
+  color: #2563eb !important;
 }
 
 html[data-theme="light"] .architecture-badge,

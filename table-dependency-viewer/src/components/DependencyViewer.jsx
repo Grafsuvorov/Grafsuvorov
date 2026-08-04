@@ -43,7 +43,7 @@ export default function DependencyViewer({ table, onBack }) {
   const total = rows.length;
 
   return (
-    <div className="incident-page">
+    <div className="container cc-page incident-page">
       <div className="dep-header">
         <button className="btn" onClick={onBack}>← Назад</button>
         <div>

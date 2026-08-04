@@ -132,7 +132,7 @@ export default function IncidentsPage({ onSelectTable }) {
   }, [filtered]);
 
   return (
-    <div className="cc-page">
+    <div className="container cc-page">
       <section className="cc-header-zone">
         <h1>Инциденты YouTrack</h1>
         <div className="cc-subtitle">

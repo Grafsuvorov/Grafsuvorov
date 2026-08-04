@@ -22,15 +22,23 @@ export default function ErrorDashboard({ onSelectTable }) {
   }, []);
 
   if (loading) {
-    return <div className="center">Loading failures...</div>;
+    return (
+      <div className="page-state-shell">
+        <div className="page-state-card muted center">Loading failures...</div>
+      </div>
+    );
   }
 
   if (errors.length === 0) {
-    return <div className="center">No load failures detected.</div>;
+    return (
+      <div className="page-state-shell">
+        <div className="page-state-card center">No load failures detected.</div>
+      </div>
+    );
   }
 
   return (
-    <div className="error-dashboard">
+    <div className="container cc-page error-dashboard">
       <h2>⚠ Load failures</h2>
       <table>
         <thead>

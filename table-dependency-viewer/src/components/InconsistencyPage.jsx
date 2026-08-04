@@ -19,7 +19,7 @@ export default function InconsistencyPage({ onBack }) {
   }, []);
 
   return (
-    <div className="inconsistency-page">
+    <div className="container cc-page inconsistency-page">
       <button onClick={onBack} style={{ marginBottom: 10 }}>← Назад</button>
       <h2 className="center">🔁 Нарушения порядка загрузки</h2>
 

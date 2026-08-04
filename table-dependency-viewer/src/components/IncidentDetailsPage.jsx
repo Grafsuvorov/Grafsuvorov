@@ -66,11 +66,19 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
   );
 
   if (loading) {
-    return <div className="page-loading">Загрузка инцидента...</div>;
+    return (
+      <div className="page-state-shell">
+        <div className="page-state-card muted">Загрузка инцидента...</div>
+      </div>
+    );
   }
 
   if (error || !data) {
-    return <div className="page-error">Не удалось загрузить инцидент</div>;
+    return (
+      <div className="page-state-shell">
+        <div className="page-state-card error">Не удалось загрузить инцидент</div>
+      </div>
+    );
   }
 
   return (

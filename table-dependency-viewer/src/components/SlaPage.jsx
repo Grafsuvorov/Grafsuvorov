@@ -49,11 +49,23 @@ export default function SlaPage() {
     )
     .sort((a, b) => Number(a.sla_ok) - Number(b.sla_ok)); // failed first
 
-  if (loading) return <div className="p-4">Загрузка...</div>;
-  if (error) return <div className="p-4 text-red-500">Ошибка: {error}</div>;
+  if (loading) {
+    return (
+      <div className="page-state-shell">
+        <div className="page-state-card muted">Загрузка SLA...</div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="page-state-shell">
+        <div className="page-state-card error">Ошибка: {error}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4">
+    <div className="container cc-page">
       <h1 className="text-2xl font-bold mb-4">SLA мониторинг</h1>
 
       <input

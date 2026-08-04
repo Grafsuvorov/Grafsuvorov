@@ -283,6 +283,70 @@ function buildMarkdownReport(cluster, recommendation, checklist, aiBrief) {
   ].join("\n");
 }
 
+function buildHintStats(pairs) {
+  const stats = new Map();
+  pairs.forEach((pair) => {
+    (pair.diff_hints || []).forEach((hint) => {
+      const key = String(hint || "").trim();
+      if (!key) return;
+      const current = stats.get(key) || {
+        hint: key,
+        count: 0,
+        highCount: 0,
+        exactCount: 0,
+      };
+      current.count += 1;
+      if ((pair.merge_potential || "").toUpperCase() === "HIGH") current.highCount += 1;
+      if (pair.issue_type === "duplicate_exact") current.exactCount += 1;
+      stats.set(key, current);
+    });
+  });
+  return [...stats.values()].sort((a, b) => (
+    (b.highCount - a.highCount) ||
+    (b.exactCount - a.exactCount) ||
+    (b.count - a.count) ||
+    a.hint.localeCompare(b.hint)
+  ));
+}
+
+function buildRecommendationPortfolio(candidates) {
+  const buckets = new Map();
+  candidates.forEach((item) => {
+    const key = item.recommendation?.kind || "manual";
+    const current = buckets.get(key) || {
+      kind: key,
+      title: item.recommendation?.title || "Нужен ручной разбор",
+      count: 0,
+      highCount: 0,
+      exactCount: 0,
+      avgScoreSum: 0,
+    };
+    current.count += 1;
+    current.highCount += item.highCount || 0;
+    current.exactCount += item.exactCount || 0;
+    current.avgScoreSum += item.avgScore || 0;
+    buckets.set(key, current);
+  });
+  return [...buckets.values()].map((item) => ({
+    ...item,
+    avgScore: item.count ? item.avgScoreSum / item.count : 0,
+  })).sort((a, b) => b.count - a.count);
+}
+
+function buildRoadmap(candidates) {
+  return {
+    now: candidates
+      .filter((item) => item.recommendation?.kind === "shared" || (item.exactCount >= 2 && item.highCount >= 1))
+      .slice(0, 6),
+    next: candidates
+      .filter((item) => item.recommendation?.kind === "collapse")
+      .slice(0, 6),
+    watch: candidates
+      .filter((item) => item.recommendation?.kind === "semantic" || item.recommendation?.kind === "manual")
+      .slice(0, 6),
+  };
+}
+
 function downloadTextFile(content, filename, type = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = window.URL.createObjectURL(blob);
@@ -419,6 +483,18 @@ export default function AdminArchitecturePage() {
   const markdownReport = useMemo(
     () => buildMarkdownReport(selectedCluster, selectedRecommendation, checklist, aiBrief),
     [aiBrief, checklist, selectedCluster, selectedRecommendation],
+  );
+  const hintStats = useMemo(
+    () => buildHintStats(pairs).slice(0, 10),
+    [pairs],
+  );
+  const recommendationPortfolio = useMemo(
+    () => buildRecommendationPortfolio(topCandidates),
+    [topCandidates],
+  );
+  const roadmap = useMemo(
+    () => buildRoadmap(topCandidates),
+    [topCandidates],
   );
 
   const openLogicAudit = (fqn) => {
@@ -606,6 +682,57 @@ export default function AdminArchitecturePage() {
             </section>
           </section>
 
+          <section className="architecture-grid">
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Портфель рекомендаций</div>
+              <div className="section-subtitle">
+                Как по всему текущему срезу распределяются типы действий: общий слой, схлопывание, семантический конфликт или ручной разбор.
+              </div>
+              <div className="architecture-family-list">
+                {recommendationPortfolio.map((item) => (
+                  <div key={item.kind} className="architecture-family-card">
+                    <div className="architecture-family-head">
+                      <strong>{item.title}</strong>
+                      <span className="architecture-badge accent">{formatPercent(item.avgScore)}</span>
+                    </div>
+                    <div className="architecture-family-bar">
+                      <div
+                        className="architecture-family-fill"
+                        style={{ width: `${Math.min(100, item.count * 10 + item.highCount * 2)}%` }}
+                      />
+                    </div>
+                    <div className="architecture-family-meta">
+                      <span>{item.count} объектов</span>
+                      <span>{item.highCount} HIGH</span>
+                      <span>{item.exactCount} exact</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Сигналы повторов</div>
+              <div className="section-subtitle">
+                Наиболее частые архитектурные паттерны, которые всплывают в похожих расчётах.
+              </div>
+              <div className="architecture-list compact">
+                {hintStats.map((item) => (
+                  <article key={item.hint} className="architecture-row-card compact">
+                    <div className="architecture-row-head">
+                      <div className="architecture-pair">{item.hint}</div>
+                      <div className="architecture-row-badges">
+                        <span className="architecture-badge">{item.count}</span>
+                        <span className="architecture-badge">{item.highCount} HIGH</span>
+                        <span className="architecture-badge">{item.exactCount} exact</span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
+
           {selectedCluster ? (
             <section className="cc-surface architecture-block">
               <div className="section-title">Разбор кластера</div>
@@ -710,6 +837,37 @@ export default function AdminArchitecturePage() {
               </div>
             </section>
           ) : null}
+
+          <section className="cc-surface architecture-block">
+            <div className="section-title">Дорожная карта рефакторинга</div>
+            <div className="section-subtitle">
+              Текущий workbench уже раскладывает кандидатов на три волны: сделать сейчас, взять следующим этапом, держать под наблюдением.
+            </div>
+            <div className="architecture-roadmap-grid">
+              {[
+                { key: "now", title: "Делать сейчас", items: roadmap.now },
+                { key: "next", title: "Следующий этап", items: roadmap.next },
+                { key: "watch", title: "Под наблюдением", items: roadmap.watch },
+              ].map((column) => (
+                <div key={column.key} className="architecture-roadmap-card">
+                  <div className="architecture-roadmap-title">{column.title}</div>
+                  <div className="architecture-roadmap-list">
+                    {column.items.length ? column.items.map((item) => (
+                      <button
+                        key={`${column.key}-${item.fqn}`}
+                        type="button"
+                        className="architecture-roadmap-item"
+                        onClick={() => setSelectedObjectFqn(item.fqn)}
+                      >
+                        <span className="mono">{item.fqn}</span>
+                        <span>{item.recommendation?.title || "Ручной разбор"}</span>
+                      </button>
+                    )) : <div className="muted">Пока пусто.</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
 
           <section className="architecture-grid">
             <section className="cc-surface architecture-block">

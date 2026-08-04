@@ -15934,6 +15934,55 @@ html[data-theme="light"] .onboarding-area-card:hover {
   margin-top: 2px;
 }
 
+.architecture-roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.architecture-roadmap-card,
+.architecture-roadmap-item {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 24, 38, 0.9), rgba(8, 12, 22, 0.98));
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
+}
+
+.architecture-roadmap-card {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.architecture-roadmap-title {
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.architecture-roadmap-list {
+  display: grid;
+  gap: 10px;
+}
+
+.architecture-roadmap-item {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.architecture-roadmap-item:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.24);
+  box-shadow: 0 20px 36px rgba(2, 6, 23, 0.18);
+}
+
 .architecture-cluster-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.8fr);
@@ -16052,7 +16101,9 @@ html[data-theme="light"] .architecture-row-card,
 html[data-theme="light"] .architecture-family-card,
 html[data-theme="light"] .architecture-cluster-head,
 html[data-theme="light"] .architecture-peer-card,
-html[data-theme="light"] .architecture-reco-card {
+html[data-theme="light"] .architecture-reco-card,
+html[data-theme="light"] .architecture-roadmap-card,
+html[data-theme="light"] .architecture-roadmap-item {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.95)) !important;
   border-color: rgba(140, 160, 183, 0.16) !important;
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06) !important;
@@ -16062,7 +16113,8 @@ html[data-theme="light"] .architecture-link,
 html[data-theme="light"] .architecture-intro-title,
 html[data-theme="light"] .architecture-family-head strong,
 html[data-theme="light"] .architecture-pair,
-html[data-theme="light"] .architecture-kpi .value {
+html[data-theme="light"] .architecture-kpi .value,
+html[data-theme="light"] .architecture-roadmap-title {
   color: var(--text-strong) !important;
 }
 
@@ -16104,6 +16156,10 @@ html[data-theme="light"] .architecture-badge.accent {
   }
 
   .architecture-cluster-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-roadmap-grid {
     grid-template-columns: 1fr;
   }
 }

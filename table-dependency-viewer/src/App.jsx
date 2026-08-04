@@ -218,6 +218,10 @@ export default function App() {
         navigate("/admin/entity-meta");
         return;
       }
+      if (target === "/admin/architecture") {
+        navigate("/admin/architecture");
+        return;
+      }
       if (target === "/admin/engineering") {
         navigate("/admin/engineering");
         return;

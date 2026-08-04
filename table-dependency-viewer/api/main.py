@@ -2179,7 +2179,7 @@ def get_admin_incident_reports(
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     try:
-        with dev_engine.connect() as conn:
+        with engine.connect() as conn:
             incident_rows = conn.execute(
                 text(
                     """
@@ -9584,7 +9584,7 @@ def _build_architecture_workbench_enrichment(
         if latest_release:
             latest_release.pop("_started_at", None)
 
-    with dev_engine.connect() as conn:
+    with engine.connect() as conn:
         incident_rows = conn.execute(
             text(
                 """

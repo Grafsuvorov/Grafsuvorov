@@ -5,7 +5,7 @@ export const adminApi = {
   userAnalytics: (days) => apiClient.get("/auth/users/analytics", { params: { days } }),
   ciCdStatus: () => apiClient.get("/api/admin/ci-cd/status"),
   engineeringEfficiency: (days) => apiClient.get("/api/admin/engineering-efficiency", { params: { days } }),
-  architectureWorkbench: () => apiClient.getCached("/api/logic-audit", {
+  architectureWorkbench: () => apiClient.getCached("/api/admin/architecture/workbench", {
     ttlMs: 10 * 60 * 1000,
     params: { issue_type: "all", mode: "standard", min_score: 0.72, limit: 500 },
   }),

@@ -9327,6 +9327,430 @@ def get_logic_audit_pair(pair_id: str):
     return detail
 
 
+def _normalize_architecture_fqn(value: Optional[str]) -> Optional[str]:
+    raw = str(value or "").strip().lower()
+    if not raw or "." not in raw:
+        return None
+    schema, table = raw.split(".", 1)
+    schema = schema.strip()
+    table = table.strip()
+    if not schema or not table:
+        return None
+    return f"{schema}.{table}"
+
+
+def _architecture_fqn_aliases(fqn: str) -> set[str]:
+    normalized = _normalize_architecture_fqn(fqn)
+    if not normalized or "." not in normalized:
+        return set()
+    schema, table = normalized.split(".", 1)
+    aliases = {normalized}
+    cleaned = _clean_table_name(table)
+    if cleaned:
+        aliases.add(f"{schema}.{cleaned}")
+        if not cleaned.startswith("/"):
+            aliases.add(f"{schema}./{cleaned}")
+    if not table.startswith("/"):
+        aliases.add(f"{schema}./{table}")
+    return {alias for alias in aliases if alias}
+
+
+def _build_architecture_alias_map(fqns: list[str]) -> dict[str, str]:
+    alias_map: dict[str, str] = {}
+    for fqn in fqns:
+        for alias in _architecture_fqn_aliases(fqn):
+            alias_map[alias] = fqn
+    return alias_map
+
+
+def _empty_architecture_context(fqn: str) -> dict[str, Any]:
+    return {
+        "fqn": fqn,
+        "direct_upstream_count": 0,
+        "direct_downstream_count": 0,
+        "transitive_downstream_count": 0,
+        "downstream_entities_count": 0,
+        "downstream_entities": [],
+        "releases_count": 0,
+        "release_objects_count": 0,
+        "release_tasks_count": 0,
+        "incidents_count": 0,
+        "latest_release": None,
+        "latest_incident": None,
+        "last_change": None,
+    }
+
+
+def _build_architecture_workbench_enrichment(
+    fqns: list[str],
+    *,
+    release_days: int = 180,
+    incident_days: int = 180,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    normalized_fqns = sorted({_normalize_architecture_fqn(item) for item in fqns if _normalize_architecture_fqn(item)})
+    if not normalized_fqns:
+        return {}, {
+            "objects_with_releases": 0,
+            "objects_with_incidents": 0,
+            "objects_with_downstream": 0,
+            "objects_with_last_change": 0,
+        }
+
+    alias_map = _build_architecture_alias_map(normalized_fqns)
+    context_map = {fqn: _empty_architecture_context(fqn) for fqn in normalized_fqns}
+
+    all_meta, reverse_index = get_cached_meta_and_index()
+    meta_map = {
+        f"{m.get('table_schema')}.{m.get('table_name')}": m
+        for m in all_meta
+        if m.get("table_schema") and m.get("table_name")
+    }
+
+    for fqn in normalized_fqns:
+        meta = meta_map.get(fqn) or {}
+        ctx = context_map[fqn]
+        depends_on = meta.get("depends_on") or {}
+        direct_upstream = {
+            f"{src_schema}.{src_table}"
+            for src_schema, tables in depends_on.items()
+            for src_table in (tables or [])
+            if src_schema and src_table
+        }
+        if "." in fqn:
+            schema_name, table_name = fqn.split(".", 1)
+        else:
+            schema_name, table_name = "", ""
+        direct_downstream = reverse_index.get((schema_name, table_name), []) or []
+
+        visited: set[str] = set()
+        queue = [fqn]
+        downstream_entities: set[str] = set()
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            if "." not in current:
+                continue
+            current_schema, current_table = current.split(".", 1)
+            for consumer in reverse_index.get((current_schema, current_table), []) or []:
+                target_schema = str(consumer.get("schema") or "").strip().lower()
+                target_table = str(consumer.get("table_name") or "").strip().lower()
+                if not target_schema or not target_table:
+                    continue
+                target_fqn = f"{target_schema}.{target_table}"
+                if target_fqn == fqn:
+                    continue
+                if target_fqn not in visited:
+                    queue.append(target_fqn)
+                entity_name = str(consumer.get("entity_name") or "").strip()
+                if entity_name:
+                    downstream_entities.add(entity_name)
+
+        ctx["direct_upstream_count"] = len(direct_upstream)
+        ctx["direct_downstream_count"] = len(
+            {
+                f"{str(item.get('schema') or '').strip().lower()}.{str(item.get('table_name') or '').strip().lower()}"
+                for item in direct_downstream
+                if item.get("schema") and item.get("table_name")
+            }
+        )
+        transitive_targets = visited - {fqn}
+        ctx["transitive_downstream_count"] = len(transitive_targets)
+        ctx["downstream_entities_count"] = len(downstream_entities)
+        ctx["downstream_entities"] = sorted(downstream_entities)[:8]
+
+    release_rows = []
+    snapshot_rows = []
+    exec_rows = []
+    with engine.connect() as conn:
+        release_query = text(
+            f"""
+            SELECT
+                lower(ro.schema_name) AS schema_name,
+                lower(ro.table_name) AS table_name,
+                ro.release_id,
+                ro.task_id,
+                ro.change_type,
+                rl.started_at,
+                rl.release_type,
+                rl.status,
+                rl.initiated_by
+            FROM {TABLE_RELEASE_OBJECTS} ro
+            JOIN {TABLE_RELEASE_LOG} rl ON rl.release_id = ro.release_id
+            WHERE rl.started_at >= (now() - (:days || ' days')::interval)
+              AND (lower(ro.schema_name) || '.' || lower(ro.table_name)) IN :fqns
+            ORDER BY rl.started_at DESC NULLS LAST, ro.release_id DESC
+            """
+        ).bindparams(bindparam("fqns", expanding=True))
+        release_rows = conn.execute(
+            release_query,
+            {"days": release_days, "fqns": normalized_fqns},
+        ).mappings().all()
+
+        release_task_ids = sorted(
+            {
+                str(row.get("task_id") or "").strip()
+                for row in release_rows
+                if str(row.get("task_id") or "").strip()
+            }
+        )
+        if release_task_ids:
+            snapshot_query = text(
+                f"""
+                SELECT
+                    issue_id,
+                    summary,
+                    created_by,
+                    assignee,
+                    updated_at,
+                    created_at,
+                    current_state
+                FROM {TABLE_YT_ISSUE_SNAPSHOT}
+                WHERE issue_id IN :issue_ids
+                """
+            ).bindparams(bindparam("issue_ids", expanding=True))
+            snapshot_rows = conn.execute(snapshot_query, {"issue_ids": release_task_ids}).mappings().all()
+
+            exec_query = text(
+                f"""
+                SELECT DISTINCT ON (issue_id)
+                       issue_id,
+                       author AS executor,
+                       ts
+                FROM {TABLE_YT_ISSUE_TIMELINE}
+                WHERE issue_id IN :issue_ids
+                  AND event_type = 'State change'
+                  AND value_to IN ('Ожидание релиза', 'В работе')
+                ORDER BY issue_id, ts DESC NULLS LAST
+                """
+            ).bindparams(bindparam("issue_ids", expanding=True))
+            exec_rows = conn.execute(exec_query, {"issue_ids": release_task_ids}).mappings().all()
+
+    snapshot_map = {str(row.get("issue_id") or ""): dict(row) for row in snapshot_rows}
+    exec_map = {str(row.get("issue_id") or ""): dict(row) for row in exec_rows}
+    release_counts: dict[str, set[str]] = defaultdict(set)
+    release_task_counts: dict[str, set[str]] = defaultdict(set)
+    for row in release_rows:
+        raw_fqn = f"{row.get('schema_name')}.{row.get('table_name')}"
+        fqn = alias_map.get(raw_fqn)
+        if not fqn:
+            continue
+        ctx = context_map[fqn]
+        release_counts[fqn].add(str(row.get("release_id") or ""))
+        if str(row.get("task_id") or "").strip():
+            release_task_counts[fqn].add(str(row.get("task_id") or "").strip())
+        ctx["release_objects_count"] += 1
+        current_latest = ctx.get("latest_release")
+        row_started_at = row.get("started_at")
+        if not current_latest or (row_started_at and row_started_at > (current_latest.get("_started_at") or datetime.min)):
+            task_id = str(row.get("task_id") or "").strip()
+            snap = snapshot_map.get(task_id, {})
+            exec_meta = exec_map.get(task_id, {})
+            actor = (
+                exec_meta.get("executor")
+                or snap.get("assignee")
+                or snap.get("created_by")
+                or row.get("initiated_by")
+                or "Не указан"
+            )
+            latest_release = {
+                "release_id": row.get("release_id"),
+                "started_at": serialize_datetime(row_started_at),
+                "release_type": row.get("release_type"),
+                "status": row.get("status"),
+                "initiated_by": row.get("initiated_by") or "Не указан",
+                "task_id": task_id or None,
+                "task_link": _build_ytrack_link(task_id) if task_id else None,
+                "task_summary": snap.get("summary"),
+                "actor": actor,
+                "_started_at": row_started_at,
+            }
+            ctx["latest_release"] = latest_release
+            ctx["last_change"] = {
+                "changed_at": serialize_datetime(row_started_at),
+                "actor": actor,
+                "source": "release",
+                "release_id": row.get("release_id"),
+                "task_id": task_id or None,
+                "task_link": _build_ytrack_link(task_id) if task_id else None,
+                "task_summary": snap.get("summary"),
+            }
+
+    for fqn in normalized_fqns:
+        context_map[fqn]["releases_count"] = len(release_counts.get(fqn) or set())
+        context_map[fqn]["release_tasks_count"] = len(release_task_counts.get(fqn) or set())
+        latest_release = context_map[fqn].get("latest_release")
+        if latest_release:
+            latest_release.pop("_started_at", None)
+
+    with dev_engine.connect() as conn:
+        incident_rows = conn.execute(
+            text(
+                """
+                SELECT
+                    issue_id,
+                    summary,
+                    state_name,
+                    author_name,
+                    assignee_name,
+                    incident_reason_name,
+                    alert_source,
+                    trigger_dttm,
+                    incident_start_dttm,
+                    detected_dttm,
+                    work_finished_dttm,
+                    updated_at_yt,
+                    resolved_at_yt,
+                    table_schema,
+                    table_name,
+                    table_name_raw
+                FROM tech_etl.yt_incidents
+                WHERE COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt, dttm_loaded)
+                      >= (now() - (:days || ' days')::interval)
+                ORDER BY COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt) DESC NULLS LAST,
+                         issue_id DESC
+                """
+            ),
+            {"days": incident_days},
+        ).mappings().all()
+
+    incident_counts: dict[str, set[str]] = defaultdict(set)
+    for row in incident_rows:
+        table_schema = str(row.get("table_schema") or "").strip().lower()
+        table_names = _split_rich_multivalue(row.get("table_name")) or _split_rich_multivalue(row.get("table_name_raw"))
+        matched_fqns: set[str] = set()
+        if table_schema and table_names:
+            for table_name in table_names:
+                table_name_norm = str(table_name or "").strip().lower()
+                if not table_name_norm:
+                    continue
+                for alias in _architecture_fqn_aliases(f"{table_schema}.{table_name_norm}"):
+                    canonical = alias_map.get(alias)
+                    if canonical:
+                        matched_fqns.add(canonical)
+        if not matched_fqns:
+            continue
+
+        incident_at = (
+            row.get("incident_start_dttm")
+            or row.get("detected_dttm")
+            or row.get("trigger_dttm")
+            or row.get("updated_at_yt")
+            or row.get("resolved_at_yt")
+        )
+        for fqn in matched_fqns:
+            incident_counts[fqn].add(str(row.get("issue_id") or ""))
+            ctx = context_map[fqn]
+            current_latest = ctx.get("latest_incident")
+            if not current_latest or (incident_at and incident_at > (current_latest.get("_incident_at") or datetime.min)):
+                issue_id = str(row.get("issue_id") or "").strip()
+                ctx["latest_incident"] = {
+                    "issue_id": issue_id,
+                    "link": _build_ytrack_link(issue_id),
+                    "summary": row.get("summary"),
+                    "state_name": row.get("state_name"),
+                    "incident_reason_name": row.get("incident_reason_name") or "Не указана",
+                    "alert_source": row.get("alert_source") or "Не указан",
+                    "incident_start_dttm": serialize_datetime(incident_at),
+                    "author_name": row.get("author_name") or "Не указан",
+                    "assignee_name": row.get("assignee_name") or row.get("author_name") or "Не указан",
+                    "_incident_at": incident_at,
+                }
+
+    for fqn in normalized_fqns:
+        context_map[fqn]["incidents_count"] = len(incident_counts.get(fqn) or set())
+        latest_incident = context_map[fqn].get("latest_incident")
+        if latest_incident:
+            latest_incident.pop("_incident_at", None)
+
+    summary = {
+        "objects_with_releases": sum(1 for row in context_map.values() if row.get("releases_count")),
+        "objects_with_incidents": sum(1 for row in context_map.values() if row.get("incidents_count")),
+        "objects_with_downstream": sum(1 for row in context_map.values() if row.get("transitive_downstream_count")),
+        "objects_with_last_change": sum(1 for row in context_map.values() if row.get("last_change")),
+    }
+    return context_map, summary
+
+
+@router.get("/api/admin/architecture/workbench")
+def get_admin_architecture_workbench(
+    request: Request,
+    issue_type: str = Query("all"),
+    mode: str = Query("standard"),
+    min_score: float = Query(0.72, ge=0.0, le=1.0),
+    limit: int = Query(500, ge=1, le=1000),
+    search: Optional[str] = Query(None),
+    release_days: int = Query(180, ge=30, le=3650),
+    incident_days: int = Query(180, ge=30, le=3650),
+):
+    user = get_current_user_from_request(request)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    payload = _build_logic_audit_cache()
+    pairs = payload.get("pairs") or []
+
+    if issue_type != "all":
+        pairs = [row for row in pairs if row.get("issue_type") == issue_type]
+
+    if min_score > 0:
+        pairs = [row for row in pairs if (row.get("score") or 0) >= min_score]
+
+    if mode == "strict":
+        pairs = [
+            row for row in pairs
+            if (row.get("expression_overlap_count") or 0) >= 1
+            and (row.get("score") or 0) >= max(min_score, 0.72)
+        ]
+
+    if search:
+        term = search.strip().lower()
+        if term:
+            pairs = [
+                row for row in pairs
+                if term in (row.get("left_fqn") or "").lower()
+                or term in (row.get("right_fqn") or "").lower()
+                or term in (row.get("left_entity") or "").lower()
+                or term in (row.get("right_entity") or "").lower()
+            ]
+
+    pairs = pairs[:limit]
+    fqns = sorted(
+        {
+            item
+            for row in pairs
+            for item in (_normalize_architecture_fqn(row.get("left_fqn")), _normalize_architecture_fqn(row.get("right_fqn")))
+            if item
+        }
+    )
+    enrichment, enrichment_summary = _build_architecture_workbench_enrichment(
+        fqns,
+        release_days=release_days,
+        incident_days=incident_days,
+    )
+    stats = {
+        "duplicate_exact": sum(1 for row in pairs if row.get("issue_type") == "duplicate_exact"),
+        "duplicate_candidate": sum(1 for row in pairs if row.get("issue_type") == "duplicate_candidate"),
+        "similar_candidate": sum(1 for row in pairs if row.get("issue_type") == "similar_candidate"),
+    }
+    return {
+        "generated_at": payload.get("generated_at"),
+        "objects_count": payload.get("objects_count"),
+        "pairs_count": payload.get("pairs_count"),
+        "mode": mode,
+        "returned_count": len(pairs),
+        "stats": stats,
+        "pairs": pairs,
+        "enrichment": enrichment,
+        "enrichment_summary": enrichment_summary,
+        "windows": {
+            "release_days": release_days,
+            "incident_days": incident_days,
+        },
+    }
+
+
 @router.get("/api/entity-loads")
 def get_entity_loads(
     entity_id: int = Query(..., ge=1),

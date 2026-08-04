@@ -27,6 +27,27 @@ function shortText(value, limit = 120) {
   return `${text.slice(0, limit - 1)}…`;
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildPressureScore(item) {
+  const releaseScore = Number(item.releasesCount || 0) * 4;
+  const incidentScore = Number(item.incidentsCount || 0) * 14;
+  const downstreamScore = Number(item.transitiveDownstreamCount || 0) * 2;
+  const duplicateScore = Number(item.highCount || 0) * 6 + Number(item.exactCount || 0) * 10;
+  return Math.min(100, Math.round(releaseScore + incidentScore + downstreamScore + duplicateScore));
+}
+
 function buildObjectStats(pairs) {
   const map = new Map();
 
@@ -226,7 +247,7 @@ function buildChecklist(cluster, recommendation) {
   return items;
 }
 
-function buildAiPayload(cluster, recommendation, checklist) {
+function buildAiPayload(cluster, recommendation, checklist, context = null) {
   if (!cluster || !recommendation) return null;
   return {
     generated_at: new Date().toISOString(),
@@ -248,10 +269,25 @@ function buildAiPayload(cluster, recommendation, checklist) {
       hints: peer.hints,
     })),
     checklist,
+    operational_context: context ? {
+      releases_count: Number(context.releasesCount || 0),
+      release_objects_count: Number(context.releaseObjectsCount || 0),
+      release_tasks_count: Number(context.releaseTasksCount || 0),
+      incidents_count: Number(context.incidentsCount || 0),
+      direct_upstream_count: Number(context.directUpstreamCount || 0),
+      direct_downstream_count: Number(context.directDownstreamCount || 0),
+      transitive_downstream_count: Number(context.transitiveDownstreamCount || 0),
+      downstream_entities_count: Number(context.downstreamEntitiesCount || 0),
+      downstream_entities: context.downstream_entities || context.downstreamEntities || [],
+      last_change: context.lastChange || null,
+      latest_release: context.latestRelease || null,
+      latest_incident: context.latestIncident || null,
+      pressure_score: Number(context.pressureScore || 0),
+    } : null,
   };
 }
 
-function buildMarkdownReport(cluster, recommendation, checklist, aiBrief) {
+function buildMarkdownReport(cluster, recommendation, checklist, aiBrief, context = null) {
   if (!cluster || !recommendation) return "";
   const peerLines = cluster.peers.map((peer) =>
     `- ${peer.fqn} | ${peer.entity} | ${ISSUE_LABELS[peer.issueType] || peer.issueType} | ${formatPercent(peer.score)} | expr ${peer.overlap} | ${peer.mergePotential}`
@@ -274,6 +310,16 @@ function buildMarkdownReport(cluster, recommendation, checklist, aiBrief) {
     "",
     "## AI-ready summary",
     aiBrief,
+    "",
+    ...(context ? [
+      "## Операционный контекст",
+      `- Releases за окно: ${context.releasesCount || 0}`,
+      `- Incidents за окно: ${context.incidentsCount || 0}`,
+      `- Downstream (transitive): ${context.transitiveDownstreamCount || 0}`,
+      `- Последний delivery-change: ${context.lastChange?.actor || "Не указан"} / ${context.lastChange?.changed_at || "—"}`,
+      `- Последний инцидент: ${context.latestIncident?.issue_id || "—"} / ${context.latestIncident?.incident_start_dttm || "—"}`,
+      "",
+    ] : []),
     "",
     "## Peer-объекты",
     ...peerLines,
@@ -347,6 +393,36 @@ function buildRoadmap(candidates) {
   };
 }
 
+function buildOwnerStats(candidates) {
+  const buckets = new Map();
+  candidates.forEach((item) => {
+    const actor = item.lastChange?.actor || "Не указан";
+    const current = buckets.get(actor) || {
+      actor,
+      objectsCount: 0,
+      incidentsCount: 0,
+      releasesCount: 0,
+      pressureSum: 0,
+    };
+    current.objectsCount += 1;
+    current.incidentsCount += Number(item.incidentsCount || 0);
+    current.releasesCount += Number(item.releasesCount || 0);
+    current.pressureSum += Number(item.pressureScore || 0);
+    buckets.set(actor, current);
+  });
+  return [...buckets.values()]
+    .map((item) => ({
+      ...item,
+      avgPressure: item.objectsCount ? item.pressureSum / item.objectsCount : 0,
+    }))
+    .sort((a, b) => (
+      (b.objectsCount - a.objectsCount) ||
+      (b.incidentsCount - a.incidentsCount) ||
+      (b.avgPressure - a.avgPressure)
+    ))
+    .slice(0, 8);
+}
+
 function downloadTextFile(content, filename, type = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = window.URL.createObjectURL(blob);
@@ -380,6 +456,8 @@ export default function AdminArchitecturePage() {
   }, []);
 
   const pairs = data?.pairs || [];
+  const enrichment = data?.enrichment || {};
+  const enrichmentSummary = data?.enrichment_summary || {};
 
   const objectStats = useMemo(() => buildObjectStats(pairs), [pairs]);
   const entityStats = useMemo(() => buildEntityStats(pairs), [pairs]);
@@ -397,6 +475,7 @@ export default function AdminArchitecturePage() {
           highCount: item.highCount,
           avgScore: item.avgScore,
         }),
+        ...(enrichment[item.fqn] || {}),
       }))
       .filter((item) => {
         if (issueFilter !== "all" && !item.issueTypes.includes(issueFilter)) return false;
@@ -404,17 +483,40 @@ export default function AdminArchitecturePage() {
         if (!term) return true;
         return (
           item.fqn.toLowerCase().includes(term) ||
-          item.entities.some((entity) => String(entity || "").toLowerCase().includes(term))
+          item.entities.some((entity) => String(entity || "").toLowerCase().includes(term)) ||
+          String(item.lastChange?.actor || "").toLowerCase().includes(term)
         );
       })
+      .map((item) => ({
+        ...item,
+        releasesCount: Number(item.releases_count || 0),
+        releaseObjectsCount: Number(item.release_objects_count || 0),
+        releaseTasksCount: Number(item.release_tasks_count || 0),
+        incidentsCount: Number(item.incidents_count || 0),
+        directUpstreamCount: Number(item.direct_upstream_count || 0),
+        directDownstreamCount: Number(item.direct_downstream_count || 0),
+        transitiveDownstreamCount: Number(item.transitive_downstream_count || 0),
+        downstreamEntitiesCount: Number(item.downstream_entities_count || 0),
+        downstreamEntities: item.downstream_entities || [],
+        latestRelease: item.latest_release || null,
+        latestIncident: item.latest_incident || null,
+        lastChange: item.last_change || null,
+        pressureScore: buildPressureScore({
+          ...item,
+          releasesCount: Number(item.releases_count || 0),
+          incidentsCount: Number(item.incidents_count || 0),
+          transitiveDownstreamCount: Number(item.transitive_downstream_count || 0),
+        }),
+      }))
       .sort((a, b) => (
+        (b.pressureScore - a.pressureScore) ||
         (b.highCount - a.highCount) ||
         (b.exactCount - a.exactCount) ||
         (b.hits - a.hits) ||
         (b.avgScore - a.avgScore)
       ))
       .slice(0, 18);
-  }, [issueFilter, objectStats, recommendationFilter, search]);
+  }, [enrichment, issueFilter, objectStats, recommendationFilter, search]);
 
   useEffect(() => {
     if (!selectedObjectFqn && topCandidates.length) {
@@ -456,7 +558,11 @@ export default function AdminArchitecturePage() {
     pairs: pairs.length,
     exact: pairs.filter((row) => row.issue_type === "duplicate_exact").length,
     high: pairs.filter((row) => (row.merge_potential || "").toUpperCase() === "HIGH").length,
-  }), [data?.objects_count, pairs]);
+    withReleases: enrichmentSummary.objects_with_releases || 0,
+    withIncidents: enrichmentSummary.objects_with_incidents || 0,
+    withDownstream: enrichmentSummary.objects_with_downstream || 0,
+    withLastChange: enrichmentSummary.objects_with_last_change || 0,
+  }), [data?.objects_count, enrichmentSummary.objects_with_downstream, enrichmentSummary.objects_with_incidents, enrichmentSummary.objects_with_last_change, enrichmentSummary.objects_with_releases, pairs]);
 
   const selectedCluster = useMemo(
     () => buildObjectCluster(selectedObjectFqn, pairs),
@@ -477,12 +583,12 @@ export default function AdminArchitecturePage() {
     [selectedCluster, selectedRecommendation],
   );
   const aiPayload = useMemo(
-    () => buildAiPayload(selectedCluster, selectedRecommendation, checklist),
-    [checklist, selectedCluster, selectedRecommendation],
+    () => buildAiPayload(selectedCluster, selectedRecommendation, checklist, selectedCandidate),
+    [checklist, selectedCandidate, selectedCluster, selectedRecommendation],
   );
   const markdownReport = useMemo(
-    () => buildMarkdownReport(selectedCluster, selectedRecommendation, checklist, aiBrief),
-    [aiBrief, checklist, selectedCluster, selectedRecommendation],
+    () => buildMarkdownReport(selectedCluster, selectedRecommendation, checklist, aiBrief, selectedCandidate),
+    [aiBrief, checklist, selectedCandidate, selectedCluster, selectedRecommendation],
   );
   const hintStats = useMemo(
     () => buildHintStats(pairs).slice(0, 10),
@@ -494,6 +600,36 @@ export default function AdminArchitecturePage() {
   );
   const roadmap = useMemo(
     () => buildRoadmap(topCandidates),
+    [topCandidates],
+  );
+  const selectedCandidate = useMemo(
+    () => topCandidates.find((item) => item.fqn === selectedObjectFqn) || null,
+    [selectedObjectFqn, topCandidates],
+  );
+  const ownerStats = useMemo(
+    () => buildOwnerStats(topCandidates),
+    [topCandidates],
+  );
+  const topIncidentCandidates = useMemo(
+    () => [...topCandidates]
+      .filter((item) => item.incidentsCount > 0)
+      .sort((a, b) => (
+        (b.incidentsCount - a.incidentsCount) ||
+        (b.pressureScore - a.pressureScore) ||
+        (b.transitiveDownstreamCount - a.transitiveDownstreamCount)
+      ))
+      .slice(0, 8),
+    [topCandidates],
+  );
+  const topBlastRadiusCandidates = useMemo(
+    () => [...topCandidates]
+      .filter((item) => item.transitiveDownstreamCount > 0)
+      .sort((a, b) => (
+        (b.transitiveDownstreamCount - a.transitiveDownstreamCount) ||
+        (b.incidentsCount - a.incidentsCount) ||
+        (b.pressureScore - a.pressureScore)
+      ))
+      .slice(0, 8),
     [topCandidates],
   );
 
@@ -575,6 +711,22 @@ export default function AdminArchitecturePage() {
                 <div className="label">HIGH merge potential</div>
                 <div className="value">{summary.high}</div>
               </div>
+              <div className="architecture-kpi">
+                <div className="label">С релизной активностью</div>
+                <div className="value">{summary.withReleases}</div>
+              </div>
+              <div className="architecture-kpi">
+                <div className="label">С инцидентами</div>
+                <div className="value">{summary.withIncidents}</div>
+              </div>
+              <div className="architecture-kpi">
+                <div className="label">С downstream-следом</div>
+                <div className="value">{summary.withDownstream}</div>
+              </div>
+              <div className="architecture-kpi">
+                <div className="label">С известным last change</div>
+                <div className="value">{summary.withLastChange}</div>
+              </div>
             </div>
           </section>
 
@@ -623,9 +775,13 @@ export default function AdminArchitecturePage() {
                         {item.fqn}
                       </button>
                       <div className="architecture-row-badges">
+                        <span className="architecture-badge accent">risk {item.pressureScore}</span>
                         <span className="architecture-badge">{item.hits} пар</span>
                         <span className="architecture-badge">{item.highCount} HIGH</span>
                         <span className="architecture-badge">{item.exactCount} exact</span>
+                        <span className="architecture-badge">{item.releasesCount} rel</span>
+                        <span className="architecture-badge">{item.incidentsCount} inc</span>
+                        <span className="architecture-badge">{item.transitiveDownstreamCount} down</span>
                         <span className="architecture-badge accent">{formatPercent(item.avgScore)}</span>
                       </div>
                     </div>
@@ -634,9 +790,16 @@ export default function AdminArchitecturePage() {
                       <span>{item.issueTypes.map((type) => ISSUE_LABELS[type] || type).join(" · ")}</span>
                       <span>{item.recommendation?.title || "Ручной разбор"}</span>
                     </div>
+                    <div className="architecture-row-meta">
+                      <span>Последний change: {item.lastChange?.actor || "Не указан"}</span>
+                      <span>{item.lastChange?.changed_at ? formatDateTime(item.lastChange.changed_at) : "Без поставок в окне"}</span>
+                    </div>
                     <div className="architecture-tags">
                       {item.sampleHints.map((hint) => (
                         <span key={`${item.fqn}-${hint}`} className="architecture-tag">{hint}</span>
+                      ))}
+                      {item.downstreamEntities.slice(0, 3).map((entity) => (
+                        <span key={`${item.fqn}-entity-${entity}`} className="architecture-tag muted-tag">{entity}</span>
                       ))}
                     </div>
                     <div className="architecture-actions">
@@ -733,6 +896,69 @@ export default function AdminArchitecturePage() {
             </section>
           </section>
 
+          <section className="architecture-grid">
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Операционный риск</div>
+              <div className="section-subtitle">
+                Где похожая логика уже успела засветиться в инцидентах и где изменение сильнее всего ударит по downstream-контуру.
+              </div>
+              <div className="architecture-list compact">
+                {topIncidentCandidates.map((item) => (
+                  <article key={`incident-${item.fqn}`} className="architecture-row-card compact">
+                    <div className="architecture-row-head">
+                      <button type="button" className="architecture-link mono" onClick={() => setSelectedObjectFqn(item.fqn)}>
+                        {item.fqn}
+                      </button>
+                      <div className="architecture-row-badges">
+                        <span className="architecture-badge accent">risk {item.pressureScore}</span>
+                        <span className="architecture-badge">{item.incidentsCount} inc</span>
+                        <span className="architecture-badge">{item.releasesCount} rel</span>
+                      </div>
+                    </div>
+                    <div className="architecture-row-meta">
+                      <span>{item.latestIncident?.incident_reason_name || "Без инцидентов в окне"}</span>
+                      <span>{item.latestIncident?.incident_start_dttm ? formatDateTime(item.latestIncident.incident_start_dttm) : "—"}</span>
+                    </div>
+                    <div className="muted">{shortText(item.latestIncident?.summary || item.sampleHints.join(" · "), 150)}</div>
+                  </article>
+                ))}
+                {!topIncidentCandidates.length ? <div className="muted">В текущем окне кандидатов с инцидентами нет.</div> : null}
+              </div>
+            </section>
+
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Blast Radius</div>
+              <div className="section-subtitle">
+                Кандидаты, у которых самый широкий downstream-след. Их рефакторить полезно, но нужно делать особенно аккуратно.
+              </div>
+              <div className="architecture-list compact">
+                {topBlastRadiusCandidates.map((item) => (
+                  <article key={`blast-${item.fqn}`} className="architecture-row-card compact">
+                    <div className="architecture-row-head">
+                      <button type="button" className="architecture-link mono" onClick={() => setSelectedObjectFqn(item.fqn)}>
+                        {item.fqn}
+                      </button>
+                      <div className="architecture-row-badges">
+                        <span className="architecture-badge">{item.transitiveDownstreamCount} total down</span>
+                        <span className="architecture-badge">{item.directDownstreamCount} direct</span>
+                      </div>
+                    </div>
+                    <div className="architecture-row-meta">
+                      <span>{item.downstreamEntitiesCount} downstream-сущностей</span>
+                      <span>{item.directUpstreamCount} upstream-источников</span>
+                    </div>
+                    <div className="architecture-tags">
+                      {item.downstreamEntities.slice(0, 4).map((entity) => (
+                        <span key={`blast-${item.fqn}-${entity}`} className="architecture-tag muted-tag">{entity}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+                {!topBlastRadiusCandidates.length ? <div className="muted">Downstream-следов по текущему срезу не найдено.</div> : null}
+              </div>
+            </section>
+          </section>
+
           {selectedCluster ? (
             <section className="cc-surface architecture-block">
               <div className="section-title">Разбор кластера</div>
@@ -800,6 +1026,49 @@ export default function AdminArchitecturePage() {
                   </div>
 
                   <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">Операционный контекст</div>
+                    <div className="architecture-context-grid">
+                      <div className="architecture-context-item">
+                        <span className="label">Pressure score</span>
+                        <strong>{selectedCandidate?.pressureScore ?? 0}</strong>
+                      </div>
+                      <div className="architecture-context-item">
+                        <span className="label">Releases</span>
+                        <strong>{selectedCandidate?.releasesCount ?? 0}</strong>
+                      </div>
+                      <div className="architecture-context-item">
+                        <span className="label">Incidents</span>
+                        <strong>{selectedCandidate?.incidentsCount ?? 0}</strong>
+                      </div>
+                      <div className="architecture-context-item">
+                        <span className="label">Downstream</span>
+                        <strong>{selectedCandidate?.transitiveDownstreamCount ?? 0}</strong>
+                      </div>
+                    </div>
+                    <div className="architecture-context-list">
+                      <div className="architecture-context-row">
+                        <span>Последний delivery-change</span>
+                        <span>{selectedCandidate?.lastChange?.actor || "Не указан"}</span>
+                      </div>
+                      <div className="architecture-context-row">
+                        <span>Когда</span>
+                        <span>{formatDateTime(selectedCandidate?.lastChange?.changed_at)}</span>
+                      </div>
+                      <div className="architecture-context-row">
+                        <span>Последний релиз</span>
+                        <span>{selectedCandidate?.latestRelease?.release_id || "—"}</span>
+                      </div>
+                      <div className="architecture-context-row">
+                        <span>Последний инцидент</span>
+                        <span>{selectedCandidate?.latestIncident?.issue_id || "—"}</span>
+                      </div>
+                    </div>
+                    {selectedCandidate?.latestIncident?.summary ? (
+                      <div className="muted">{shortText(selectedCandidate.latestIncident.summary, 150)}</div>
+                    ) : null}
+                  </div>
+
+                  <div className="architecture-reco-card">
                     <div className="architecture-reco-kicker">Checklist</div>
                     <div className="architecture-checklist">
                       {checklist.map((item) => (
@@ -838,35 +1107,63 @@ export default function AdminArchitecturePage() {
             </section>
           ) : null}
 
-          <section className="cc-surface architecture-block">
-            <div className="section-title">Дорожная карта рефакторинга</div>
-            <div className="section-subtitle">
-              Текущий workbench уже раскладывает кандидатов на три волны: сделать сейчас, взять следующим этапом, держать под наблюдением.
-            </div>
-            <div className="architecture-roadmap-grid">
-              {[
-                { key: "now", title: "Делать сейчас", items: roadmap.now },
-                { key: "next", title: "Следующий этап", items: roadmap.next },
-                { key: "watch", title: "Под наблюдением", items: roadmap.watch },
-              ].map((column) => (
-                <div key={column.key} className="architecture-roadmap-card">
-                  <div className="architecture-roadmap-title">{column.title}</div>
-                  <div className="architecture-roadmap-list">
-                    {column.items.length ? column.items.map((item) => (
-                      <button
-                        key={`${column.key}-${item.fqn}`}
-                        type="button"
-                        className="architecture-roadmap-item"
-                        onClick={() => setSelectedObjectFqn(item.fqn)}
-                      >
-                        <span className="mono">{item.fqn}</span>
-                        <span>{item.recommendation?.title || "Ручной разбор"}</span>
-                      </button>
-                    )) : <div className="muted">Пока пусто.</div>}
+          <section className="architecture-grid">
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Последние владельцы изменений</div>
+              <div className="section-subtitle">
+                Кто чаще всего фигурирует как последний delivery-change по текущим кандидатам. Удобно для планирования review и согласования рефакторинга.
+              </div>
+              <div className="architecture-list compact">
+                {ownerStats.map((item) => (
+                  <article key={`owner-${item.actor}`} className="architecture-row-card compact">
+                    <div className="architecture-row-head">
+                      <div className="architecture-pair">{item.actor}</div>
+                      <div className="architecture-row-badges">
+                        <span className="architecture-badge">{item.objectsCount} obj</span>
+                        <span className="architecture-badge">{item.releasesCount} rel</span>
+                        <span className="architecture-badge">{item.incidentsCount} inc</span>
+                        <span className="architecture-badge accent">{Math.round(item.avgPressure)}</span>
+                      </div>
+                    </div>
+                    <div className="architecture-row-meta">
+                      <span>Средний pressure</span>
+                      <span>{Math.round(item.avgPressure)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Дорожная карта рефакторинга</div>
+              <div className="section-subtitle">
+                Текущий workbench уже раскладывает кандидатов на три волны: сделать сейчас, взять следующим этапом, держать под наблюдением.
+              </div>
+              <div className="architecture-roadmap-grid">
+                {[
+                  { key: "now", title: "Делать сейчас", items: roadmap.now },
+                  { key: "next", title: "Следующий этап", items: roadmap.next },
+                  { key: "watch", title: "Под наблюдением", items: roadmap.watch },
+                ].map((column) => (
+                  <div key={column.key} className="architecture-roadmap-card">
+                    <div className="architecture-roadmap-title">{column.title}</div>
+                    <div className="architecture-roadmap-list">
+                      {column.items.length ? column.items.map((item) => (
+                        <button
+                          key={`${column.key}-${item.fqn}`}
+                          type="button"
+                          className="architecture-roadmap-item"
+                          onClick={() => setSelectedObjectFqn(item.fqn)}
+                        >
+                          <span className="mono">{item.fqn}</span>
+                          <span>{item.recommendation?.title || "Ручной разбор"}</span>
+                        </button>
+                      )) : <div className="muted">Пока пусто.</div>}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </section>
           </section>
 
           <section className="architecture-grid">

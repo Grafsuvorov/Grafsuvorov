@@ -15924,6 +15924,10 @@ html[data-theme="light"] .onboarding-area-card:hover {
   color: rgba(226, 232, 240, 0.84);
 }
 
+.architecture-tag.muted-tag {
+  opacity: 0.88;
+}
+
 .architecture-tags {
   display: flex;
   flex-wrap: wrap;
@@ -16062,6 +16066,57 @@ html[data-theme="light"] .onboarding-area-card:hover {
   font-weight: 600;
 }
 
+.architecture-context-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.architecture-context-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.architecture-context-item .label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.architecture-context-item strong {
+  color: var(--text-strong);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.architecture-context-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.architecture-context-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.architecture-context-row span:last-child {
+  color: var(--text);
+  font-weight: 700;
+  text-align: right;
+}
+
 .architecture-checklist {
   display: grid;
   gap: 10px;
@@ -16133,6 +16188,21 @@ html[data-theme="light"] .architecture-reco-action {
   color: #1d4ed8 !important;
 }
 
+html[data-theme="light"] .architecture-context-item {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(140, 160, 183, 0.18) !important;
+}
+
+html[data-theme="light"] .architecture-context-item .label,
+html[data-theme="light"] .architecture-context-row {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .architecture-context-item strong,
+html[data-theme="light"] .architecture-context-row span:last-child {
+  color: var(--text-strong) !important;
+}
+
 html[data-theme="light"] .architecture-checkmark {
   color: #2563eb !important;
 }
@@ -16160,6 +16230,10 @@ html[data-theme="light"] .architecture-badge.accent {
   }
 
   .architecture-roadmap-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-context-grid {
     grid-template-columns: 1fr;
   }
 }

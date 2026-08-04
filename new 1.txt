@@ -1,209 +1,304 @@
-ТЗ
-  Нужно встроить существующий скрипт в Git/CI/CD так, чтобы он автоматически запускался при merge request / merge в рабочую ветку и валидировал изменения по ветке.
-
-  Цель
-  Автоматизировать проверку ветки перед вливанием, чтобы:
-
-  - не запускать валидацию вручную из интерфейса
-  - получать результат проверки прямо в pipeline
-  - блокировать merge при критических ошибках
-  - сохранять понятный отчёт по каждому проверенному объекту
-
-  Что уже есть
-  Есть существующий локальный скрипт валидации ветки, который:
-
-  - принимает ветку или набор объектов
-  - проходит по объектам ветки
-  - валидирует их по текущим правилам
-  - возвращает результаты по каждому объекту
-
-  Задача разработчика:
-
-  - не переписывать бизнес-логику проверки с нуля
-  - адаптировать текущий скрипт под запуск в CI/CD
-  - сделать его стабильным для non-interactive окружения
-
-  Что должно получиться
-  После внедрения:
-
-  - при создании или обновлении merge request запускается pipeline job
-  - job определяет изменённые объекты в ветке
-  - по каждому объекту запускается существующая валидация
-  - в конце формируется итоговый статус:
-      - success, если ошибок нет
-      - failed, если есть критические ошибки
-      - warning допустим опционально, если есть некритичные замечания
-  - merge должен блокироваться при failed
-
-  Требования к интеграции
-
-  1. Скрипт должен запускаться из CLI.
-     Примерно в формате:
-
-     validate_branch --branch <branch_name>
-     или
-
-     ./validate_branch.sh <branch_name>
-     ./validate_branch.sh <branch_name>
-  2. Скрипт должен уметь работать без UI и без ручного ввода.
-  3. Скрипт должен возвращать корректный exit code:
-
-  - 0 — валидация успешна
-  - 1 — есть ошибки валидации
-  - 2 и выше — техническая ошибка запуска
-
-  4. Скрипт должен писать лог в stdout/stderr так, чтобы он был читаем в pipeline.
-  5. По возможности нужен машинно-читаемый артефакт:
-
-  - json
-  - или junit xml
-  - или csv
-
-  Рекомендуемый формат:
-
-  {
-    "branch": "feature/xxx",
-    "checked_objects": 6,
-    "success_count": 4,
-    "warning_count": 1,
-    "error_count": 1,
-    "items": [
-      {
-        "object": "schema.table_name",
-        "status": "success",
-        "message": "validated"
-      },
-      {
-        "object": "schema.bad_table",
-        "status": "error",
-        "message": "missing required field"
-      }
-    ]
-  }
-
-  Что именно должен сделать разработчик
-
-  1. Взять существующий скрипт валидации ветки.
-  2. Выделить из него CI-friendly entrypoint.
-  3. Убрать зависимости от:
-
-  - локального UI
-  - интерактивных prompt
-  - ручного выбора объектов
-
-  4. Добавить определение списка изменённых объектов по ветке.
-  5. Подключить запуск в CI/CD pipeline.
-  6. Настроить fail pipeline при критических ошибках.
-  7. Сохранить артефакты проверки.
-  8. Добавить краткую документацию:
-
-  - как запускается локально
-  - как запускается в pipeline
-  - какие переменные окружения нужны
-  - какие exit codes используются
-
-  Логика проверки
-  Нужно сохранить текущую бизнес-логику валидации без изменений, если она уже корректна.
-  Если в текущем скрипте есть разделение на типы ошибок, нужно сохранить категории:
-
-  - ошибка
-  - warning
-  - success
-
-  Если сейчас категорий нет, минимум нужен такой уровень:
-
-  - критическая ошибка, блокирующая merge
-  - информационное сообщение
-
-  Источник объектов для проверки
-  Разработчику нужно реализовать один из вариантов:
-
-  - брать список изменённых файлов из git diff относительно target branch
-  - по ним определять связанные объекты
-  - валидировать только их
-
-  Минимально ожидаемое поведение:
-
-  - валидируются только объекты, затронутые в текущей ветке
-  - не валидируется весь репозиторий целиком без необходимости
-
-  Интеграция в CI/CD
-  Нужно встроить в текущий pipeline как отдельный stage/job, например:
-
-  - validate_branch
-  - branch_checks
-
-  Запуск:
-
-  - на merge request
-  - при push в ветку MR
-  - опционально на merge в main/develop как safety check
-
-  Ожидаемое поведение pipeline:
-
-  - если есть ошибка валидации, job красный
-  - если ошибок нет, job зелёный
-  - в логах видно, какой объект упал и почему
-
-  Требования к логированию
-  В логах должно быть видно:
-
-  - какая ветка проверяется
-  - сколько объектов найдено
-  - какой объект проверяется сейчас
-  - результат по каждому объекту
-  - финальная сводка
-
-  Пример:
-
-  Branch: feature/abc
-  Found objects: 6
-
-  [1/6] schema.table_1 -> OK
-  [2/6] schema.table_2 -> OK
-  [3/6] schema.table_3 -> ERROR: invalid config
-  ...
-
-  Summary:
-  OK: 4
-  WARN: 1
-  ERROR: 1
-
-  Требования к отказоустойчивости
-  Если:
-
-  - не удалось определить branch
-  - не удалось определить список объектов
-  - не хватает обязательных переменных окружения
-  - недоступны нужные зависимости
-
-  то job должен падать с понятной технической ошибкой.
-
-  Что желательно дополнительно
-
-  - возможность локального запуска тем же способом, что и в CI
-  - возможность проверить один объект отдельно:
-
-  validate_branch --object schema.table_name
-
-  - публикация summary в merge request comment, если это поддерживается CI
-  - junit report для красивого отображения в pipeline UI
-
-  Критерии готовности
-  Задача считается выполненной, если:
-
-  1. Скрипт запускается в CI без ручных действий.
-  2. Pipeline видит результат и корректно падает при ошибках.
-  3. Валидация идёт только по изменённым объектам ветки.
-  4. В логах и/или артефакте видно, какой объект не прошёл и почему.
-  5. Есть короткая инструкция по использованию.
-
-  Что передать разработчику вместе с ТЗ
-  Нужно приложить:
-
-  - сам текущий скрипт
-  - пример входных данных
-  - пример успешного результата
-  - пример результата с ошибкой
-  - список обязательных переменных окружения
-  - описание, как сейчас определяется список объектов в ветке, если это уже реализовано
+⠿ Container table-dependency-viewer-frontend-1  Started                                      11.3s
+ ⠿ Container table-dependency-viewer-api-1       Started                                      11.3s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=100 api
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_unload_reasons depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_roles BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_users BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_roles_mask BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_waste_report depends on api.sapxi_production_waste_report BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_ove_dislocation_cargo_group depends on api.new_api_cargo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.dashboards_and_tables_relations depends on dq.dm_calc_dashboards_and_tables_relations BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.dashboards_and_tables_relations depends on dq.data_quality_results BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.is2_toro2_wrp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.ral_toro2_imp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.toro2_eqp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.toro2_flc_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_i2_toro2_ntf_hdr_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_flc_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_is2_toro2_ord_hdr_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_toro2_mdc_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_eqp_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_cst depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_is2_toro2_mtd_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_toro_complex_equipment_technical_readiness depends on dict_dds.toro_technical_place_design_features BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.cast_sched depends on stg.cast_sched BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_ove_dislocation_cargo_group depends on api.new_api_cargo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_waste_report depends on api.sapxi_production_waste_report BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtime depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtimeklass depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.investment_expenses depends on stg.bip_zbw1642m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ad_users depends on api.dag_load_ad_users BUT META NOT FOUND
+table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
+table-dependency-viewer-api-1  | INFO:     Application startup complete.
+table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45882 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45892 - "GET /api/graph/orphans?limit=50&offset=0&meta_only=true HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45888 - "GET /api/entities/shared?limit=3 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45900 - "GET /auth/favorites/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45904 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45890 - "GET /api/dq/entity?days=7&delta=10&limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45878 - "GET /api/night-summary?days=30&limit=50 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45880 - "GET /api/night-summary?days=30&limit=50&shift_days=1 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45920 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45918 - "GET /api/releases?days=60&limit=80 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45916 - "GET /api/ytrek/workload?days=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45902 - "GET /api/entities/timeline?days=7 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45886 - "GET /api/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45924 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45928 - "GET /api/click/summary?days=7&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45926 - "GET /api/click/slow-stages?days=7&limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45930 - "GET /api/night/heavy-tables?days=30&limit=20&window_start=04%3A30&window_end=05%3A20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45944 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45934 - "GET /api/load-profile?days=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45938 - "GET /api/window-runs?date=2026-08-04&from=04%3A30&to=05%3A00&source=both HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45932 - "GET /api/slowest-tables?days=30&limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45940 - "GET /api/night-summary?days=30&limit=50 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45936 - "GET /api/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45960 - "GET /api/entity-loads?entity_id=67&days=30&limit=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45972 - "GET /api/admin/dev-copy/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45974 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45958 - "GET /api/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45988 - "GET /api/admin/entity-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45996 - "GET /api/admin/entity-meta/reference/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45990 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45992 - "GET /api/admin/entity-meta/catalog HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45994 - "GET /api/admin/meta-workspace/branches HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:46054 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=200 api
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_en_plus_personnel_department depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.material_stock_balance depends on dm.material_stock_balance BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.material_price_calculation depends on dm.material_price_calculation BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.si_restructuringofnoncoreassets_ao depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.si_balancesofnoncoreassets_ao depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asugdc_dislocation_cargo depends on api.dag_api_asugdc_load BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_opers depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwopers_time depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_unload_reasons depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs_cargo depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.ral_konv depends on stg.zbw1758m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.ral_konv depends on stg.konv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.data_quality_overview depends on dq.check_result BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.data_quality_plan_vs_actual depends on dq.check_result BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.data_quality_detail depends on dq.check_result_detail BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asugdc_arrived_cargo depends on api.dag_api_asugdc_load BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.crm_bpm_claimreplicate depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_ove_dislocation_cargo_group depends on api.new_api_cargo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.accounting_document_position_correspondence depends on stg.ral_zbw1592m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.controlling_documents_to_cost_centers depends on stg.ral_zbw1690m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.controlling_documents_to_wbs_elements depends on stg.ral_zbw1556m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.controlling_documents_to_orders depends on stg.ral_zbw1687m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.settlement_documents_from_project_to_receiver depends on stg.ral_zbw1728m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.accounting_documents depends on stg.ral_zbw1595m_odata_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.paydox_credit_limits depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.s1c_debt_for_working_capital depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.accounting_exchange_rate_revaluation depends on dds.unit_balance BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.accounting_document_contracts depends on dm_calc.accounting_document_and_purchase_contract_relation BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_hrw_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_henter_home depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.counterparty_structure_1c_mdm_prod depends on landing.back_up_input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.counterparty_structure_1c_mdm_prod depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_unload_req_pack depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.sapxi_esp_nsi_xxaus_dto_24958908 depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_hrwsort_norm_stay depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.sok_counterparty_parameters depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_hrw_state depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.hr_organization_structure depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_unload_cargo_groups depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_hst_local depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_hgh_list depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_unload_group_members depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.asuzdc_hcarcnt_idle depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.texts_from_sap_fm_read_text depends on stg.ral_zbw1583m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_dds.time_zone_texts depends on dict_stg.map_time_zone_sap_to_iana BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_dds.dq_error depends on dict_stg.dq_plan BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_dds.plant_and_subsidiary_td depends on dict_stg.map_time_zone_sap_to_iana BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dds.material_movement_document_fs depends on ods.mseg_ral_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs_cargo depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_opers depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwopers_time depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_docs depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_unload_reasons depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_roles BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_users BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_roles_mask BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_waste_report depends on api.sapxi_production_waste_report BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_ove_dislocation_cargo_group depends on api.new_api_cargo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.dashboards_and_tables_relations depends on dq.dm_calc_dashboards_and_tables_relations BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_view.dashboards_and_tables_relations depends on dq.data_quality_results BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.is2_toro2_wrp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.ral_toro2_imp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.toro2_eqp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.toro2_flc_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_i2_toro2_ntf_hdr_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_flc_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_is2_toro2_ord_hdr_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_toro2_mdc_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_eqp_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_cst depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_is2_toro2_mtd_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.exp_toro_complex_equipment_technical_readiness depends on dict_dds.toro_technical_place_design_features BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.cast_sched depends on stg.cast_sched BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_ove_dislocation_cargo_group depends on api.new_api_cargo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_waste_report depends on api.sapxi_production_waste_report BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtime depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtimeklass depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.investment_expenses depends on stg.bip_zbw1642m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ad_users depends on api.dag_load_ad_users BUT META NOT FOUND
+table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
+table-dependency-viewer-api-1  | INFO:     Application startup complete.
+table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45882 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45892 - "GET /api/graph/orphans?limit=50&offset=0&meta_only=true HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45888 - "GET /api/entities/shared?limit=3 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45900 - "GET /auth/favorites/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45904 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45890 - "GET /api/dq/entity?days=7&delta=10&limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45878 - "GET /api/night-summary?days=30&limit=50 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45880 - "GET /api/night-summary?days=30&limit=50&shift_days=1 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45920 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45918 - "GET /api/releases?days=60&limit=80 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45916 - "GET /api/ytrek/workload?days=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45902 - "GET /api/entities/timeline?days=7 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45886 - "GET /api/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45924 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45928 - "GET /api/click/summary?days=7&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45926 - "GET /api/click/slow-stages?days=7&limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45930 - "GET /api/night/heavy-tables?days=30&limit=20&window_start=04%3A30&window_end=05%3A20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45944 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45934 - "GET /api/load-profile?days=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45938 - "GET /api/window-runs?date=2026-08-04&from=04%3A30&to=05%3A00&source=both HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45932 - "GET /api/slowest-tables?days=30&limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45940 - "GET /api/night-summary?days=30&limit=50 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45936 - "GET /api/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45960 - "GET /api/entity-loads?entity_id=67&days=30&limit=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45972 - "GET /api/admin/dev-copy/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45974 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45958 - "GET /api/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45988 - "GET /api/admin/entity-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45996 - "GET /api/admin/entity-meta/reference/entities HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45990 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45992 - "GET /api/admin/entity-meta/catalog HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:45994 - "GET /api/admin/meta-workspace/branches HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:46054 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:46214 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK

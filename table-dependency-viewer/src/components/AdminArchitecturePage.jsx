@@ -101,11 +101,104 @@ function buildEntityStats(pairs) {
   }));
 }
 
+function buildObjectCluster(fqn, pairs) {
+  const related = pairs.filter((pair) => pair.left_fqn === fqn || pair.right_fqn === fqn);
+  if (!related.length) return null;
+  const peerMap = new Map();
+  const issueTypes = new Set();
+  const entities = new Set();
+  const hints = [];
+  let exactCount = 0;
+  let highCount = 0;
+  let scoreSum = 0;
+
+  related.forEach((pair) => {
+    const peer = pair.left_fqn === fqn ? pair.right_fqn : pair.left_fqn;
+    const peerEntity = pair.left_fqn === fqn ? pair.right_entity : pair.left_entity;
+    issueTypes.add(pair.issue_type);
+    if (pair.left_entity) entities.add(pair.left_entity);
+    if (pair.right_entity) entities.add(pair.right_entity);
+    if (pair.issue_type === "duplicate_exact") exactCount += 1;
+    if ((pair.merge_potential || "").toUpperCase() === "HIGH") highCount += 1;
+    scoreSum += Number(pair.score || 0);
+    if (Array.isArray(pair.diff_hints)) {
+      pair.diff_hints.forEach((hint) => {
+        if (hint && hints.length < 8 && !hints.includes(hint)) hints.push(hint);
+      });
+    }
+    if (!peerMap.has(peer)) {
+      peerMap.set(peer, {
+        fqn: peer,
+        entity: peerEntity || "Без сущности",
+        issueType: pair.issue_type,
+        score: Number(pair.score || 0),
+        overlap: pair.expression_overlap_count || 0,
+        mergePotential: pair.merge_potential || "LOW",
+        hints: pair.diff_hints || [],
+      });
+    }
+  });
+
+  return {
+    fqn,
+    related,
+    peers: [...peerMap.values()].sort((a, b) => b.score - a.score).slice(0, 12),
+    issues: [...issueTypes],
+    entities: [...entities],
+    exactCount,
+    highCount,
+    avgScore: related.length ? scoreSum / related.length : 0,
+    hints,
+  };
+}
+
+function buildRecommendation(cluster) {
+  if (!cluster) return null;
+  const crossEntity = new Set(cluster.peers.map((item) => item.entity).filter(Boolean)).size > 1;
+  const exactDominates = cluster.exactCount >= 2 || (cluster.exactCount >= 1 && cluster.avgScore >= 0.9);
+  const highDominates = cluster.highCount >= 3 || (cluster.highCount >= 2 && cluster.avgScore >= 0.86);
+  let title = "Нужен ручной разбор";
+  let action = "Проверить, не разошлась ли одна и та же бизнес-логика в нескольких объектах.";
+  let rationale = "Похожесть есть, но паттерн ещё не выглядит как безопасный кандидат на прямое схлопывание.";
+
+  if (exactDominates) {
+    title = "Выносить в общий слой";
+    action = "Кандидат на shared CTE, reusable model или единый вычислительный блок.";
+    rationale = "Есть точные дубли или почти идентичные пары с очень высоким score.";
+  } else if (highDominates && crossEntity) {
+    title = "Проверить конфликт бизнес-логики";
+    action = "Сначала сравнить смысл расчёта между направлениями, потом решать вопрос консолидации.";
+    rationale = "Высокая похожесть идёт через разные сущности, значит одинаковый расчёт мог разойтись семантически.";
+  } else if (highDominates) {
+    title = "Кандидат на схлопывание";
+    action = "Можно собирать family review и выносить повторяющиеся части в общий шаблон.";
+    rationale = "Объект стабильно участвует в HIGH-парах и повторяется в одном логическом контуре.";
+  }
+
+  return {
+    title,
+    action,
+    rationale,
+  };
+}
+
+function buildAiBrief(cluster, recommendation) {
+  if (!cluster || !recommendation) return "";
+  return [
+    `Объект ${cluster.fqn} участвует в ${cluster.related.length} похожих парах.`,
+    `Средняя похожесть ${formatPercent(cluster.avgScore)}, HIGH-пар: ${cluster.highCount}, exact: ${cluster.exactCount}.`,
+    cluster.entities.length ? `Контекст сущностей: ${cluster.entities.join(", ")}.` : "",
+    cluster.hints.length ? `Ключевые сигналы: ${cluster.hints.slice(0, 4).join("; ")}.` : "",
+    `Рекомендация: ${recommendation.title}. ${recommendation.action}`,
+  ].filter(Boolean).join(" ");
+}
+
 export default function AdminArchitecturePage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedObjectFqn, setSelectedObjectFqn] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -133,6 +226,12 @@ export default function AdminArchitecturePage() {
         .slice(0, 12),
     [objectStats],
   );
+
+  useEffect(() => {
+    if (!selectedObjectFqn && topCandidates.length) {
+      setSelectedObjectFqn(topCandidates[0].fqn);
+    }
+  }, [selectedObjectFqn, topCandidates]);
 
   const exactDuplicates = useMemo(
     () => pairs.filter((row) => row.issue_type === "duplicate_exact").slice(0, 12),
@@ -169,6 +268,21 @@ export default function AdminArchitecturePage() {
     exact: pairs.filter((row) => row.issue_type === "duplicate_exact").length,
     high: pairs.filter((row) => (row.merge_potential || "").toUpperCase() === "HIGH").length,
   }), [data?.objects_count, pairs]);
+
+  const selectedCluster = useMemo(
+    () => buildObjectCluster(selectedObjectFqn, pairs),
+    [selectedObjectFqn, pairs],
+  );
+
+  const selectedRecommendation = useMemo(
+    () => buildRecommendation(selectedCluster),
+    [selectedCluster],
+  );
+
+  const aiBrief = useMemo(
+    () => buildAiBrief(selectedCluster, selectedRecommendation),
+    [selectedCluster, selectedRecommendation],
+  );
 
   const openLogicAudit = (fqn) => {
     if (!fqn) return;
@@ -266,6 +380,9 @@ export default function AdminArchitecturePage() {
                       ))}
                     </div>
                     <div className="architecture-actions">
+                      <button type="button" className="btn btn-primary" onClick={() => setSelectedObjectFqn(item.fqn)}>
+                        Разобрать
+                      </button>
                       <button type="button" className="btn btn-secondary" onClick={() => openTable(item.fqn)}>
                         Открыть таблицу
                       </button>
@@ -303,6 +420,67 @@ export default function AdminArchitecturePage() {
               </div>
             </section>
           </section>
+
+          {selectedCluster ? (
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Разбор кластера</div>
+              <div className="section-subtitle">
+                Детализация по выбранному кандидату на схлопывание и готовое архитектурное заключение.
+              </div>
+              <div className="architecture-cluster-grid">
+                <div className="architecture-cluster-main">
+                  <div className="architecture-cluster-head">
+                    <div>
+                      <div className="architecture-cluster-title mono">{selectedCluster.fqn}</div>
+                      <div className="architecture-row-meta">
+                        <span>{selectedCluster.entities.join(" · ") || "Без сущности"}</span>
+                        <span>{selectedCluster.related.length} связанных пар</span>
+                        <span>{formatPercent(selectedCluster.avgScore)} средняя похожесть</span>
+                      </div>
+                    </div>
+                    <div className="architecture-row-badges">
+                      <span className="architecture-badge">{selectedCluster.highCount} HIGH</span>
+                      <span className="architecture-badge">{selectedCluster.exactCount} exact</span>
+                    </div>
+                  </div>
+
+                  <div className="architecture-cluster-peers">
+                    {selectedCluster.peers.map((peer) => (
+                      <article key={`${selectedCluster.fqn}-${peer.fqn}`} className="architecture-peer-card">
+                        <div className="architecture-row-head">
+                          <button type="button" className="architecture-link mono" onClick={() => openLogicAudit(peer.fqn)}>
+                            {peer.fqn}
+                          </button>
+                          <span className="architecture-badge accent">{formatPercent(peer.score)}</span>
+                        </div>
+                        <div className="architecture-row-meta">
+                          <span>{peer.entity}</span>
+                          <span>{ISSUE_LABELS[peer.issueType] || peer.issueType}</span>
+                          <span>{peer.overlap} expr</span>
+                          <span>{peer.mergePotential}</span>
+                        </div>
+                        <div className="muted">{shortText((peer.hints || []).join(" · "))}</div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="architecture-cluster-side">
+                  <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">Рекомендация</div>
+                    <div className="architecture-reco-title">{selectedRecommendation?.title}</div>
+                    <div className="architecture-reco-text">{selectedRecommendation?.rationale}</div>
+                    <div className="architecture-reco-action">{selectedRecommendation?.action}</div>
+                  </div>
+
+                  <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">AI-ready summary</div>
+                    <div className="architecture-reco-text">{aiBrief}</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section className="architecture-grid">
             <section className="cc-surface architecture-block">

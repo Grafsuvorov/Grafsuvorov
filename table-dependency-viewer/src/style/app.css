@@ -15934,6 +15934,85 @@ html[data-theme="light"] .onboarding-area-card:hover {
   margin-top: 2px;
 }
 
+.architecture-cluster-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.8fr);
+  gap: 16px;
+}
+
+.architecture-cluster-main,
+.architecture-cluster-side,
+.architecture-cluster-peers {
+  display: grid;
+  gap: 12px;
+}
+
+.architecture-cluster-head,
+.architecture-peer-card,
+.architecture-reco-card {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 24, 38, 0.9), rgba(8, 12, 22, 0.98));
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
+}
+
+.architecture-cluster-head,
+.architecture-peer-card,
+.architecture-reco-card {
+  padding: 18px;
+}
+
+.architecture-cluster-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.architecture-cluster-title,
+.architecture-reco-title {
+  color: var(--text-strong);
+}
+
+.architecture-cluster-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.architecture-reco-kicker {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+.architecture-reco-title {
+  margin-top: 10px;
+  font-size: 22px;
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.architecture-reco-text,
+.architecture-reco-action {
+  line-height: 1.6;
+}
+
+.architecture-reco-text {
+  margin-top: 10px;
+  color: var(--text);
+}
+
+.architecture-reco-action {
+  margin-top: 12px;
+  color: #bfeeff;
+  font-weight: 600;
+}
+
 .architecture-family-bar {
   height: 8px;
   margin: 12px 0 10px;
@@ -15951,7 +16030,10 @@ html[data-theme="light"] .onboarding-area-card:hover {
 html[data-theme="light"] .architecture-intro-card,
 html[data-theme="light"] .architecture-kpi,
 html[data-theme="light"] .architecture-row-card,
-html[data-theme="light"] .architecture-family-card {
+html[data-theme="light"] .architecture-family-card,
+html[data-theme="light"] .architecture-cluster-head,
+html[data-theme="light"] .architecture-peer-card,
+html[data-theme="light"] .architecture-reco-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.95)) !important;
   border-color: rgba(140, 160, 183, 0.16) !important;
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06) !important;
@@ -15971,8 +16053,13 @@ html[data-theme="light"] .architecture-link:hover {
 
 html[data-theme="light"] .architecture-row-meta,
 html[data-theme="light"] .architecture-family-meta,
-html[data-theme="light"] .architecture-kpi .label {
+html[data-theme="light"] .architecture-kpi .label,
+html[data-theme="light"] .architecture-reco-kicker {
   color: #64748b !important;
+}
+
+html[data-theme="light"] .architecture-reco-action {
+  color: #1d4ed8 !important;
 }
 
 html[data-theme="light"] .architecture-badge,
@@ -15990,6 +16077,10 @@ html[data-theme="light"] .architecture-badge.accent {
 
 @media (max-width: 1120px) {
   .architecture-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-cluster-grid {
     grid-template-columns: 1fr;
   }
 }

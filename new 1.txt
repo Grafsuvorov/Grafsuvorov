@@ -1,352 +1,209 @@
-[
+ТЗ
+  Нужно встроить существующий скрипт в Git/CI/CD так, чтобы он автоматически запускался при merge request / merge в рабочую ветку и валидировал изменения по ветке.
+
+  Цель
+  Автоматизировать проверку ветки перед вливанием, чтобы:
+
+  - не запускать валидацию вручную из интерфейса
+  - получать результат проверки прямо в pipeline
+  - блокировать merge при критических ошибках
+  - сохранять понятный отчёт по каждому проверенному объекту
+
+  Что уже есть
+  Есть существующий локальный скрипт валидации ветки, который:
+
+  - принимает ветку или набор объектов
+  - проходит по объектам ветки
+  - валидирует их по текущим правилам
+  - возвращает результаты по каждому объекту
+
+  Задача разработчика:
+
+  - не переписывать бизнес-логику проверки с нуля
+  - адаптировать текущий скрипт под запуск в CI/CD
+  - сделать его стабильным для non-interactive окружения
+
+  Что должно получиться
+  После внедрения:
+
+  - при создании или обновлении merge request запускается pipeline job
+  - job определяет изменённые объекты в ветке
+  - по каждому объекту запускается существующая валидация
+  - в конце формируется итоговый статус:
+      - success, если ошибок нет
+      - failed, если есть критические ошибки
+      - warning допустим опционально, если есть некритичные замечания
+  - merge должен блокироваться при failed
+
+  Требования к интеграции
+
+  1. Скрипт должен запускаться из CLI.
+     Примерно в формате:
+
+     validate_branch --branch <branch_name>
+     или
+
+     ./validate_branch.sh <branch_name>
+     ./validate_branch.sh <branch_name>
+  2. Скрипт должен уметь работать без UI и без ручного ввода.
+  3. Скрипт должен возвращать корректный exit code:
+
+  - 0 — валидация успешна
+  - 1 — есть ошибки валидации
+  - 2 и выше — техническая ошибка запуска
+
+  4. Скрипт должен писать лог в stdout/stderr так, чтобы он был читаем в pipeline.
+  5. По возможности нужен машинно-читаемый артефакт:
+
+  - json
+  - или junit xml
+  - или csv
+
+  Рекомендуемый формат:
+
   {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 3,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 15036707.76,
-      "Total Cost": 15809274.51,
-      "Plan Rows": 282499,
-      "Plan Width": 382,
-      "Output": ["entrys.sender", "entrys.receiver", "entrys.create_date_time", "entrys.dt_report", "entrys.database_code_1c", "entrys.database_name_1c", "entrys.unit_balance_mdm_code_1c", "(((xpath('id/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('invNum/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctrpRole/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('dcName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('docDesc/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('docNum/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('respCntr/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('regEndUsr/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('cntEndUsr/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctrpMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('ctrpTurnov/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('fgGrName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctNum/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('pdUrl/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctType/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('ctAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('ctCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtCtStart/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "((((xpath('dtCtEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('payTerm/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtOverdue/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('covTypeName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('covAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('covCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtDebt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('docCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dbDocCurAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "((((xpath('dbRubAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "((((xpath('dbUsdAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "((((xpath('odDocCurAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "((((xpath('odRubAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "((((xpath('odUsdAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('bankRecName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('recClmUrl/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtRecClm/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "((((xpath('dtLawCrt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('ctrSupName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctrSupId/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('glAccCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('glAccName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtCtReg/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "((((xpath('docCurAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('ctrSup1c/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctrSupSap/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('smCode/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('smName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('badDbAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('badDbCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('crLimRubAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "((((xpath('dtCrLimEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('crUrlPd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('insAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('insCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtInsEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('insCoMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('bgAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('bgCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtBgEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('bgMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('thpgAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6))", "(((xpath('thpgCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "((((xpath('dtThpgEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('thpgMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "(((xpath('ctrpName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)", "entrys.uuid", "entrys.dt_insert"],
-      "Plans": [
-        {
-          "Node Type": "Subquery Scan",
-          "Parent Relationship": "Outer",
-          "Slice": 3,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Alias": "entrys",
-          "Startup Cost": 15036707.76,
-          "Total Cost": 15809274.51,
-          "Plan Rows": 282499,
-          "Plan Width": 382,
-          "Output": ["entrys.sender", "entrys.receiver", "entrys.create_date_time", "entrys.dt_report", "entrys.database_code_1c", "entrys.database_name_1c", "entrys.unit_balance_mdm_code_1c", "((xpath('id/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('invNum/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctrpRole/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('dcName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('docDesc/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('docNum/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('respCntr/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('regEndUsr/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('cntEndUsr/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctrpMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('ctrpTurnov/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('fgGrName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctNum/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('pdUrl/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctType/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('ctAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('ctCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtCtStart/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "(((xpath('dtCtEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('payTerm/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtOverdue/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('covTypeName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('covAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('covCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtDebt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('docCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dbDocCurAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "(((xpath('dbRubAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "(((xpath('dbUsdAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "(((xpath('odDocCurAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "(((xpath('odRubAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "(((xpath('odUsdAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('bankRecName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('recClmUrl/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtRecClm/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "(((xpath('dtLawCrt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('ctrSupName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctrSupId/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('glAccCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('glAccName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtCtReg/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "(((xpath('docCurAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('ctrSup1c/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctrSupSap/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('smCode/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('smName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('badDbAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('badDbCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('crLimRubAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "(((xpath('dtCrLimEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('crUrlPd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('insAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('insCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtInsEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('insCoMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('bgAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('bgCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtBgEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('bgMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('thpgAmt/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::numeric(20,6)", "((xpath('thpgCurCd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "(((xpath('dtThpgEnd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('thpgMd/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "((xpath('ctrpName/text()'::text, entrys.entry_xml, '{}'::text[]))[1])::character varying", "entrys.uuid", "entrys.dt_insert"],
-          "Plans": [
-            {
-              "Node Type": "Subquery Scan",
-              "Parent Relationship": "Subquery",
-              "Slice": 3,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Alias": "t",
-              "Startup Cost": 15036707.76,
-              "Total Cost": 15713930.96,
-              "Plan Rows": 282499,
-              "Plan Width": 382,
-              "Output": ["t.uuid", "t.dt_insert", "t.sender", "t.receiver", "t.create_date_time", "t.dt_report", "t.database_code_1c", "t.database_name_1c", "t.unit_balance_mdm_code_1c", "t.timezone_1c", "t.entry_xml"],
-              "Plans": [
-                {
-                  "Node Type": "Result",
-                  "Parent Relationship": "Subquery",
-                  "Slice": 3,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 15036707.76,
-                  "Total Cost": 15711105.97,
-                  "Plan Rows": 282499,
-                  "Plan Width": 250,
-                  "Output": ["t_1.uuid", "t_1.dt_insert", "t_1.sender", "t_1.receiver", "t_1.create_date_time", "t_1.item_xml", "((((xpath('dtRp/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying)::date)", "(((xpath('dbCd/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying)", "(((xpath('dbName/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying)", "(((xpath('unitMd/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying)", "(((xpath('tz/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying)", "unnest(xpath('entry'::text, t_1.item_xml, '{}'::text[]))"],
-                  "Plans": [
-                    {
-                      "Node Type": "Subquery Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 3,
-                      "Segments": 1,
-                      "Gang Type": "primary reader",
-                      "Alias": "t_1",
-                      "Startup Cost": 15036707.76,
-                      "Total Cost": 15709665.22,
-                      "Plan Rows": 2825,
-                      "Plan Width": 250,
-                      "Output": ["t_1.uuid", "t_1.dt_insert", "t_1.sender", "t_1.receiver", "t_1.create_date_time", "t_1.item_xml", "(((xpath('dtRp/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying)::date", "((xpath('dbCd/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying", "((xpath('dbName/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying", "((xpath('unitMd/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying", "((xpath('tz/text()'::text, t_1.item_xml, '{}'::text[]))[1])::character varying"],
-                      "Plans": [
-                        {
-                          "Node Type": "Result",
-                          "Parent Relationship": "Subquery",
-                          "Slice": 3,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 15036707.76,
-                          "Total Cost": 15709587.53,
-                          "Plan Rows": 2825,
-                          "Plan Width": 302,
-                          "Output": ["src.uuid", "src.dt_insert", "src.sender", "src.receiver", "src.create_date_time", "unnest(xpath('Body/Item'::text, src.document_xml, '{}'::text[]))"],
-                          "Plans": [
-                            {
-                              "Node Type": "Subquery Scan",
-                              "Parent Relationship": "Outer",
-                              "Slice": 3,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Alias": "src",
-                              "Startup Cost": 15036707.76,
-                              "Total Cost": 15709587.53,
-                              "Plan Rows": 2825,
-                              "Plan Width": 302,
-                              "Output": ["src.uuid", "src.dt_insert", "src.sender", "src.receiver", "src.create_date_time", "src.document_xml"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Hash Join",
-                                  "Parent Relationship": "Subquery",
-                                  "Slice": 3,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Join Type": "Anti",
-                                  "Startup Cost": 15036707.76,
-                                  "Total Cost": 15709573.12,
-                                  "Plan Rows": 28,
-                                  "Plan Width": 302,
-                                  "Output": ["t_2.uuid", "t_2.dt_insert", "t_2.document_xml", "((xpath('Header/Sender/text()'::text, t_2.document_xml, '{}'::text[]))[1])::character varying", "((xpath('Header/Receiver/text()'::text, t_2.document_xml, '{}'::text[]))[1])::character varying", "(((xpath('Header/CreatedDateTime/text()'::text, t_2.document_xml, '{}'::text[]))[1])::character varying)::timestamp without time zone"],
-                                  "Hash Cond": "((t_2.uuid)::text = (s.uuid)::text)",
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Redistribute Motion",
-                                      "Senders": 8,
-                                      "Receivers": 8,
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 1,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 42361.93,
-                                      "Plan Rows": 251531,
-                                      "Plan Width": 302,
-                                      "Output": ["t_2.uuid", "t_2.dt_insert", "t_2.document_xml"],
-                                      "Hash Key": "t_2.uuid",
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 1,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Relation Name": "INPUT_DATA_FROM_SAPXI_IN",
-                                          "Schema": "landing",
-                                          "Alias": "t_2",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 37331.31,
-                                          "Plan Rows": 251531,
-                                          "Plan Width": 302,
-                                          "Output": ["t_2.uuid", "t_2.dt_insert", "t_2.document_xml"],
-                                          "Filter": "((t_2.flow_id)::text = 'SI_WorkingCapital_AI'::text)"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "Node Type": "Hash",
-                                      "Parent Relationship": "Inner",
-                                      "Slice": 3,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 10423089.36,
-                                      "Total Cost": 10423089.36,
-                                      "Plan Rows": 319212512,
-                                      "Plan Width": 37,
-                                      "Output": ["s.uuid", "s.unit_balance_mdm_code_1c", "s.posting_uid_code_1c"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Redistribute Motion",
-                                          "Senders": 8,
-                                          "Receivers": 8,
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 2,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 10423089.36,
-                                          "Plan Rows": 319212512,
-                                          "Plan Width": 37,
-                                          "Output": ["s.uuid", "s.unit_balance_mdm_code_1c", "s.posting_uid_code_1c"],
-                                          "Hash Key": "s.uuid",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Seq Scan",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 2,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Relation Name": "s1c_debt_for_working_capital",
-                                              "Schema": "stg",
-                                              "Alias": "s",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 4038839.12,
-                                              "Plan Rows": 319212512,
-                                              "Plan Width": 37,
-                                              "Output": ["s.uuid", "s.unit_balance_mdm_code_1c", "s.posting_uid_code_1c"]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Postgres query optimizer"
-    }
+    "branch": "feature/xxx",
+    "checked_objects": 6,
+    "success_count": 4,
+    "warning_count": 1,
+    "error_count": 1,
+    "items": [
+      {
+        "object": "schema.table_name",
+        "status": "success",
+        "message": "validated"
+      },
+      {
+        "object": "schema.bad_table",
+        "status": "error",
+        "message": "missing required field"
+      }
+    ]
   }
-]
 
+  Что именно должен сделать разработчик
 
-	WITH src AS (
-	    SELECT
-	        t.uuid,
-	        t.dt_insert,
-	        t.document_xml,
-	        (xpath('Header/Sender/text()', document_xml))[1]::varchar AS sender,
-	        (xpath('Header/Receiver/text()', document_xml))[1]::varchar AS receiver,
-	        ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp AS create_date_time
-	    FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
-	    WHERE t.flow_id = 'SI_WorkingCapital_AI'
-		and not exists (select 1 from stg.s1c_debt_for_working_capital as s where t.uuid = s.uuid)
-	),
- 
-	items AS (
-	    SELECT
-	        uuid,
-	        dt_insert,
-	        sender,
-	        receiver,
-	        create_date_time,
-	        item_xml,
-	        (xpath('dtRp/text()', item_xml))[1]::varchar::date AS dt_report,
-	        (xpath('dbCd/text()', item_xml))[1]::varchar AS database_code_1c,
-	        (xpath('dbName/text()', item_xml))[1]::varchar AS database_name_1c,
-	        (xpath('unitMd/text()', item_xml))[1]::varchar AS unit_balance_mdm_code_1c,
-	        (xpath('tz/text()', item_xml))[1]::varchar AS timezone_1c
-	    FROM (
-	        SELECT
-	            uuid,
-	            dt_insert,
-	            sender,
-	            receiver,
-	            create_date_time,
-	            unnest(xpath('Body/Item', document_xml)) AS item_xml
-	        FROM src
-	    ) t
-	),
- 
-	entrys AS (
-	    SELECT
-	        uuid,
-	        dt_insert,
-	        sender,
-	        receiver,
-	        create_date_time,
-	        dt_report,
-	        database_code_1c,
-	        database_name_1c,
-	        unit_balance_mdm_code_1c,
-	        timezone_1c,
-	        entry_xml
-	    FROM (
-	        SELECT
-	            *,
-	            unnest(xpath('entry', item_xml)) AS entry_xml
-	        FROM items
-	    ) t
-	)
- 
-	SELECT
-	    sender,
-	    receiver,
-	    create_date_time,
-	    dt_report,
-	    database_code_1c,
-	    database_name_1c,
-	    unit_balance_mdm_code_1c,
- 
-	    (xpath('id/text()', entry_xml))[1]::varchar,
-	    (xpath('invNum/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrpRole/text()', entry_xml))[1]::varchar,
-	    (xpath('dcName/text()', entry_xml))[1]::varchar,
-	    (xpath('docDesc/text()', entry_xml))[1]::varchar,
-	    (xpath('docNum/text()', entry_xml))[1]::varchar,
-	    (xpath('respCntr/text()', entry_xml))[1]::varchar,
-	    (xpath('regEndUsr/text()', entry_xml))[1]::varchar,
-	    (xpath('cntEndUsr/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrpMd/text()', entry_xml))[1]::varchar,
- 
-	    (xpath('ctrpTurnov/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('fgGrName/text()', entry_xml))[1]::varchar,
-	    (xpath('ctNum/text()', entry_xml))[1]::varchar,
-	    (xpath('pdUrl/text()', entry_xml))[1]::varchar,
-	    (xpath('ctType/text()', entry_xml))[1]::varchar,
-	    (xpath('ctAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('ctCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtCtStart/text()', entry_xml))[1]::varchar::date,
-	    (xpath('dtCtEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('payTerm/text()', entry_xml))[1]::varchar,
-	    (xpath('dtOverdue/text()', entry_xml))[1]::varchar::date,
-	    (xpath('covTypeName/text()', entry_xml))[1]::varchar,
-	    (xpath('covAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('covCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtDebt/text()', entry_xml))[1]::varchar::date,
-	    (xpath('docCurCd/text()', entry_xml))[1]::varchar,
- 
-	    (xpath('dbDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('dbRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('dbUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('odDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('odRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('odUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
- 
-	    (xpath('bankRecName/text()', entry_xml))[1]::varchar,
-	    (xpath('recClmUrl/text()', entry_xml))[1]::varchar,
-	    (xpath('dtRecClm/text()', entry_xml))[1]::varchar::date,
-	    (xpath('dtLawCrt/text()', entry_xml))[1]::varchar::date,
-	    (xpath('ctrSupName/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrSupId/text()', entry_xml))[1]::varchar,
-	    (xpath('glAccCd/text()', entry_xml))[1]::varchar,
-	    (xpath('glAccName/text()', entry_xml))[1]::varchar,
-	    (xpath('dtCtReg/text()', entry_xml))[1]::varchar::date,
-	    (xpath('docCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
- 
-	    (xpath('ctrSup1c/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrSupSap/text()', entry_xml))[1]::varchar,
-	    (xpath('smCode/text()', entry_xml))[1]::varchar,
-	    (xpath('smName/text()', entry_xml))[1]::varchar,
- 
-	    (xpath('badDbAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('badDbCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('crLimRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('dtCrLimEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('crUrlPd/text()', entry_xml))[1]::varchar,
- 
-	    (xpath('insAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('insCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtInsEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('insCoMd/text()', entry_xml))[1]::varchar,
- 
-	    (xpath('bgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('bgCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtBgEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('bgMd/text()', entry_xml))[1]::varchar,
- 
-	    (xpath('thpgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('thpgCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtThpgEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('thpgMd/text()', entry_xml))[1]::varchar,
-        (xpath('ctrpName/text()', entry_xml))[1]::varchar,
- 
-	    uuid,
-	    dt_insert
- 
-	FROM entrys;
+  1. Взять существующий скрипт валидации ветки.
+  2. Выделить из него CI-friendly entrypoint.
+  3. Убрать зависимости от:
+
+  - локального UI
+  - интерактивных prompt
+  - ручного выбора объектов
+
+  4. Добавить определение списка изменённых объектов по ветке.
+  5. Подключить запуск в CI/CD pipeline.
+  6. Настроить fail pipeline при критических ошибках.
+  7. Сохранить артефакты проверки.
+  8. Добавить краткую документацию:
+
+  - как запускается локально
+  - как запускается в pipeline
+  - какие переменные окружения нужны
+  - какие exit codes используются
+
+  Логика проверки
+  Нужно сохранить текущую бизнес-логику валидации без изменений, если она уже корректна.
+  Если в текущем скрипте есть разделение на типы ошибок, нужно сохранить категории:
+
+  - ошибка
+  - warning
+  - success
+
+  Если сейчас категорий нет, минимум нужен такой уровень:
+
+  - критическая ошибка, блокирующая merge
+  - информационное сообщение
+
+  Источник объектов для проверки
+  Разработчику нужно реализовать один из вариантов:
+
+  - брать список изменённых файлов из git diff относительно target branch
+  - по ним определять связанные объекты
+  - валидировать только их
+
+  Минимально ожидаемое поведение:
+
+  - валидируются только объекты, затронутые в текущей ветке
+  - не валидируется весь репозиторий целиком без необходимости
+
+  Интеграция в CI/CD
+  Нужно встроить в текущий pipeline как отдельный stage/job, например:
+
+  - validate_branch
+  - branch_checks
+
+  Запуск:
+
+  - на merge request
+  - при push в ветку MR
+  - опционально на merge в main/develop как safety check
+
+  Ожидаемое поведение pipeline:
+
+  - если есть ошибка валидации, job красный
+  - если ошибок нет, job зелёный
+  - в логах видно, какой объект упал и почему
+
+  Требования к логированию
+  В логах должно быть видно:
+
+  - какая ветка проверяется
+  - сколько объектов найдено
+  - какой объект проверяется сейчас
+  - результат по каждому объекту
+  - финальная сводка
+
+  Пример:
+
+  Branch: feature/abc
+  Found objects: 6
+
+  [1/6] schema.table_1 -> OK
+  [2/6] schema.table_2 -> OK
+  [3/6] schema.table_3 -> ERROR: invalid config
+  ...
+
+  Summary:
+  OK: 4
+  WARN: 1
+  ERROR: 1
+
+  Требования к отказоустойчивости
+  Если:
+
+  - не удалось определить branch
+  - не удалось определить список объектов
+  - не хватает обязательных переменных окружения
+  - недоступны нужные зависимости
+
+  то job должен падать с понятной технической ошибкой.
+
+  Что желательно дополнительно
+
+  - возможность локального запуска тем же способом, что и в CI
+  - возможность проверить один объект отдельно:
+
+  validate_branch --object schema.table_name
+
+  - публикация summary в merge request comment, если это поддерживается CI
+  - junit report для красивого отображения в pipeline UI
+
+  Критерии готовности
+  Задача считается выполненной, если:
+
+  1. Скрипт запускается в CI без ручных действий.
+  2. Pipeline видит результат и корректно падает при ошибках.
+  3. Валидация идёт только по изменённым объектам ветки.
+  4. В логах и/или артефакте видно, какой объект не прошёл и почему.
+  5. Есть короткая инструкция по использованию.
+
+  Что передать разработчику вместе с ТЗ
+  Нужно приложить:
+
+  - сам текущий скрипт
+  - пример входных данных
+  - пример успешного результата
+  - пример результата с ошибкой
+  - список обязательных переменных окружения
+  - описание, как сейчас определяется список объектов в ветке, если это уже реализовано

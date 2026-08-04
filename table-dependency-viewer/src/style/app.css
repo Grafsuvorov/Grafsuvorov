@@ -16197,6 +16197,10 @@ html[data-theme="light"] .onboarding-area-card:hover {
   gap: 12px;
 }
 
+.architecture-timeline-list.cluster {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .architecture-timeline-card {
   padding: 16px 18px;
   display: grid;
@@ -16226,6 +16230,10 @@ html[data-theme="light"] .onboarding-area-card:hover {
 .architecture-timeline-body {
   display: grid;
   gap: 8px;
+}
+
+.architecture-reco-card .architecture-context-grid {
+  margin-top: 14px;
 }
 
 .architecture-checklist {
@@ -16346,6 +16354,10 @@ html[data-theme="light"] .architecture-badge.accent {
 
   .architecture-matrix,
   .architecture-owner-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-timeline-list.cluster {
     grid-template-columns: 1fr;
   }
 

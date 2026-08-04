@@ -514,6 +514,95 @@ function buildActivityTimeline(candidate) {
     .slice(0, 5);
 }
 
+function buildClusterTimeline(cluster, candidatesByFqn) {
+  if (!cluster) return [];
+  const events = [];
+  const rows = [cluster.fqn, ...cluster.peers.map((peer) => peer.fqn)]
+    .map((fqn) => candidatesByFqn.get(fqn))
+    .filter(Boolean);
+
+  rows.forEach((item) => {
+    const itemLabel = item.fqn;
+    if (item.lastChange?.changed_at) {
+      events.push({
+        id: `cluster-change-${item.fqn}`,
+        type: "delivery_change",
+        title: "Delivery-change",
+        object: itemLabel,
+        actor: item.lastChange.actor || "Не указан",
+        at: item.lastChange.changed_at,
+        meta: item.lastChange.release_id || item.lastChange.task_id || "—",
+        text: item.lastChange.task_summary || "Изменение через релизный контур.",
+        link: item.lastChange.task_link || null,
+      });
+    }
+    if (item.latestIncident?.incident_start_dttm) {
+      events.push({
+        id: `cluster-incident-${item.fqn}`,
+        type: "incident",
+        title: "Инцидент",
+        object: itemLabel,
+        actor: item.latestIncident.assignee_name || item.latestIncident.author_name || "Не указан",
+        at: item.latestIncident.incident_start_dttm,
+        meta: item.latestIncident.issue_id || "—",
+        text: item.latestIncident.summary || item.latestIncident.incident_reason_name || "Инцидент по объекту.",
+        link: item.latestIncident.link || null,
+      });
+    }
+  });
+
+  return events
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, 10);
+}
+
+function buildSemanticDrift(cluster, candidatesByFqn) {
+  if (!cluster) return null;
+  const rows = [cluster.fqn, ...cluster.peers.map((peer) => peer.fqn)]
+    .map((fqn) => candidatesByFqn.get(fqn))
+    .filter(Boolean);
+  if (!rows.length) return null;
+
+  const entitySpread = new Set(cluster.entities.filter(Boolean)).size;
+  const owners = new Set(rows.map((row) => row.lastChange?.actor).filter(Boolean)).size;
+  const releaseSpread = rows.filter((row) => row.releasesCount > 0).length;
+  const incidentSpread = rows.filter((row) => row.incidentsCount > 0).length;
+  const downstreamSpread = rows.filter((row) => row.transitiveDownstreamCount > 0).length;
+  const score = Math.min(
+    100,
+    Math.round(
+      entitySpread * 12 +
+      owners * 10 +
+      incidentSpread * 9 +
+      releaseSpread * 4 +
+      downstreamSpread * 4 +
+      Math.max(0, rows.length - 2) * 5 +
+      Math.min(20, (cluster.hints?.length || 0) * 2)
+    ),
+  );
+
+  let band = "Стабильный";
+  let summary = "Пока это выглядит как повторяющийся контур без сильного расхождения по владельцам и операционному поведению.";
+  if (score >= 75) {
+    band = "Высокий drift";
+    summary = "Похожие объекты уже живут в разных руках и в разном операционном контексте. Схлопывать без выравнивания смысла рискованно.";
+  } else if (score >= 45) {
+    band = "Средний drift";
+    summary = "Контур начал расходиться: перед рефакторингом нужен обзор владельцев, релизов и инцидентов по семейству.";
+  }
+
+  return {
+    score,
+    band,
+    summary,
+    entitySpread,
+    owners,
+    releaseSpread,
+    incidentSpread,
+    downstreamSpread,
+  };
+}
+
 function downloadTextFile(content, filename, type = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type });
   const url = window.URL.createObjectURL(blob);
@@ -664,6 +753,30 @@ export default function AdminArchitecturePage() {
     () => buildRecommendation(selectedCluster),
     [selectedCluster],
   );
+  const selectedCandidate = useMemo(
+    () => topCandidates.find((item) => item.fqn === selectedObjectFqn) || null,
+    [selectedObjectFqn, topCandidates],
+  );
+  const candidatesByFqn = useMemo(
+    () => new Map(topCandidates.map((item) => [item.fqn, item])),
+    [topCandidates],
+  );
+  const selectedOwnerAmbiguity = useMemo(
+    () => buildOwnerAmbiguity(selectedCluster, candidatesByFqn),
+    [candidatesByFqn, selectedCluster],
+  );
+  const selectedTimeline = useMemo(
+    () => buildActivityTimeline(selectedCandidate),
+    [selectedCandidate],
+  );
+  const selectedClusterTimeline = useMemo(
+    () => buildClusterTimeline(selectedCluster, candidatesByFqn),
+    [candidatesByFqn, selectedCluster],
+  );
+  const selectedSemanticDrift = useMemo(
+    () => buildSemanticDrift(selectedCluster, candidatesByFqn),
+    [candidatesByFqn, selectedCluster],
+  );
 
   const aiBrief = useMemo(
     () => buildAiBrief(selectedCluster, selectedRecommendation),
@@ -693,10 +806,6 @@ export default function AdminArchitecturePage() {
     () => buildRoadmap(topCandidates),
     [topCandidates],
   );
-  const selectedCandidate = useMemo(
-    () => topCandidates.find((item) => item.fqn === selectedObjectFqn) || null,
-    [selectedObjectFqn, topCandidates],
-  );
   const ownerStats = useMemo(
     () => buildOwnerStats(topCandidates),
     [topCandidates],
@@ -722,18 +831,6 @@ export default function AdminArchitecturePage() {
       ))
       .slice(0, 8),
     [topCandidates],
-  );
-  const candidatesByFqn = useMemo(
-    () => new Map(topCandidates.map((item) => [item.fqn, item])),
-    [topCandidates],
-  );
-  const selectedOwnerAmbiguity = useMemo(
-    () => buildOwnerAmbiguity(selectedCluster, candidatesByFqn),
-    [candidatesByFqn, selectedCluster],
-  );
-  const selectedTimeline = useMemo(
-    () => buildActivityTimeline(selectedCandidate),
-    [selectedCandidate],
   );
   const riskMatrix = useMemo(
     () => buildRiskMatrix(topCandidates),
@@ -1241,6 +1338,34 @@ export default function AdminArchitecturePage() {
                   </div>
 
                   <div className="architecture-reco-card">
+                    <div className="architecture-reco-kicker">Semantic drift</div>
+                    <div className="architecture-reco-title">
+                      {selectedSemanticDrift?.band || "—"}
+                    </div>
+                    <div className="architecture-reco-text">
+                      {selectedSemanticDrift?.summary || "Недостаточно данных для оценки drift."}
+                    </div>
+                    <div className="architecture-context-grid">
+                      <div className="architecture-context-item">
+                        <span className="label">Drift score</span>
+                        <strong>{selectedSemanticDrift?.score ?? 0}</strong>
+                      </div>
+                      <div className="architecture-context-item">
+                        <span className="label">Entity spread</span>
+                        <strong>{selectedSemanticDrift?.entitySpread ?? 0}</strong>
+                      </div>
+                      <div className="architecture-context-item">
+                        <span className="label">Owners</span>
+                        <strong>{selectedSemanticDrift?.owners ?? 0}</strong>
+                      </div>
+                      <div className="architecture-context-item">
+                        <span className="label">Incident spread</span>
+                        <strong>{selectedSemanticDrift?.incidentSpread ?? 0}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="architecture-reco-card">
                     <div className="architecture-reco-kicker">Checklist</div>
                     <div className="architecture-checklist">
                       {checklist.map((item) => (
@@ -1302,6 +1427,38 @@ export default function AdminArchitecturePage() {
                     </article>
                   ))}
                   {!selectedTimeline.length ? <div className="muted">Для выбранного объекта пока нет событий в окне анализа.</div> : null}
+                </div>
+              </div>
+
+              <div className="architecture-timeline-block">
+                <div className="architecture-reco-kicker">Cluster timeline</div>
+                <div className="architecture-reco-text">
+                  Последние события по всему семейству похожих объектов. Это помогает понять, где логика уже разошлась по релизам и инцидентам, а не только по SQL.
+                </div>
+                <div className="architecture-timeline-list cluster">
+                  {selectedClusterTimeline.map((event) => (
+                    <article key={event.id} className={`architecture-timeline-card tone-${event.type}`}>
+                      <div className="architecture-timeline-dot" />
+                      <div className="architecture-timeline-body">
+                        <div className="architecture-row-head">
+                          <div className="architecture-pair">{event.title}</div>
+                          <span className="architecture-badge">{formatDateTime(event.at)}</span>
+                        </div>
+                        <div className="architecture-row-meta">
+                          <span className="mono">{event.object}</span>
+                          <span>{event.actor}</span>
+                          <span>{event.meta}</span>
+                        </div>
+                        <div className="muted">{shortText(event.text, 180)}</div>
+                        {event.link ? (
+                          <div className="architecture-actions">
+                            <a className="btn btn-ghost" href={event.link} target="_blank" rel="noreferrer">Открыть</a>
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                  {!selectedClusterTimeline.length ? <div className="muted">Для выбранного кластера пока нет истории событий в окне анализа.</div> : null}
                 </div>
               </div>
             </section>

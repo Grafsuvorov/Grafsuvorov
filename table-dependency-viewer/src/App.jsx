@@ -25,6 +25,7 @@ import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
 import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import AdminArchitecturePage from "./components/AdminArchitecturePage.jsx";
+import AdminArchitectureBlockPage from "./components/AdminArchitectureBlockPage.jsx";
 import AdminFeedbackPage from "./components/AdminFeedbackPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
@@ -548,6 +549,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : isAdmin ? (
               <AdminArchitecturePage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/architecture/block/:pairId"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminArchitectureBlockPage />
             ) : (
               <Navigate to="/" replace />
             )

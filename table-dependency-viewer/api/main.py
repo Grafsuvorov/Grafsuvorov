@@ -4020,10 +4020,11 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
     }
 
 
-def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list[dict], dict]:
+def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list[dict], dict, dict]:
     exact_groups = defaultdict(list)
     source_groups = defaultdict(list)
     all_blocks = []
+    pair_index = {}
 
     for obj in objects:
         for block in obj.get("statement_blocks") or []:
@@ -4049,6 +4050,56 @@ def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list
         source_tables = sorted({src for row in rows for src in (row.get("source_tables") or set())})
         functions = sorted({fn for row in rows for fn in (row.get("signal_functions") or set())})
         block_type_counts = Counter(row.get("block_type") or "statement" for row in rows)
+        sample_pair_id = None
+        sample_pair_label = None
+        for left, right in combinations(rows, 2):
+            if left.get("fqn") == right.get("fqn"):
+                continue
+            pair_key = "|".join(sorted((left["fqn"], right["fqn"], left["block_id"], right["block_id"])))
+            sample_pair_id = hashlib.sha1(pair_key.encode("utf-8")).hexdigest()[:16]
+            sample_pair_label = f"{left['fqn']} ↔ {right['fqn']}"
+            comparison = _build_pair_comparison(left, right)
+            explanation = _build_pair_explanation(
+                {
+                    "score": 1.0,
+                    "expression_overlap_count": len((left.get("expr_hashes") or set()) & (right.get("expr_hashes") or set())),
+                    "merge_potential": "HIGH",
+                    "diff_hints": _build_diff_hints(left, right),
+                },
+                left,
+                right,
+                comparison,
+            )
+            pair_index[sample_pair_id] = {
+                "pair_id": sample_pair_id,
+                "pair_kind": "block_exact",
+                "score": 1.0,
+                "expression_overlap_count": len((left.get("expr_hashes") or set()) & (right.get("expr_hashes") or set())),
+                "merge_potential": "HIGH",
+                "left_fqn": left.get("fqn"),
+                "right_fqn": right.get("fqn"),
+                "left_entity": left.get("entity_name"),
+                "right_entity": right.get("entity_name"),
+                "left_block_id": left.get("block_id"),
+                "right_block_id": right.get("block_id"),
+                "left_block_type": left.get("block_type"),
+                "right_block_type": right.get("block_type"),
+                "comparison": comparison,
+                "explanation": explanation,
+                "left": left,
+                "right": right,
+                "left_features": {
+                    "tokens_count": len(left.get("tokens") or []),
+                    "source_tables": sorted(left.get("source_tables") or []),
+                    "functions": sorted(left.get("signal_functions") or []),
+                },
+                "right_features": {
+                    "tokens_count": len(right.get("tokens") or []),
+                    "source_tables": sorted(right.get("source_tables") or []),
+                    "functions": sorted(right.get("signal_functions") or []),
+                },
+            }
+            break
         exact_clusters.append({
             "kind": "exact",
             "block_type": block_type_counts.most_common(1)[0][0],
@@ -4059,6 +4110,8 @@ def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list
             "sample_sources": source_tables[:6],
             "sample_functions": functions[:6],
             "sql_preview": rows[0].get("sql_preview"),
+            "sample_pair_id": sample_pair_id,
+            "sample_pair_label": sample_pair_label,
         })
 
     similar_pairs = []
@@ -4076,7 +4129,52 @@ def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list
             score, sim_meta = _calc_logic_similarity(left, right)
             if score < 0.84 or sim_meta.get("expr_exact_count", 0) < 1:
                 continue
+            pair_key = "|".join(sorted((left["fqn"], right["fqn"], left["block_id"], right["block_id"])))
+            pair_id = hashlib.sha1(pair_key.encode("utf-8")).hexdigest()[:16]
+            diff_hints = _build_diff_hints(left, right)
+            comparison = _build_pair_comparison(left, right)
+            explanation = _build_pair_explanation(
+                {
+                    "score": score,
+                    "expression_overlap_count": sim_meta.get("expr_exact_count", 0),
+                    "merge_potential": "HIGH" if score >= 0.9 else "MEDIUM",
+                    "diff_hints": diff_hints,
+                },
+                left,
+                right,
+                comparison,
+            )
+            pair_index[pair_id] = {
+                "pair_id": pair_id,
+                "pair_kind": "block_similar",
+                "score": score,
+                "expression_overlap_count": sim_meta.get("expr_exact_count", 0),
+                "merge_potential": "HIGH" if score >= 0.9 else "MEDIUM",
+                "left_fqn": left.get("fqn"),
+                "right_fqn": right.get("fqn"),
+                "left_entity": left.get("entity_name"),
+                "right_entity": right.get("entity_name"),
+                "left_block_id": left.get("block_id"),
+                "right_block_id": right.get("block_id"),
+                "left_block_type": left.get("block_type"),
+                "right_block_type": right.get("block_type"),
+                "comparison": comparison,
+                "explanation": explanation,
+                "left": left,
+                "right": right,
+                "left_features": {
+                    "tokens_count": len(left.get("tokens") or []),
+                    "source_tables": sorted(left.get("source_tables") or []),
+                    "functions": sorted(left.get("signal_functions") or []),
+                },
+                "right_features": {
+                    "tokens_count": len(right.get("tokens") or []),
+                    "source_tables": sorted(right.get("source_tables") or []),
+                    "functions": sorted(right.get("signal_functions") or []),
+                },
+            }
             similar_pairs.append({
+                "pair_id": pair_id,
                 "left_fqn": left["fqn"],
                 "right_fqn": right["fqn"],
                 "left_entity": left.get("entity_name"),
@@ -4087,7 +4185,7 @@ def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list
                 "right_block_type": right.get("block_type"),
                 "score": score,
                 "expression_overlap_count": sim_meta.get("expr_exact_count", 0),
-                "diff_hints": _build_diff_hints(left, right),
+                "diff_hints": diff_hints,
                 "sample_sources": sorted((left.get("source_tables") or set()) & (right.get("source_tables") or set()))[:6],
                 "sample_functions": sorted((left.get("signal_functions") or set()) & (right.get("signal_functions") or set()))[:6],
             })
@@ -4113,7 +4211,7 @@ def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list
         "exact_clusters_count": len(exact_clusters),
         "similar_pairs_count": len(similar_pairs),
     }
-    return exact_clusters[:16], similar_pairs[:20], summary
+    return exact_clusters[:16], similar_pairs[:20], summary, pair_index
 
 
 def _build_logic_audit_cache():
@@ -4237,7 +4335,7 @@ def _build_logic_audit_cache():
             },
         }
 
-    block_exact_clusters, block_similar_pairs, block_summary = _build_logic_block_candidates(objects)
+    block_exact_clusters, block_similar_pairs, block_summary, block_pair_index = _build_logic_block_candidates(objects)
 
     pairs.sort(key=lambda row: (row["score"], row["merge_potential"]), reverse=True)
     payload = {
@@ -4250,6 +4348,7 @@ def _build_logic_audit_cache():
         "block_exact_clusters": block_exact_clusters,
         "block_similar_pairs": block_similar_pairs,
         "block_summary": block_summary,
+        "block_pair_index": block_pair_index,
     }
     _logic_audit_cache_payload = payload
     _logic_audit_cache_ts = now
@@ -9948,6 +10047,22 @@ def get_admin_architecture_workbench(
         "duplicate_candidate": sum(1 for row in pairs if row.get("issue_type") == "duplicate_candidate"),
         "similar_candidate": sum(1 for row in pairs if row.get("issue_type") == "similar_candidate"),
     }
+
+
+@router.get("/api/admin/architecture/block-pair/{pair_id}")
+def get_admin_architecture_block_pair(
+    pair_id: str,
+    request: Request,
+):
+    user = get_current_user_from_request(request)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    payload = _build_logic_audit_cache()
+    detail = (payload.get("block_pair_index") or {}).get(pair_id)
+    if not detail:
+        return JSONResponse(status_code=404, content={"error": "block pair not found"})
+    return detail
     return {
         "generated_at": payload.get("generated_at"),
         "objects_count": payload.get("objects_count"),

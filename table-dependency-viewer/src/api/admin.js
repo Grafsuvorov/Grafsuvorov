@@ -9,6 +9,7 @@ export const adminApi = {
     ttlMs: 10 * 60 * 1000,
     params: { issue_type: "all", mode: "standard", min_score: 0.72, limit: 500 },
   }),
+  architectureBlockPair: (pairId) => apiClient.get(`/api/admin/architecture/block-pair/${encodeURIComponent(pairId)}`),
   releaseReports: (days) => apiClient.get("/api/admin/reports/releases", { params: { days } }),
   incidentReports: (days) => apiClient.get("/api/admin/reports/incidents", { params: { days } }),
   exportReportPdf: (body) => apiClient.post("/api/admin/reports/export-pdf", body, { expect: "response" }),

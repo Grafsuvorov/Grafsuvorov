@@ -15986,6 +15986,21 @@ html[data-theme="light"] .onboarding-area-card:hover {
   overflow-wrap: anywhere;
 }
 
+.architecture-sql-pre {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(8, 12, 22, 0.78);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .architecture-matrix {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

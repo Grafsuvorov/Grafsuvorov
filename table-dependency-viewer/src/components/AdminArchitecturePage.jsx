@@ -872,6 +872,11 @@ export default function AdminArchitecturePage() {
     navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(rest.join("."))}`);
   };
 
+  const openBlockPair = (pairId) => {
+    if (!pairId) return;
+    navigate(`/admin/architecture/block/${encodeURIComponent(pairId)}`);
+  };
+
   const copyAiPayload = async (mode = "json") => {
     const content = mode === "json"
       ? JSON.stringify(aiPayload, null, 2)
@@ -999,6 +1004,13 @@ export default function AdminArchitecturePage() {
                       ))}
                     </div>
                     <div className="muted architecture-block-preview">{shortText(item.sql_preview, 220)}</div>
+                    {item.sample_pair_id ? (
+                      <div className="architecture-actions">
+                        <button type="button" className="btn btn-secondary" onClick={() => openBlockPair(item.sample_pair_id)}>
+                          Сопоставить блоки
+                        </button>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
                 {!blockExactClusters.length ? <div className="muted">Пока нет повторяющихся внутренних блоков с точным совпадением.</div> : null}
@@ -1034,6 +1046,11 @@ export default function AdminArchitecturePage() {
                       ))}
                     </div>
                     <div className="muted">{shortText((pair.diff_hints || []).join(" · "), 180)}</div>
+                    <div className="architecture-actions">
+                      <button type="button" className="btn btn-secondary" onClick={() => openBlockPair(pair.pair_id)}>
+                        Сопоставить блоки
+                      </button>
+                    </div>
                   </article>
                 ))}
                 {!blockSimilarPairs.length ? <div className="muted">Пока нет сильных near-duplicate блоков.</div> : null}

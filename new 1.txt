@@ -1,202 +1,39 @@
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=200 api
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asuzdc_ove_dislocation_cargo_group depends on api.new_api_cargo BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_waste_report depends on api.sapxi_production_waste_report BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtime depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtimeklass depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.investment_expenses depends on stg.bip_zbw1642m_srv BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ad_users depends on api.dag_load_ad_users BUT META NOT FOUND
-table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
-table-dependency-viewer-api-1  | INFO:     Application startup complete.
-table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:56340 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:56338 - "GET /api/admin/dev-copy/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:56354 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:56352 - "GET /api/admin/architecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500 HTTP/1.1" 500 Internal Server Error
-table-dependency-viewer-api-1  | ERROR:    Exception in ASGI application
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
-table-dependency-viewer-api-1  |     result = await app(  # type: ignore[func-returns-value]
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
-table-dependency-viewer-api-1  |     return await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
-table-dependency-viewer-api-1  |     await super().__call__(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 90, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, _send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
-table-dependency-viewer-api-1  |     response = await self.dispatch_func(request, call_next)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 817, in auth_middleware
-table-dependency-viewer-api-1  |     return await call_next(request)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
-table-dependency-viewer-api-1  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
-table-dependency-viewer-api-1  |     await self.app(scope, receive_or_disconnect, send_no_error)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 88, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 660, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2734, in app
-table-dependency-viewer-api-1  |     await route.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1780, in handle
-table-dependency-viewer-api-1  |     await self.original_router.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2789, in handle
-table-dependency-viewer-api-1  |     await included_router._handle_selected(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1800, in _handle_selected
-table-dependency-viewer-api-1  |     await original_route.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1279, in handle
-table-dependency-viewer-api-1  |     await app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 158, in app
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 144, in app
-table-dependency-viewer-api-1  |     response = await f(request)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 706, in app
-table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 354, in run_endpoint_function
-table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.call, **values)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
-table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/to_thread.py", line 65, in run_sync
-table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_in_worker_thread(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
-table-dependency-viewer-api-1  |     return await future
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
-table-dependency-viewer-api-1  |     result = context.run(func, *args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 9905, in get_admin_architecture_workbench
-table-dependency-viewer-api-1  |     payload = _build_logic_audit_cache()
-table-dependency-viewer-api-1  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4240, in _build_logic_audit_cache
-table-dependency-viewer-api-1  |     block_exact_clusters, block_similar_pairs, block_summary = _build_logic_block_candidates(objects)
-table-dependency-viewer-api-1  |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4051, in _build_logic_block_candidates
-table-dependency-viewer-api-1  |     block_type_counts = Counter(row.get("block_type") or "statement" for row in rows)
-table-dependency-viewer-api-1  |                         ^^^^^^^
-table-dependency-viewer-api-1  | NameError: name 'Counter' is not defined
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:56416 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:56414 - "GET /api/admin/architecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500 HTTP/1.1" 500 Internal Server Error
-table-dependency-viewer-api-1  | ERROR:    Exception in ASGI application
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
-table-dependency-viewer-api-1  |     result = await app(  # type: ignore[func-returns-value]
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
-table-dependency-viewer-api-1  |     return await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
-table-dependency-viewer-api-1  |     await super().__call__(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 90, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, _send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
-table-dependency-viewer-api-1  |     response = await self.dispatch_func(request, call_next)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 817, in auth_middleware
-table-dependency-viewer-api-1  |     return await call_next(request)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
-table-dependency-viewer-api-1  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
-table-dependency-viewer-api-1  |     await self.app(scope, receive_or_disconnect, send_no_error)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 88, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 660, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2734, in app
-table-dependency-viewer-api-1  |     await route.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1780, in handle
-table-dependency-viewer-api-1  |     await self.original_router.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2789, in handle
-table-dependency-viewer-api-1  |     await included_router._handle_selected(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1800, in _handle_selected
-table-dependency-viewer-api-1  |     await original_route.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1279, in handle
-table-dependency-viewer-api-1  |     await app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 158, in app
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 144, in app
-table-dependency-viewer-api-1  |     response = await f(request)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 706, in app
-table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 354, in run_endpoint_function
-table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.call, **values)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
-table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/to_thread.py", line 65, in run_sync
-table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_in_worker_thread(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
-table-dependency-viewer-api-1  |     return await future
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
-table-dependency-viewer-api-1  |     result = context.run(func, *args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 9905, in get_admin_architecture_workbench
-table-dependency-viewer-api-1  |     payload = _build_logic_audit_cache()
-table-dependency-viewer-api-1  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4240, in _build_logic_audit_cache
-table-dependency-viewer-api-1  |     block_exact_clusters, block_similar_pairs, block_summary = _build_logic_block_candidates(objects)
-table-dependency-viewer-api-1  |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4051, in _build_logic_block_candidates
-table-dependency-viewer-api-1  |     block_type_counts = Counter(row.get("block_type") or "statement" for row in rows)
-table-dependency-viewer-api-1  |                         ^^^^^^^
-table-dependency-viewer-api-1  | NameError: name 'Counter' is not defined
+dds.transport_bill ↔ dds.transport_bill_fs
+SQL block
+20 expr
+100%
+TRANSPORTATION
+RAW_MATERIALS_SHIPMENT_AND_ARRIVAL
+dict_dds.material
+pg_temp.all_table_union
+pg_temp.dislcont
+pg_temp.disloc
+pg_temp.map_cont_to_platform
+cast
+coalesce
+round
+with
+Логика почти идентична, различия минимальны
+dm.fixed_asset_non_liquid_analysis ↔ dm.fixed_asset_cost_and_depreciation
+Insert-select
+20 expr
+100%
+BI_FI
+BI_FI
+dm.fixed_asset_main
+pg_temp.cumulatives
+coalesce
+Отличаются условия WHERE
+dm.toro_equipment_downtime_losses ↔ dm.exp_toro_equipment_readiness_coefficient_ad_analysis
+SQL block
+9 expr
+100%
+TORO
+TORO
+overlap_merge
+pg_temp.downtime_days_start_end
+extract
+max
+min
+sum
+Логика почти идентична, различия минимальны

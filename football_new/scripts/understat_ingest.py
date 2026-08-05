@@ -5,6 +5,7 @@ import re
 import subprocess
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -15,10 +16,20 @@ from curl_cffi import requests
 DEFAULT_PSQL = "/Applications/Postgres.app/Contents/Versions/18/bin/psql"
 
 
+def resolve_default_understat_season(now: Optional[datetime] = None) -> int:
+    current = now or datetime.utcnow()
+    return current.year if current.month >= 7 else current.year - 1
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Ingest Understat data into Postgres tables.")
     p.add_argument("--league", default="EPL", help="League code for Understat (default: EPL)")
-    p.add_argument("--season", type=int, default=2025, help="Season year for Understat (default: 2025)")
+    p.add_argument(
+        "--season",
+        type=int,
+        default=resolve_default_understat_season(),
+        help="Season year for Understat (defaults to the current football season)",
+    )
     p.add_argument("--year", type=int, default=None, help="Calendar year filter by match datetime, e.g. 2026")
     p.add_argument("--match-id", type=int, default=None, help="Single match id to ingest")
     p.add_argument(

@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from pathlib import Path
 import re
 from typing import Optional, List, Dict, Any
@@ -14,6 +15,19 @@ router = APIRouter(prefix="/api/roi-admin", tags=["roi-admin"])
 
 DB_URL = os.getenv("DB_URL", settings.DATABASE_URL)
 engine = create_engine(DB_URL, pool_pre_ping=True)
+
+
+def _default_season_year(today: Optional[date] = None) -> int:
+    current = today or date.today()
+    return current.year if current.month >= 7 else current.year - 1
+
+
+def _default_roi_date_from() -> str:
+    return f"{_default_season_year()}-08-01"
+
+
+def _default_roi_date_to() -> str:
+    return f"{_default_season_year() + 1}-06-30"
 
 # -----------------------
 # Access control
@@ -375,8 +389,8 @@ def _compute_decisions(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def roi_summary(
     season: Optional[int] = Query(None),
     league_id: Optional[int] = Query(None),
-    date_from: str = Query("2025-08-01"),
-    date_to: str = Query("2026-01-30"),
+    date_from: str = Query(_default_roi_date_from()),
+    date_to: str = Query(_default_roi_date_to()),
     user=Depends(require_roi_admin),
 ):
     rows = _compute_decisions(_load_matches(date_from, date_to, season, league_id))
@@ -464,8 +478,8 @@ def roi_matches(
     season: Optional[int] = Query(None),
     league_id: Optional[int] = Query(None),
     round_label: Optional[str] = Query(None),
-    date_from: str = Query("2025-08-01"),
-    date_to: str = Query("2026-01-30"),
+    date_from: str = Query(_default_roi_date_from()),
+    date_to: str = Query(_default_roi_date_to()),
     user=Depends(require_roi_admin),
 ):
     rows = _compute_decisions(_load_matches(date_from, date_to, season, league_id))

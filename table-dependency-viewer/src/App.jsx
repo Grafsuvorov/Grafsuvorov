@@ -467,6 +467,8 @@ export default function App() {
           }}
         />
       ) : null}
+      <main className="content">
+        <div className="content-inner">
         <Routes>
         <Route
           path="/login"
@@ -689,6 +691,8 @@ export default function App() {
         <Route path="/entity_schedule" element={<Navigate to="/entities" replace />} />
         <Route path="*" element={<div className="page-error">Page not found</div>} />
       </Routes>
+        </div>
+      </main>
     </div>
   );
 }

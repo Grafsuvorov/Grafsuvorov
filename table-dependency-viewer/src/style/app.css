@@ -393,6 +393,7 @@ body {
 
 .app-container {
   min-height: 100vh;
+  width: 100%;
   background: var(--bg);
   display: flex;
   flex-direction: column;
@@ -401,12 +402,12 @@ body {
 main.content {
   flex: 1;
   width: 100%;
+  min-width: 0;
 }
 
 .content-inner {
   width: 100%;
-  max-width: var(--container-width);
-  margin: 0 auto;
+  min-width: 0;
 }
 
 .page {

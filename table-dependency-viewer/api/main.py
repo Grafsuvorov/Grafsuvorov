@@ -4,7 +4,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import List, Dict, Tuple, Set, Union, Any
-from collections import deque, defaultdict
+from collections import Counter, deque, defaultdict
 from pydantic import BaseModel
 import os
 import yaml

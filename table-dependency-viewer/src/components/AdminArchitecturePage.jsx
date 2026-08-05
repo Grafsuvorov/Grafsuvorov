@@ -8,6 +8,14 @@ const ISSUE_LABELS = {
   similar_candidate: "Похожие блоки",
 };
 
+const BLOCK_TYPE_LABELS = {
+  temp_table: "Temp table",
+  create_as_select: "Create as select",
+  insert_select: "Insert-select",
+  query: "Select / CTE",
+  statement: "SQL block",
+};
+
 const RECOMMENDATION_FILTERS = [
   { id: "all", label: "Все" },
   { id: "shared", label: "Общий слой" },
@@ -638,6 +646,9 @@ export default function AdminArchitecturePage() {
   const pairs = data?.pairs || [];
   const enrichment = data?.enrichment || {};
   const enrichmentSummary = data?.enrichment_summary || {};
+  const blockExactClusters = data?.block_exact_clusters || [];
+  const blockSimilarPairs = data?.block_similar_pairs || [];
+  const blockSummary = data?.block_summary || {};
 
   const objectStats = useMemo(() => buildObjectStats(pairs), [pairs]);
   const entityStats = useMemo(() => buildEntityStats(pairs), [pairs]);
@@ -742,7 +753,20 @@ export default function AdminArchitecturePage() {
     withIncidents: enrichmentSummary.objects_with_incidents || 0,
     withDownstream: enrichmentSummary.objects_with_downstream || 0,
     withLastChange: enrichmentSummary.objects_with_last_change || 0,
-  }), [data?.objects_count, enrichmentSummary.objects_with_downstream, enrichmentSummary.objects_with_incidents, enrichmentSummary.objects_with_last_change, enrichmentSummary.objects_with_releases, pairs]);
+    internalBlocks: blockSummary.blocks_count || 0,
+    internalExact: blockSummary.exact_clusters_count || 0,
+    internalSimilar: blockSummary.similar_pairs_count || 0,
+  }), [
+    blockSummary.blocks_count,
+    blockSummary.exact_clusters_count,
+    blockSummary.similar_pairs_count,
+    data?.objects_count,
+    enrichmentSummary.objects_with_downstream,
+    enrichmentSummary.objects_with_incidents,
+    enrichmentSummary.objects_with_last_change,
+    enrichmentSummary.objects_with_releases,
+    pairs,
+  ]);
 
   const selectedCluster = useMemo(
     () => buildObjectCluster(selectedObjectFqn, pairs),
@@ -869,7 +893,7 @@ export default function AdminArchitecturePage() {
         <button className="btn" onClick={() => navigate("/")}>← Назад</button>
         <h1>Архитектурный Workbench</h1>
         <div className="cc-subtitle">
-          Admin-only экран для поиска повторяющейся логики, кандидатов на схлопывание и зон риска в SQL-ландшафте.
+          Admin-only экран для поиска повторяющейся логики, кандидатов на схлопывание и зон риска в SQL-ландшафте. `DQ` из аудита исключён.
         </div>
       </section>
 
@@ -931,7 +955,90 @@ export default function AdminArchitecturePage() {
                 <div className="label">С известным last change</div>
                 <div className="value">{summary.withLastChange}</div>
               </div>
+              <div className="architecture-kpi">
+                <div className="label">Внутренних SQL-блоков</div>
+                <div className="value">{summary.internalBlocks}</div>
+              </div>
+              <div className="architecture-kpi">
+                <div className="label">Exact block clusters</div>
+                <div className="value">{summary.internalExact}</div>
+              </div>
+              <div className="architecture-kpi">
+                <div className="label">Similar block pairs</div>
+                <div className="value">{summary.internalSimilar}</div>
+              </div>
             </div>
+          </section>
+
+          <section className="architecture-grid">
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Внутренние повторы SQL-блоков</div>
+              <div className="section-subtitle">
+                Это новый слой не по объекту целиком, а по внутренним statement/block-фрагментам. Он помогает находить повторяющиеся `temp table`, `insert-select`, `select/cte` даже если сами скрипты на 5000 строк в целом не похожи.
+              </div>
+              <div className="architecture-list compact">
+                {blockExactClusters.map((item, index) => (
+                  <article key={`block-exact-${index}`} className="architecture-row-card compact">
+                    <div className="architecture-row-head">
+                      <div className="architecture-pair">{BLOCK_TYPE_LABELS[item.block_type] || item.block_type}</div>
+                      <div className="architecture-row-badges">
+                        <span className="architecture-badge">{item.objects_count} obj</span>
+                        <span className="architecture-badge">{item.occurrences_count} uses</span>
+                        <span className="architecture-badge accent">exact</span>
+                      </div>
+                    </div>
+                    <div className="architecture-row-meta">
+                      <span>{item.entities.join(" · ") || "Без сущности"}</span>
+                      <span>{item.sample_sources.join(" · ") || "Источники не выделены"}</span>
+                    </div>
+                    <div className="architecture-tags">
+                      {item.sample_objects.map((fqn) => (
+                        <button key={`block-exact-obj-${index}-${fqn}`} type="button" className="architecture-tag architecture-tag-button mono" onClick={() => setSelectedObjectFqn(fqn)}>
+                          {fqn}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="muted architecture-block-preview">{shortText(item.sql_preview, 220)}</div>
+                  </article>
+                ))}
+                {!blockExactClusters.length ? <div className="muted">Пока нет повторяющихся внутренних блоков с точным совпадением.</div> : null}
+              </div>
+            </section>
+
+            <section className="cc-surface architecture-block">
+              <div className="section-title">Похожие внутренние блоки</div>
+              <div className="section-subtitle">
+                Здесь уже не обязательно совпадение всего SQL-фрагмента. Пара попадает сюда, если внутренние блоки очень близки по источникам, выражениям и SQL-форме.
+              </div>
+              <div className="architecture-list compact">
+                {blockSimilarPairs.map((pair, index) => (
+                  <article key={`block-similar-${index}`} className="architecture-row-card compact">
+                    <div className="architecture-row-head">
+                      <div className="architecture-pair mono">{pair.left_fqn} ↔ {pair.right_fqn}</div>
+                      <div className="architecture-row-badges">
+                        <span className="architecture-badge">{BLOCK_TYPE_LABELS[pair.left_block_type] || pair.left_block_type}</span>
+                        <span className="architecture-badge">{pair.expression_overlap_count || 0} expr</span>
+                        <span className="architecture-badge accent">{formatPercent(pair.score)}</span>
+                      </div>
+                    </div>
+                    <div className="architecture-row-meta">
+                      <span>{pair.left_entity || "—"}</span>
+                      <span>{pair.right_entity || "—"}</span>
+                    </div>
+                    <div className="architecture-tags">
+                      {(pair.sample_sources || []).map((source) => (
+                        <span key={`block-source-${index}-${source}`} className="architecture-tag">{source}</span>
+                      ))}
+                      {(pair.sample_functions || []).map((fn) => (
+                        <span key={`block-fn-${index}-${fn}`} className="architecture-tag muted-tag">{fn}</span>
+                      ))}
+                    </div>
+                    <div className="muted">{shortText((pair.diff_hints || []).join(" · "), 180)}</div>
+                  </article>
+                ))}
+                {!blockSimilarPairs.length ? <div className="muted">Пока нет сильных near-duplicate блоков.</div> : null}
+              </div>
+            </section>
           </section>
 
           <section className="cc-surface architecture-block">

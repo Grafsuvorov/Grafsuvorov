@@ -15851,6 +15851,8 @@ html[data-theme="light"] .onboarding-area-card:hover {
   padding: 16px 18px;
   display: grid;
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .architecture-row-card.compact {
@@ -15894,6 +15896,7 @@ html[data-theme="light"] .onboarding-area-card:hover {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .architecture-row-head {
@@ -15908,6 +15911,8 @@ html[data-theme="light"] .onboarding-area-card:hover {
   cursor: pointer;
   font: inherit;
   text-align: left;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .architecture-link:hover {
@@ -15921,6 +15926,7 @@ html[data-theme="light"] .onboarding-area-card:hover {
   flex-wrap: wrap;
   color: var(--muted);
   font-size: 12px;
+  min-width: 0;
 }
 
 .architecture-badge,
@@ -15958,10 +15964,26 @@ html[data-theme="light"] .onboarding-area-card:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .architecture-actions {
   margin-top: 2px;
+}
+
+.architecture-pair {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.architecture-tag-button {
+  cursor: pointer;
+  background: rgba(255,255,255,0.04);
+}
+
+.architecture-block-preview {
+  overflow-wrap: anywhere;
 }
 
 .architecture-matrix {
@@ -16051,6 +16073,7 @@ html[data-theme="light"] .onboarding-area-card:hover {
   padding: 18px;
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .architecture-roadmap-title {
@@ -16074,6 +16097,9 @@ html[data-theme="light"] .onboarding-area-card:hover {
   color: var(--text);
   cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .architecture-roadmap-item:hover {
@@ -16210,6 +16236,7 @@ html[data-theme="light"] .onboarding-area-card:hover {
   color: var(--text);
   font-weight: 700;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .architecture-timeline-block {

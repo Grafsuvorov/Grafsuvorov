@@ -3615,6 +3615,111 @@ def _expression_signature(expr: str) -> tuple[str, set[str]]:
     return expr_hash, tokens
 
 
+def _split_sql_statements(sql: str) -> list[str]:
+    if not sql:
+        return []
+    parts = []
+    current = []
+    depth = 0
+    in_single = False
+    in_double = False
+    for idx, ch in enumerate(sql):
+        prev = sql[idx - 1] if idx > 0 else ""
+        if ch == "'" and not in_double and prev != "\\":
+            in_single = not in_single
+        elif ch == '"' and not in_single and prev != "\\":
+            in_double = not in_double
+        if not in_single and not in_double:
+            if ch == "(":
+                depth += 1
+            elif ch == ")" and depth > 0:
+                depth -= 1
+            elif ch == ";" and depth == 0:
+                stmt = "".join(current).strip()
+                if stmt:
+                    parts.append(stmt)
+                current = []
+                continue
+        current.append(ch)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _normalize_statement_body(stmt: str) -> tuple[str, str, str]:
+    raw = re.sub(r"\s+", " ", (stmt or "").strip())
+    lowered = raw.lower()
+    temp_match = re.match(
+        r"^create\s+(?:temporary\s+|temp\s+)?table\s+([a-z0-9_\".`]+)\s+as\s+(select\b.+)$",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if temp_match:
+        return "temp_table", temp_match.group(1), temp_match.group(2).strip()
+
+    create_as_match = re.match(
+        r"^create\s+table\s+([a-z0-9_\".`]+)\s+as\s+(select\b.+)$",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if create_as_match:
+        return "create_as_select", create_as_match.group(1), create_as_match.group(2).strip()
+
+    insert_match = re.match(
+        r"^insert\s+into\s+([a-z0-9_\".`]+)\b",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if insert_match:
+        select_idx = lowered.find("select")
+        body = raw[select_idx:].strip() if select_idx >= 0 else raw
+        return "insert_select", insert_match.group(1), body
+
+    if lowered.startswith("with "):
+        return "query", "with_query", raw
+    if lowered.startswith("select "):
+        return "query", "select_query", raw
+    return "statement", "statement", raw
+
+
+def _extract_logic_blocks(normalized_sql: str) -> list[dict]:
+    blocks = []
+    for index, stmt in enumerate(_split_sql_statements(normalized_sql), start=1):
+        block_type, block_label, body = _normalize_statement_body(stmt)
+        if "select" not in body.lower():
+            continue
+        select_targets = _extract_select_targets(body)[:20]
+        expr_hashes = set()
+        expr_token_union = set()
+        for target in select_targets:
+            expr_hash, expr_tokens = _expression_signature(target.get("expression") or "")
+            expr_hashes.add(expr_hash)
+            expr_token_union |= expr_tokens
+        source_tables = _extract_source_tables(body)
+        functions = _extract_functions(body)
+        where_clause = _extract_where_clause(body)
+        tokens = _tokenize_sql(body)
+        if len(tokens) < 18 and not source_tables:
+            continue
+        blocks.append({
+            "block_id": f"{block_type}:{index}:{block_label}",
+            "block_type": block_type,
+            "block_label": block_label,
+            "sql_hash": hashlib.sha1(body.encode("utf-8")).hexdigest(),
+            "sql_preview": body[:500],
+            "tokens": tokens,
+            "source_tables": source_tables,
+            "functions": functions,
+            "signal_functions": set(functions),
+            "where_clause": where_clause,
+            "select_targets": select_targets,
+            "expr_hashes": expr_hashes,
+            "expr_token_union": expr_token_union,
+        })
+    return blocks
+
+
 def _jaccard_similarity(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 1.0
@@ -3868,6 +3973,9 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
     table = (meta.get("table_name") or "").strip().lower()
     if not schema or not table:
         return None
+    entity_name = str(meta.get("entity_name") or "").strip()
+    if entity_name.upper() == "DQ":
+        return None
 
     sql_path = (
         _resolve_sql_path_from_meta(meta_path, meta, "sql_query_insert_init", "sql_query_insert_init.sql")
@@ -3877,6 +3985,7 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
     normalized_sql = _normalize_sql(sql_text)
     if not normalized_sql:
         return None
+    statement_blocks = _extract_logic_blocks(normalized_sql)[:24]
     select_targets = _extract_select_targets(normalized_sql)[:25]
     expr_hashes = set()
     expr_token_union = set()
@@ -3889,7 +3998,7 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
         "fqn": f"{schema}.{table}",
         "schema": schema,
         "table": table,
-        "entity_name": meta.get("entity_name"),
+        "entity_name": entity_name,
         "entity_id": meta.get("entity_id"),
         "table_id": meta.get("table_id"),
         "table_load_mode": meta.get("table_load_mode"),
@@ -3907,7 +4016,104 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
         "select_targets": select_targets,
         "expr_hashes": expr_hashes,
         "expr_token_union": expr_token_union,
+        "statement_blocks": statement_blocks,
     }
+
+
+def _build_logic_block_candidates(objects: list[dict]) -> tuple[list[dict], list[dict], dict]:
+    exact_groups = defaultdict(list)
+    source_groups = defaultdict(list)
+    all_blocks = []
+
+    for obj in objects:
+        for block in obj.get("statement_blocks") or []:
+            block_row = {
+                **block,
+                "fqn": obj.get("fqn"),
+                "entity_name": obj.get("entity_name"),
+            }
+            if len(block_row.get("tokens") or []) < 18:
+                continue
+            all_blocks.append(block_row)
+            exact_groups[block_row["sql_hash"]].append(block_row)
+            source_tables = sorted(block_row.get("source_tables") or [])
+            if source_tables:
+                source_groups["|".join(source_tables[:4])].append(block_row)
+
+    exact_clusters = []
+    for rows in exact_groups.values():
+        object_fqns = sorted({row["fqn"] for row in rows if row.get("fqn")})
+        if len(object_fqns) < 2:
+            continue
+        entities = sorted({str(row.get("entity_name") or "Без сущности") for row in rows})
+        source_tables = sorted({src for row in rows for src in (row.get("source_tables") or set())})
+        functions = sorted({fn for row in rows for fn in (row.get("signal_functions") or set())})
+        block_type_counts = Counter(row.get("block_type") or "statement" for row in rows)
+        exact_clusters.append({
+            "kind": "exact",
+            "block_type": block_type_counts.most_common(1)[0][0],
+            "occurrences_count": len(rows),
+            "objects_count": len(object_fqns),
+            "entities": entities[:8],
+            "sample_objects": object_fqns[:6],
+            "sample_sources": source_tables[:6],
+            "sample_functions": functions[:6],
+            "sql_preview": rows[0].get("sql_preview"),
+        })
+
+    similar_pairs = []
+    seen_pairs = set()
+    for rows in source_groups.values():
+        if len(rows) < 2 or len(rows) > 18:
+            continue
+        for left, right in combinations(rows, 2):
+            if left["fqn"] == right["fqn"]:
+                continue
+            pair_key = tuple(sorted((left["fqn"], right["fqn"], left["block_id"], right["block_id"])))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            score, sim_meta = _calc_logic_similarity(left, right)
+            if score < 0.84 or sim_meta.get("expr_exact_count", 0) < 1:
+                continue
+            similar_pairs.append({
+                "left_fqn": left["fqn"],
+                "right_fqn": right["fqn"],
+                "left_entity": left.get("entity_name"),
+                "right_entity": right.get("entity_name"),
+                "left_block_id": left.get("block_id"),
+                "right_block_id": right.get("block_id"),
+                "left_block_type": left.get("block_type"),
+                "right_block_type": right.get("block_type"),
+                "score": score,
+                "expression_overlap_count": sim_meta.get("expr_exact_count", 0),
+                "diff_hints": _build_diff_hints(left, right),
+                "sample_sources": sorted((left.get("source_tables") or set()) & (right.get("source_tables") or set()))[:6],
+                "sample_functions": sorted((left.get("signal_functions") or set()) & (right.get("signal_functions") or set()))[:6],
+            })
+
+    exact_clusters.sort(
+        key=lambda item: (
+            -item["objects_count"],
+            -item["occurrences_count"],
+            item["sample_objects"][0] if item["sample_objects"] else "",
+        ),
+    )
+    similar_pairs.sort(
+        key=lambda item: (
+            -(item["score"] or 0),
+            -(item["expression_overlap_count"] or 0),
+            item["left_fqn"],
+            item["right_fqn"],
+        ),
+    )
+    summary = {
+        "objects_with_blocks": len({row["fqn"] for row in all_blocks}),
+        "blocks_count": len(all_blocks),
+        "exact_clusters_count": len(exact_clusters),
+        "similar_pairs_count": len(similar_pairs),
+    }
+    return exact_clusters[:16], similar_pairs[:20], summary
 
 
 def _build_logic_audit_cache():
@@ -3937,6 +4143,9 @@ def _build_logic_audit_cache():
             if not _is_common_function(fn, function_freq, total_objects)
         }
         obj["signal_functions"] = filtered
+        for block in obj.get("statement_blocks") or []:
+            block_filtered = {fn for fn in (block.get("functions") or set()) if fn in filtered}
+            block["signal_functions"] = block_filtered or set(block.get("functions") or set())
         obj["story"] = _build_story(obj)
 
     objects_index = {}
@@ -4028,6 +4237,8 @@ def _build_logic_audit_cache():
             },
         }
 
+    block_exact_clusters, block_similar_pairs, block_summary = _build_logic_block_candidates(objects)
+
     pairs.sort(key=lambda row: (row["score"], row["merge_potential"]), reverse=True)
     payload = {
         "generated_at": datetime.utcnow().isoformat(),
@@ -4036,6 +4247,9 @@ def _build_logic_audit_cache():
         "pairs": pairs,
         "pair_index": pair_index,
         "objects_index": objects_index,
+        "block_exact_clusters": block_exact_clusters,
+        "block_similar_pairs": block_similar_pairs,
+        "block_summary": block_summary,
     }
     _logic_audit_cache_payload = payload
     _logic_audit_cache_ts = now
@@ -9744,6 +9958,9 @@ def get_admin_architecture_workbench(
         "pairs": pairs,
         "enrichment": enrichment,
         "enrichment_summary": enrichment_summary,
+        "block_exact_clusters": payload.get("block_exact_clusters") or [],
+        "block_similar_pairs": payload.get("block_similar_pairs") or [],
+        "block_summary": payload.get("block_summary") or {},
         "windows": {
             "release_days": release_days,
             "incident_days": incident_days,

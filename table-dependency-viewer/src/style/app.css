@@ -16001,6 +16001,18 @@ html[data-theme="light"] .onboarding-area-card:hover {
   word-break: break-word;
 }
 
+.architecture-sql-pre-compact {
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.architecture-block-diff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .architecture-matrix {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

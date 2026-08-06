@@ -1,200 +1,205 @@
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/base.py", line 1421, in execute
+
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=200 frontend
+table-dependency-viewer-frontend-1  | frontend server listening on 8080
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=200 api
+table-dependency-viewer-api-1  |     response = await self.dispatch_func(request, call_next)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 803, in auth_middleware
+table-dependency-viewer-api-1  |     user = get_current_user_from_request(request)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 785, in get_current_user_from_request
+table-dependency-viewer-api-1  |     user = _get_user_by_email(email)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 183, in _get_user_by_email
+table-dependency-viewer-api-1  |     row = conn.execute(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
 table-dependency-viewer-api-1  |     return meth(
 table-dependency-viewer-api-1  |            ^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
 table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
 table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
 table-dependency-viewer-api-1  |     ret = self._execute_context(
 table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/base.py", line 1848, in _execute_context
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
 table-dependency-viewer-api-1  |     return self._exec_single_context(
 table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
 table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
-table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(e                     xc_info[2]) from e
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
 table-dependency-viewer-api-1  |     self.dialect.do_execute(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                     /sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
 table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
-table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.Oper                     ationalError) server closed the connection unexpectedly
-table-dependency-viewer-api-1  |        This probably means the server terminate                     d abnormally
+table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) server closed the connection unexpectedly
+table-dependency-viewer-api-1  |        This probably means the server terminated abnormally
 table-dependency-viewer-api-1  |        before or while processing the request.
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | [SQL:
-table-dependency-viewer-api-1  |                     SELECT
-table-dependency-viewer-api-1  |                         issue_id,
-table-dependency-viewer-api-1  |                         issue_type,
-table-dependency-viewer-api-1  |                         project_name,
-table-dependency-viewer-api-1  |                         summary,
-table-dependency-viewer-api-1  |                         description_text,
-table-dependency-viewer-api-1  |                         state_name,
-table-dependency-viewer-api-1  |                         priority_name,
-table-dependency-viewer-api-1  |                         author_name,
-table-dependency-viewer-api-1  |                         assignee_name,
-table-dependency-viewer-api-1  |                         team_name,
-table-dependency-viewer-api-1  |                         direction_name,
-table-dependency-viewer-api-1  |                         dashboard_name,
-table-dependency-viewer-api-1  |                         component_name,
-table-dependency-viewer-api-1  |                         trigger_dttm,
-table-dependency-viewer-api-1  |                         incident_start_dttm,
-table-dependency-viewer-api-1  |                         detected_dttm,
-table-dependency-viewer-api-1  |                         incident_reason_name,
-table-dependency-viewer-api-1  |                         work_finished_dttm,
-table-dependency-viewer-api-1  |                         entity_name,
-table-dependency-viewer-api-1  |                         table_name_raw,
-table-dependency-viewer-api-1  |                         table_schema,
-table-dependency-viewer-api-1  |                         table_name,
-table-dependency-viewer-api-1  |                         event_description,
-table-dependency-viewer-api-1  |                         alert_source,
-table-dependency-viewer-api-1  |                         root_cause,
-table-dependency-viewer-api-1  |                         fix_actions,
-table-dependency-viewer-api-1  |                         preventive_actions,
-table-dependency-viewer-api-1  |                         spent_time_text,
-table-dependency-viewer-api-1  |                         actual_effort_text,
-table-dependency-viewer-api-1  |                         estimated_effort_text,
-table-dependency-viewer-api-1  |                         ai_saving_text,
-table-dependency-viewer-api-1  |                         created_at_yt,
-table-dependency-viewer-api-1  |                         updated_at_yt,
-table-dependency-viewer-api-1  |                         resolved_at_yt
-table-dependency-viewer-api-1  |                     FROM tech_etl.yt_incidents
-table-dependency-viewer-api-1  |                     WHERE COALESCE(incident_sta                     rt_dttm, detected_dttm, trigger_dttm, created_at_yt, dttm_loaded)
-table-dependency-viewer-api-1  |                           >= (now() - (%(days)s                      || ' days')::interval)
-table-dependency-viewer-api-1  |                     ORDER BY COALESCE(incident_                     start_dttm, detected_dttm, trigger_dttm, created_at_yt) DESC NULLS LAST,
-table-dependency-viewer-api-1  |                              issue_id DESC
-table-dependency-viewer-api-1  |                     ]
-table-dependency-viewer-api-1  | [parameters: {'days': 180}]
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.                     me/e/20/e3q8)
+table-dependency-viewer-api-1  |                 SELECT id, email, username, role, password_hash, password_salt, is_active
+table-dependency-viewer-api-1  |                 FROM tech_etl.app_users
+table-dependency-viewer-api-1  |                 WHERE email = %(email)s
+table-dependency-viewer-api-1  |                 ]
+table-dependency-viewer-api-1  | [parameters: {'email': 'Nikita.Suvorov@rusal.com'}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/e3q8)
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43518 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43544 - "GET /api/admin/architecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500&view_version=2026-08-blocks-v2 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | ERROR:    Exception in ASGI application
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | psycopg2.OperationalError: server closed the connection unexpectedly
+table-dependency-viewer-api-1  |        This probably means the server terminated abnormally
+table-dependency-viewer-api-1  |        before or while processing the request.
 table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39148 - "GET /api/admin/re                     ports/incidents?days=180 HTTP/1.1" 500 Internal Server Error
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39142 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39322 - "GET /api/graph/di                     agnostics?include_any=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39320 - "GET /api/incident                     s/history?days=7&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39344 - "GET /api/incident                     s/timeline?days=7 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39340 - "GET /api/dq/alert                     s?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39324 - "GET /api/metrics                      HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39348 - "GET /api/click/sl                     ow-stages?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39326 - "GET /api/incident                     s/active HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39350 - "GET /api/click/su                     mmary?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39352 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39346 - "GET /api/dq/summa                     ry?days=7&delta=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39356 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39354 - "GET /api/admin/ar                     chitecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500 HTTP/                     1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39328 - "GET /api/night-su                     mmary?days=30&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39318 - "GET /api/orderbre                     aches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39542 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39540 - "GET /api/admin/ar                     chitecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500 HTTP/                     1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39932 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39940 - "GET /api/table-va                     riants/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39942 - "GET /api/dq/histo                     ry/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39948 - "GET /api/click/me                     ta/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39938 - "GET /api/dq/table                     /dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39952 - "GET /api/analytic                     s/table/dm/sales_statement_report?days=90 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39944 - "GET /api/click/ta                     ble/dm/sales_statement_report?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39954 - "GET /api/click/vi                     ew/search?schema=dm&table=sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39950 - "GET /api/click/hi                     story/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39956 - "GET /api/releases                     /table/dm/sales_statement_report?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39964 - "GET /api/click/me                     ta/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39960 - "GET /api/table-va                     riants/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39934 - "GET /api/card/dm/                     sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39968 - "GET /api/analytic                     s/table/dm/sales_statement_report?days=90 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39962 - "GET /api/dq/histo                     ry/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39958 - "GET /api/ytrek/ta                     ble/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39972 - "GET /api/click/vi                     ew/search?schema=dm&table=sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39976 - "GET /api/releases                     /table/dm/sales_statement_report?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39966 - "GET /api/dq/table                     /dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39974 - "GET /api/click/hi                     story/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39970 - "GET /api/click/ta                     ble/dm/sales_statement_report?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39980 - "GET /api/ytrek/ta                     ble/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39978 - "GET /api/card/dm/                     sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39982 - "GET /auth/favorit                     es/tables/3530 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39986 - "GET /api/table-va                     riants/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39996 - "GET /api/click/me                     ta/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39990 - "GET /api/dq/histo                     ry/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40000 - "GET /api/analytic                     s/table/dm/sales_statement_report?days=90 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39992 - "GET /api/click/ta                     ble/dm/sales_statement_report?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39988 - "GET /api/dq/table                     /dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40002 - "GET /api/click/vi                     ew/search?schema=dm&table=sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40004 - "GET /api/releases                     /table/dm/sales_statement_report?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40006 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39998 - "GET /api/click/hi                     story/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40012 - "GET /api/click/me                     ta/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40010 - "GET /api/table-va                     riants/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40014 - "GET /api/analytic                     s/table/dm/sales_statement_report?days=90 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40020 - "GET /api/click/vi                     ew/search?schema=dm&table=sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40008 - "GET /api/ytrek/ta                     ble/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40016 - "GET /api/dq/histo                     ry/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39984 - "GET /api/card/dm/                     sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40024 - "GET /api/releases                     /table/dm/sales_statement_report?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40018 - "GET /api/click/ta                     ble/dm/sales_statement_report?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40022 - "GET /api/dq/table                     /dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40028 - "GET /api/click/hi                     story/dm/sales_statement_report?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40026 - "GET /api/ytrek/ta                     ble/dm/sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40030 - "GET /api/card/dm/                     sales_statement_report HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39936 - "GET /api/table-hi                     story/dm/sales_statement_report?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40036 - "GET /auth/favorit                     es/tables/3530 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40044 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40046 - "GET /api/tables?d                     etailed=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40034 - "GET /api/table-hi                     story/dm/sales_statement_report?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40050 - "GET /api/table-hi                     story/dm/sales_statement_report?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40054 - "GET /api/table-hi                     story/dm/sales_statement_report?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40216 - "GET /api/admin/en                     tity-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40220 - "GET /api/admin/en                     tity-meta/reference/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40224 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40218 - "GET /api/admin/en                     tity-meta/catalog HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40222 - "GET /api/admin/me                     ta-workspace/branches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40266 - "GET /api/admin/en                     tity-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40268 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40272 - "GET /api/admin/en                     tity-meta/reference/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40270 - "GET /api/admin/en                     tity-meta/catalog HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40274 - "GET /api/admin/me                     ta-workspace/branches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40286 - "GET /api/admin/me                     ta-workspace/branch-catalog?branch_name=feature%2FDWH-15115&base_branch=main HTT                     P/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40298 - "GET /api/admin/me                     ta-workspace/branch-catalog?branch_name=feature%2FDWH-15115&base_branch=main HTT                     P/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40288 - "GET /api/admin/me                     ta-workspace/branch-tree?branch_name=feature%2FDWH-15115&base_branch=main HTTP/1                     .1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40300 - "GET /api/admin/me                     ta-workspace/branch-tree?branch_name=feature%2FDWH-15115&base_branch=main HTTP/1                     .1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40316 - "POST /api/admin/m                     eta-workspace/branch-gp-bundle HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40324 - "POST /api/admin/e                     ntity-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40472 - "GET /api/graph/di                     agnostics?include_any=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40470 - "GET /api/incident                     s/history?days=7&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40478 - "GET /api/incident                     s/timeline?days=7 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40476 - "GET /api/metrics                      HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40488 - "GET /api/click/su                     mmary?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40466 - "GET /api/incident                     s/active HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40484 - "GET /api/dq/summa                     ry?days=7&delta=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40486 - "GET /api/dq/alert                     s?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40490 - "GET /api/click/sl                     ow-stages?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40492 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40474 - "GET /api/night-su                     mmary?days=30&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40524 - "GET /api/graph/di                     agnostics?include_any=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40526 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40520 - "GET /api/incident                     s/history?days=7&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40532 - "GET /api/incident                     s/timeline?days=7 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40516 - "GET /api/incident                     s/active HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40522 - "GET /api/metrics                      HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40540 - "GET /api/click/su                     mmary?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40542 - "GET /api/click/sl                     ow-stages?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40536 - "GET /api/dq/summa                     ry?days=7&delta=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40468 - "GET /api/orderbre                     aches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40538 - "GET /api/dq/alert                     s?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40528 - "GET /api/night-su                     mmary?days=30&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40518 - "GET /api/orderbre                     aches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40580 - "GET /api/orderbre                     aches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40590 - "GET /api/graph/di                     agnostics?include_any=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40592 - "GET /api/incident                     s/timeline?days=7 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40584 - "GET /api/incident                     s/history?days=7&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40600 - "GET /api/click/su                     mmary?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40602 - "GET /api/click/sl                     ow-stages?days=7&limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40588 - "GET /api/metrics                      HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40586 - "GET /api/incident                     s/active HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40594 - "GET /api/dq/summa                     ry?days=7&delta=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40604 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40598 - "GET /api/dq/alert                     s?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40616 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40614 - "GET /api/admin/ar                     chitecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500 HTTP/                     1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40582 - "GET /api/night-su                     mmary?days=30&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40622 - "POST /auth/audit/                     event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:40624 - "GET /api/admin/ar                     chitecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500 HTTP/                     1.1" 200 OK
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+table-dependency-viewer-api-1  |     result = await app(  # type: ignore[func-returns-value]
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+table-dependency-viewer-api-1  |     return await self.app(scope, receive, send)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
+table-dependency-viewer-api-1  |     await super().__call__(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 90, in __call__
+table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
+table-dependency-viewer-api-1  |     raise exc
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+table-dependency-viewer-api-1  |     await self.app(scope, receive, _send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+table-dependency-viewer-api-1  |     response = await self.dispatch_func(request, call_next)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 817, in auth_middleware
+table-dependency-viewer-api-1  |     return await call_next(request)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+table-dependency-viewer-api-1  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+table-dependency-viewer-api-1  |     await self.app(scope, receive_or_disconnect, send_no_error)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 88, in __call__
+table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+table-dependency-viewer-api-1  |     raise exc
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+table-dependency-viewer-api-1  |     await app(scope, receive, sender)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 660, in __call__
+table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2734, in app
+table-dependency-viewer-api-1  |     await route.handle(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1780, in handle
+table-dependency-viewer-api-1  |     await self.original_router.handle(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2789, in handle
+table-dependency-viewer-api-1  |     await included_router._handle_selected(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1800, in _handle_selected
+table-dependency-viewer-api-1  |     await original_route.handle(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1279, in handle
+table-dependency-viewer-api-1  |     await app(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 158, in app
+table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+table-dependency-viewer-api-1  |     raise exc
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+table-dependency-viewer-api-1  |     await app(scope, receive, sender)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 144, in app
+table-dependency-viewer-api-1  |     response = await f(request)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 706, in app
+table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 354, in run_endpoint_function
+table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.call, **values)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
+table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/to_thread.py", line 65, in run_sync
+table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_in_worker_thread(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
+table-dependency-viewer-api-1  |     return await future
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
+table-dependency-viewer-api-1  |     result = context.run(func, *args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 10059, in get_admin_architecture_workbench
+table-dependency-viewer-api-1  |     enrichment, enrichment_summary = _build_architecture_workbench_enrichment(
+table-dependency-viewer-api-1  |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 9818, in _build_architecture_workbench_enrichment
+table-dependency-viewer-api-1  |     release_rows = conn.execute(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+table-dependency-viewer-api-1  |     return meth(
+table-dependency-viewer-api-1  |            ^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+table-dependency-viewer-api-1  |     ret = self._execute_context(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+table-dependency-viewer-api-1  |     return self._exec_single_context(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) server closed the connection unexpectedly
+table-dependency-viewer-api-1  |        This probably means the server terminated abnormally
+table-dependency-viewer-api-1  |        before or while processing the request.
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |             SELECT
+table-dependency-viewer-api-1  |                 lower(ro.schema_name) AS schema_name,
+table-dependency-viewer-api-1  |                 lower(ro.table_name) AS table_name,
+table-dependency-viewer-api-1  |                 ro.release_id,
+table-dependency-viewer-api-1  |                 ro.task_id,
+table-dependency-viewer-api-1  |                 ro.change_type,
+table-dependency-viewer-api-1  |                 rl.started_at,
+table-dependency-viewer-api-1  |                 rl.release_type,
+table-dependency-viewer-api-1  |                 rl.status,
+table-dependency-viewer-api-1  |                 rl.initiated_by
+table-dependency-viewer-api-1  |             FROM tech_etl.release_objects ro
+table-dependency-viewer-api-1  |             JOIN tech_etl.release_log rl ON rl.release_id = ro.release_id
+table-dependency-viewer-api-1  |             WHERE rl.started_at >= (now() - (%(days)s || ' days')::interval)
+table-dependency-viewer-api-1  |               AND (lower(ro.schema_name) || '.' || lower(ro.table_name)) IN (%(fqns_1)s, %(fqns_2)s, %(fqns_3)s, %(fqns_4)s, %(fqns_5)s, %(fqns_6)s, %(fqns_7)s, %(fqns_8)s, %(fqns_9)s, %(fqns_10)s, %(fqns_11)s, %(fqns_12)s, %(fqns_13)s, %(fqns_14)s, %(fqns_15)s, %(fqns_16)s, %(fqns_17)s, %(fqns_18)s, %(fqns_19)s, %(fqns_20)s, %(fqns_21)s, %(fqns_22)s, %(fqns_23)s, %(fqns_24)s, %(fqns_25)s, %(fqns_26)s, %(fqns_27)s, %(fqns_28)s, %(fqns_29)s, %(fqns_30)s, %(fqns_31)s, %(fqns_32)s, %(fqns_33)s, %(fqns_34)s, %(fqns_35)s, %(fqns_36)s, %(fqns_37)s, %(fqns_38)s, %(fqns_39)s, %(fqns_40)s, %(fqns_41)s, %(fqns_42)s, %(fqns_43)s, %(fqns_44)s, %(fqns_45)s, %(fqns_46)s, %(fqns_47)s, %(fqns_48)s, %(fqns_49)s, %(fqns_50)s, %(fqns_51)s, %(fqns_52)s, %(fqns_53)s, %(fqns_54)s, %(fqns_55)s, %(fqns_56)s, %(fqns_57)s, %(fqns_58)s, %(fqns_59)s, %(fqns_60)s, %(fqns_61)s, %(fqns_62)s, %(fqns_63)s, %(fqns_64)s, %(fqns_65)s, %(fqns_66)s, %(fqns_67)s, %(fqns_68)s, %(fqns_69)s, %(fqns_70)s, %(fqns_71)s, %(fqns_72)s, %(fqns_73)s, %(fqns_74)s, %(fqns_75)s, %(fqns_76)s, %(fqns_77)s, %(fqns_78)s, %(fqns_79)s, %(fqns_80)s, %(fqns_81)s, %(fqns_82)s, %(fqns_83)s, %(fqns_84)s, %(fqns_85)s, %(fqns_86)s, %(fqns_87)s, %(fqns_88)s, %(fqns_89)s, %(fqns_90)s, %(fqns_91)s, %(fqns_92)s, %(fqns_93)s, %(fqns_94)s, %(fqns_95)s, %(fqns_96)s, %(fqns_97)s, %(fqns_98)s, %(fqns_99)s, %(fqns_100)s, %(fqns_101)s, %(fqns_102)s, %(fqns_103)s, %(fqns_104)s)
+table-dependency-viewer-api-1  |             ORDER BY rl.started_at DESC NULLS LAST, ro.release_id DESC
+table-dependency-viewer-api-1  |             ]
+table-dependency-viewer-api-1  | [parameters: {'days': 180, 'fqns_1': 'dds.accounting_document_contracts', 'fqns_2': 'dds.accounting_document_header', 'fqns_3': 'dds.delivery_number_deleted', 'fqns_4': 'dds.financial_loan_terms', 'fqns_5': 'dds.purchase_agreement_header', 'fqns_6': 'dds.purchase_agreement_position', 'fqns_7': 'dds.purchase_contract_position', 'fqns_8': 'dds.purchase_order_header', 'fqns_9': 'dds.purchase_order_position', 'fqns_10': 'dds.transportation_service_invoice_header_unblock_rejection', 'fqns_11': 'dds.transportation_service_invoice_position_unblock_rejection', 'fqns_12': 'dict_dds.budget_type_texts', 'fqns_13': 'dict_dds.claim_status_texts', 'fqns_14': 'dict_dds.container_length_type_texts', 'fqns_15': 'dict_dds.container_ownership_type_texts', 'fqns_16': 'dict_dds.cost_element_type_texts', 'fqns_17': 'dict_dds.cost_region_texts', 'fqns_18': 'dict_dds.currency_decimal_place_bip', 'fqns_19': 'dict_dds.currency_decimal_place_ral', 'fqns_20': 'dict_dds.delivery_split_reason_texts', 'fqns_21': 'dict_dds.export_method_texts', 'fqns_22': 'dict_dds.freight_movement_method_texts', 'fqns_23': 'dict_dds.general_ledger_account_chart', 'fqns_24': 'dict_dds.general_ledger_account_chart_texts', 'fqns_25': 'dict_dds.import_method_texts', 'fqns_26': 'dict_dds.indicator_yes_no_texts', 'fqns_27': 'dict_dds.invoice_type_texts', 'fqns_28': 'dict_dds.movement_scheme_texts', 'fqns_29': 'dict_dds.package_subtype_texts', 'fqns_30': 'dict_dds.paydox_contract_type_texts', 'fqns_31': 'dict_dds.paydox_document_status_texts', 'fqns_32': 'dict_dds.payment_date_calculation_rule_texts', 'fqns_33': 'dict_dds.payment_terms_document_texts', 'fqns_34': 'dict_dds.price_scale_basis_texts', 'fqns_35': 'dict_dds.railcar_information_source_texts', 'fqns_36': 'dict_dds.railcar_quantity_index_texts', 'fqns_37': 'dict_dds.railway_platform_completeness_type_texts', 'fqns_38': 'dict_dds.railway_tariff_calculation_method_texts', 'fqns_39': 'dict_dds.ready_for_realization_status', 'fqns_40': 'dict_dds.reason_of_allocation_to_illiquid_texts', 'fqns_41': 'dict_dds.redirection_type_texts', 'fqns_42': 'dict_dds.sap_to_aldor_export_status_texts', 'fqns_43': 'dict_dds.scm_pledge_status_texts', 'fqns_44': 'dict_dds.service_type_texts', 'fqns_45': 'dict_dds.shipment_type_texts', 'fqns_46': 'dict_dds.tariff_calculation_weekday_type_texts', 'fqns_47': 'dict_dds.tax_budget_fund_receiver_hierarchy_level_based', 'fqns_48': 'dict_dds.tax_hierarchy_level_based', 'fqns_49': 'dict_dds.tax_movement_type_hierarchy_level_based' ... 5 parameters truncated ... 'fqns_55': 'dict_dds.transportation_document_type_texts', 'fqns_56': 'dict_dds.transportation_material_type_texts', 'fqns_57': 'dict_dds.transportation_services_approval_status_texts', 'fqns_58': 'dict_dds.vat_adjustment_texts', 'fqns_59': 'dict_dds.vat_classification_texts', 'fqns_60': 'dict_dds.vehicle_length_type_texts', 'fqns_61': 'dict_dds.vessel_crane_texts', 'fqns_62': 'dict_dds.vessel_port_call_texts', 'fqns_63': 'dict_dds.zsd2921m_sc', 'fqns_64': 'dict_stg.toro2_eqp_hdr', 'fqns_65': 'dict_stg.toro2_flc_hdr', 'fqns_66': 'dm.accounting_customer_insolvency', 'fqns_67': 'dm.accounting_significant_overdue_account_receivable', 'fqns_68': 'dm.alumina_balance', 'fqns_69': 'dm.exp_toro_equipment_downtime_losses', 'fqns_70': 'dm.fixed_asset_cost_and_depreciation', 'fqns_71': 'dm.fixed_asset_non_liquid_analysis', 'fqns_72': 'dm.kaizen_personnel_involvement', 'fqns_73': 'dm.kaizen_submitted_and_implemented', 'fqns_74': 'dm.material_alumina_balance', 'fqns_75': 'dm.production_ad_kpa_finish_goods_stock_and_shipment', 'fqns_76': 'dm.production_aluminium_electrolysis', 'fqns_77': 'dm.production_aluminium_finish_goods', 'fqns_78': 'dm.production_baked_anodes_and_mass', 'fqns_79': 'dm.production_toro_diesel_equipment_unit_plan_vs_actual', 'fqns_80': 'dm.toro_equipment_downtime_by_production_type', 'fqns_81': 'dm.toro_equipment_downtime_messages', 'fqns_82': 'dm_calc.accounting_document_contracts', 'fqns_83': 'dm_calc.accounting_document_header', 'fqns_84': 'dm_calc.delivery_schema_for_other_routes', 'fqns_85': 'dm_calc.delivery_schema_for_overland_routes', 'fqns_86': 'dm_view.accounting_debt_claim_status_en', 'fqns_87': 'dm_view.accounting_debt_claim_status_ru', 'fqns_88': 'dm_view.accounting_debt_overdue_reason_en', 'fqns_89': 'dm_view.accounting_debt_overdue_reason_ru', 'fqns_90': 'dm_view.kpi_indicators_actual_daily_report_ad', 'fqns_91': 'dm_view.kpi_indicators_daily_ad', 'fqns_92': 'dm_view.sales_metal_in_supply_chain_for_transportation_reporting', 'fqns_93': 'dm_view.sales_supply_chain_metal_realization_forecast', 'fqns_94': 'dm_view.transportation_railcar_at_plant_kd_ad', 'fqns_95': 'dm_view.transportation_railcar_at_plant_normative_vs_actual', 'fqns_96': 'ods.controlling_documents_to_cost_centers', 'fqns_97': 'ods.controlling_documents_to_orders', 'fqns_98': 'ods.controlling_documents_to_wbs_elements', 'fqns_99': 'ods.delivery_number_deleted', 'fqns_100': 'ods.financial_loan_terms', 'fqns_101': 'stg.sapxi_web_kaizen_authors', 'fqns_102': 'stg.sapxi_web_kaizen_performers', 'fqns_103': 'stg.toro2_eqp_avc', 'fqns_104': 'stg.toro2_flc_avc'}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/e3q8)
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43546 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cacheINFO:     172.22.0.2:43558 - "GET /api/graph/diagnostics?include_any=true HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43554 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43576 - "GET /api/incidents/timeline?days=7 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43566 - "GET /api/incidents/history?days=7&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43560 - "GET /api/metrics HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43556 - "GET /api/incidents/active HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43588 - "GET /api/click/summary?days=7&limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43582 - "GET /api/dq/summary?days=7&delta=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43590 - "GET /api/click/slow-stages?days=7&limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43584 - "GET /api/dq/alerts?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43594 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43592 - "GET /api/admin/architecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500&view_version=2026-08-blocks-v2 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43602 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43604 - "GET /api/admin/architecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500&view_version=2026-08-blocks-v2 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43574 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43612 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43610 - "GET /api/admin/architecture/workbench?issue_type=all&mode=standard&min_score=0.72&limit=500&view_version=2026-08-blocks-v2 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43564 - "GET /api/orderbreaches HTTP/1.1" 200 OK
+[root@rgm-s-dwhapp01 table-dependency-viewer]#

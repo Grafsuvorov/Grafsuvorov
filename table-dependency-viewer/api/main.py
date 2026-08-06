@@ -9795,69 +9795,83 @@ def _build_architecture_workbench_enrichment(
     release_rows = []
     snapshot_rows = []
     exec_rows = []
-    with engine.connect() as conn:
-        release_query = text(
-            f"""
-            SELECT
-                lower(ro.schema_name) AS schema_name,
-                lower(ro.table_name) AS table_name,
-                ro.release_id,
-                ro.task_id,
-                ro.change_type,
-                rl.started_at,
-                rl.release_type,
-                rl.status,
-                rl.initiated_by
-            FROM {TABLE_RELEASE_OBJECTS} ro
-            JOIN {TABLE_RELEASE_LOG} rl ON rl.release_id = ro.release_id
-            WHERE rl.started_at >= (now() - (:days || ' days')::interval)
-              AND (lower(ro.schema_name) || '.' || lower(ro.table_name)) IN :fqns
-            ORDER BY rl.started_at DESC NULLS LAST, ro.release_id DESC
-            """
-        ).bindparams(bindparam("fqns", expanding=True))
-        release_rows = conn.execute(
-            release_query,
-            {"days": release_days, "fqns": normalized_fqns},
-        ).mappings().all()
-
-        release_task_ids = sorted(
-            {
-                str(row.get("task_id") or "").strip()
-                for row in release_rows
-                if str(row.get("task_id") or "").strip()
-            }
-        )
-        if release_task_ids:
-            snapshot_query = text(
+    try:
+        with engine.connect() as conn:
+            release_query = text(
                 f"""
                 SELECT
-                    issue_id,
-                    summary,
-                    created_by,
-                    assignee,
-                    updated_at,
-                    created_at,
-                    current_state
-                FROM {TABLE_YT_ISSUE_SNAPSHOT}
-                WHERE issue_id IN :issue_ids
+                    lower(ro.schema_name) AS schema_name,
+                    lower(ro.table_name) AS table_name,
+                    ro.release_id,
+                    ro.task_id,
+                    ro.change_type,
+                    rl.started_at,
+                    rl.release_type,
+                    rl.status,
+                    rl.initiated_by
+                FROM {TABLE_RELEASE_OBJECTS} ro
+                JOIN {TABLE_RELEASE_LOG} rl ON rl.release_id = ro.release_id
+                WHERE rl.started_at >= (now() - (:days || ' days')::interval)
+                  AND (lower(ro.schema_name) || '.' || lower(ro.table_name)) IN :fqns
+                ORDER BY rl.started_at DESC NULLS LAST, ro.release_id DESC
                 """
-            ).bindparams(bindparam("issue_ids", expanding=True))
-            snapshot_rows = conn.execute(snapshot_query, {"issue_ids": release_task_ids}).mappings().all()
+            ).bindparams(bindparam("fqns", expanding=True))
+            for offset in range(0, len(normalized_fqns), 25):
+                fqns_chunk = normalized_fqns[offset: offset + 25]
+                if not fqns_chunk:
+                    continue
+                release_rows.extend(
+                    conn.execute(
+                        release_query,
+                        {"days": release_days, "fqns": fqns_chunk},
+                    ).mappings().all()
+                )
 
-            exec_query = text(
-                f"""
-                SELECT DISTINCT ON (issue_id)
-                       issue_id,
-                       author AS executor,
-                       ts
-                FROM {TABLE_YT_ISSUE_TIMELINE}
-                WHERE issue_id IN :issue_ids
-                  AND event_type = 'State change'
-                  AND value_to IN ('Ожидание релиза', 'В работе')
-                ORDER BY issue_id, ts DESC NULLS LAST
-                """
-            ).bindparams(bindparam("issue_ids", expanding=True))
-            exec_rows = conn.execute(exec_query, {"issue_ids": release_task_ids}).mappings().all()
+            release_task_ids = sorted(
+                {
+                    str(row.get("task_id") or "").strip()
+                    for row in release_rows
+                    if str(row.get("task_id") or "").strip()
+                }
+            )
+            if release_task_ids:
+                snapshot_query = text(
+                    f"""
+                    SELECT
+                        issue_id,
+                        summary,
+                        created_by,
+                        assignee,
+                        updated_at,
+                        created_at,
+                        current_state
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT}
+                    WHERE issue_id IN :issue_ids
+                    """
+                ).bindparams(bindparam("issue_ids", expanding=True))
+                exec_query = text(
+                    f"""
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id,
+                           author AS executor,
+                           ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE issue_id IN :issue_ids
+                      AND event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                    """
+                ).bindparams(bindparam("issue_ids", expanding=True))
+                for offset in range(0, len(release_task_ids), 100):
+                    task_chunk = release_task_ids[offset: offset + 100]
+                    if not task_chunk:
+                        continue
+                    snapshot_rows.extend(conn.execute(snapshot_query, {"issue_ids": task_chunk}).mappings().all())
+                    exec_rows.extend(conn.execute(exec_query, {"issue_ids": task_chunk}).mappings().all())
+    except OperationalError:
+        release_rows = []
+        snapshot_rows = []
+        exec_rows = []
 
     snapshot_map = {str(row.get("issue_id") or ""): dict(row) for row in snapshot_rows}
     exec_map = {str(row.get("issue_id") or ""): dict(row) for row in exec_rows}
@@ -9916,36 +9930,39 @@ def _build_architecture_workbench_enrichment(
         if latest_release:
             latest_release.pop("_started_at", None)
 
-    with engine.connect() as conn:
-        incident_rows = conn.execute(
-            text(
-                """
-                SELECT
-                    issue_id,
-                    summary,
-                    state_name,
-                    author_name,
-                    assignee_name,
-                    incident_reason_name,
-                    alert_source,
-                    trigger_dttm,
-                    incident_start_dttm,
-                    detected_dttm,
-                    work_finished_dttm,
-                    updated_at_yt,
-                    resolved_at_yt,
-                    table_schema,
-                    table_name,
-                    table_name_raw
-                FROM tech_etl.yt_incidents
-                WHERE COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt, dttm_loaded)
-                      >= (now() - (:days || ' days')::interval)
-                ORDER BY COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt) DESC NULLS LAST,
-                         issue_id DESC
-                """
-            ),
-            {"days": incident_days},
-        ).mappings().all()
+    try:
+        with engine.connect() as conn:
+            incident_rows = conn.execute(
+                text(
+                    """
+                    SELECT
+                        issue_id,
+                        summary,
+                        state_name,
+                        author_name,
+                        assignee_name,
+                        incident_reason_name,
+                        alert_source,
+                        trigger_dttm,
+                        incident_start_dttm,
+                        detected_dttm,
+                        work_finished_dttm,
+                        updated_at_yt,
+                        resolved_at_yt,
+                        table_schema,
+                        table_name,
+                        table_name_raw
+                    FROM tech_etl.yt_incidents
+                    WHERE COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt, dttm_loaded)
+                          >= (now() - (:days || ' days')::interval)
+                    ORDER BY COALESCE(incident_start_dttm, detected_dttm, trigger_dttm, created_at_yt) DESC NULLS LAST,
+                             issue_id DESC
+                    """
+                ),
+                {"days": incident_days},
+            ).mappings().all()
+    except OperationalError:
+        incident_rows = []
 
     incident_counts: dict[str, set[str]] = defaultdict(set)
     for row in incident_rows:
@@ -10066,22 +10083,6 @@ def get_admin_architecture_workbench(
         "duplicate_candidate": sum(1 for row in pairs if row.get("issue_type") == "duplicate_candidate"),
         "similar_candidate": sum(1 for row in pairs if row.get("issue_type") == "similar_candidate"),
     }
-
-
-@router.get("/api/admin/architecture/block-pair/{pair_id}")
-def get_admin_architecture_block_pair(
-    pair_id: str,
-    request: Request,
-):
-    user = get_current_user_from_request(request)
-    if not user or user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-    payload = _build_logic_audit_cache()
-    detail = (payload.get("block_pair_index") or {}).get(pair_id)
-    if not detail:
-        return JSONResponse(status_code=404, content={"error": "block pair not found"})
-    return detail
     return {
         "generated_at": payload.get("generated_at"),
         "objects_count": payload.get("objects_count"),
@@ -10100,6 +10101,22 @@ def get_admin_architecture_block_pair(
             "incident_days": incident_days,
         },
     }
+
+
+@router.get("/api/admin/architecture/block-pair/{pair_id}")
+def get_admin_architecture_block_pair(
+    pair_id: str,
+    request: Request,
+):
+    user = get_current_user_from_request(request)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    payload = _build_logic_audit_cache()
+    detail = (payload.get("block_pair_index") or {}).get(pair_id)
+    if not detail:
+        return JSONResponse(status_code=404, content={"error": "block pair not found"})
+    return detail
 
 
 @router.get("/api/entity-loads")

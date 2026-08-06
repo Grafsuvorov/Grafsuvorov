@@ -7,7 +7,7 @@ export const adminApi = {
   engineeringEfficiency: (days) => apiClient.get("/api/admin/engineering-efficiency", { params: { days } }),
   architectureWorkbench: () => apiClient.getCached("/api/admin/architecture/workbench", {
     ttlMs: 10 * 60 * 1000,
-    params: { issue_type: "all", mode: "standard", min_score: 0.72, limit: 500 },
+    params: { issue_type: "all", mode: "standard", min_score: 0.72, limit: 500, view_version: "2026-08-blocks-v2" },
   }),
   architectureBlockPair: (pairId) => apiClient.get(`/api/admin/architecture/block-pair/${encodeURIComponent(pairId)}`),
   releaseReports: (days) => apiClient.get("/api/admin/reports/releases", { params: { days } }),

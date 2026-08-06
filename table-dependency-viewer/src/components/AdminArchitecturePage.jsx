@@ -993,11 +993,11 @@ export default function AdminArchitecturePage() {
                       </div>
                     </div>
                     <div className="architecture-row-meta">
-                      <span>{item.entities.join(" · ") || "Без сущности"}</span>
-                      <span>{item.sample_sources.join(" · ") || "Источники не выделены"}</span>
+                      <span>{Array.isArray(item.entities) && item.entities.length ? item.entities.join(" · ") : "Без сущности"}</span>
+                      <span>{Array.isArray(item.sample_sources) && item.sample_sources.length ? item.sample_sources.join(" · ") : "Источники не выделены"}</span>
                     </div>
                     <div className="architecture-tags">
-                      {item.sample_objects.map((fqn) => (
+                      {(Array.isArray(item.sample_objects) ? item.sample_objects : []).map((fqn) => (
                         <button key={`block-exact-obj-${index}-${fqn}`} type="button" className="architecture-tag architecture-tag-button mono" onClick={() => setSelectedObjectFqn(fqn)}>
                           {fqn}
                         </button>
@@ -1038,10 +1038,10 @@ export default function AdminArchitecturePage() {
                       <span>{pair.right_entity || "—"}</span>
                     </div>
                     <div className="architecture-tags">
-                      {(pair.sample_sources || []).map((source) => (
+                      {(Array.isArray(pair.sample_sources) ? pair.sample_sources : []).map((source) => (
                         <span key={`block-source-${index}-${source}`} className="architecture-tag">{source}</span>
                       ))}
-                      {(pair.sample_functions || []).map((fn) => (
+                      {(Array.isArray(pair.sample_functions) ? pair.sample_functions : []).map((fn) => (
                         <span key={`block-fn-${index}-${fn}`} className="architecture-tag muted-tag">{fn}</span>
                       ))}
                     </div>

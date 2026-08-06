@@ -2179,6 +2179,7 @@ def get_admin_incident_reports(
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     try:
+        detail_limit = 160
         with engine.connect() as conn:
             incident_rows = conn.execute(
                 text(
@@ -2188,7 +2189,6 @@ def get_admin_incident_reports(
                         issue_type,
                         project_name,
                         summary,
-                        description_text,
                         state_name,
                         priority_name,
                         author_name,
@@ -2206,11 +2206,7 @@ def get_admin_incident_reports(
                         table_name_raw,
                         table_schema,
                         table_name,
-                        event_description,
                         alert_source,
-                        root_cause,
-                        fix_actions,
-                        preventive_actions,
                         spent_time_text,
                         actual_effort_text,
                         estimated_effort_text,
@@ -2229,8 +2225,30 @@ def get_admin_incident_reports(
             ).mappings().all()
 
             incident_ids = [row["issue_id"] for row in incident_rows if row.get("issue_id")]
+            detail_issue_ids = incident_ids[:detail_limit]
+            details_by_issue: dict[str, dict[str, Any]] = {}
             link_rows = []
             history_rows = []
+            if detail_issue_ids:
+                detail_query = text(
+                    """
+                    SELECT
+                        issue_id,
+                        description_text,
+                        event_description,
+                        root_cause,
+                        fix_actions,
+                        preventive_actions
+                    FROM tech_etl.yt_incidents
+                    WHERE issue_id IN :issue_ids
+                    """
+                ).bindparams(bindparam("issue_ids", expanding=True))
+                detail_rows = conn.execute(detail_query, {"issue_ids": detail_issue_ids}).mappings().all()
+                details_by_issue = {
+                    str(row.get("issue_id")): dict(row)
+                    for row in detail_rows
+                    if row.get("issue_id")
+                }
             if incident_ids:
                 link_query = text(
                     """
@@ -2295,12 +2313,13 @@ def get_admin_incident_reports(
 
             link_items = links_by_issue.get(issue_id, [])
             history_items = history_by_issue.get(issue_id, [])
+            details = details_by_issue.get(issue_id, {})
             linked_issue_types = sorted({str(item.get("linked_issue_type") or "Не указано").strip() or "Не указано" for item in link_items})
             link_types = sorted({str(item.get("link_type") or "Не указано").strip() or "Не указано" for item in link_items})
             state_changes_count = sum(1 for item in history_items if str(item.get("event_type") or "").lower() == "state_change")
             assignee_changes_count = sum(1 for item in history_items if str(item.get("event_type") or "").lower() == "assignee_change")
             comments_count = sum(1 for item in history_items if str(item.get("comment_text") or "").strip())
-            preventive_filled = bool(_normalize_rich_text(row.get("preventive_actions")))
+            preventive_filled = bool(_normalize_rich_text(details.get("preventive_actions")))
 
             incidents.append(
                 {
@@ -2309,7 +2328,7 @@ def get_admin_incident_reports(
                     "issue_type": row.get("issue_type"),
                     "project_name": row.get("project_name"),
                     "summary": str(row.get("summary") or "").strip(),
-                    "description_text": _normalize_rich_text(row.get("description_text")),
+                    "description_text": _normalize_rich_text(details.get("description_text")),
                     "state_name": row.get("state_name"),
                     "status_bucket": _incident_status_bucket(row.get("state_name")),
                     "priority_name": row.get("priority_name") or "Normal",
@@ -2330,11 +2349,11 @@ def get_admin_incident_reports(
                     "table_fqns": table_fqns,
                     "primary_table_fqn": table_fqns[0] if len(table_fqns) == 1 else None,
                     "affected_tables_count": len(table_fqns),
-                    "event_description": _normalize_rich_text(row.get("event_description")),
+                    "event_description": _normalize_rich_text(details.get("event_description")),
                     "alert_source": row.get("alert_source") or "Не указан",
-                    "root_cause": _normalize_rich_text(row.get("root_cause")) or _normalize_rich_text(row.get("incident_reason_name")),
-                    "fix_actions": _normalize_rich_text(row.get("fix_actions")),
-                    "preventive_actions": _normalize_rich_text(row.get("preventive_actions")),
+                    "root_cause": _normalize_rich_text(details.get("root_cause")) or _normalize_rich_text(row.get("incident_reason_name")),
+                    "fix_actions": _normalize_rich_text(details.get("fix_actions")),
+                    "preventive_actions": _normalize_rich_text(details.get("preventive_actions")),
                     "actual_effort_minutes": actual_effort_minutes,
                     "estimated_effort_minutes": estimated_effort_minutes,
                     "ai_saving_minutes": ai_saving_minutes,

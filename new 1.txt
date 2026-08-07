@@ -1,167 +1,3 @@
-/* =====================================================================
-   НОВАЯ АРХИТЕКТУРА:
-   
-   LANDING
-      ↓ новые XML по watermark
-   tmp_new_docs
-      ↓ XML parsing
-   tmp_delta
-      ├──────────────→ STG HISTORY
-      │
-      └→ latest snapshot
-             ↓
-         ODS CURRENT
-
-   Дополнительно:
-   meta.s1c_debt_watermark       - что уже обработал ETL
-   meta.s1c_debt_source_control  - когда каждая 1С/БЕ приезжала последний раз
-   ===================================================================== */
-
-
-/* =====================================================================
-   БЛОК 0.
-   СОЗДАЁМ META-СХЕМУ
-   Выполняется ОДИН РАЗ.
-   ===================================================================== */
-
-CREATE SCHEMA IF NOT EXISTS meta;
-
-
-/* =====================================================================
-   БЛОК 1.
-   WATERMARK
-
-   Зачем:
-   Хранит до какого dt_insert LANDING уже успешно обработан.
-
-   Вместо текущего:
-       select max(dt_insert) from ods...
-
-   ODS больше не управляет состоянием ETL.
-   ===================================================================== */
-
-CREATE TABLE meta.s1c_debt_watermark
-(
-    process_name    varchar(100) NOT NULL,
-    last_dt_insert  timestamp    NOT NULL,
-    updated_dttm    timestamp    NOT NULL
-)
-DISTRIBUTED REPLICATED;
-
-
-/* ---------------------------------------------------------------------
-   INITIAL LOAD WATERMARK
-
-   ВЫПОЛНЯЕТСЯ ТОЛЬКО ОДИН РАЗ при переходе на новый алгоритм.
-
-   Берём max(dt_insert), который уже попал в STG.
-   --------------------------------------------------------------------- */
-
-INSERT INTO meta.s1c_debt_watermark
-(
-    process_name,
-    last_dt_insert,
-    updated_dttm
-)
-SELECT
-    's1c_debt_for_working_capital',
-    COALESCE(
-        MAX(dt_insert),
-        timestamp '1900-01-01 00:00:00'
-    ),
-    clock_timestamp()
-FROM stg.s1c_debt_for_working_capital;
-
-
-/* =====================================================================
-   БЛОК 2.
-   SOURCE CONTROL
-
-   Зачем:
-   Контроль того, когда конкретная 1С + БЕ
-   последний раз присылала данные.
-
-   Например:
-
-   ERP01 + BE01 -> сегодня
-   ERP02 + BE02 -> сегодня
-   ERP03 + BE03 -> три дня назад -> ALERT
-   ===================================================================== */
-
-CREATE TABLE meta.s1c_debt_source_control
-(
-    database_code_1c          varchar(255) NOT NULL,
-    unit_balance_mdm_code_1c  varchar(255) NOT NULL,
-
-    /* участвует ли источник в мониторинге */
-    is_active                 boolean NOT NULL DEFAULT true,
-
-    /*
-       Сколько источник может молчать.
-       Например 36 часов.
-    */
-    stale_after_hours         integer NOT NULL DEFAULT 36,
-
-    last_dt_report            date,
-    last_dt_insert            timestamp,
-    last_create_date_time     timestamp,
-
-    updated_dttm              timestamp NOT NULL
-)
-DISTRIBUTED BY
-(
-    database_code_1c,
-    unit_balance_mdm_code_1c
-);
-
-
-/* ---------------------------------------------------------------------
-   INITIAL LOAD SOURCE CONTROL
-
-   ОДИН РАЗ при внедрении.
-
-   Здесь можно использовать ODS, потому что нам нужно только
-   текущее состояние каждого источника.
-   --------------------------------------------------------------------- */
-
-INSERT INTO meta.s1c_debt_source_control
-(
-    database_code_1c,
-    unit_balance_mdm_code_1c,
-    is_active,
-    stale_after_hours,
-    last_dt_report,
-    last_dt_insert,
-    last_create_date_time,
-    updated_dttm
-)
-SELECT
-    database_code_1c,
-    unit_balance_mdm_code_1c,
-    true,
-    36,
-    MAX(dt_report),
-    MAX(dt_insert),
-    MAX(create_date_time),
-    clock_timestamp()
-
-FROM ods.account_debt_for_working_capital_1c
-
-GROUP BY
-    database_code_1c,
-    unit_balance_mdm_code_1c;
-
-
-/* =====================================================================
-   =====================================================================
-   
-                       ЕЖЕДНЕВНЫЙ ПРОЦЕСС
-   
-   Всё ниже запускается DAG-ом каждый день.
-   
-   =====================================================================
-   ===================================================================== */
-
 
 DO
 $$
@@ -190,7 +26,7 @@ BEGIN
 
       INTO v_watermark
 
-      FROM meta.s1c_debt_watermark
+      FROM tech_etl.s1c_debt_watermark
 
      WHERE process_name =
            's1c_debt_for_working_capital';
@@ -295,7 +131,7 @@ BEGIN
 
     CREATE TEMP TABLE tmp_delta
     (
-        LIKE stg.s1c_debt_for_working_capital
+        LIKE stg.s1c_debt_for_working_capital_test
     )
 
     ON COMMIT DROP
@@ -660,7 +496,7 @@ BEGIN
        Но дальше для расчёта ODS мы её НЕ ЧИТАЕМ.
        ================================================================ */
 
-    INSERT INTO stg.s1c_debt_for_working_capital
+    INSERT INTO stg.s1c_debt_for_working_capital_test
     SELECT *
     FROM tmp_delta;
 
@@ -1073,7 +909,7 @@ BEGIN
        ================================================================ */
 
 
-    DELETE FROM ods.account_debt_for_working_capital_1c o
+    DELETE FROM ods.account_debt_for_working_capital_1c_test o
 
     USING tmp_changed_snapshots c
 
@@ -1096,7 +932,7 @@ BEGIN
        ================================================================ */
 
 
-    INSERT INTO ods.account_debt_for_working_capital_1c
+    INSERT INTO ods.account_debt_for_working_capital_1c_test
     (
         sender,
         receiver,
@@ -1227,7 +1063,7 @@ BEGIN
        Сначала UPDATE существующих источников
        ================================================================ */
 
-    UPDATE meta.s1c_debt_source_control t
+    UPDATE tech_etl.s1c_debt_source_control t
 
        SET last_dt_report =
                s.dt_report,
@@ -1254,7 +1090,7 @@ BEGIN
        Добавляем совершенно новые 1С/БЕ
        ================================================================ */
 
-    INSERT INTO meta.s1c_debt_source_control
+    INSERT INTO tech_etl.s1c_debt_source_control
     (
         database_code_1c,
         unit_balance_mdm_code_1c,
@@ -1286,7 +1122,7 @@ BEGIN
     (
         SELECT 1
 
-        FROM meta.s1c_debt_source_control t
+        FROM tech_etl.s1c_debt_source_control t
 
         WHERE t.database_code_1c =
               s.database_code_1c
@@ -1308,7 +1144,7 @@ BEGIN
        ================================================================ */
 
 
-    UPDATE meta.s1c_debt_watermark
+    UPDATE tech_etl.s1c_debt_watermark
 
        SET last_dt_insert =
                v_new_watermark,
@@ -1333,7 +1169,7 @@ BEGIN
        STG 350+ млн я бы НЕ ANALYZE-ил после каждого ежедневного append.
        ================================================================ */
 
-    ANALYZE ods.account_debt_for_working_capital_1c;
+    ANALYZE ods.account_debt_for_working_capital_1c_test;
 
 
     RAISE NOTICE
@@ -1344,71 +1180,27 @@ END;
 
 $$;
 
-
-/* =====================================================================
-   =====================================================================
-   ОТДЕЛЬНЫЙ ЗАПРОС МОНИТОРИНГА
-
-   Можно запускать после DAG или отдельным мониторингом.
-
-   Покажет 1С/БЕ, которые давно ничего не отправляли.
-   =====================================================================
-   ===================================================================== */
+SQL Error [XX000]: ERROR: could not devise a plan (createplan.c:6417)
+  Где: SQL statement "UPDATE tech_etl.s1c_debt_watermark
 
 
-SELECT
-    database_code_1c,
-    unit_balance_mdm_code_1c,
 
-    last_dt_report,
-    last_dt_insert,
+       SET last_dt_insert =
 
-    stale_after_hours,
-
-    clock_timestamp() - last_dt_insert
-        AS current_delay
-
-FROM meta.s1c_debt_source_control
-
-WHERE is_active = true
-
-  AND last_dt_insert <
-      clock_timestamp()
-      - stale_after_hours * interval '1 hour'
-
-ORDER BY last_dt_insert;
+               v_new_watermark,
 
 
-/* =====================================================================
-   ОДНОРАЗОВАЯ ПРОВЕРКА КЛЮЧА SNAPSHOT
 
-   ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ ПЕРЕД ПЕРЕХОДОМ.
+           updated_dttm =
 
-   Если запрос вернул 0 строк:
-       текущий ключ BE + dt_report нормальный.
-
-   Если вернул строки:
-       надо отдельно разбирать ключ,
-       возможно добавить database_code_1c.
-   ===================================================================== */
+               clock_timestamp()
 
 
-SELECT
-    unit_balance_mdm_code_1c,
-    dt_report,
 
-    COUNT(
-        DISTINCT database_code_1c
-    ) AS cnt_database
+     WHERE process_name =
 
-FROM stg.s1c_debt_for_working_capital
+           's1c_debt_for_working_capital'"
+PL/pgSQL function inline_code_block line 1145 at SQL statement
 
-GROUP BY
-    unit_balance_mdm_code_1c,
-    dt_report
 
-HAVING COUNT(
-    DISTINCT database_code_1c
-) > 1
-
-LIMIT 100;
+Позиция ошибки:

@@ -1,94 +1,285 @@
+-- =====================================================================
+-- Debt for working capital: delta architecture for Greenplum
+-- Generated from the current production logic supplied by the user.
+-- IMPORTANT: scripts preserve the CURRENT snapshot key:
+--   (unit_balance_mdm_code_1c, dt_report)
+-- Before production rollout, validate whether database_code_1c must also
+-- be part of this key.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. CONTROL TABLES
+-- ---------------------------------------------------------------------
+
+create schema if not exists meta;
+
+create table if not exists meta.s1c_debt_etl_watermark (
+    process_name        varchar(100) not null,
+    last_dt_insert      timestamp not null,
+    updated_dttm        timestamp not null default clock_timestamp()
+)
+distributed replicated;
+
+create table if not exists meta.s1c_debt_processed_documents (
+    uuid                varchar(60) not null,
+    dt_insert           timestamp,
+    processed_dttm      timestamp not null default clock_timestamp()
+)
+distributed by (uuid);
+
+create table if not exists meta.s1c_debt_source_state (
+    database_code_1c            varchar(255),
+    unit_balance_mdm_code_1c    varchar(255),
+    last_dt_report              date,
+    last_dt_insert              timestamp,
+    last_create_date_time       timestamp,
+    last_row_count              bigint,
+    updated_dttm                timestamp not null default clock_timestamp()
+)
+distributed by (database_code_1c, unit_balance_mdm_code_1c);
+
+create table if not exists meta.s1c_debt_expected_source (
+    database_code_1c            varchar(255),
+    unit_balance_mdm_code_1c    varchar(255),
+    is_active                   boolean not null default true,
+    expected_interval           interval not null default interval '1 day',
+    grace_interval              interval not null default interval '6 hours',
+    comment_text                varchar(1000)
+)
+distributed by (database_code_1c, unit_balance_mdm_code_1c);
+
+
+-- ---------------------------------------------------------------------
+-- 2. ONE-TIME BOOTSTRAP FOR EXISTING PRODUCTION
+-- ---------------------------------------------------------------------
+-- Run once BEFORE switching the DAG to the new algorithm.
+-- We set the watermark to the max already loaded STG dt_insert.
+-- The >= predicate in the daily process is protected by processed_documents.
+
+insert into meta.s1c_debt_etl_watermark
+(process_name, last_dt_insert, updated_dttm)
+select
+    's1c_debt_for_working_capital',
+    coalesce(max(dt_insert), timestamp '1900-01-01 00:00:00'),
+    clock_timestamp()
+from stg.s1c_debt_for_working_capital
+where not exists (
+    select 1
+    from meta.s1c_debt_etl_watermark w
+    where w.process_name = 's1c_debt_for_working_capital'
+);
+
+-- Mark only documents exactly on the bootstrap watermark.
+-- This prevents duplicate processing when the daily query uses >=.
+insert into meta.s1c_debt_processed_documents (uuid, dt_insert, processed_dttm)
+select distinct l.uuid, l.dt_insert, clock_timestamp()
+from landing."INPUT_DATA_FROM_SAPXI_IN" l
+join meta.s1c_debt_etl_watermark w
+  on w.process_name = 's1c_debt_for_working_capital'
+ and l.dt_insert = w.last_dt_insert
+where l.flow_id = 'SI_WorkingCapital_AI'
+  and not exists (
+      select 1
+      from meta.s1c_debt_processed_documents p
+      where p.uuid = l.uuid
+  );
+
+-- Initial source state. One-time scan of STG.
+with mx as (
+    select
+        database_code_1c,
+        unit_balance_mdm_code_1c,
+        max(dt_insert) as last_dt_insert
+    from stg.s1c_debt_for_working_capital
+    group by 1,2
+)
+insert into meta.s1c_debt_source_state (
+    database_code_1c,
+    unit_balance_mdm_code_1c,
+    last_dt_report,
+    last_dt_insert,
+    last_create_date_time,
+    last_row_count,
+    updated_dttm
+)
+select
+    s.database_code_1c,
+    s.unit_balance_mdm_code_1c,
+    max(s.dt_report),
+    m.last_dt_insert,
+    max(s.create_date_time),
+    count(*),
+    clock_timestamp()
+from stg.s1c_debt_for_working_capital s
+join mx m
+  on m.database_code_1c = s.database_code_1c
+ and m.unit_balance_mdm_code_1c = s.unit_balance_mdm_code_1c
+ and m.last_dt_insert = s.dt_insert
+group by 1,2,4;
+
+-- Bootstrap expected sources from everything that has historically sent data.
+insert into meta.s1c_debt_expected_source (
+    database_code_1c,
+    unit_balance_mdm_code_1c,
+    is_active,
+    expected_interval,
+    grace_interval,
+    comment_text
+)
+select distinct
+    s.database_code_1c,
+    s.unit_balance_mdm_code_1c,
+    true,
+    interval '1 day',
+    interval '6 hours',
+    'bootstrap from STG'
+from stg.s1c_debt_for_working_capital s
+where not exists (
+    select 1
+    from meta.s1c_debt_expected_source e
+    where e.database_code_1c = s.database_code_1c
+      and e.unit_balance_mdm_code_1c = s.unit_balance_mdm_code_1c
+);
+
+
+-- ---------------------------------------------------------------------
+-- 3. DAILY LOAD
+-- ---------------------------------------------------------------------
+-- Recommended to execute as ONE transaction / one Airflow task.
+-- On failure nothing is marked as processed and the watermark is not moved.
+
 do
 $$
-DECLARE    
-	v_row_cnt int8;
-	v_row_cnt_agg int8 = 0;
-	v_calc_time interval ;
-	v_start_dttm timestamp(0) ;
-	v_last_step_finish_dttm timestamp(0) ;
-BEGIN
-	v_start_dttm   := clock_timestamp()  ;
-	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
-	v_last_step_finish_dttm :=  clock_timestamp();
- 
-	INSERT INTO stg.s1c_debt_for_working_capital
-	(
-	    sender,
-	    receiver,
-	    create_date_time,
-	    dt_report,
-	    database_code_1c,
-	    database_name_1c,
-	    unit_balance_mdm_code_1c,
-	    posting_uid_code_1c,
-	    invoice_registration_number,
-	    counterparty_role_name,
-	    debit_or_credit_name,
-	    accounting_document_descriprion_text,
-	    document_1c_code,
-	    responsibility_center_hfm_code,
-	    region_of_end_user_code,
-	    country_of_end_user_code,
-	    counterparty_mdm_code,
-	    counterparty_annual_turnover_amount,
-	    finish_goods_group_name,
-	    contract_number,
-	    paydox_document_url,
-	    contract_type_name,
-	    contract_amount,
-	    contract_currency_code,
-	    dt_contract_start,
-	    dt_contract_end,
-	    terms_of_payment_name,
-	    dt_overdue,
-	    debt_coverage_type_name,
-	    coverage_amount,
-	    coverage_currency_code,
-	    dt_debt,
-	    document_currency_code,
-	    debt_balance_document_currency_amount,
-	    debt_balance_rub_currency_amount,
-	    debt_balance_usd_currency_amount,
-	    debt_overdue_document_currency_amount,
-	    debt_overdue_rub_currency_amount,
-	    debt_overdue_usd_currency_amount,
-	    bank_receiver_name,
-	    receivable_claim_paydox_url,
-	    dt_receivable_claim,
-	    dt_claim_send_to_law_court,
-	    contract_supervisor_name,
-	    contract_supervisor_ad_login_code,
-	    general_ledger_account_code,
-	    general_ledger_account_name,
-	    dt_contract_registration,
-	    document_currency_amount,
-	    contract_supervisor_employee_1c_number,
-	    contract_supervisor_employee_sap_number,
-	    sales_market_code,
-	    sales_market_name,
-	    bad_debt_provision_amount,
-	    bad_debt_provision_currency_code,
-	    credit_limit_rub_currency_amount,
-	    dt_credit_limit_valid_to,
-	    paydox_credit_limit_url,
-	    insured_amount,
-	    insurance_currency_code,
-	    dt_insurance_valid_to,
-	    insurance_company_mdm_code,
-	    bank_guarantee_amount,
-	    bank_guarantee_currency_code,
-	    dt_bank_guarantee_valid_to,
-	    bank_guarantee_mdm_code,
-	    third_party_guarantee_amount,
-	    third_party_guarantee_currency_code,
-	    dt_third_party_guarantee_valid_to,
-	    third_party_guarantee_mdm_code,
-        counterparty_out_of_mdm_text,
-	    uuid,
-	    dt_insert
-	)
- 
-	WITH src AS (
+declare
+    v_watermark      timestamp;
+    v_new_watermark  timestamp;
+    v_docs           bigint;
+    v_rows           bigint;
+begin
+    select last_dt_insert
+      into v_watermark
+    from meta.s1c_debt_etl_watermark
+    where process_name = 's1c_debt_for_working_capital';
+
+    if v_watermark is null then
+        raise exception 'Watermark is not initialized';
+    end if;
+
+    -- 3.1 Select ONLY raw XML documents not processed yet.
+    -- >= intentionally handles documents with the same dt_insert timestamp.
+    drop table if exists tmp_new_docs;
+    create temp table tmp_new_docs
+    on commit drop
+    as
+    select uuid, dt_insert, document_xml
+    from (
+        select
+            l.uuid,
+            l.dt_insert,
+            l.document_xml,
+            row_number() over (partition by l.uuid order by l.dt_insert desc) as rn
+        from landing."INPUT_DATA_FROM_SAPXI_IN" l
+        left join meta.s1c_debt_processed_documents p
+          on p.uuid = l.uuid
+        where l.flow_id = 'SI_WorkingCapital_AI'
+          and l.dt_insert >= v_watermark
+          and p.uuid is null
+    ) x
+    where rn = 1
+    distributed by (uuid);
+
+    get diagnostics v_docs = row_count;
+
+    if v_docs = 0 then
+        raise notice 'No new XML documents';
+        return;
+    end if;
+
+    select max(dt_insert) into v_new_watermark from tmp_new_docs;
+
+    -- 3.2 Parse XML ONCE into current-run delta.
+    drop table if exists tmp_delta;
+    create temp table tmp_delta
+    (like stg.s1c_debt_for_working_capital including defaults)
+    on commit drop
+    distributed by (unit_balance_mdm_code_1c);
+
+    insert into tmp_delta (
+    sender,
+    receiver,
+    create_date_time,
+    dt_report,
+    database_code_1c,
+    database_name_1c,
+    unit_balance_mdm_code_1c,
+    posting_uid_code_1c,
+    invoice_registration_number,
+    counterparty_role_name,
+    debit_or_credit_name,
+    accounting_document_descriprion_text,
+    document_1c_code,
+    responsibility_center_hfm_code,
+    region_of_end_user_code,
+    country_of_end_user_code,
+    counterparty_mdm_code,
+    counterparty_annual_turnover_amount,
+    finish_goods_group_name,
+    contract_number,
+    paydox_document_url,
+    contract_type_name,
+    contract_amount,
+    contract_currency_code,
+    dt_contract_start,
+    dt_contract_end,
+    terms_of_payment_name,
+    dt_overdue,
+    debt_coverage_type_name,
+    coverage_amount,
+    coverage_currency_code,
+    dt_debt,
+    document_currency_code,
+    debt_balance_document_currency_amount,
+    debt_balance_rub_currency_amount,
+    debt_balance_usd_currency_amount,
+    debt_overdue_document_currency_amount,
+    debt_overdue_rub_currency_amount,
+    debt_overdue_usd_currency_amount,
+    bank_receiver_name,
+    receivable_claim_paydox_url,
+    dt_receivable_claim,
+    dt_claim_send_to_law_court,
+    contract_supervisor_name,
+    contract_supervisor_ad_login_code,
+    general_ledger_account_code,
+    general_ledger_account_name,
+    dt_contract_registration,
+    document_currency_amount,
+    contract_supervisor_employee_1c_number,
+    contract_supervisor_employee_sap_number,
+    sales_market_code,
+    sales_market_name,
+    bad_debt_provision_amount,
+    bad_debt_provision_currency_code,
+    credit_limit_rub_currency_amount,
+    dt_credit_limit_valid_to,
+    paydox_credit_limit_url,
+    insured_amount,
+    insurance_currency_code,
+    dt_insurance_valid_to,
+    insurance_company_mdm_code,
+    bank_guarantee_amount,
+    bank_guarantee_currency_code,
+    dt_bank_guarantee_valid_to,
+    bank_guarantee_mdm_code,
+    third_party_guarantee_amount,
+    third_party_guarantee_currency_code,
+    dt_third_party_guarantee_valid_to,
+    third_party_guarantee_mdm_code,
+    counterparty_out_of_mdm_text,
+    uuid,
+    dt_insert
+)
+WITH src AS (
 	    SELECT
 	        t.uuid,
 	        t.dt_insert,
@@ -96,9 +287,7 @@ BEGIN
 	        (xpath('Header/Sender/text()', document_xml))[1]::varchar AS sender,
 	        (xpath('Header/Receiver/text()', document_xml))[1]::varchar AS receiver,
 	        ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp AS create_date_time
-	    FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
-	    WHERE t.flow_id = 'SI_WorkingCapital_AI'
-		and not exists (select 1 from stg.s1c_debt_for_working_capital as s where t.uuid = s.uuid)
+	    FROM tmp_new_docs t
 	),
  
 	items AS (
@@ -233,149 +422,258 @@ BEGIN
 	    dt_insert
  
 	FROM entrys;
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
- 
-	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
- 
- 
-	if v_row_cnt_agg > 0 then
-		analyze stg.s1c_debt_for_working_capital;
-		get diagnostics v_row_cnt = row_count;
-		raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;	
-		v_last_step_finish_dttm :=  clock_timestamp();
-	end if;
- 
-	v_calc_time :=  clock_timestamp() - v_start_dttm ;
-	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
-end;
-$$
 
+    get diagnostics v_rows = row_count;
+    raise notice 'Parsed XML documents: %, delta rows: %', v_docs, v_rows;
 
+    -- 3.3 Persist raw parsed history.
+    insert into stg.s1c_debt_for_working_capital (
+    sender,
+    receiver,
+    create_date_time,
+    dt_report,
+    database_code_1c,
+    database_name_1c,
+    unit_balance_mdm_code_1c,
+    posting_uid_code_1c,
+    invoice_registration_number,
+    counterparty_role_name,
+    debit_or_credit_name,
+    accounting_document_descriprion_text,
+    document_1c_code,
+    responsibility_center_hfm_code,
+    region_of_end_user_code,
+    country_of_end_user_code,
+    counterparty_mdm_code,
+    counterparty_annual_turnover_amount,
+    finish_goods_group_name,
+    contract_number,
+    paydox_document_url,
+    contract_type_name,
+    contract_amount,
+    contract_currency_code,
+    dt_contract_start,
+    dt_contract_end,
+    terms_of_payment_name,
+    dt_overdue,
+    debt_coverage_type_name,
+    coverage_amount,
+    coverage_currency_code,
+    dt_debt,
+    document_currency_code,
+    debt_balance_document_currency_amount,
+    debt_balance_rub_currency_amount,
+    debt_balance_usd_currency_amount,
+    debt_overdue_document_currency_amount,
+    debt_overdue_rub_currency_amount,
+    debt_overdue_usd_currency_amount,
+    bank_receiver_name,
+    receivable_claim_paydox_url,
+    dt_receivable_claim,
+    dt_claim_send_to_law_court,
+    contract_supervisor_name,
+    contract_supervisor_ad_login_code,
+    general_ledger_account_code,
+    general_ledger_account_name,
+    dt_contract_registration,
+    document_currency_amount,
+    contract_supervisor_employee_1c_number,
+    contract_supervisor_employee_sap_number,
+    sales_market_code,
+    sales_market_name,
+    bad_debt_provision_amount,
+    bad_debt_provision_currency_code,
+    credit_limit_rub_currency_amount,
+    dt_credit_limit_valid_to,
+    paydox_credit_limit_url,
+    insured_amount,
+    insurance_currency_code,
+    dt_insurance_valid_to,
+    insurance_company_mdm_code,
+    bank_guarantee_amount,
+    bank_guarantee_currency_code,
+    dt_bank_guarantee_valid_to,
+    bank_guarantee_mdm_code,
+    third_party_guarantee_amount,
+    third_party_guarantee_currency_code,
+    dt_third_party_guarantee_valid_to,
+    third_party_guarantee_mdm_code,
+    counterparty_out_of_mdm_text,
+    uuid,
+    dt_insert
+)
+    select
+    sender,
+    receiver,
+    create_date_time,
+    dt_report,
+    database_code_1c,
+    database_name_1c,
+    unit_balance_mdm_code_1c,
+    posting_uid_code_1c,
+    invoice_registration_number,
+    counterparty_role_name,
+    debit_or_credit_name,
+    accounting_document_descriprion_text,
+    document_1c_code,
+    responsibility_center_hfm_code,
+    region_of_end_user_code,
+    country_of_end_user_code,
+    counterparty_mdm_code,
+    counterparty_annual_turnover_amount,
+    finish_goods_group_name,
+    contract_number,
+    paydox_document_url,
+    contract_type_name,
+    contract_amount,
+    contract_currency_code,
+    dt_contract_start,
+    dt_contract_end,
+    terms_of_payment_name,
+    dt_overdue,
+    debt_coverage_type_name,
+    coverage_amount,
+    coverage_currency_code,
+    dt_debt,
+    document_currency_code,
+    debt_balance_document_currency_amount,
+    debt_balance_rub_currency_amount,
+    debt_balance_usd_currency_amount,
+    debt_overdue_document_currency_amount,
+    debt_overdue_rub_currency_amount,
+    debt_overdue_usd_currency_amount,
+    bank_receiver_name,
+    receivable_claim_paydox_url,
+    dt_receivable_claim,
+    dt_claim_send_to_law_court,
+    contract_supervisor_name,
+    contract_supervisor_ad_login_code,
+    general_ledger_account_code,
+    general_ledger_account_name,
+    dt_contract_registration,
+    document_currency_amount,
+    contract_supervisor_employee_1c_number,
+    contract_supervisor_employee_sap_number,
+    sales_market_code,
+    sales_market_name,
+    bad_debt_provision_amount,
+    bad_debt_provision_currency_code,
+    credit_limit_rub_currency_amount,
+    dt_credit_limit_valid_to,
+    paydox_credit_limit_url,
+    insured_amount,
+    insurance_currency_code,
+    dt_insurance_valid_to,
+    insurance_company_mdm_code,
+    bank_guarantee_amount,
+    bank_guarantee_currency_code,
+    dt_bank_guarantee_valid_to,
+    bank_guarantee_mdm_code,
+    third_party_guarantee_amount,
+    third_party_guarantee_currency_code,
+    dt_third_party_guarantee_valid_to,
+    third_party_guarantee_mdm_code,
+    counterparty_out_of_mdm_text,
+    uuid,
+    dt_insert
+    from tmp_delta;
 
-do
-$$
-DECLARE    
-	v_row_cnt int8;
-	v_row_cnt_agg int8 = 0;
-	v_calc_time interval ;
-	v_start_dttm timestamp(0) ;
-	v_last_step_finish_dttm timestamp(0) ;
-    v_key_min date ;
-    v_key_max date ;
-	v_dt_insert_max timestamp;
-    v_key_min_tgt date ;
-	v_is_init bool = false ;
-BEGIN
-	v_start_dttm   := clock_timestamp()  ;
-	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
-	v_last_step_finish_dttm :=  clock_timestamp();
- 
-	select max(dt_insert)
-		into v_dt_insert_max
-	from ods.account_debt_for_working_capital_1c;
- 
-	raise notice '% Расчет v_dt_insert_max =  % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_dt_insert_max;
- 
-	if v_dt_insert_max is null then
-		v_key_min:= '2024-01-01'::date;
-		v_key_max:= current_date::date;
-	else
-		select min(dt_report), max(dt_report)
-			into v_key_min, v_key_max
-		from stg.s1c_debt_for_working_capital
-		where dt_insert > v_dt_insert_max;
-	end if;
- 
- 
-	raise notice '% Параметры расчета v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
- 
- 
-	delete from ods.account_debt_for_working_capital_1c
-	where dt_report between  v_key_min and v_key_max;
- 
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] Delete target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
- 
- 
-	insert into ods.account_debt_for_working_capital_1c (
-		sender,
-		receiver,
-		create_date_time,
-		dt_report,
-		database_code_1c,
-		database_name_1c,
-		unit_balance_mdm_code_1c,
-		posting_uid_code_1c,
-		invoice_registration_number,
-		counterparty_role_name,
-		debit_or_credit_name,
-		accounting_document_descriprion_text,
-		document_1c_code,
-		responsibility_center_hfm_code,
-		region_of_end_user_code,
-		country_of_end_user_code,
-		counterparty_mdm_code,
-		counterparty_annual_turnover_amount,
-		finish_goods_group_name,
-		contract_number,
-		paydox_document_url,
-		contract_type_name,
-		contract_amount,
-		contract_currency_code,
-		dt_contract_start,
-		dt_contract_end,
-		terms_of_payment_name,
-		dt_overdue,
-		debt_coverage_type_name,
-		coverage_amount,
-		coverage_currency_code,
-		dt_debt,
-		document_currency_code,
-		debt_balance_document_currency_amount,
-		debt_balance_rub_currency_amount,
-		debt_balance_usd_currency_amount,
-		debt_overdue_document_currency_amount,
-		debt_overdue_rub_currency_amount,
-		debt_overdue_usd_currency_amount,
-		bank_receiver_name,
-		receivable_claim_paydox_url,
-		dt_receivable_claim,
-		dt_claim_send_to_law_court,
-		contract_supervisor_name,
-		contract_supervisor_ad_login_code,
-		general_ledger_account_code,
-		general_ledger_account_name,
-		dt_contract_registration,
-		document_currency_amount,
-		contract_supervisor_employee_1c_number,
-		contract_supervisor_employee_sap_number,
-		sales_market_code,
-		sales_market_name,
-		bad_debt_provision_amount,
-		bad_debt_provision_currency_code,
-		credit_limit_rub_currency_amount,
-		dt_credit_limit_valid_to,
-		paydox_credit_limit_url,
-		insured_amount,
-		insurance_currency_code,
-		dt_insurance_valid_to,
-		insurance_company_mdm_code,
-		bank_guarantee_amount,
-		bank_guarantee_currency_code,
-		dt_bank_guarantee_valid_to,
-		bank_guarantee_mdm_code,
-		third_party_guarantee_amount,
-		third_party_guarantee_currency_code,
-		dt_third_party_guarantee_valid_to,
-		third_party_guarantee_mdm_code,
-		counterparty_out_of_mdm_text,
-		dt_insert
-	)
-	with cte as (
+    -- 3.4 Define affected snapshots.
+    -- This preserves the CURRENT production key.
+    drop table if exists tmp_changed_snapshots;
+    create temp table tmp_changed_snapshots
+    on commit drop
+    as
+    select distinct
+        unit_balance_mdm_code_1c,
+        dt_report
+    from tmp_delta
+    where dt_report is not null
+    distributed by (unit_balance_mdm_code_1c);
+
+    -- 3.5 Delete ONLY snapshots that actually arrived in this run.
+    delete from ods.account_debt_for_working_capital_1c o
+    using tmp_changed_snapshots k
+    where o.unit_balance_mdm_code_1c = k.unit_balance_mdm_code_1c
+      and o.dt_report = k.dt_report;
+
+    -- 3.6 Rebuild the affected ODS snapshots ONLY from current delta.
+    -- Current transformations, date guards, URL cleanup and both ranks are preserved.
+    insert into ods.account_debt_for_working_capital_1c (
+    sender,
+    receiver,
+    create_date_time,
+    dt_report,
+    database_code_1c,
+    database_name_1c,
+    unit_balance_mdm_code_1c,
+    posting_uid_code_1c,
+    invoice_registration_number,
+    counterparty_role_name,
+    debit_or_credit_name,
+    accounting_document_descriprion_text,
+    document_1c_code,
+    responsibility_center_hfm_code,
+    region_of_end_user_code,
+    country_of_end_user_code,
+    counterparty_mdm_code,
+    counterparty_annual_turnover_amount,
+    finish_goods_group_name,
+    contract_number,
+    paydox_document_url,
+    contract_type_name,
+    contract_amount,
+    contract_currency_code,
+    dt_contract_start,
+    dt_contract_end,
+    terms_of_payment_name,
+    dt_overdue,
+    debt_coverage_type_name,
+    coverage_amount,
+    coverage_currency_code,
+    dt_debt,
+    document_currency_code,
+    debt_balance_document_currency_amount,
+    debt_balance_rub_currency_amount,
+    debt_balance_usd_currency_amount,
+    debt_overdue_document_currency_amount,
+    debt_overdue_rub_currency_amount,
+    debt_overdue_usd_currency_amount,
+    bank_receiver_name,
+    receivable_claim_paydox_url,
+    dt_receivable_claim,
+    dt_claim_send_to_law_court,
+    contract_supervisor_name,
+    contract_supervisor_ad_login_code,
+    general_ledger_account_code,
+    general_ledger_account_name,
+    dt_contract_registration,
+    document_currency_amount,
+    contract_supervisor_employee_1c_number,
+    contract_supervisor_employee_sap_number,
+    sales_market_code,
+    sales_market_name,
+    bad_debt_provision_amount,
+    bad_debt_provision_currency_code,
+    credit_limit_rub_currency_amount,
+    dt_credit_limit_valid_to,
+    paydox_credit_limit_url,
+    insured_amount,
+    insurance_currency_code,
+    dt_insurance_valid_to,
+    insurance_company_mdm_code,
+    bank_guarantee_amount,
+    bank_guarantee_currency_code,
+    dt_bank_guarantee_valid_to,
+    bank_guarantee_mdm_code,
+    third_party_guarantee_amount,
+    third_party_guarantee_currency_code,
+    dt_third_party_guarantee_valid_to,
+    third_party_guarantee_mdm_code,
+    counterparty_out_of_mdm_text,
+    dt_insert
+)
+with cte as (
 		SELECT distinct
 			c.sender,
 			c.receiver,
@@ -476,8 +774,7 @@ BEGIN
 			c.counterparty_out_of_mdm_text,
 			c.dt_insert,
 			dense_rank() over (partition by c.unit_balance_mdm_code_1c, c.dt_report order by c.dt_insert desc) as rn
-		FROM stg.s1c_debt_for_working_capital as c
-		where dt_report between  v_key_min and v_key_max
+		FROM tmp_delta as c
 	),	cte2 as (
 		select
 			c2.sender,
@@ -634,25 +931,152 @@ BEGIN
 	from cte2 as c
 	where 1=1
 		and c.rn=1;
- 
- 
- 
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
- 
-	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
- 
- 
-	if v_row_cnt_agg > 0 then
-		analyze ods.account_debt_for_working_capital_1c;
-		get diagnostics v_row_cnt = row_count;
-		raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-		v_last_step_finish_dttm :=  clock_timestamp();
-	end if;
- 
-	v_calc_time :=  clock_timestamp() - v_start_dttm ;
-	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+
+    -- 3.7 Update freshness/state for sources that actually sent data.
+    drop table if exists tmp_source_state;
+    create temp table tmp_source_state
+    on commit drop
+    as
+    select
+        database_code_1c,
+        unit_balance_mdm_code_1c,
+        max(dt_report)          as last_dt_report,
+        max(dt_insert)          as last_dt_insert,
+        max(create_date_time)   as last_create_date_time,
+        count(*)                as last_row_count
+    from tmp_delta
+    group by 1,2
+    distributed by (database_code_1c, unit_balance_mdm_code_1c);
+
+    delete from meta.s1c_debt_source_state s
+    using tmp_source_state d
+    where s.database_code_1c = d.database_code_1c
+      and s.unit_balance_mdm_code_1c = d.unit_balance_mdm_code_1c;
+
+    insert into meta.s1c_debt_source_state (
+        database_code_1c,
+        unit_balance_mdm_code_1c,
+        last_dt_report,
+        last_dt_insert,
+        last_create_date_time,
+        last_row_count,
+        updated_dttm
+    )
+    select
+        database_code_1c,
+        unit_balance_mdm_code_1c,
+        last_dt_report,
+        last_dt_insert,
+        last_create_date_time,
+        last_row_count,
+        clock_timestamp()
+    from tmp_source_state;
+
+    -- 3.8 Register XML only after ODS/history work completed.
+    insert into meta.s1c_debt_processed_documents (
+        uuid, dt_insert, processed_dttm
+    )
+    select uuid, dt_insert, clock_timestamp()
+    from tmp_new_docs;
+
+    -- 3.9 Move watermark LAST.
+    update meta.s1c_debt_etl_watermark
+       set last_dt_insert = v_new_watermark,
+           updated_dttm   = clock_timestamp()
+     where process_name = 's1c_debt_for_working_capital';
+
+    -- Do not blindly run full ANALYZE on every daily load if ODS is large.
+    -- Prefer GP autostats / scheduled ANALYZE / partition-level ANALYZE if partitioned.
+
+    raise notice 'Finished. documents=%, delta_rows=%, new_watermark=%',
+                 v_docs, v_rows, v_new_watermark;
 end;
-$$
- 
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 4. SOURCE FRESHNESS MONITORING
+-- ---------------------------------------------------------------------
+-- Returns only sources that should be sending data but are stale or never sent.
+
+select
+    e.database_code_1c,
+    e.unit_balance_mdm_code_1c,
+    s.last_dt_report,
+    s.last_dt_insert,
+    clock_timestamp() - s.last_dt_insert as data_age,
+    e.expected_interval,
+    e.grace_interval,
+    case
+        when s.last_dt_insert is null then 'NEVER_RECEIVED'
+        when clock_timestamp() - s.last_dt_insert
+             > e.expected_interval + e.grace_interval then 'STALE'
+        else 'OK'
+    end as status
+from meta.s1c_debt_expected_source e
+left join meta.s1c_debt_source_state s
+  on s.database_code_1c = e.database_code_1c
+ and s.unit_balance_mdm_code_1c = e.unit_balance_mdm_code_1c
+where e.is_active
+  and (
+      s.last_dt_insert is null
+      or clock_timestamp() - s.last_dt_insert
+         > e.expected_interval + e.grace_interval
+  )
+order by data_age desc nulls first;
+
+
+-- ---------------------------------------------------------------------
+-- 5. DATA-QUALITY CHECKS FOR THE NEW ARCHITECTURE
+-- ---------------------------------------------------------------------
+
+-- 5.1 Potential collision: same BE/date from multiple 1C databases.
+-- If this returns rows, strongly consider adding database_code_1c to snapshot key.
+select
+    unit_balance_mdm_code_1c,
+    dt_report,
+    count(distinct database_code_1c) as database_cnt
+from stg.s1c_debt_for_working_capital
+group by 1,2
+having count(distinct database_code_1c) > 1
+order by database_cnt desc
+limit 100;
+
+-- 5.2 Duplicate logical posting in ODS.
+select
+    unit_balance_mdm_code_1c,
+    dt_report,
+    posting_uid_code_1c,
+    count(*) as cnt
+from ods.account_debt_for_working_capital_1c
+group by 1,2,3
+having count(*) > 1
+order by cnt desc
+limit 100;
+
+-- 5.3 Compare last received source state with ODS.
+select
+    s.database_code_1c,
+    s.unit_balance_mdm_code_1c,
+    s.last_dt_report,
+    max(o.dt_report) as ods_max_dt_report,
+    s.last_dt_insert
+from meta.s1c_debt_source_state s
+left join ods.account_debt_for_working_capital_1c o
+  on o.database_code_1c = s.database_code_1c
+ and o.unit_balance_mdm_code_1c = s.unit_balance_mdm_code_1c
+group by 1,2,3,5
+having max(o.dt_report) is distinct from s.last_dt_report;
+
+
+-- ---------------------------------------------------------------------
+-- 6. OPTIONAL CLEANUP / RETENTION
+-- ---------------------------------------------------------------------
+-- processed_documents does not need infinite retention if dt_insert watermark
+-- is reliable. Keep a safety window, e.g. 30-90 days.
+-- Example:
+-- delete from meta.s1c_debt_processed_documents
+-- where processed_dttm < current_date - interval '90 days';
+
+-- Historical STG retention / partitioning is a separate policy decision.
+-- It is no longer on the critical daily ODS calculation path.

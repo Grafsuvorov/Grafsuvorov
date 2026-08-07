@@ -1,95 +1,658 @@
-Сопоставление SQL-блоков
-Отдельный экран для сопоставления внутреннего SQL-фрагмента между двумя объектами: совпадения, отличия, источники, выражения и текст самого блока.
-Итог по блоку
-dm.fixed_asset_non_liquid_analysis ↔ dm.fixed_asset_cost_and_depreciation
-dm.fixed_asset_non_liquid_analysis и dm.fixed_asset_cost_and_depreciation похожи на 100%. Совпадающих выражений SELECT: 20. Совпадает: Общие источники, Общие бизнес-функции. Отличается: WHERE (левый объект).
-Пара выглядит как хороший кандидат на объединение в один расчёт.
-Insert-select
-20 expr
-100%
-block_similar
-Совпадает / отличается
-Совпадает
-Общие источники
-dm.fixed_asset_main
-pg_temp.cumulatives
-Общие бизнес-функции
-coalesce
-Отличается
-WHERE (левый объект)
-(fam.is_asset_conservated is not null and fam.document_type_code = '5') or fam.is_non_liquid_asset_record_created_manually is not null
-Левый и правый блок
-Block A
-Открыть таблицу
-dm.fixed_asset_non_liquid_analysis
-BI_FI
-Insert-select
-insert_select:27:dm.fixed_asset_non_liquid_analysis
-Фичи блока
-fn:coalesce
-src:dm.fixed_asset_main
-src:pg_temp.cumulatives
-Совпавшие выражения и alias
-expr_1
-fam.unit_balance_code
-expr_2
-fam.unit_balance_name
-expr_3
-fam.asset_main_code
-expr_4
-fam.asset_sub_code
-expr_5
-fam.valuation_area_code
-expr_6
-fam.valuation_area_name
-expr_7
-fam.valuation_area_currency_code
-expr_8
-fam.valuation_area_currency_name
-expr_9
-fam.asset_class_code
-expr_10
-fam.asset_class_name
-expr_11
-fam.asset_inventory_number
-expr_12
-fam.asset_name
-SQL блока
-select fam.unit_balance_code, fam.unit_balance_name, fam.asset_main_code, fam.asset_sub_code, fam.valuation_area_code, fam.valuation_area_name, fam.valuation_area_currency_code, fam.valuation_area_currency_name, fam.asset_class_code, fam.asset_class_name, fam.asset_inventory_number, fam.asset_name, fam.dt_assignment_valid_from, fam.dt_assignment_valid_to, fam.asset_depreciation_rule_code, fam.asset_depreciation_rule_name, fam.dt_asset_recognized, fam.dt_asset_write_off, fam.cost_center_code, fam
-Block B
-Открыть таблицу
-dm.fixed_asset_cost_and_depreciation
-BI_FI
-Insert-select
-insert_select:27:dm.fixed_asset_cost_and_depreciation
-Фичи блока
-fn:coalesce
-src:dm.fixed_asset_main
-src:pg_temp.cumulatives
-Совпавшие выражения и alias
-expr_1
-fam.unit_balance_code
-expr_2
-fam.unit_balance_name
-expr_3
-fam.asset_main_code
-expr_4
-fam.asset_sub_code
-expr_5
-fam.valuation_area_code
-expr_6
-fam.valuation_area_name
-expr_7
-fam.valuation_area_currency_code
-expr_8
-fam.valuation_area_currency_name
-expr_9
-fam.asset_class_code
-expr_10
-fam.asset_class_name
-expr_11
-fam.asset_inventory_number
-expr_12
-fam.asset_name
-SQL блока
-select fam.unit_balance_code, fam.unit_balance_name, fam.asset_main_code, fam.asset_sub_code, fam.valuation_area_code, fam.valuation_area_name, fam.valuation_area_currency_code, fam.valuation_area_currency_name, fam.asset_class_code, fam.asset_class_name, fam.asset_inventory_number, fam.asset_name, fam.dt_assignment_valid_from, fam.dt_assignment_valid_to, fam.asset_depreciation_rule_code, fam.asset_depreciation_rule_name, fam.dt_asset_recognized, fam.dt_asset_write_off, fam.cost_center_code, fam
+do
+$$
+DECLARE    
+	v_row_cnt int8;
+	v_row_cnt_agg int8 = 0;
+	v_calc_time interval ;
+	v_start_dttm timestamp(0) ;
+	v_last_step_finish_dttm timestamp(0) ;
+BEGIN
+	v_start_dttm   := clock_timestamp()  ;
+	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
+	v_last_step_finish_dttm :=  clock_timestamp();
+ 
+	INSERT INTO stg.s1c_debt_for_working_capital
+	(
+	    sender,
+	    receiver,
+	    create_date_time,
+	    dt_report,
+	    database_code_1c,
+	    database_name_1c,
+	    unit_balance_mdm_code_1c,
+	    posting_uid_code_1c,
+	    invoice_registration_number,
+	    counterparty_role_name,
+	    debit_or_credit_name,
+	    accounting_document_descriprion_text,
+	    document_1c_code,
+	    responsibility_center_hfm_code,
+	    region_of_end_user_code,
+	    country_of_end_user_code,
+	    counterparty_mdm_code,
+	    counterparty_annual_turnover_amount,
+	    finish_goods_group_name,
+	    contract_number,
+	    paydox_document_url,
+	    contract_type_name,
+	    contract_amount,
+	    contract_currency_code,
+	    dt_contract_start,
+	    dt_contract_end,
+	    terms_of_payment_name,
+	    dt_overdue,
+	    debt_coverage_type_name,
+	    coverage_amount,
+	    coverage_currency_code,
+	    dt_debt,
+	    document_currency_code,
+	    debt_balance_document_currency_amount,
+	    debt_balance_rub_currency_amount,
+	    debt_balance_usd_currency_amount,
+	    debt_overdue_document_currency_amount,
+	    debt_overdue_rub_currency_amount,
+	    debt_overdue_usd_currency_amount,
+	    bank_receiver_name,
+	    receivable_claim_paydox_url,
+	    dt_receivable_claim,
+	    dt_claim_send_to_law_court,
+	    contract_supervisor_name,
+	    contract_supervisor_ad_login_code,
+	    general_ledger_account_code,
+	    general_ledger_account_name,
+	    dt_contract_registration,
+	    document_currency_amount,
+	    contract_supervisor_employee_1c_number,
+	    contract_supervisor_employee_sap_number,
+	    sales_market_code,
+	    sales_market_name,
+	    bad_debt_provision_amount,
+	    bad_debt_provision_currency_code,
+	    credit_limit_rub_currency_amount,
+	    dt_credit_limit_valid_to,
+	    paydox_credit_limit_url,
+	    insured_amount,
+	    insurance_currency_code,
+	    dt_insurance_valid_to,
+	    insurance_company_mdm_code,
+	    bank_guarantee_amount,
+	    bank_guarantee_currency_code,
+	    dt_bank_guarantee_valid_to,
+	    bank_guarantee_mdm_code,
+	    third_party_guarantee_amount,
+	    third_party_guarantee_currency_code,
+	    dt_third_party_guarantee_valid_to,
+	    third_party_guarantee_mdm_code,
+        counterparty_out_of_mdm_text,
+	    uuid,
+	    dt_insert
+	)
+ 
+	WITH src AS (
+	    SELECT
+	        t.uuid,
+	        t.dt_insert,
+	        t.document_xml,
+	        (xpath('Header/Sender/text()', document_xml))[1]::varchar AS sender,
+	        (xpath('Header/Receiver/text()', document_xml))[1]::varchar AS receiver,
+	        ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp AS create_date_time
+	    FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
+	    WHERE t.flow_id = 'SI_WorkingCapital_AI'
+		and not exists (select 1 from stg.s1c_debt_for_working_capital as s where t.uuid = s.uuid)
+	),
+ 
+	items AS (
+	    SELECT
+	        uuid,
+	        dt_insert,
+	        sender,
+	        receiver,
+	        create_date_time,
+	        item_xml,
+	        (xpath('dtRp/text()', item_xml))[1]::varchar::date AS dt_report,
+	        (xpath('dbCd/text()', item_xml))[1]::varchar AS database_code_1c,
+	        (xpath('dbName/text()', item_xml))[1]::varchar AS database_name_1c,
+	        (xpath('unitMd/text()', item_xml))[1]::varchar AS unit_balance_mdm_code_1c,
+	        (xpath('tz/text()', item_xml))[1]::varchar AS timezone_1c
+	    FROM (
+	        SELECT
+	            uuid,
+	            dt_insert,
+	            sender,
+	            receiver,
+	            create_date_time,
+	            unnest(xpath('Body/Item', document_xml)) AS item_xml
+	        FROM src
+	    ) t
+	),
+ 
+	entrys AS (
+	    SELECT
+	        uuid,
+	        dt_insert,
+	        sender,
+	        receiver,
+	        create_date_time,
+	        dt_report,
+	        database_code_1c,
+	        database_name_1c,
+	        unit_balance_mdm_code_1c,
+	        timezone_1c,
+	        entry_xml
+	    FROM (
+	        SELECT
+	            *,
+	            unnest(xpath('entry', item_xml)) AS entry_xml
+	        FROM items
+	    ) t
+	)
+ 
+	SELECT
+	    sender,
+	    receiver,
+	    create_date_time,
+	    dt_report,
+	    database_code_1c,
+	    database_name_1c,
+	    unit_balance_mdm_code_1c,
+ 
+	    (xpath('id/text()', entry_xml))[1]::varchar,
+	    (xpath('invNum/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrpRole/text()', entry_xml))[1]::varchar,
+	    (xpath('dcName/text()', entry_xml))[1]::varchar,
+	    (xpath('docDesc/text()', entry_xml))[1]::varchar,
+	    (xpath('docNum/text()', entry_xml))[1]::varchar,
+	    (xpath('respCntr/text()', entry_xml))[1]::varchar,
+	    (xpath('regEndUsr/text()', entry_xml))[1]::varchar,
+	    (xpath('cntEndUsr/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrpMd/text()', entry_xml))[1]::varchar,
+ 
+	    (xpath('ctrpTurnov/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('fgGrName/text()', entry_xml))[1]::varchar,
+	    (xpath('ctNum/text()', entry_xml))[1]::varchar,
+	    (xpath('pdUrl/text()', entry_xml))[1]::varchar,
+	    (xpath('ctType/text()', entry_xml))[1]::varchar,
+	    (xpath('ctAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('ctCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtCtStart/text()', entry_xml))[1]::varchar::date,
+	    (xpath('dtCtEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('payTerm/text()', entry_xml))[1]::varchar,
+	    (xpath('dtOverdue/text()', entry_xml))[1]::varchar::date,
+	    (xpath('covTypeName/text()', entry_xml))[1]::varchar,
+	    (xpath('covAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('covCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtDebt/text()', entry_xml))[1]::varchar::date,
+	    (xpath('docCurCd/text()', entry_xml))[1]::varchar,
+ 
+	    (xpath('dbDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('dbRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('dbUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('odDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('odRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('odUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+ 
+	    (xpath('bankRecName/text()', entry_xml))[1]::varchar,
+	    (xpath('recClmUrl/text()', entry_xml))[1]::varchar,
+	    (xpath('dtRecClm/text()', entry_xml))[1]::varchar::date,
+	    (xpath('dtLawCrt/text()', entry_xml))[1]::varchar::date,
+	    (xpath('ctrSupName/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrSupId/text()', entry_xml))[1]::varchar,
+	    (xpath('glAccCd/text()', entry_xml))[1]::varchar,
+	    (xpath('glAccName/text()', entry_xml))[1]::varchar,
+	    (xpath('dtCtReg/text()', entry_xml))[1]::varchar::date,
+	    (xpath('docCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+ 
+	    (xpath('ctrSup1c/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrSupSap/text()', entry_xml))[1]::varchar,
+	    (xpath('smCode/text()', entry_xml))[1]::varchar,
+	    (xpath('smName/text()', entry_xml))[1]::varchar,
+ 
+	    (xpath('badDbAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('badDbCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('crLimRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('dtCrLimEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('crUrlPd/text()', entry_xml))[1]::varchar,
+ 
+	    (xpath('insAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('insCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtInsEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('insCoMd/text()', entry_xml))[1]::varchar,
+ 
+	    (xpath('bgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('bgCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtBgEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('bgMd/text()', entry_xml))[1]::varchar,
+ 
+	    (xpath('thpgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('thpgCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtThpgEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('thpgMd/text()', entry_xml))[1]::varchar,
+        (xpath('ctrpName/text()', entry_xml))[1]::varchar,
+ 
+	    uuid,
+	    dt_insert
+ 
+	FROM entrys;
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+ 
+	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+ 
+ 
+	if v_row_cnt_agg > 0 then
+		analyze stg.s1c_debt_for_working_capital;
+		get diagnostics v_row_cnt = row_count;
+		raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;	
+		v_last_step_finish_dttm :=  clock_timestamp();
+	end if;
+ 
+	v_calc_time :=  clock_timestamp() - v_start_dttm ;
+	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+end;
+$$
+
+
+
+do
+$$
+DECLARE    
+	v_row_cnt int8;
+	v_row_cnt_agg int8 = 0;
+	v_calc_time interval ;
+	v_start_dttm timestamp(0) ;
+	v_last_step_finish_dttm timestamp(0) ;
+    v_key_min date ;
+    v_key_max date ;
+	v_dt_insert_max timestamp;
+    v_key_min_tgt date ;
+	v_is_init bool = false ;
+BEGIN
+	v_start_dttm   := clock_timestamp()  ;
+	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
+	v_last_step_finish_dttm :=  clock_timestamp();
+ 
+	select max(dt_insert)
+		into v_dt_insert_max
+	from ods.account_debt_for_working_capital_1c;
+ 
+	raise notice '% Расчет v_dt_insert_max =  % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_dt_insert_max;
+ 
+	if v_dt_insert_max is null then
+		v_key_min:= '2024-01-01'::date;
+		v_key_max:= current_date::date;
+	else
+		select min(dt_report), max(dt_report)
+			into v_key_min, v_key_max
+		from stg.s1c_debt_for_working_capital
+		where dt_insert > v_dt_insert_max;
+	end if;
+ 
+ 
+	raise notice '% Параметры расчета v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
+ 
+ 
+	delete from ods.account_debt_for_working_capital_1c
+	where dt_report between  v_key_min and v_key_max;
+ 
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] Delete target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+ 
+ 
+	insert into ods.account_debt_for_working_capital_1c (
+		sender,
+		receiver,
+		create_date_time,
+		dt_report,
+		database_code_1c,
+		database_name_1c,
+		unit_balance_mdm_code_1c,
+		posting_uid_code_1c,
+		invoice_registration_number,
+		counterparty_role_name,
+		debit_or_credit_name,
+		accounting_document_descriprion_text,
+		document_1c_code,
+		responsibility_center_hfm_code,
+		region_of_end_user_code,
+		country_of_end_user_code,
+		counterparty_mdm_code,
+		counterparty_annual_turnover_amount,
+		finish_goods_group_name,
+		contract_number,
+		paydox_document_url,
+		contract_type_name,
+		contract_amount,
+		contract_currency_code,
+		dt_contract_start,
+		dt_contract_end,
+		terms_of_payment_name,
+		dt_overdue,
+		debt_coverage_type_name,
+		coverage_amount,
+		coverage_currency_code,
+		dt_debt,
+		document_currency_code,
+		debt_balance_document_currency_amount,
+		debt_balance_rub_currency_amount,
+		debt_balance_usd_currency_amount,
+		debt_overdue_document_currency_amount,
+		debt_overdue_rub_currency_amount,
+		debt_overdue_usd_currency_amount,
+		bank_receiver_name,
+		receivable_claim_paydox_url,
+		dt_receivable_claim,
+		dt_claim_send_to_law_court,
+		contract_supervisor_name,
+		contract_supervisor_ad_login_code,
+		general_ledger_account_code,
+		general_ledger_account_name,
+		dt_contract_registration,
+		document_currency_amount,
+		contract_supervisor_employee_1c_number,
+		contract_supervisor_employee_sap_number,
+		sales_market_code,
+		sales_market_name,
+		bad_debt_provision_amount,
+		bad_debt_provision_currency_code,
+		credit_limit_rub_currency_amount,
+		dt_credit_limit_valid_to,
+		paydox_credit_limit_url,
+		insured_amount,
+		insurance_currency_code,
+		dt_insurance_valid_to,
+		insurance_company_mdm_code,
+		bank_guarantee_amount,
+		bank_guarantee_currency_code,
+		dt_bank_guarantee_valid_to,
+		bank_guarantee_mdm_code,
+		third_party_guarantee_amount,
+		third_party_guarantee_currency_code,
+		dt_third_party_guarantee_valid_to,
+		third_party_guarantee_mdm_code,
+		counterparty_out_of_mdm_text,
+		dt_insert
+	)
+	with cte as (
+		SELECT distinct
+			c.sender,
+			c.receiver,
+			c.create_date_time,
+			case when c.dt_report < '19000101' then '19000101'
+				 when c.dt_report > '22991231' then '22991231'
+				 else c.dt_report end as dt_report,
+			c.database_code_1c,
+			c.database_name_1c,
+			c.unit_balance_mdm_code_1c,
+			c.posting_uid_code_1c,
+			c.invoice_registration_number,
+			c.counterparty_role_name,
+			c.debit_or_credit_name,
+			c.accounting_document_descriprion_text,
+			c.document_1c_code,
+			c.responsibility_center_hfm_code,
+			c.region_of_end_user_code,
+			c.country_of_end_user_code,
+			c.counterparty_mdm_code,
+			c.counterparty_annual_turnover_amount,
+			c.finish_goods_group_name,
+			c.contract_number,
+			case when c.paydox_document_url like '%https://paydox%' or c.paydox_document_url like '%http://paydox%'
+				then c.paydox_document_url
+				else null end as paydox_document_url,
+			c.contract_type_name,
+			c.contract_amount,
+			c.contract_currency_code,
+			case when c.dt_contract_start < '19000101' then '19000101'
+				 when c.dt_contract_start > '22991231' then '22991231'
+				 else c.dt_contract_start end as dt_contract_start,
+			case when c.dt_contract_end < '19000101' then '19000101'
+				 when c.dt_contract_end > '22991231' then '22991231'
+				 else c.dt_contract_end end as dt_contract_end,
+			c.terms_of_payment_name,
+			case when c.dt_overdue < '19000101' then '19000101'
+				 when c.dt_overdue > '22991231' then '22991231'
+				 else c.dt_overdue end as dt_overdue,
+			c.debt_coverage_type_name,
+			c.coverage_amount,
+			c.coverage_currency_code,
+			case when c.dt_debt < '19000101' then '19000101'
+				 when c.dt_debt > '22991231' then '22991231'
+				 else c.dt_debt end as dt_debt,
+			c.document_currency_code,
+			c.debt_balance_document_currency_amount,
+			c.debt_balance_rub_currency_amount,
+			c.debt_balance_usd_currency_amount,
+			c.debt_overdue_document_currency_amount,
+			c.debt_overdue_rub_currency_amount,
+			c.debt_overdue_usd_currency_amount,
+			c.bank_receiver_name,
+			c.receivable_claim_paydox_url,
+			case when c.dt_receivable_claim < '19000101' then '19000101'
+				 when c.dt_receivable_claim > '22991231' then '22991231'
+				 else c.dt_receivable_claim end as dt_receivable_claim,
+			case when c.dt_claim_send_to_law_court < '19000101' then '19000101'
+				 when c.dt_claim_send_to_law_court > '22991231' then '22991231'
+				 else c.dt_claim_send_to_law_court end as dt_claim_send_to_law_court,
+			c.contract_supervisor_name,
+			c.contract_supervisor_ad_login_code,
+			c.general_ledger_account_code,
+			c.general_ledger_account_name,
+			case when c.dt_contract_registration < '19000101' then '19000101'
+				 when c.dt_contract_registration > '22991231' then '22991231'
+				 else c.dt_contract_registration end as dt_contract_registration,
+			c.document_currency_amount,
+			c.contract_supervisor_employee_1c_number,
+			c.contract_supervisor_employee_sap_number,
+			c.sales_market_code,
+			c.sales_market_name,
+			c.bad_debt_provision_amount,
+			c.bad_debt_provision_currency_code,
+			c.credit_limit_rub_currency_amount,
+			case when c.dt_credit_limit_valid_to < '19000101' then '19000101'
+				 when c.dt_credit_limit_valid_to > '22991231' then '22991231'
+				 else c.dt_credit_limit_valid_to end as dt_credit_limit_valid_to,
+			c.paydox_credit_limit_url,
+			c.insured_amount,
+			c.insurance_currency_code,
+			case when c.dt_insurance_valid_to < '19000101' then '19000101'
+				 when c.dt_insurance_valid_to > '22991231' then '22991231'
+				 else c.dt_insurance_valid_to end as dt_insurance_valid_to,
+			c.insurance_company_mdm_code,
+			c.bank_guarantee_amount,
+			c.bank_guarantee_currency_code,
+			case when c.dt_bank_guarantee_valid_to < '19000101' then '19000101'
+				 when c.dt_bank_guarantee_valid_to > '22991231' then '22991231'
+				 else c.dt_bank_guarantee_valid_to end as dt_bank_guarantee_valid_to,
+			c.bank_guarantee_mdm_code,
+			c.third_party_guarantee_amount,
+			c.third_party_guarantee_currency_code,
+			case when c.dt_third_party_guarantee_valid_to < '19000101' then '19000101'
+				 when c.dt_third_party_guarantee_valid_to > '22991231' then '22991231'
+				 else c.dt_third_party_guarantee_valid_to end as dt_third_party_guarantee_valid_to,
+			c.third_party_guarantee_mdm_code,
+			c.counterparty_out_of_mdm_text,
+			c.dt_insert,
+			dense_rank() over (partition by c.unit_balance_mdm_code_1c, c.dt_report order by c.dt_insert desc) as rn
+		FROM stg.s1c_debt_for_working_capital as c
+		where dt_report between  v_key_min and v_key_max
+	),	cte2 as (
+		select
+			c2.sender,
+			c2.receiver,
+			c2.create_date_time,
+			c2.dt_report,
+			c2.database_code_1c,
+			c2.database_name_1c,
+			c2.unit_balance_mdm_code_1c,
+			c2.posting_uid_code_1c,
+			c2.invoice_registration_number,
+			c2.counterparty_role_name,
+			c2.debit_or_credit_name,
+			c2.accounting_document_descriprion_text,
+			c2.document_1c_code,
+			c2.responsibility_center_hfm_code,
+			c2.region_of_end_user_code,
+			c2.country_of_end_user_code,
+			c2.counterparty_mdm_code,
+			c2.counterparty_annual_turnover_amount,
+			c2.finish_goods_group_name,
+			c2.contract_number,
+			c2.paydox_document_url,
+			c2.contract_type_name,
+			c2.contract_amount,
+			c2.contract_currency_code,
+			c2.dt_contract_start,
+			c2.dt_contract_end,
+			c2.terms_of_payment_name,
+			c2.dt_overdue,
+			c2.debt_coverage_type_name,
+			c2.coverage_amount,
+			c2.coverage_currency_code,
+			c2.dt_debt,
+			c2.document_currency_code,
+			c2.debt_balance_document_currency_amount,
+			c2.debt_balance_rub_currency_amount,
+			c2.debt_balance_usd_currency_amount,
+			c2.debt_overdue_document_currency_amount,
+			c2.debt_overdue_rub_currency_amount,
+			c2.debt_overdue_usd_currency_amount,
+			c2.bank_receiver_name,
+			c2.receivable_claim_paydox_url,
+			c2.dt_receivable_claim,
+			c2.dt_claim_send_to_law_court,
+			c2.contract_supervisor_name,
+			c2.contract_supervisor_ad_login_code,
+			c2.general_ledger_account_code,
+			c2.general_ledger_account_name,
+			c2.dt_contract_registration,
+			c2.document_currency_amount,
+			c2.contract_supervisor_employee_1c_number,
+			c2.contract_supervisor_employee_sap_number,
+			c2.sales_market_code,
+			c2.sales_market_name,
+			c2.bad_debt_provision_amount,
+			c2.bad_debt_provision_currency_code,
+			c2.credit_limit_rub_currency_amount,
+			c2.dt_credit_limit_valid_to,
+			c2.paydox_credit_limit_url,
+			c2.insured_amount,
+			c2.insurance_currency_code,
+			c2.dt_insurance_valid_to,
+			c2.insurance_company_mdm_code,
+			c2.bank_guarantee_amount,
+			c2.bank_guarantee_currency_code,
+			c2.dt_bank_guarantee_valid_to,
+			c2.bank_guarantee_mdm_code,
+			c2.third_party_guarantee_amount,
+			c2.third_party_guarantee_currency_code,
+			c2.dt_third_party_guarantee_valid_to,
+			c2.third_party_guarantee_mdm_code,
+			c2.counterparty_out_of_mdm_text,
+			c2.dt_insert,
+			row_number() over (partition by c2.unit_balance_mdm_code_1c, c2.posting_uid_code_1c, c2.dt_report order by c2.create_date_time desc) as rn
+		from cte as c2
+		where 1=1
+			and c2.rn=1
+			and c2.dt_report <> '1900-01-01'
+	)
+	select
+		c.sender,
+		c.receiver,
+		c.create_date_time,
+		c.dt_report,
+		c.database_code_1c,
+		c.database_name_1c,
+		c.unit_balance_mdm_code_1c,
+		c.posting_uid_code_1c,
+		c.invoice_registration_number,
+		c.counterparty_role_name,
+		c.debit_or_credit_name,
+		c.accounting_document_descriprion_text,
+		c.document_1c_code,
+		c.responsibility_center_hfm_code,
+		c.region_of_end_user_code,
+		c.country_of_end_user_code,
+		c.counterparty_mdm_code,
+		c.counterparty_annual_turnover_amount,
+		c.finish_goods_group_name,
+		c.contract_number,
+		c.paydox_document_url,
+		c.contract_type_name,
+		c.contract_amount,
+		c.contract_currency_code,
+		c.dt_contract_start,
+		c.dt_contract_end,
+		c.terms_of_payment_name,
+		c.dt_overdue,
+		c.debt_coverage_type_name,
+		c.coverage_amount,
+		c.coverage_currency_code,
+		c.dt_debt,
+		c.document_currency_code,
+		c.debt_balance_document_currency_amount,
+		c.debt_balance_rub_currency_amount,
+		c.debt_balance_usd_currency_amount,
+		c.debt_overdue_document_currency_amount,
+		c.debt_overdue_rub_currency_amount,
+		c.debt_overdue_usd_currency_amount,
+		c.bank_receiver_name,
+		c.receivable_claim_paydox_url,
+		c.dt_receivable_claim,
+		c.dt_claim_send_to_law_court,
+		c.contract_supervisor_name,
+		c.contract_supervisor_ad_login_code,
+		c.general_ledger_account_code,
+		c.general_ledger_account_name,
+		c.dt_contract_registration,
+		c.document_currency_amount,
+		c.contract_supervisor_employee_1c_number,
+		c.contract_supervisor_employee_sap_number,
+		c.sales_market_code,
+		c.sales_market_name,
+		c.bad_debt_provision_amount,
+		c.bad_debt_provision_currency_code,
+		c.credit_limit_rub_currency_amount,
+		c.dt_credit_limit_valid_to,
+		c.paydox_credit_limit_url,
+		c.insured_amount,
+		c.insurance_currency_code,
+		c.dt_insurance_valid_to,
+		c.insurance_company_mdm_code,
+		c.bank_guarantee_amount,
+		c.bank_guarantee_currency_code,
+		c.dt_bank_guarantee_valid_to,
+		c.bank_guarantee_mdm_code,
+		c.third_party_guarantee_amount,
+		c.third_party_guarantee_currency_code,
+		c.dt_third_party_guarantee_valid_to,
+		c.third_party_guarantee_mdm_code,
+		c.counterparty_out_of_mdm_text,
+		c.dt_insert
+	from cte2 as c
+	where 1=1
+		and c.rn=1;
+ 
+ 
+ 
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+ 
+	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+ 
+ 
+	if v_row_cnt_agg > 0 then
+		analyze ods.account_debt_for_working_capital_1c;
+		get diagnostics v_row_cnt = row_count;
+		raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+		v_last_step_finish_dttm :=  clock_timestamp();
+	end if;
+ 
+	v_calc_time :=  clock_timestamp() - v_start_dttm ;
+	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+end;
+$$
+ 

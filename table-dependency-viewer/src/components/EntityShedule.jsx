@@ -656,10 +656,6 @@ export default function EntityShedule() {
               </div>
               <div className="entity-meta-grid compact">
                 <div>
-                  <div className="entity-meta-label">Расписание загрузки</div>
-                  <div className="entity-meta-value">{formatDateTime(row.scheduleDate)}</div>
-                </div>
-                <div>
                   <div className="entity-meta-label">Старт загрузки</div>
                   <div className="entity-meta-value">{formatDateTime(row.scheduleStart)}</div>
                 </div>

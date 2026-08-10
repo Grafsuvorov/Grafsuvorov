@@ -605,7 +605,9 @@ def submit_feedback(payload: FeedbackPayload, request: Request):
 
 @router.get("/api/admin/feedback")
 def get_feedback(request: Request, days: int = 30, topic: str = "", limit: int = 200):
-    _require_admin(request)
+    user = get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
     try:
         items = list_feedback(
             engine=engine,

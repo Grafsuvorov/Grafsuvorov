@@ -663,25 +663,7 @@ export default function EntityShedule() {
                   <div className="entity-meta-label">Финиш загрузки</div>
                   <div className="entity-meta-value">{formatDateTime(row.scheduleEnd)}</div>
                 </div>
-                <div>
-                  <div className="entity-meta-label">Общие таблицы</div>
-                  <div className="entity-meta-value">
-                    {sharedMap[String(row.entity_id)]?.count ?? 0}
-                  </div>
-                </div>
               </div>
-              {sharedMap[String(row.entity_id)]?.tables?.length > 0 && (
-                <div className="entity-shared">
-                  {sharedMap[String(row.entity_id)].tables.slice(0, 3).map((tbl) => (
-                    <span key={tbl} className="entity-shared-pill mono">{tbl}</span>
-                  ))}
-                  {sharedMap[String(row.entity_id)].tables.length > 3 && (
-                    <span className="entity-shared-pill entity-shared-more">
-                      +{sharedMap[String(row.entity_id)].tables.length - 3}
-                    </span>
-                  )}
-                </div>
-              )}
               <div className="entity-actions">
                 <button className="btn btn-ghost entity-expand-toggle" onClick={() => toggleEntityExpand(row.entity_id)}>
                   {expandedEntityIds.has(row.entity_id) ? "Скрыть историю загрузки" : "История загрузки за 7 дней"}

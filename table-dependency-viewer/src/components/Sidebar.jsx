@@ -43,7 +43,7 @@ export default function Sidebar({
           },
         }]
       : []),
-    ...(authEnabled && userProfile?.role === "admin"
+    ...(authEnabled && userProfile
       ? [{ path: "/admin/feedback", label: "Фидбек", action: () => onChangeView("/admin/feedback") }]
       : []),
     { path: "/onboarding", label: "Гид", action: () => onChangeView("onboarding") },

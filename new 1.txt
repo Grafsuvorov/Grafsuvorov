@@ -1,19 +1,43 @@
-select * from tech_etl.s1c_debt_source_control
+Unique  (cost=26102979.42..27670841.52 rows=6968276 width=110) (actual time=105236.155..166582.460 rows=22263383 loops=1)
+  Group Key: knumv, kposn, stunr, zaehk
+  ->  Gather Motion 8:1  (slice2; segments: 8)  (cost=26102979.42..26974013.92 rows=69682760 width=110) (actual time=105236.127..163367.598 rows=22263383 loops=1)
+        Merge Key: knumv, kposn, stunr, zaehk, sap_pointer, file_num, row_num, dttm_inserted
+        ->  Unique  (cost=26102979.42..26974013.92 rows=8710345 width=110) (actual time=105143.385..126046.755 rows=2784148 loops=1)
+              Group Key: knumv, kposn, stunr, zaehk
+              ->  Sort  (cost=26102979.42..26277186.32 rows=8710345 width=110) (actual time=105093.838..126804.416 rows=8719160 loops=1)
+                    Sort Key (Distinct): knumv, kposn, stunr, zaehk, sap_pointer, file_num, row_num, dttm_inserted
+                    Sort Method:  external merge  Disk: 10320352kB
+                    ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..2130935.80 rows=8710345 width=110) (actual time=3.555..7181.277 rows=8719160 loops=1)
+                          Hash Key: knumv, kposn, stunr, zaehk
+                          ->  Seq Scan on ral_zbw1758m_srv  (cost=0.00..737280.60 rows=8710345 width=110) (actual time=1.557..2938.658 rows=8713771 loops=1)
+Planning time: 0.856 ms
+  (slice0)    Executor memory: 2067K bytes.
+  (slice1)    Executor memory: 2239K bytes avg x 8 workers, 2239K bytes max (seg0).
 
-Cobad / 1С:ERP	BP00030114	true	36	2026-08-06	2026-08-07 00:14:16.126	2026-08-06 09:14:12.000	2026-08-07 14:53:55.470
-FRIGUIA PRODUCTION /	BP00038002	true	36	2026-08-06	2026-08-07 00:32:26.164	2026-08-06 09:32:16.000	2026-08-07 14:53:55.470
-CBK / 1С:ERP	BP00000028	true	36	2026-08-06	2026-08-07 00:10:55.260	2026-08-06 09:10:44.000	2026-08-07 14:53:55.470
-PRODUCTION / 1С:ERP.	BP00044418	true	36	2026-08-07	2026-08-07 14:05:48.916	2026-08-07 06:05:42.000	2026-08-07 14:53:55.471
-buh_subr-kp	BP00044501	true	36	2026-01-14	2026-08-07 09:54:28.688	2026-08-07 01:53:45.000	2026-08-07 14:53:55.471
+* (slice2)    Executor memory: 163541K bytes avg x 8 workers, 163541K bytes max (seg0).  Work_mem: 163420K bytes max, 2656479K bytes wanted.
+Memory used:  126976kB
+Memory wanted:  2656978kB
+Optimizer: Postgres query optimizer
+Execution time: 169966.207 ms
 
+Gather Motion 8:1  (slice2; segments: 8)  (cost=0.00..143864.29 rows=27873104 width=104) (actual time=109777.398..138038.812 rows=22263383 loops=1)
+  ->  Result  (cost=0.00..135827.35 rows=3484138 width=104) (actual time=109824.284..136019.755 rows=2784148 loops=1)
+        Filter: ((row_number() OVER (?)) = 1)
+        ->  WindowAgg  (cost=0.00..135540.78 rows=8710345 width=104) (actual time=110137.576..136350.554 rows=8719160 loops=1)
+              Partition By: knumv, kposn, stunr, zaehk
+              Order By: sap_pointer, file_num, row_num, dttm_inserted
+              ->  Sort  (cost=0.00..131708.23 rows=8710345 width=110) (actual time=110137.546..131675.909 rows=8719160 loops=1)
+                    Sort Key: knumv, kposn, stunr, zaehk, sap_pointer, file_num, row_num, dttm_inserted
+                    Sort Method:  external merge  Disk: 10321120kB
+                    ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..6462.48 rows=8710345 width=110) (actual time=2.712..6639.353 rows=8719160 loops=1)
+                          Hash Key: knumv, kposn, stunr, zaehk
+                          ->  Seq Scan on ral_zbw1758m_srv  (cost=0.00..1681.37 rows=8710345 width=110) (actual time=1.590..3558.679 rows=8713771 loops=1)
+Planning time: 10.700 ms
+  (slice0)    Executor memory: 1842K bytes.
+  (slice1)    Executor memory: 2239K bytes avg x 8 workers, 2239K bytes max (seg0).
 
-
-insert into ods.account_debt_for_working_capital_1c_test 
-   select * from ods.account_debt_for_working_capital_1c
-   where dttm_updated<'2026-08-07'
-
-и в стг_тест 
-я вставил по dt_insert <'2026-08-07'
-
-в одс_тест 9196369
-в одс 15208669
+* (slice2)    Executor memory: 73315K bytes avg x 8 workers, 73315K bytes max (seg0).  Work_mem: 73114K bytes max, 2542311K bytes wanted.
+Memory used:  126976kB
+Memory wanted:  5085021kB
+Optimizer: Pivotal Optimizer (GPORCA)
+Execution time: 138933.489 ms

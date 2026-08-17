@@ -562,12 +562,15 @@ def refresh_cache(request: Request):
     globals()["_logic_audit_cache_ts"] = 0
     globals()["_assistant_index_cache"] = None
     globals()["_assistant_index_ts"] = 0
+    globals()["_table_sizes_cache_payload"] = None
+    globals()["_table_sizes_cache_cycle"] = None
 
     try:
         get_cached_meta_and_index()
         get_cached_order_breaches()
         get_graph_snapshot()
         _build_logic_audit_cache()
+        get_cached_table_sizes()
     except Exception as exc:
         print("❌ refresh cache error:", exc)
         print(traceback.format_exc())
@@ -3504,6 +3507,8 @@ _graph_cache_meta_ts = 0
 _logic_audit_cache_payload = None
 _logic_audit_cache_ts = 0
 _LOGIC_AUDIT_CACHE_TTL = 86400
+_table_sizes_cache_payload = None
+_table_sizes_cache_cycle = None
 
 SQL_STOPWORDS = {
     "select", "from", "where", "join", "left", "right", "inner", "outer", "full", "on",
@@ -3520,6 +3525,65 @@ SQL_FUNCTION_BLACKLIST = {
 SQL_FUNCTION_COMMON_PREFIXES = (
     "util_text_to_",
 )
+
+
+def _current_table_sizes_cache_cycle(now: datetime | None = None) -> str:
+    current = now.astimezone(DEV_COPY_TZ) if now else datetime.now(DEV_COPY_TZ)
+    cycle_date = current.date()
+    if current.hour < 9:
+        cycle_date -= timedelta(days=1)
+    return cycle_date.isoformat()
+
+
+def _build_table_sizes_cache() -> dict[str, Any]:
+    query = """
+        SELECT
+            n.nspname AS table_schema,
+            c.relname AS table_name,
+            r.rolname AS owner_name,
+            pg_total_relation_size(c.oid)::bigint AS size_bytes
+        FROM pg_catalog.pg_class c
+        JOIN pg_catalog.pg_namespace n
+          ON n.oid = c.relnamespace
+        JOIN pg_catalog.pg_roles r
+          ON r.oid = c.relowner
+        WHERE c.relkind IN ('r', 'p', 'm')
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+          AND n.nspname NOT LIKE 'pg_toast%%'
+        ORDER BY size_bytes DESC NULLS LAST, n.nspname, c.relname
+    """
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(query)).mappings().all()
+
+    normalized_rows = [
+        {
+            "table_schema": row.get("table_schema"),
+            "table_name": row.get("table_name"),
+            "owner_name": row.get("owner_name"),
+            "size_bytes": int(row.get("size_bytes") or 0),
+        }
+        for row in rows
+    ]
+    schemas = sorted({row["table_schema"] for row in normalized_rows if row.get("table_schema")})
+    return {
+        "generated_at": datetime.now(DEV_COPY_TZ).isoformat(),
+        "schemas": schemas,
+        "rows": normalized_rows,
+    }
+
+
+def get_cached_table_sizes() -> dict[str, Any]:
+    global _table_sizes_cache_payload, _table_sizes_cache_cycle
+
+    cycle = _current_table_sizes_cache_cycle()
+    if _table_sizes_cache_payload is not None and _table_sizes_cache_cycle == cycle:
+        return _table_sizes_cache_payload
+
+    print("⚠️ rebuilding table sizes cache")
+    _table_sizes_cache_payload = _build_table_sizes_cache()
+    _table_sizes_cache_cycle = cycle
+    return _table_sizes_cache_payload
 
 
 def _strip_sql_comments(sql_text: str) -> str:
@@ -5583,6 +5647,7 @@ def warm_up_cache():
         get_cached_meta_and_index()
         get_cached_order_breaches()  # 🔥 прогрев orderbreaches
         get_graph_snapshot()
+        get_cached_table_sizes()
     except Exception as e:
         print("Ошибка при старте приложения:", e)
 
@@ -9071,6 +9136,41 @@ def get_slowest_tables(
         return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
     except Exception as e:
         print("❌ /api/slowest-tables error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/table-sizes")
+def get_table_sizes(
+    limit: int = Query(30, ge=1, le=200),
+    schema: str = Query(""),
+):
+    try:
+        schema_value = str(schema or "").strip()
+        cached = get_cached_table_sizes()
+        all_rows = cached.get("rows") or []
+        filtered_rows = (
+            [row for row in all_rows if row.get("table_schema") == schema_value]
+            if schema_value
+            else all_rows
+        )
+        rows = filtered_rows[:limit]
+        total_size_bytes = sum(int(row.get("size_bytes") or 0) for row in rows)
+        payload = {
+            "meta": {
+                "limit": limit,
+                "schema": schema_value or None,
+                "generated_at": cached.get("generated_at"),
+                "returned_rows": len(rows),
+                "available_rows": len(filtered_rows),
+                "total_size_bytes": total_size_bytes,
+            },
+            "schemas": cached.get("schemas") or [],
+            "rows": rows,
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        print("❌ /api/table-sizes error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 

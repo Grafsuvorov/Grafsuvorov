@@ -3,6 +3,8 @@ import { apiClient } from "./client.js";
 export const performanceApi = {
   slowestTables: (days, limit) =>
     apiClient.get("/api/slowest-tables", { params: { days, limit } }),
+  tableSizes: (limit = 30, schema = "") =>
+    apiClient.get("/api/table-sizes", { params: { limit, schema } }),
   loadProfile: (days) =>
     apiClient.get("/api/load-profile", { params: { days } }),
   nightSummary: (days, limit = 50) =>

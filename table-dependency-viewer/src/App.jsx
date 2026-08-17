@@ -10,6 +10,7 @@ import IncidentsPage from "./components/IncidentsPage.jsx";
 import ErrorDashboard from "./components/ErrorDashboard.jsx";
 import TableSearch from "./components/TableSearch.jsx";
 import SlowestTables from "./components/SlowestTables.jsx";
+import TableSizesPage from "./components/TableSizesPage.jsx";
 import SlaPage from "./components/SlaPage.jsx";
 import DependencyViewer from "./components/DependencyViewer.jsx";
 import TableCard from "./components/TableCard.jsx";
@@ -173,6 +174,10 @@ export default function App() {
       }
       if (target === "__slowest_tables__") {
         navigate("/slow-tables");
+        return;
+      }
+      if (target === "__table_sizes__") {
+        navigate("/table-sizes");
         return;
       }
       if (target === "__entity_schedule__") {
@@ -647,6 +652,16 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : (
               <SlowestTables onSelectTable={openView} />
+            )
+          }
+        />
+        <Route
+          path="/table-sizes"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <TableSizesPage onSelectTable={openView} />
             )
           }
         />

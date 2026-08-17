@@ -18,6 +18,7 @@ export default function Sidebar({
   ];
   const secondaryNav = [
     { path: "/slow-tables", label: "Производительность", action: () => onChangeView("__slowest_tables__") },
+    { path: "/table-sizes", label: "Размеры таблиц", action: () => onChangeView("__table_sizes__") },
     { path: "/night-ops", label: "Мониторинг", action: () => onChangeView("night_ops") },
     { path: "/entities", label: "Сущности", action: () => onChangeView("__entity_schedule__") },
     { path: "/releases", label: "Релизы", action: () => onChangeView("releases") },

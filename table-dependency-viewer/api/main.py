@@ -3537,16 +3537,34 @@ def _current_table_sizes_cache_cycle(now: datetime | None = None) -> str:
 
 def _build_table_sizes_cache() -> dict[str, Any]:
     query = """
+        WITH created_ops AS (
+            SELECT
+                pso.schemaname AS table_schema,
+                pso.objname AS table_name,
+                MAX(pso.statime) AS dt_creation
+            FROM pg_catalog.pg_stat_operations pso
+            WHERE pso.actionname = 'CREATE'
+              AND pso.subtype = 'TABLE'
+            GROUP BY pso.schemaname, pso.objname
+        )
         SELECT
             n.nspname AS table_schema,
             c.relname AS table_name,
             r.rolname AS owner_name,
-            pg_total_relation_size(c.oid)::bigint AS size_bytes
+            pg_total_relation_size(c.oid)::bigint AS size_bytes,
+            created_ops.dt_creation AS dt_creation,
+            CASE
+                WHEN created_ops.dt_creation IS NULL THEN NULL
+                ELSE EXTRACT(DAY FROM now() - created_ops.dt_creation)::int
+            END AS days_old
         FROM pg_catalog.pg_class c
         JOIN pg_catalog.pg_namespace n
           ON n.oid = c.relnamespace
         JOIN pg_catalog.pg_roles r
           ON r.oid = c.relowner
+        LEFT JOIN created_ops
+          ON created_ops.table_schema = n.nspname
+         AND created_ops.table_name = c.relname
         WHERE c.relkind IN ('r', 'p', 'm')
           AND n.nspname NOT IN ('pg_catalog', 'information_schema')
           AND n.nspname NOT LIKE 'pg_toast%%'
@@ -3562,6 +3580,8 @@ def _build_table_sizes_cache() -> dict[str, Any]:
             "table_name": row.get("table_name"),
             "owner_name": row.get("owner_name"),
             "size_bytes": int(row.get("size_bytes") or 0),
+            "days_old": int(row.get("days_old")) if row.get("days_old") is not None else None,
+            "dt_creation": serialize_datetime(row.get("dt_creation")),
         }
         for row in rows
     ]
@@ -9144,28 +9164,32 @@ def get_slowest_tables(
 def get_table_sizes(
     limit: int = Query(30, ge=1, le=200),
     schema: str = Query(""),
+    owner: str = Query(""),
 ):
     try:
         schema_value = str(schema or "").strip()
+        owner_value = str(owner or "").strip()
         cached = get_cached_table_sizes()
         all_rows = cached.get("rows") or []
-        filtered_rows = (
-            [row for row in all_rows if row.get("table_schema") == schema_value]
-            if schema_value
-            else all_rows
-        )
+        filtered_rows = all_rows
+        if schema_value:
+            filtered_rows = [row for row in filtered_rows if row.get("table_schema") == schema_value]
+        if owner_value:
+            filtered_rows = [row for row in filtered_rows if row.get("owner_name") == owner_value]
         rows = filtered_rows[:limit]
         total_size_bytes = sum(int(row.get("size_bytes") or 0) for row in rows)
         payload = {
             "meta": {
                 "limit": limit,
                 "schema": schema_value or None,
+                "owner": owner_value or None,
                 "generated_at": cached.get("generated_at"),
                 "returned_rows": len(rows),
                 "available_rows": len(filtered_rows),
                 "total_size_bytes": total_size_bytes,
             },
             "schemas": cached.get("schemas") or [],
+            "owners": sorted({row.get("owner_name") for row in all_rows if row.get("owner_name")}),
             "rows": rows,
         }
         return JSONResponse(content=payload, media_type="application/json; charset=utf-8")

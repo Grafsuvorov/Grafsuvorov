@@ -18,10 +18,19 @@ const formatBytes = (value) => {
   return `${size.toFixed(digits)} ${units[unitIndex]}`;
 };
 
+const formatCreationDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("ru-RU");
+};
+
 export default function TableSizesPage({ onSelectTable }) {
   const [rows, setRows] = useState([]);
   const [schemas, setSchemas] = useState([]);
+  const [owners, setOwners] = useState([]);
   const [selectedSchema, setSelectedSchema] = useState("all");
+  const [selectedOwner, setSelectedOwner] = useState("all");
   const [limit, setLimit] = useState(30);
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,15 +39,20 @@ export default function TableSizesPage({ onSelectTable }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    performanceApi.tableSizes(limit, selectedSchema === "all" ? "" : selectedSchema)
+    performanceApi.tableSizes(
+      limit,
+      selectedSchema === "all" ? "" : selectedSchema,
+      selectedOwner === "all" ? "" : selectedOwner,
+    )
       .then((data) => {
         setRows(Array.isArray(data?.rows) ? data.rows : []);
         setSchemas(sortSchemaNames(Array.isArray(data?.schemas) ? data.schemas : []));
+        setOwners(Array.isArray(data?.owners) ? data.owners.filter(Boolean).sort((a, b) => a.localeCompare(b, "ru")) : []);
         setMeta(data?.meta || null);
       })
       .catch(() => setError("Не удалось загрузить размеры таблиц"))
       .finally(() => setLoading(false));
-  }, [limit, selectedSchema]);
+  }, [limit, selectedOwner, selectedSchema]);
 
   const summary = useMemo(() => {
     const owners = new Set(rows.map((row) => row.owner_name).filter(Boolean));
@@ -61,7 +75,7 @@ export default function TableSizesPage({ onSelectTable }) {
       <section className="cc-header-zone">
         <h1>Топ таблиц по размеру</h1>
         <div className="cc-subtitle">
-          Показывает самые тяжелые таблицы с указанием схемы и владельца.
+          Показывает самые тяжелые таблицы с указанием схемы, владельца и даты создания из `pg_stat_operations`.
         </div>
       </section>
 
@@ -103,6 +117,21 @@ export default function TableSizesPage({ onSelectTable }) {
             </select>
           </div>
           <div className="slow-select-group">
+            <span className="slow-select-label">Владелец</span>
+            <select
+              className="slow-entity-select"
+              value={selectedOwner}
+              onChange={(event) => setSelectedOwner(event.target.value)}
+            >
+              <option value="all">Все владельцы</option>
+              {owners.map((ownerName) => (
+                <option key={ownerName} value={ownerName}>
+                  {ownerName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="slow-select-group">
             <span className="slow-select-label">TOP</span>
             {[30, 50, 100].map((size) => (
               <button
@@ -120,7 +149,7 @@ export default function TableSizesPage({ onSelectTable }) {
       {loading && <div className="page-loading">Загрузка размеров таблиц...</div>}
       {error && <div className="page-error">{error}</div>}
       {!loading && !error && rows.length === 0 && (
-        <div className="card muted">Нет таблиц для выбранной схемы.</div>
+        <div className="card muted">Нет таблиц для выбранных фильтров.</div>
       )}
 
       {!loading && !error && rows.length > 0 && (
@@ -137,6 +166,8 @@ export default function TableSizesPage({ onSelectTable }) {
                   <th>Схема</th>
                   <th>Таблица</th>
                   <th>Владелец</th>
+                  <th>Создана</th>
+                  <th>Возраст</th>
                   <th>Размер</th>
                 </tr>
               </thead>
@@ -153,6 +184,8 @@ export default function TableSizesPage({ onSelectTable }) {
                       {row.table_name || "—"}
                     </td>
                     <td>{row.owner_name || "—"}</td>
+                    <td>{formatCreationDate(row.dt_creation)}</td>
+                    <td>{row.days_old !== null && row.days_old !== undefined ? `${row.days_old} дн` : "—"}</td>
                     <td>{formatBytes(row.size_bytes)}</td>
                   </tr>
                 ))}

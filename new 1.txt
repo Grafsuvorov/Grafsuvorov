@@ -1,33 +1,38 @@
-SELECT
-    n.nspname AS schema_name,
-    c.relname AS table_name,
-    pg_get_userbyid(c.relowner) AS owner_name,
-
-    ROUND(
-        pg_total_relation_size(c.oid) / 1024.0 / 1024 / 1024,
-        2
-    ) AS total_size_gb,
-
-    ROUND(
-        pg_relation_size(c.oid) / 1024.0 / 1024 / 1024,
-        2
-    ) AS table_size_gb,
-
-    ROUND(
-        (pg_total_relation_size(c.oid) - pg_relation_size(c.oid))
-        / 1024.0 / 1024 / 1024,
-        2
-    ) AS additional_size_gb,
-
-    NULL::timestamp AS created_at,
-    NULL::integer   AS days_since_creation
-
-FROM pg_class c
-JOIN pg_namespace n
-    ON n.oid = c.relnamespace
-
-WHERE n.nspname = 'dds'
-  AND c.relkind = 'r'
-
-ORDER BY pg_total_relation_size(c.oid) DESC
-LIMIT 30;
+with cte as(
+        select 
+        subtype as object_type,
+        pso.schemaname as schema_name,
+        objname as table_name, 
+        pg_total_relation_size(pso.schemaname ||'."' || objname || '"') as table_size,
+        tableowner as "owner",
+        extract(day from now() - statime) as days_old,
+        statime as dt_creation
+        from pg_catalog.pg_stat_operations pso
+        left join pg_catalog.pg_tables pt on pso.objname = pt.tablename and pso.schemaname = pt.schemaname 
+        where actionname='CREATE' and subtype='TABLE' and 
+              pso.schemaname not in ('stg', 'dict_stg', 'ods', 'dds', 'tech_etl', 'dict_dds', 'dm', 'dm_calc', 'dm_view', 'raw_ext', 
+                                     'dict_raw_ext', 'landing', 'rls', 'rmp_stg', 'rmp_dict', 'arenadata_toolkit', 'dict_ods', 'export', 'tech_monitoring')
+        union all
+        select 
+        subtype as object_type,
+        pso.schemaname as schema_name,
+        objname as table_name,
+        pg_total_relation_size(pso.schemaname ||'."' || objname || '"') as table_size,
+        viewowner as "owner",
+        extract(day from now() - statime) as days_old,
+        statime as dt_creation
+        from pg_catalog.pg_stat_operations pso
+        left join pg_catalog.pg_views pt on pso.objname = pt.viewname  and pso.schemaname = pt.schemaname 
+        where actionname='CREATE' and subtype='VIEW' and 
+              pso.schemaname not in ('stg', 'dict_stg', 'ods', 'dds', 'tech_etl', 'dict_dds', 'dm', 'dm_calc', 'dm_view', 'raw_ext', 
+                                     'dict_raw_ext', 'landing', 'rls', 'rmp_stg', 'rmp_dict', 'arenadata_toolkit', 'dict_ods', 'export', 'tech_monitoring')                                                                     
+        )
+        select 
+        object_type,
+        schema_name,
+        table_name,
+        pg_size_pretty(table_size),
+        "owner",
+        days_old::int,
+        dt_creation::date
+        from cte where days_old >30 order by table_size desc, table_name;

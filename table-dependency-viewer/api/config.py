@@ -67,6 +67,12 @@ CLICK_META_GIT_ROOT = os.getenv("CLICK_META_GIT_ROOT", "config_files/meta")
 META_WORKSPACE_ROOT = os.getenv("META_WORKSPACE_ROOT", "/var/lib/table-dependency-viewer/meta-workspaces")
 TABLE_APP_FEEDBACK = os.getenv("TABLE_APP_FEEDBACK", "tech_etl.app_feedback")
 
+CORP_AI_API_KEY = os.getenv("CORP_AI_API_KEY", "")
+CORP_AI_BASE_URL = os.getenv("CORP_AI_BASE_URL", "")
+CORP_AI_MODEL = os.getenv("CORP_AI_MODEL", "coder-ultra")
+CORP_AI_SSL_VERIFY = os.getenv("CORP_AI_SSL_VERIFY", "false")
+CORP_AI_TIMEOUT_SEC = int(os.getenv("CORP_AI_TIMEOUT_SEC", "60"))
+
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")
 AUTH_ACCESS_TTL_MIN = int(os.getenv("AUTH_ACCESS_TTL_MIN", "480"))

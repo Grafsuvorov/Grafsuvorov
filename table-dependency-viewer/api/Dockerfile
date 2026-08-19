@@ -11,7 +11,7 @@ RUN apt-get update \
     && useradd -r -g airflow airflow \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl python-dotenv pillow reportlab
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl python-dotenv pillow reportlab openai
 
 COPY api/ /app/api/
 COPY scripts/ /app/scripts/

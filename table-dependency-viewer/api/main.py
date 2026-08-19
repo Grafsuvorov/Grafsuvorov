@@ -144,6 +144,7 @@ from .services.meta_workspace import (
     validate_meta_workspace_branch,
 )
 from .services.feedback import list_feedback, save_feedback
+from .services.corp_ai import enhance_assistant_response
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
     get_dbt_graph_snapshot,
@@ -687,7 +688,19 @@ def run_ci_cd(request: Request):
 def assistant_query(payload: AssistantQueryPayload, request: Request):
     _require_authenticated(request)
     try:
-        response = _assistant_answer(payload.question, payload.context)
+        local_response = _assistant_answer(payload.question, payload.context)
+        context_payload = None
+        if payload.context:
+            context_payload = (
+                payload.context.model_dump()
+                if hasattr(payload.context, "model_dump")
+                else payload.context.dict()
+            )
+        response = enhance_assistant_response(
+            question=payload.question,
+            context=context_payload,
+            local_response=local_response,
+        ) or local_response
         return JSONResponse(content=response, media_type="application/json; charset=utf-8")
     except Exception as exc:
         print("❌ /api/admin/assistant/query error:", exc)

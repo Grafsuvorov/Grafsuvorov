@@ -61,6 +61,17 @@ VITE_API_BASE_URL=http://localhost:8000
 
 Backend-конфиг БД и таблиц: `api/config.py`.
 
+Для корпоративного AI-ассистента добавьте переменные в основной `.env`
+и, если запускаете через Docker Compose, они будут проброшены в `api` контейнер:
+
+```env
+CORP_AI_API_KEY=
+CORP_AI_BASE_URL=
+CORP_AI_MODEL=coder-ultra
+CORP_AI_SSL_VERIFY=false
+CORP_AI_TIMEOUT_SEC=60
+```
+
 ## Ключевые API ручки
 
 - `GET /api/night-summary` — сводка ночного окна (по умолчанию 21:00–08:00)

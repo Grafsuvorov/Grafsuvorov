@@ -1,48 +1,20 @@
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=200
-WARN[0000] The "CORP_AI_API_KEY" variable is not set. Defaulting to a blank string.
-WARN[0000] The "CORP_AI_BASE_URL" variable is not set. Defaulting to a blank string.
-WARN[0000] The "CORP_AI_MODEL" variable is not set. Defaulting to a blank string.
-WARN[0000] The "CORP_AI_SSL_VERIFY" variable is not set. Defaulting to a blank string.
-WARN[0000] The "CORP_AI_TIMEOUT_SEC" variable is not set. Defaulting to a blank string.
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
-table-dependency-viewer-api-1  |     sys.exit(main())
-table-dependency-viewer-api-1  |              ^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1569, in __call__
-table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1490, in main
-table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1353, in invoke
-table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 907, in invoke
-table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 440, in main
-table-dependency-viewer-api-1  |     run(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 609, in run
-table-dependency-viewer-api-1  |     config.load_app()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 428, in load_app
-table-dependency-viewer-api-1  |     return import_from_string(self.app)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
-table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
-table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 41, in <module>
-table-dependency-viewer-api-1  |     from .config import (
-table-dependency-viewer-api-1  |   File "/app/api/config.py", line 75, in <module>
-table-dependency-viewer-api-1  |     CORP_AI_TIMEOUT_SEC = int(os.getenv("CORP_AI_TIMEOUT_SEC", "60"))
-table-dependency-viewer-api-1  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  | ValueError: invalid literal for int() with base 10: ''
+/root/table-dependency-viewer/api
+[root@rgm-s-dwhapp01 api]# grep CORP_AI .env
+CORP_AI_API_KEY=*****
+CORP_AI_BASE_URL=*****
+CORP_AI_MODEL=coder-ultra
+CORP_AI_SSL_VERIFY=false
+CORP_AI_TIMEOUT_SEC=60
+[root@rgm-s-dwhapp01 api]# docker compose config | grep CORP_AI
+      CORP_AI_API_KEY: *****
+      CORP_AI_BASE_URL: *****
+      CORP_AI_MODEL: coder-ultra
+      CORP_AI_SSL_VERIFY: "false"
+      CORP_AI_TIMEOUT_SEC: "60"
+[root@rgm-s-dwhapp01 api]# docker compose exec api /bin/sh -lc 'env | grep CORP_AI'
+CORP_AI_MODEL=
+CORP_AI_SSL_VERIFY=
+CORP_AI_BASE_URL=
+CORP_AI_API_KEY=
+CORP_AI_TIMEOUT_SEC=

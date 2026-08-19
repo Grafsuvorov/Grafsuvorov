@@ -3,6 +3,19 @@ import os
 
 load_dotenv()
 
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = str(value).strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
 TABLE_LOADING_HISTORY   = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
 TABLE_ENTITIES_META     = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
 TABLE_TABLES_META       = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
@@ -46,9 +59,9 @@ AIRFLOW_DEV_BASE_URL    = os.getenv("AIRFLOW_DEV_BASE_URL", "")
 AIRFLOW_DEV_DAG_ID      = os.getenv("AIRFLOW_DEV_DAG_ID", "")
 AIRFLOW_DEV_USERNAME    = os.getenv("AIRFLOW_DEV_USERNAME", "")
 AIRFLOW_DEV_PASSWORD    = os.getenv("AIRFLOW_DEV_PASSWORD", "")
-DEV_META_LOCK_TTL_MIN   = int(os.getenv("DEV_META_LOCK_TTL_MIN", "30"))
+DEV_META_LOCK_TTL_MIN   = _env_int("DEV_META_LOCK_TTL_MIN", 30)
 DEV_META_DEPLOY_HOST    = os.getenv("DEV_META_DEPLOY_HOST", "")
-DEV_META_DEPLOY_PORT    = int(os.getenv("DEV_META_DEPLOY_PORT", "22"))
+DEV_META_DEPLOY_PORT    = _env_int("DEV_META_DEPLOY_PORT", 22)
 DEV_META_DEPLOY_USER    = os.getenv("DEV_META_DEPLOY_USER", "")
 DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
 DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
@@ -71,11 +84,11 @@ CORP_AI_API_KEY = os.getenv("CORP_AI_API_KEY", "")
 CORP_AI_BASE_URL = os.getenv("CORP_AI_BASE_URL", "")
 CORP_AI_MODEL = os.getenv("CORP_AI_MODEL", "coder-ultra")
 CORP_AI_SSL_VERIFY = os.getenv("CORP_AI_SSL_VERIFY", "false")
-CORP_AI_TIMEOUT_SEC = int(os.getenv("CORP_AI_TIMEOUT_SEC", "60"))
+CORP_AI_TIMEOUT_SEC = _env_int("CORP_AI_TIMEOUT_SEC", 60)
 
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")
-AUTH_ACCESS_TTL_MIN = int(os.getenv("AUTH_ACCESS_TTL_MIN", "480"))
+AUTH_ACCESS_TTL_MIN = _env_int("AUTH_ACCESS_TTL_MIN", 480)
 AUTH_ALLOW_REGISTER = os.getenv("AUTH_ALLOW_REGISTER", "false")
 AUTH_BOOTSTRAP_ADMIN_EMAIL = os.getenv("AUTH_BOOTSTRAP_ADMIN_EMAIL")
 AUTH_BOOTSTRAP_ADMIN_PASSWORD = os.getenv("AUTH_BOOTSTRAP_ADMIN_PASSWORD")

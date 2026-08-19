@@ -1,6 +1,8 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d --force-recreate  frontend api
+
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api env | grep CORP_AI
 WARN[0000] The "CORP_AI_API_KEY" variable is not set. Defaulting to a blank string.
 WARN[0000] The "CORP_AI_BASE_URL" variable is not set. Defaulting to a blank string.
 WARN[0000] The "CORP_AI_MODEL" variable is not set. Defaulting to a blank string.
 WARN[0000] The "CORP_AI_SSL_VERIFY" variable is not set. Defaulting to a blank string.
 WARN[0000] The "CORP_AI_TIMEOUT_SEC" variable is not set. Defaulting to a blank string.
+service "api" is not running container #1

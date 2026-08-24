@@ -16,6 +16,7 @@ from .entity_dev_meta import _gitlab_json_request, _parse_gitlab_project, _urlop
 
 
 SQL_FILE_RE = re.compile(r"\.sql$", re.IGNORECASE)
+IGNORED_DEPENDENCY_SCHEMAS = {"information_schema", "pg_catalog", "pg_temp"}
 TARGET_PATTERNS = [
     re.compile(r"\binsert\s+into\s+([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
     re.compile(r"\binsert\s+overwrite(?:\s+table)?\s+([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
@@ -60,6 +61,23 @@ def _normalize_fqn(value: str) -> Optional[str]:
     if not schema_name or not table_name:
         return None
     return f"{schema_name.lower()}.{table_name.lower()}"
+
+
+def _is_valid_dependency_fqn(value: Optional[str], known_schemas: Optional[set[str]] = None) -> bool:
+    if not value or "." not in value:
+        return False
+    schema_name, table_name = value.split(".", 1)
+    schema_name = schema_name.strip().lower()
+    table_name = table_name.strip().lower()
+    if not schema_name or not table_name:
+        return False
+    if schema_name in IGNORED_DEPENDENCY_SCHEMAS:
+        return False
+    if schema_name.startswith("pg_temp"):
+        return False
+    if known_schemas and schema_name not in known_schemas:
+        return False
+    return True
 
 
 def _split_sql_statements(sql_text: str) -> list[str]:
@@ -215,15 +233,26 @@ def infer_final_target(files: list[dict[str, Any]]) -> Optional[str]:
     return targets[-1] if targets else None
 
 
-def extract_sql_dependencies(files: list[dict[str, Any]]) -> list[str]:
+def extract_sql_dependencies(
+    files: list[dict[str, Any]],
+    *,
+    known_schemas: Optional[set[str]] = None,
+    exclude_fqns: Optional[set[str]] = None,
+) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
+    excluded = {str(item).strip().lower() for item in (exclude_fqns or set()) if str(item).strip()}
     for item in files:
         for statement in item.get("statements") or []:
             for pattern in DEPENDENCY_PATTERNS:
                 for match in pattern.finditer(statement):
                     normalized = _normalize_fqn(match.group(1))
-                    if normalized and normalized not in seen:
+                    if (
+                        normalized
+                        and normalized not in seen
+                        and normalized not in excluded
+                        and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
+                    ):
                         seen.add(normalized)
                         result.append(normalized)
     return result

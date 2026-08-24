@@ -748,36 +748,37 @@ def _prototype_impact_summary(target_fqn: Optional[str]) -> dict[str, Any]:
     normalized = norm(target_fqn)
     if not normalized:
         return {"tables": [], "entities": [], "count": 0}
-    snapshot = get_graph_snapshot()
+    snapshot = _get_table_graph_context("current")
     table_edges = snapshot["table_graph"]["edges"]
     table_nodes = snapshot["table_graph"]["nodes"]
-    visited = set()
-    queue = [normalized]
+    table_fqn_map = snapshot.get("table_fqn_map") or {}
+    if "." not in normalized:
+        return {"tables": [], "entities": [], "count": 0}
+    schema_name, table_name = normalized.split(".", 1)
+    key = _resolve_table_key(table_nodes, schema_name, table_name, fqn_map=table_fqn_map)
+    if key not in table_nodes:
+        return {"tables": [], "entities": [], "count": 0}
+
+    visited, depth_map, truncated = _traverse_forward(key, table_edges, depth=3, max_nodes=300)
+    visited.discard(key)
     downstream_tables: list[dict[str, Any]] = []
     entity_counter: dict[str, int] = {}
 
-    while queue:
-        current = queue.pop(0)
-        for edge in table_edges:
-            source = str(edge.get("source") or "").lower()
-            target = str(edge.get("target") or "").lower()
-            if source != current or not target or target in visited:
-                continue
-            visited.add(target)
-            queue.append(target)
-            node = table_nodes.get(target) or {}
-            entity_name = str(node.get("entity_name") or "").strip()
-            if entity_name:
-                entity_counter[entity_name] = entity_counter.get(entity_name, 0) + 1
-            downstream_tables.append(
-                {
-                    "fqn": target,
-                    "schema": node.get("schema"),
-                    "table": node.get("table"),
-                    "entity_name": entity_name or None,
-                    "table_id": node.get("table_id"),
-                }
-            )
+    for node_id in sorted(visited, key=lambda item: (depth_map.get(item, 0), item)):
+        node = table_nodes.get(node_id) or {}
+        entity_name = str(node.get("entity_name") or node.get("entity") or "").strip()
+        if entity_name:
+            entity_counter[entity_name] = entity_counter.get(entity_name, 0) + 1
+        downstream_tables.append(
+            {
+                "fqn": node_id,
+                "schema": node.get("schema"),
+                "table": node.get("table"),
+                "entity_name": entity_name or None,
+                "table_id": node.get("table_id"),
+                "depth": depth_map.get(node_id, 0),
+            }
+        )
     entities = [
         {"entity_name": name, "tables_count": count}
         for name, count in sorted(entity_counter.items(), key=lambda item: (-item[1], item[0]))[:12]
@@ -786,6 +787,7 @@ def _prototype_impact_summary(target_fqn: Optional[str]) -> dict[str, Any]:
         "tables": downstream_tables[:40],
         "entities": entities,
         "count": len(downstream_tables),
+        "truncated": truncated,
     }
 
 
@@ -843,7 +845,17 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
         )
         files = bundle.get("files") or []
         final_target = infer_final_target(files)
-        dependencies = extract_sql_dependencies(files)
+        all_meta, _ = get_cached_meta_and_index()
+        known_schemas = {
+            str(meta.get("table_schema") or "").strip().lower()
+            for meta in all_meta
+            if str(meta.get("table_schema") or "").strip()
+        }
+        dependencies = extract_sql_dependencies(
+            files,
+            known_schemas=known_schemas,
+            exclude_fqns={final_target} if final_target else None,
+        )
         meta = _prototype_find_meta_by_fqn(final_target)
         detected_keys = list((meta or {}).get("key_attributes") or [])
         provided_keys = [str(item).strip() for item in (payload.key_attributes or []) if str(item).strip()]
@@ -865,6 +877,11 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             validation_errors.append("Не удалось определить финальную витрину по последнему INSERT/CREATE TABLE")
         if checks.get("duplicate_groups") not in (None, 0):
             validation_errors.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
+        status_reason = (
+            "Финальная витрина определена, SQL выполнен в DEV, дубли по ключу не обнаружены."
+            if not validation_errors
+            else "; ".join(validation_errors)
+        )
 
         issue_result = {"status": "skipped", "issue_id": None, "url": None, "link": None}
         if payload.create_issue and not validation_errors:
@@ -903,6 +920,7 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             "checks": checks,
             "impact": impact,
             "validation_errors": validation_errors,
+            "status_reason": status_reason,
             "issue": issue_result,
         }
     except Exception as exc:

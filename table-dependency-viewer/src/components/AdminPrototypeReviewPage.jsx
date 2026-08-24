@@ -3,7 +3,23 @@ import { adminApi } from "../api/admin.js";
 
 function formatDuration(value) {
   const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return "—";
+  if (numeric >= 60) {
+    return `${(numeric / 60).toFixed(numeric >= 600 ? 1 : 2)} мин`;
+  }
   return `${numeric.toFixed(3)} сек`;
+}
+
+function formatStatus(status) {
+  return status === "passed" ? "PASS" : "FAIL";
+}
+
+function formatIssueStatus(issue) {
+  if (issue?.status === "created") {
+    return issue?.link ? <a href={issue.link} target="_blank" rel="noreferrer">{issue.issue_id}</a> : issue.issue_id;
+  }
+  if (issue?.status === "not_configured") return "YTrack не настроен";
+  return issue?.status || "skipped";
 }
 
 export default function AdminPrototypeReviewPage() {
@@ -92,11 +108,14 @@ export default function AdminPrototypeReviewPage() {
           <section className="slow-summary">
             <div className={`slow-summary-card ${result.status === "passed" ? "" : "danger"}`}>
               <div className="label">Статус</div>
-              <div className="value">{result.status === "passed" ? "PASS" : "FAIL"}</div>
+              <div className="value">{formatStatus(result.status)}</div>
+              <div className="hint">{result.status_reason || "—"}</div>
             </div>
             <div className="slow-summary-card">
               <div className="label">Финальная витрина</div>
-              <div className="value mono" style={{ fontSize: "1rem" }}>{result.final_target || "—"}</div>
+              <div className="value mono" style={{ fontSize: "1rem", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                {result.final_target || "—"}
+              </div>
             </div>
             <div className="slow-summary-card">
               <div className="label">SQL файлов</div>
@@ -105,6 +124,16 @@ export default function AdminPrototypeReviewPage() {
             <div className="slow-summary-card">
               <div className="label">Downstream impact</div>
               <div className="value">{result.impact?.count ?? 0}</div>
+              <div className="hint">{result.impact?.truncated ? "Показан неполный список" : "Потенциально затронутые downstream-таблицы"}</div>
+            </div>
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">Что проверяется</div>
+            <div className="card muted">
+              <div>`PASS` означает: финальная витрина определена по последнему `INSERT`/`CREATE TABLE`, SQL из MR выполнился в DEV, и по выбранному ключу не найдено дублей.</div>
+              <div style={{ marginTop: 8 }}>`Проверки` показывают ключ, `row count` после выполнения и количество duplicate groups по этому ключу.</div>
+              <div style={{ marginTop: 8 }}>`SQL statements` — это число SQL-операторов в файле после разбиения по `;`, а не число строк.</div>
             </div>
           </section>
 
@@ -136,13 +165,7 @@ export default function AdminPrototypeReviewPage() {
                     <td>{(result.key_attributes || []).length ? result.key_attributes.join(", ") : "—"}</td>
                     <td>{result.checks?.row_count ?? "—"}</td>
                     <td>{result.checks?.duplicate_groups ?? "—"}</td>
-                    <td>
-                      {result.issue?.status === "created" ? (
-                        result.issue?.link ? <a href={result.issue.link} target="_blank" rel="noreferrer">{result.issue.issue_id}</a> : result.issue.issue_id
-                      ) : (
-                        result.issue?.status || "skipped"
-                      )}
-                    </td>
+                    <td>{formatIssueStatus(result.issue)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -163,7 +186,7 @@ export default function AdminPrototypeReviewPage() {
                 <thead>
                   <tr>
                     <th>Файл</th>
-                    <th>Statements</th>
+                    <th>SQL statements</th>
                     <th>Статус</th>
                     <th>Время</th>
                   </tr>
@@ -173,7 +196,7 @@ export default function AdminPrototypeReviewPage() {
                     const execRow = (result.execution || []).find((entry) => entry.path === item.path) || {};
                     return (
                       <tr key={item.path}>
-                        <td className="mono">{item.path}</td>
+                        <td className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{item.path}</td>
                         <td>{item.statements_count ?? "—"}</td>
                         <td>{execRow.status || "—"}</td>
                         <td>{execRow.duration_sec !== undefined ? formatDuration(execRow.duration_sec) : "—"}</td>
@@ -188,7 +211,15 @@ export default function AdminPrototypeReviewPage() {
           <section className="cc-surface">
             <div className="section-title">SQL зависимости</div>
             <div className="card muted">
-              {(result.dependencies || []).length ? result.dependencies.map((item) => <div key={item} className="mono">{item}</div>) : "Не нашли зависимости в SQL."}
+              {(result.dependencies || []).length ? (
+                result.dependencies.map((item) => (
+                  <div key={item} className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                    {item}
+                  </div>
+                ))
+              ) : (
+                "Не нашли боевых schema.table зависимостей в SQL."
+              )}
             </div>
           </section>
 
@@ -206,13 +237,13 @@ export default function AdminPrototypeReviewPage() {
                   {(result.impact?.tables || []).length ? (
                     result.impact.tables.map((item) => (
                       <tr key={item.fqn}>
-                        <td className="mono">{item.fqn}</td>
+                        <td className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{item.fqn}</td>
                         <td>{item.entity_name || "—"}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={2}>Downstream-зависимости не найдены.</td>
+                      <td colSpan={2}>Downstream-зависимости по графу меты не найдены.</td>
                     </tr>
                   )}
                 </tbody>

@@ -76,19 +76,17 @@ CORP_AI_TIMEOUT_SEC=60
 
 ```env
 ANALYST_GITLAB_PROJECT=
-YTRACK_API_URL=https://api.tracker.yandex.net/v3
-YTRACK_OAUTH_TOKEN=
-YTRACK_ORG_ID=
-YTRACK_CLOUD_ORG_ID=
-YTRACK_QUEUE=
-YTRACK_ISSUE_TYPE=task
-YTRACK_SSL_VERIFY=true
+YOUTRACK_URL=https://yt.rusal.ru
+YOUTRACK_TOKEN=
+YOUTRACK_QUEUE=
+YOUTRACK_ISSUE_TYPE=task
+YOUTRACK_SSL_VERIFY=false
 ```
 
 Замечания:
 
 - `ANALYST_GITLAB_PROJECT` можно не заполнять, если MR аналитиков живут в том же `GITLAB_PROJECT`.
-- Для автосоздания задач в YTrack нужен `YTRACK_OAUTH_TOKEN` и как минимум один из `YTRACK_ORG_ID` / `YTRACK_CLOUD_ORG_ID`, плюс `YTRACK_QUEUE`.
+- Для автосоздания задач в YTrack нужен только уже привычный `YOUTRACK_TOKEN` плюс `YOUTRACK_QUEUE`.
 
 ## Ключевые API ручки
 

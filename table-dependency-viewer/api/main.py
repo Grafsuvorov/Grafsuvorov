@@ -94,13 +94,11 @@ from .config import (
     AIRFLOW_DEV_USERNAME,
     AIRFLOW_DEV_PASSWORD,
     DEV_META_LOCK_TTL_MIN,
-    YTRACK_API_URL,
-    YTRACK_OAUTH_TOKEN,
-    YTRACK_ORG_ID,
-    YTRACK_CLOUD_ORG_ID,
-    YTRACK_QUEUE,
-    YTRACK_ISSUE_TYPE,
-    YTRACK_SSL_VERIFY,
+    YOUTRACK_URL,
+    YOUTRACK_TOKEN,
+    YOUTRACK_QUEUE,
+    YOUTRACK_ISSUE_TYPE,
+    YOUTRACK_SSL_VERIFY,
 )
 
 
@@ -877,13 +875,11 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                 impact=impact,
             )
             issue_result = create_ytrack_issue(
-                api_url=YTRACK_API_URL,
-                oauth_token=YTRACK_OAUTH_TOKEN,
-                org_id=YTRACK_ORG_ID,
-                cloud_org_id=YTRACK_CLOUD_ORG_ID,
-                queue=YTRACK_QUEUE,
-                issue_type=YTRACK_ISSUE_TYPE,
-                ssl_verify=YTRACK_SSL_VERIFY,
+                base_url=YOUTRACK_URL,
+                token=YOUTRACK_TOKEN,
+                queue=YOUTRACK_QUEUE,
+                issue_type=YOUTRACK_ISSUE_TYPE,
+                ssl_verify=YOUTRACK_SSL_VERIFY,
                 summary=summary,
                 description=description,
             )

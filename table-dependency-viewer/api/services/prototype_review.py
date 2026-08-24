@@ -303,27 +303,21 @@ def query_dev_table_checks(
 
 def create_ytrack_issue(
     *,
-    api_url: str,
-    oauth_token: str,
-    org_id: str,
-    cloud_org_id: str,
+    base_url: str,
+    token: str,
     queue: str,
     issue_type: str,
     ssl_verify: str,
     summary: str,
     description: str,
 ) -> dict[str, Any]:
-    if not oauth_token or not queue:
+    if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
     headers = {
-        "Authorization": f"OAuth {oauth_token}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    if org_id:
-        headers["X-Org-ID"] = org_id
-    if cloud_org_id:
-        headers["X-Cloud-Org-ID"] = cloud_org_id
     payload = {
         "queue": queue,
         "summary": summary,
@@ -331,7 +325,7 @@ def create_ytrack_issue(
         "type": issue_type or "task",
     }
     req = urlrequest.Request(
-        f"{api_url.rstrip('/')}/issues/",
+        f"{base_url.rstrip('/')}/api/issues",
         data=json.dumps(payload).encode("utf-8"),
         headers=headers,
         method="POST",

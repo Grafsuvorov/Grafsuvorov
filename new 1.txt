@@ -1,4 +1,10 @@
- GITLAB_PROJECT=dwh/etl
 
-аналитический
-dwh_analyst / Sql Queries Storage
+WARN[0000] The "YOUTRACK_URL" variable is not set. Defaulting to a blank string.
+WARN[0000] The "YOUTRACK_TOKEN" variable is not set. Defaulting to a blank string.
+WARN[0000] The "YOUTRACK_QUEUE" variable is not set. Defaulting to a blank string.
+WARN[0000] The "YOUTRACK_ISSUE_TYPE" variable is not set. Defaulting to a blank string.
+WARN[0000] The "YOUTRACK_SSL_VERIFY" variable is not set. Defaulting to a blank string.
+[+] Running 2/2
+ ⠿ Container table-dependency-viewer-frontend-1  Started                                                  11.0s
+ ⠿ Container table-dependency-viewer-api-1       Started                                                  11.0s
+[root@rgm-s-dwhapp01 table-dependency-viewer]#

@@ -28,6 +28,7 @@ import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import AdminArchitecturePage from "./components/AdminArchitecturePage.jsx";
 import AdminArchitectureBlockPage from "./components/AdminArchitectureBlockPage.jsx";
 import AdminFeedbackPage from "./components/AdminFeedbackPage.jsx";
+import AdminPrototypeReviewPage from "./components/AdminPrototypeReviewPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
@@ -234,6 +235,10 @@ export default function App() {
       }
       if (target === "/admin/feedback") {
         navigate("/admin/feedback");
+        return;
+      }
+      if (target === "/admin/prototype-review") {
+        navigate("/admin/prototype-review");
         return;
       }
       if (target === "/account") {
@@ -590,6 +595,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : (
               <AdminFeedbackPage />
+            )
+          }
+        />
+        <Route
+          path="/admin/prototype-review"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminPrototypeReviewPage />
+            ) : (
+              <Navigate to="/" replace />
             )
           }
         />

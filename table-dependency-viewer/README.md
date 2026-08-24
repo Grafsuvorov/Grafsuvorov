@@ -72,6 +72,24 @@ CORP_AI_SSL_VERIFY=false
 CORP_AI_TIMEOUT_SEC=60
 ```
 
+Для Prototype Review / MR-анализатора:
+
+```env
+ANALYST_GITLAB_PROJECT=
+YTRACK_API_URL=https://api.tracker.yandex.net/v3
+YTRACK_OAUTH_TOKEN=
+YTRACK_ORG_ID=
+YTRACK_CLOUD_ORG_ID=
+YTRACK_QUEUE=
+YTRACK_ISSUE_TYPE=task
+YTRACK_SSL_VERIFY=true
+```
+
+Замечания:
+
+- `ANALYST_GITLAB_PROJECT` можно не заполнять, если MR аналитиков живут в том же `GITLAB_PROJECT`.
+- Для автосоздания задач в YTrack нужен `YTRACK_OAUTH_TOKEN` и как минимум один из `YTRACK_ORG_ID` / `YTRACK_CLOUD_ORG_ID`, плюс `YTRACK_QUEUE`.
+
 ## Ключевые API ручки
 
 - `GET /api/night-summary` — сводка ночного окна (по умолчанию 21:00–08:00)

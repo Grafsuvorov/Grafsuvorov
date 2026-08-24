@@ -85,6 +85,7 @@ from .config import (
     META_WORKSPACE_ROOT,
     TABLE_APP_FEEDBACK,
     GITLAB_API_URL,
+    ANALYST_GITLAB_PROJECT,
     GITLAB_PROJECT,
     GITLAB_SSL_VERIFY,
     GITLAB_TOKEN,
@@ -93,6 +94,13 @@ from .config import (
     AIRFLOW_DEV_USERNAME,
     AIRFLOW_DEV_PASSWORD,
     DEV_META_LOCK_TTL_MIN,
+    YTRACK_API_URL,
+    YTRACK_OAUTH_TOKEN,
+    YTRACK_ORG_ID,
+    YTRACK_CLOUD_ORG_ID,
+    YTRACK_QUEUE,
+    YTRACK_ISSUE_TYPE,
+    YTRACK_SSL_VERIFY,
 )
 
 
@@ -145,6 +153,14 @@ from .services.meta_workspace import (
 )
 from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
+from .services.prototype_review import (
+    create_ytrack_issue,
+    execute_sql_files_in_dev,
+    extract_sql_dependencies,
+    infer_final_target,
+    load_merge_request_sql_bundle,
+    query_dev_table_checks,
+)
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
     get_dbt_graph_snapshot,
@@ -407,6 +423,12 @@ class AssistantContextPayload(BaseModel):
 class AssistantQueryPayload(BaseModel):
     question: str
     context: Optional[AssistantContextPayload] = None
+
+
+class PrototypeReviewRunPayload(BaseModel):
+    mr_input: str
+    key_attributes: Optional[List[str]] = None
+    create_issue: bool = True
 
 
 def _require_dev_meta_role(request: Request):
@@ -706,6 +728,187 @@ def assistant_query(payload: AssistantQueryPayload, request: Request):
         print("❌ /api/admin/assistant/query error:", exc)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось получить ответ ассистента")
+
+
+def _prototype_find_meta_by_fqn(target_fqn: Optional[str]) -> Optional[dict[str, Any]]:
+    normalized = norm(target_fqn)
+    if not normalized or "." not in normalized:
+        return None
+    schema_name, table_name = normalized.split(".", 1)
+    all_meta, _ = get_cached_meta_and_index()
+    for item in all_meta:
+        if item.get("table_schema") == schema_name and item.get("table_name") == table_name:
+            return item
+    return None
+
+
+def _prototype_impact_summary(target_fqn: Optional[str]) -> dict[str, Any]:
+    normalized = norm(target_fqn)
+    if not normalized:
+        return {"tables": [], "entities": [], "count": 0}
+    snapshot = get_graph_snapshot()
+    table_edges = snapshot["table_graph"]["edges"]
+    table_nodes = snapshot["table_graph"]["nodes"]
+    visited = set()
+    queue = [normalized]
+    downstream_tables: list[dict[str, Any]] = []
+    entity_counter: dict[str, int] = {}
+
+    while queue:
+        current = queue.pop(0)
+        for edge in table_edges:
+            source = str(edge.get("source") or "").lower()
+            target = str(edge.get("target") or "").lower()
+            if source != current or not target or target in visited:
+                continue
+            visited.add(target)
+            queue.append(target)
+            node = table_nodes.get(target) or {}
+            entity_name = str(node.get("entity_name") or "").strip()
+            if entity_name:
+                entity_counter[entity_name] = entity_counter.get(entity_name, 0) + 1
+            downstream_tables.append(
+                {
+                    "fqn": target,
+                    "schema": node.get("schema"),
+                    "table": node.get("table"),
+                    "entity_name": entity_name or None,
+                    "table_id": node.get("table_id"),
+                }
+            )
+    entities = [
+        {"entity_name": name, "tables_count": count}
+        for name, count in sorted(entity_counter.items(), key=lambda item: (-item[1], item[0]))[:12]
+    ]
+    return {
+        "tables": downstream_tables[:40],
+        "entities": entities,
+        "count": len(downstream_tables),
+    }
+
+
+def _prototype_issue_description(
+    *,
+    mr: dict[str, Any],
+    final_target: Optional[str],
+    key_attributes: list[str],
+    dependencies: list[str],
+    execution: list[dict[str, Any]],
+    checks: dict[str, Any],
+    impact: dict[str, Any],
+) -> str:
+    lines = [
+        "Автоматически создано из Prototype Review.",
+        "",
+        f"MR: {mr.get('web_url') or '—'}",
+        f"Проект: {mr.get('project') or '—'}",
+        f"Ветка: {mr.get('source_branch') or '—'} -> {mr.get('target_branch') or '—'}",
+        f"Автор MR: {mr.get('author') or '—'}",
+        "",
+        f"Финальная витрина: {final_target or 'не определена'}",
+        f"Ключ: {', '.join(key_attributes) if key_attributes else 'не задан'}",
+        f"Row count: {checks.get('row_count') if checks else '—'}",
+        f"Duplicate groups: {checks.get('duplicate_groups') if checks.get('duplicate_groups') is not None else 'не проверялось'}",
+        "",
+        "Файлы и время выполнения:",
+    ]
+    for item in execution:
+        lines.append(f"- {item.get('path')}: {item.get('status')} · {item.get('duration_sec', 0)} сек")
+    if dependencies:
+        lines.extend(["", "Зависимости SQL:"])
+        lines.extend(f"- {item}" for item in dependencies[:40])
+    impact_tables = impact.get("tables") or []
+    if impact_tables:
+        lines.extend(["", "Потенциальное downstream-влияние:"])
+        lines.extend(
+            f"- {item.get('fqn')} · {item.get('entity_name') or '—'}"
+            for item in impact_tables[:25]
+        )
+    return "\n".join(lines)
+
+
+@router.post("/api/admin/prototype-review/run")
+def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Request):
+    _require_admin(request)
+    try:
+        bundle = load_merge_request_sql_bundle(
+            gitlab_api_url=GITLAB_API_URL,
+            gitlab_project=GITLAB_PROJECT,
+            gitlab_token=GITLAB_TOKEN,
+            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+            mr_input=payload.mr_input,
+            default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
+        )
+        files = bundle.get("files") or []
+        final_target = infer_final_target(files)
+        dependencies = extract_sql_dependencies(files)
+        meta = _prototype_find_meta_by_fqn(final_target)
+        detected_keys = list((meta or {}).get("key_attributes") or [])
+        provided_keys = [str(item).strip() for item in (payload.key_attributes or []) if str(item).strip()]
+        key_attributes = provided_keys or detected_keys
+
+        execution = execute_sql_files_in_dev(
+            dev_database_url=DEV_DATABASE_URL,
+            files=files,
+        )
+        checks = query_dev_table_checks(
+            dev_database_url=DEV_DATABASE_URL,
+            target_fqn=final_target or "",
+            key_attributes=key_attributes,
+        ) if final_target else {"row_count": None, "duplicate_groups": None}
+        impact = _prototype_impact_summary(final_target)
+
+        validation_errors = []
+        if not final_target:
+            validation_errors.append("Не удалось определить финальную витрину по последнему INSERT/CREATE TABLE")
+        if checks.get("duplicate_groups") not in (None, 0):
+            validation_errors.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
+
+        issue_result = {"status": "skipped", "issue_id": None, "url": None, "link": None}
+        if payload.create_issue and not validation_errors:
+            summary = f"[Prototype Review] {final_target or 'prototype'}"
+            description = _prototype_issue_description(
+                mr=bundle.get("mr") or {},
+                final_target=final_target,
+                key_attributes=key_attributes,
+                dependencies=dependencies,
+                execution=execution,
+                checks=checks,
+                impact=impact,
+            )
+            issue_result = create_ytrack_issue(
+                api_url=YTRACK_API_URL,
+                oauth_token=YTRACK_OAUTH_TOKEN,
+                org_id=YTRACK_ORG_ID,
+                cloud_org_id=YTRACK_CLOUD_ORG_ID,
+                queue=YTRACK_QUEUE,
+                issue_type=YTRACK_ISSUE_TYPE,
+                ssl_verify=YTRACK_SSL_VERIFY,
+                summary=summary,
+                description=description,
+            )
+            if issue_result.get("issue_id"):
+                issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
+
+        status = "passed" if not validation_errors else "failed"
+        return {
+            "status": status,
+            "mr": bundle.get("mr") or {},
+            "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],
+            "final_target": final_target,
+            "key_attributes": key_attributes,
+            "auto_detected_key_attributes": detected_keys,
+            "dependencies": dependencies,
+            "execution": execution,
+            "checks": checks,
+            "impact": impact,
+            "validation_errors": validation_errors,
+            "issue": issue_result,
+        }
+    except Exception as exc:
+        print("❌ /api/admin/prototype-review/run error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/api/admin/ci-cd/status")

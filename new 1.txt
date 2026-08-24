@@ -1,40 +1,202 @@
 
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=200
 table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
-table-dependency-viewer-api-1  |     sys.exit(main())
-table-dependency-viewer-api-1  |              ^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1569, in __call__
-table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1490, in main
-table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1353, in invoke
-table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 907, in invoke
-table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 440, in main
-table-dependency-viewer-api-1  |     run(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 609, in run
-table-dependency-viewer-api-1  |     config.load_app()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 428, in load_app
-table-dependency-viewer-api-1  |     return import_from_string(self.app)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
-table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
-table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | psycopg2.OperationalError: server closed the connection unexpectedly
+table-dependency-viewer-api-1  |        This probably means the server terminated abnormally
+table-dependency-viewer-api-1  |        before or while processing the request.
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+table-dependency-viewer-api-1  |     result = await app(  # type: ignore[func-returns-value]
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+table-dependency-viewer-api-1  |     return await self.app(scope, receive, send)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
+table-dependency-viewer-api-1  |     await super().__call__(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
+table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 186, in __call__
+table-dependency-viewer-api-1  |     raise exc
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+table-dependency-viewer-api-1  |     await self.app(scope, receive, _send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+table-dependency-viewer-api-1  |     response = await self.dispatch_func(request, call_next)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 817, in auth_middleware
+table-dependency-viewer-api-1  |     return await call_next(request)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 168, in call_next
+table-dependency-viewer-api-1  |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+table-dependency-viewer-api-1  |     await self.app(scope, receive_or_disconnect, send_no_error)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 88, in __call__
+table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+table-dependency-viewer-api-1  |     raise exc
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+table-dependency-viewer-api-1  |     await app(scope, receive, sender)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
+table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2734, in app
+table-dependency-viewer-api-1  |     await route.handle(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1780, in handle
+table-dependency-viewer-api-1  |     await self.original_router.handle(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 2789, in handle
+table-dependency-viewer-api-1  |     await included_router._handle_selected(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1800, in _handle_selected
+table-dependency-viewer-api-1  |     await original_route.handle(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 1279, in handle
+table-dependency-viewer-api-1  |     await app(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 158, in app
+table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+table-dependency-viewer-api-1  |     raise exc
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+table-dependency-viewer-api-1  |     await app(scope, receive, sender)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 144, in app
+table-dependency-viewer-api-1  |     response = await f(request)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 706, in app
+table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 354, in run_endpoint_function
+table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.call, **values)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/starlette/concurrency.py", line 34, in run_in_threadpool
+table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/to_thread.py", line 65, in run_sync
+table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_in_worker_thread(
 table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 41, in <module>
-table-dependency-viewer-api-1  |     from .config import (
-table-dependency-viewer-api-1  | ImportError: cannot import name 'YOUTRACK_URL' from 'api.config' (/app/api/config.py)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2641, in run_sync_in_worker_thread
+table-dependency-viewer-api-1  |     return await future
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 1033, in run
+table-dependency-viewer-api-1  |     result = context.run(func, *args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 11328, in get_order_breaches
+table-dependency-viewer-api-1  |     return get_cached_order_breaches()
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4747, in get_cached_order_breaches
+table-dependency-viewer-api-1  |     result = compute_order_breaches()
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4679, in compute_order_breaches
+table-dependency-viewer-api-1  |     resp = get_dependency_violations()
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 9098, in get_dependency_violations
+table-dependency-viewer-api-1  |     result = conn.execute(
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1421, in execute
+table-dependency-viewer-api-1  |     return meth(
+table-dependency-viewer-api-1  |            ^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+table-dependency-viewer-api-1  |     ret = self._execute_context(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+table-dependency-viewer-api-1  |     return self._exec_single_context(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) server closed the connection unexpectedly
+table-dependency-viewer-api-1  |        This probably means the server terminated abnormally
+table-dependency-viewer-api-1  |        before or while processing the request.
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |                 WITH base AS (
+table-dependency-viewer-api-1  |                     SELECT
+table-dependency-viewer-api-1  |                         COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+table-dependency-viewer-api-1  |                         COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
+table-dependency-viewer-api-1  |                         l.loading_finish_dttm
+table-dependency-viewer-api-1  |                     FROM tech_etl.log_objects_loading_history l
+table-dependency-viewer-api-1  |                     LEFT JOIN tech_etl.tables_meta t ON t.table_id = l.object_id
+table-dependency-viewer-api-1  |                     WHERE l.object_type = 'table'
+table-dependency-viewer-api-1  |                       AND l.loading_state IN ('SUCCESS', 'LOADED')
+table-dependency-viewer-api-1  |                       AND l.loading_finish_dttm IS NOT NULL
+table-dependency-viewer-api-1  |                       AND t.table_schema = %(schema)s
+table-dependency-viewer-api-1  |                       AND t.table_name = ANY(%(tables)s)
+table-dependency-viewer-api-1  |                 )
+table-dependency-viewer-api-1  |                 SELECT table_schema, table_name, loading_finish_dttm
+table-dependency-viewer-api-1  |                 FROM (
+table-dependency-viewer-api-1  |                     SELECT
+table-dependency-viewer-api-1  |                         table_schema,
+table-dependency-viewer-api-1  |                         table_name,
+table-dependency-viewer-api-1  |                         loading_finish_dttm,
+table-dependency-viewer-api-1  |                         ROW_NUMBER() OVER (
+table-dependency-viewer-api-1  |                             PARTITION BY table_schema, table_name
+table-dependency-viewer-api-1  |                             ORDER BY loading_finish_dttm DESC
+table-dependency-viewer-api-1  |                         ) AS rn
+table-dependency-viewer-api-1  |                     FROM base
+table-dependency-viewer-api-1  |                 ) x
+table-dependency-viewer-api-1  |                 WHERE rn <= %(limit)s
+table-dependency-viewer-api-1  |                 ]
+table-dependency-viewer-api-1  | [parameters: {'schema': 'dict_stg', 'tables': ['/rusal/tvtrus1', 'eqkt', 'usr21', 'tmamt', '/bic/tzpbf', 'tfact', 'tvm4', 'tech_status_of_claims', 'tvv3', 'tvbo', 't691t', 't685t', 'tzone', 'ohd_d ... (12113 characters truncated) ... cl_bs', 'toijnomsi_appt', 'tbmot', 't171', 'zsd3216m_stakns', 't189', 'purgtx_t', '/rusal/sd2901m1t', 'toro2_flc_hdr', 'zsd4270m07t', 'tvdct', 'tvst'], 'limit': 6}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/e3q8)
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51744 - "GET /api/graph/diagnostics?include_any=true HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51742 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51758 - "GET /api/incidents/timeline?days=7 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51736 - "GET /api/incidents/history?days=7&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51768 - "GET /api/click/summary?days=7&limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51770 - "GET /api/click/slow-stages?days=7&limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51772 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51740 - "GET /api/metrics HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51762 - "GET /api/dq/summary?days=7&delta=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51734 - "GET /api/incidents/active HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51766 - "GET /api/dq/alerts?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51754 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51812 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51810 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51814 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51820 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51830 - "GET /api/admin/dev-copy/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51832 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51844 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51846 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51842 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:51850 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | ❌ /api/admin/prototype-review/run error: Не удалось распознать MR. Используйте URL или IID
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 832, in run_admin_prototype_review
+table-dependency-viewer-api-1  |     bundle = load_merge_request_sql_bundle(
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/prototype_review.py", line 120, in load_merge_request_sql_bundle
+table-dependency-viewer-api-1  |     mr_ref = parse_prototype_gitlab_ref(mr_input, project_default)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/prototype_review.py", line 107, in parse_prototype_gitlab_ref
+table-dependency-viewer-api-1  |     raise ValueError("Не удалось распознать MR. Используйте URL или IID")
+table-dependency-viewer-api-1  | ValueError: Не удалось распознать MR. Используйте URL или IID
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52206 - "POST /api/admin/prototype-review/run HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | ❌ /api/admin/prototype-review/run error: Не удалось распознать MR. Используйте URL или IID
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 832, in run_admin_prototype_review
+table-dependency-viewer-api-1  |     bundle = load_merge_request_sql_bundle(
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/prototype_review.py", line 120, in load_merge_request_sql_bundle
+table-dependency-viewer-api-1  |     mr_ref = parse_prototype_gitlab_ref(mr_input, project_default)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/prototype_review.py", line 107, in parse_prototype_gitlab_ref
+table-dependency-viewer-api-1  |     raise ValueError("Не удалось распознать MR. Используйте URL или IID")
+table-dependency-viewer-api-1  | ValueError: Не удалось распознать MR. Используйте URL или IID
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52252 - "POST /api/admin/prototype-review/run HTTP/1.1" 500 Internal Server Error

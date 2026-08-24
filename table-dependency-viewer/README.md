@@ -75,7 +75,6 @@ CORP_AI_TIMEOUT_SEC=60
 Для Prototype Review / MR-анализатора:
 
 ```env
-ANALYST_GITLAB_PROJECT=
 YOUTRACK_URL=https://yt.rusal.ru
 YOUTRACK_TOKEN=
 YOUTRACK_QUEUE=
@@ -85,8 +84,8 @@ YOUTRACK_SSL_VERIFY=false
 
 Замечания:
 
-- `ANALYST_GITLAB_PROJECT` можно не заполнять, если MR аналитиков живут в том же `GITLAB_PROJECT`.
 - Для автосоздания задач в YTrack нужен только уже привычный `YOUTRACK_TOKEN` плюс `YOUTRACK_QUEUE`.
+- GitLab project аналитиков сейчас зафиксирован в `docker-compose.yml` как `dwh_analyst/Sql Queries Storage`.
 
 ## Ключевые API ручки
 

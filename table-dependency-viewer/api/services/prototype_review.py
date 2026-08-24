@@ -63,6 +63,10 @@ def _normalize_fqn(value: str) -> Optional[str]:
     return f"{schema_name.lower()}.{table_name.lower()}"
 
 
+def _split_lines_block(value: str) -> list[str]:
+    return [line.strip() for line in str(value or "").splitlines() if line.strip()]
+
+
 def _is_valid_dependency_fqn(value: Optional[str], known_schemas: Optional[set[str]] = None) -> bool:
     if not value or "." not in value:
         return False
@@ -78,6 +82,100 @@ def _is_valid_dependency_fqn(value: Optional[str], known_schemas: Optional[set[s
     if known_schemas and schema_name not in known_schemas:
         return False
     return True
+
+
+def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
+    raw_text = str(task_text or "").strip()
+    if not raw_text:
+        return {}
+    lines = _split_lines_block(raw_text)
+    result: dict[str, Any] = {
+        "summary": lines[0] if lines else None,
+        "target_table_fqn": None,
+        "entity_name": None,
+        "subject_area": None,
+        "git_reference": None,
+        "load_mode": None,
+        "environments": [],
+        "dependent_views": [],
+        "copy_to_clickhouse": None,
+        "clickhouse_keys": [],
+        "linked_issues": [],
+        "parent_issue": None,
+        "dashboard_name": None,
+    }
+
+    field_patterns = {
+        "target_table_fqn": r"Название таблицы Greenplum:\s*(.+)",
+        "entity_name": r"Сущность загрузки:\s*(.+)",
+        "subject_area": r"Предметная область:\s*(.+)",
+        "git_reference": r"Ссылка на гит:\s*(.+)",
+        "load_mode": r"Способ обновления:\s*(.+)",
+        "environments": r"Стенд:\s*(.+)",
+        "dependent_views": r"Зависимые представления:\s*(.+)",
+        "dashboard_name": r"Дашборд КХД/Направление\s*(.+)",
+    }
+    for field_name, pattern in field_patterns.items():
+        match = re.search(pattern, raw_text, re.IGNORECASE)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if field_name == "target_table_fqn":
+            result[field_name] = _normalize_fqn(value)
+        elif field_name == "environments":
+            result[field_name] = [item.strip().upper() for item in re.split(r"[/,;]", value) if item.strip()]
+        elif field_name == "dependent_views":
+            result[field_name] = [
+                item for item in (_normalize_fqn(part) for part in re.split(r"[,;\s]+", value)) if item
+            ]
+        else:
+            result[field_name] = value
+
+    copy_match = re.search(r"Копировать в ClickHouse:\s*(.+)", raw_text, re.IGNORECASE)
+    if copy_match:
+        result["copy_to_clickhouse"] = "не нужно" not in copy_match.group(1).strip().lower()
+
+    clickhouse_keys_match = re.search(
+        r"Ключевые поля.*?:\s*(.+?)(?:\n\s*\n|\n[А-ЯA-Z][^:\n]{0,80}:|\nсвязана с|\nподзадача для|\Z)",
+        raw_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if clickhouse_keys_match:
+        clickhouse_keys: list[str] = []
+        for line in clickhouse_keys_match.group(1).splitlines():
+            key = str(line or "").strip(" \t-•")
+            if key:
+                clickhouse_keys.append(key)
+        result["clickhouse_keys"] = clickhouse_keys
+
+    related = []
+    for issue_id in re.findall(r"\b[A-Z]+-\d+\b", raw_text):
+        if issue_id not in related:
+            related.append(issue_id)
+    result["linked_issues"] = related
+    parent_match = re.search(r"подзадача для.*?\b([A-Z]+-\d+)\b", raw_text, re.IGNORECASE | re.DOTALL)
+    if parent_match:
+        result["parent_issue"] = parent_match.group(1)
+
+    if not result.get("target_table_fqn"):
+        for line in lines[:5]:
+            maybe_fqn = re.search(r"\b([a-zA-Z_][\w]*)\.([a-zA-Z_][\w]*)\b", line)
+            if maybe_fqn:
+                result["target_table_fqn"] = _normalize_fqn(maybe_fqn.group(0))
+                break
+    return result
+
+
+def validate_prototype_sql(files: list[dict[str, Any]]) -> dict[str, list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    for item in files:
+        path_value = str(item.get("path") or "")
+        sql_text = str(item.get("sql") or "")
+        normalized_sql = _strip_sql_comments(sql_text).lower()
+        if re.search(r"\buserdata\b", normalized_sql):
+            errors.append(f"В `{path_value}` найдена ссылка на `userdata`; такие объекты запрещены для prototype review")
+    return {"errors": errors, "warnings": warnings}
 
 
 def _split_sql_statements(sql_text: str) -> list[str]:
@@ -307,6 +405,61 @@ def execute_sql_files_in_dev(
                 pass
         exec_engine.dispose()
     return results
+
+
+def prepare_target_table_in_dev(
+    *,
+    dev_database_url: str,
+    target_fqn: str,
+) -> dict[str, Any]:
+    normalized = _normalize_fqn(target_fqn)
+    if not dev_database_url:
+        raise ValueError("Не настроен DEV_DATABASE_URL")
+    if not normalized:
+        return {"status": "skipped", "action": "truncate", "message": "Финальная таблица не определена"}
+    schema_name, table_name = normalized.split(".", 1)
+    exec_engine = create_engine(dev_database_url)
+    started = time.perf_counter()
+    try:
+        with exec_engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT table_type
+                    FROM information_schema.tables
+                    WHERE table_schema = :schema_name
+                      AND table_name = :table_name
+                    LIMIT 1
+                    """
+                ),
+                {"schema_name": schema_name, "table_name": table_name},
+            ).mappings().first()
+            if not row:
+                return {
+                    "status": "warning",
+                    "action": "truncate",
+                    "target_fqn": normalized,
+                    "message": "Целевая таблица не найдена в DEV, предварительный TRUNCATE пропущен",
+                    "duration_sec": round(time.perf_counter() - started, 3),
+                }
+            if str(row.get("table_type") or "").upper() != "BASE TABLE":
+                return {
+                    "status": "warning",
+                    "action": "truncate",
+                    "target_fqn": normalized,
+                    "message": f"Целевой объект имеет тип `{row.get('table_type')}`, TRUNCATE пропущен",
+                    "duration_sec": round(time.perf_counter() - started, 3),
+                }
+            conn.execute(text(f'TRUNCATE TABLE "{schema_name}"."{table_name}"'))
+            return {
+                "status": "ok",
+                "action": "truncate",
+                "target_fqn": normalized,
+                "message": "Целевая таблица очищена перед выполнением SQL",
+                "duration_sec": round(time.perf_counter() - started, 3),
+            }
+    finally:
+        exec_engine.dispose()
 
 
 def query_dev_table_checks(

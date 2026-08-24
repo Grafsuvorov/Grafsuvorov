@@ -157,7 +157,10 @@ from .services.prototype_review import (
     extract_sql_dependencies,
     infer_final_target,
     load_merge_request_sql_bundle,
+    parse_prototype_task_text,
+    prepare_target_table_in_dev,
     query_dev_table_checks,
+    validate_prototype_sql,
 )
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
@@ -431,6 +434,16 @@ class PrototypeReviewRunPayload(BaseModel):
     mr_input: str
     key_attributes: Optional[List[str]] = None
     create_issue: bool = True
+    task_text: Optional[str] = None
+    target_table_fqn: Optional[str] = None
+    entity_name: Optional[str] = None
+    issue_summary: Optional[str] = None
+    load_mode: Optional[str] = None
+    stand_dev: bool = True
+    stand_prod: bool = True
+    copy_to_clickhouse: Optional[bool] = None
+    dependent_views: Optional[List[str]] = None
+    linked_issues: Optional[List[str]] = None
 
 
 def _require_dev_meta_role(request: Request):
@@ -771,7 +784,7 @@ def _prototype_impact_summary(target_fqn: Optional[str]) -> dict[str, Any]:
             entity_counter[entity_name] = entity_counter.get(entity_name, 0) + 1
         downstream_tables.append(
             {
-                "fqn": node_id,
+                "fqn": str(node.get("fqn") or f"{node.get('schema')}.{node.get('table')}").lower(),
                 "schema": node.get("schema"),
                 "table": node.get("table"),
                 "entity_name": entity_name or None,
@@ -795,27 +808,53 @@ def _prototype_issue_description(
     *,
     mr: dict[str, Any],
     final_target: Optional[str],
+    entity_name: Optional[str],
     key_attributes: list[str],
     dependencies: list[str],
+    preparation: dict[str, Any],
     execution: list[dict[str, Any]],
     checks: dict[str, Any],
     impact: dict[str, Any],
+    task_context: dict[str, Any],
+    initiator: dict[str, Any],
 ) -> str:
     lines = [
         "Автоматически создано из Prototype Review.",
         "",
+        f"Инициатор в приложении: {initiator.get('username') or initiator.get('email') or '—'}",
+        f"Email инициатора: {initiator.get('email') or '—'}",
         f"MR: {mr.get('web_url') or '—'}",
         f"Проект: {mr.get('project') or '—'}",
         f"Ветка: {mr.get('source_branch') or '—'} -> {mr.get('target_branch') or '—'}",
         f"Автор MR: {mr.get('author') or '—'}",
         "",
         f"Финальная витрина: {final_target or 'не определена'}",
+        f"Сущность: {entity_name or 'не определена'}",
         f"Ключ: {', '.join(key_attributes) if key_attributes else 'не задан'}",
         f"Row count: {checks.get('row_count') if checks else '—'}",
         f"Duplicate groups: {checks.get('duplicate_groups') if checks.get('duplicate_groups') is not None else 'не проверялось'}",
         "",
+        f"Подготовка DEV: {preparation.get('message') or '—'}",
+        "",
         "Файлы и время выполнения:",
     ]
+    if task_context:
+        lines.extend(
+            [
+                "",
+                "Контекст задачи:",
+                f"- Summary: {task_context.get('summary') or '—'}",
+                f"- Предметная область: {task_context.get('subject_area') or '—'}",
+                f"- Сущность: {task_context.get('entity_name') or entity_name or '—'}",
+                f"- Режим обновления: {task_context.get('load_mode') or '—'}",
+                f"- Стенды: {', '.join(task_context.get('environments') or []) or '—'}",
+                f"- Git ref: {task_context.get('git_reference') or '—'}",
+                f"- Copy to ClickHouse: {'да' if task_context.get('copy_to_clickhouse') else 'нет'}",
+                f"- ClickHouse keys: {', '.join(task_context.get('clickhouse_keys') or []) or '—'}",
+                f"- Зависимые view: {', '.join(task_context.get('dependent_views') or []) or '—'}",
+                f"- Связанные тикеты: {', '.join(task_context.get('linked_issues') or []) or '—'}",
+            ]
+        )
     for item in execution:
         lines.append(f"- {item.get('path')}: {item.get('status')} · {item.get('duration_sec', 0)} сек")
     if dependencies:
@@ -833,7 +872,7 @@ def _prototype_issue_description(
 
 @router.post("/api/admin/prototype-review/run")
 def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Request):
-    _require_admin(request)
+    user = _require_authenticated(request)
     try:
         bundle = load_merge_request_sql_bundle(
             gitlab_api_url=GITLAB_API_URL,
@@ -844,7 +883,14 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
         )
         files = bundle.get("files") or []
-        final_target = infer_final_target(files)
+        parsed_task = parse_prototype_task_text(payload.task_text or "")
+        sql_validation = validate_prototype_sql(files)
+        final_target_from_sql = infer_final_target(files)
+        target_table_hint = (
+            payload.target_table_fqn
+            or parsed_task.get("target_table_fqn")
+        )
+        final_target = final_target_from_sql or target_table_hint
         all_meta, _ = get_cached_meta_and_index()
         known_schemas = {
             str(meta.get("table_schema") or "").strip().lower()
@@ -860,40 +906,90 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
         detected_keys = list((meta or {}).get("key_attributes") or [])
         provided_keys = [str(item).strip() for item in (payload.key_attributes or []) if str(item).strip()]
         key_attributes = provided_keys or detected_keys
-
-        execution = execute_sql_files_in_dev(
-            dev_database_url=DEV_DATABASE_URL,
-            files=files,
+        resolved_entity_name = (
+            (payload.entity_name or "").strip()
+            or str(parsed_task.get("entity_name") or "").strip()
+            or str((meta or {}).get("entity_name") or "").strip()
+            or None
         )
+
+        validation_errors = list(sql_validation.get("errors") or [])
+        validation_warnings = list(sql_validation.get("warnings") or [])
+        if not final_target:
+            validation_errors.append("Не удалось определить финальную витрину по SQL и данным задачи")
+        if final_target_from_sql and target_table_hint and final_target_from_sql != target_table_hint:
+            validation_warnings.append(
+                f"Финальная витрина по SQL `{final_target_from_sql}` не совпадает с таблицей из задачи `{target_table_hint}`"
+            )
+        if not meta:
+            validation_warnings.append("Для целевой таблицы не найдена мета; сущность и ключи могли не подтянуться")
+        if not resolved_entity_name:
+            validation_warnings.append("Сущность не определена автоматически; укажите её вручную")
+        if not key_attributes:
+            validation_warnings.append("Ключевые поля не определены автоматически; без них проверка дублей не выполняется")
+
+        preparation = {"status": "skipped", "action": "truncate", "message": "Проверка не запускалась"}
+        execution = []
+        if not validation_errors:
+            preparation = prepare_target_table_in_dev(
+                dev_database_url=DEV_DATABASE_URL,
+                target_fqn=final_target or "",
+            )
+            if preparation.get("status") == "warning":
+                validation_warnings.append(preparation.get("message") or "TRUNCATE целевой таблицы был пропущен")
+            execution = execute_sql_files_in_dev(
+                dev_database_url=DEV_DATABASE_URL,
+                files=files,
+            )
+
         checks = query_dev_table_checks(
             dev_database_url=DEV_DATABASE_URL,
             target_fqn=final_target or "",
             key_attributes=key_attributes,
-        ) if final_target else {"row_count": None, "duplicate_groups": None}
+        ) if final_target and not validation_errors else {"row_count": None, "duplicate_groups": None}
         impact = _prototype_impact_summary(final_target)
-
-        validation_errors = []
-        if not final_target:
-            validation_errors.append("Не удалось определить финальную витрину по последнему INSERT/CREATE TABLE")
         if checks.get("duplicate_groups") not in (None, 0):
             validation_errors.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
+        status = "error" if validation_errors else ("warning" if validation_warnings else "ok")
         status_reason = (
-            "Финальная витрина определена, SQL выполнен в DEV, дубли по ключу не обнаружены."
-            if not validation_errors
-            else "; ".join(validation_errors)
+            "; ".join(validation_errors)
+            if validation_errors
+            else "; ".join(validation_warnings)
+            if validation_warnings
+            else "SQL выполнен в DEV, целевая таблица очищена заранее, критичных проблем не найдено."
         )
 
         issue_result = {"status": "skipped", "issue_id": None, "url": None, "link": None}
-        if payload.create_issue and not validation_errors:
-            summary = f"[Prototype Review] {final_target or 'prototype'}"
+        task_context = {
+            **parsed_task,
+            "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
+            "load_mode": (payload.load_mode or "").strip() or parsed_task.get("load_mode"),
+            "entity_name": resolved_entity_name,
+            "target_table_fqn": final_target,
+            "dependent_views": payload.dependent_views or parsed_task.get("dependent_views") or [],
+            "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
+            "environments": [
+                label
+                for enabled, label in ((payload.stand_dev, "DEV"), (payload.stand_prod, "PROD"))
+                if enabled
+            ] or parsed_task.get("environments") or [],
+            "copy_to_clickhouse": payload.copy_to_clickhouse if payload.copy_to_clickhouse is not None else parsed_task.get("copy_to_clickhouse"),
+            "clickhouse_keys": parsed_task.get("clickhouse_keys") or key_attributes,
+        }
+        if payload.create_issue and status != "error":
+            summary = (payload.issue_summary or "").strip() or parsed_task.get("summary") or f"[Prototype Review] {final_target or 'prototype'}"
             description = _prototype_issue_description(
                 mr=bundle.get("mr") or {},
                 final_target=final_target,
+                entity_name=resolved_entity_name,
                 key_attributes=key_attributes,
                 dependencies=dependencies,
+                preparation=preparation,
                 execution=execution,
                 checks=checks,
                 impact=impact,
+                task_context=task_context,
+                initiator={"email": getattr(user, "email", None), "username": getattr(user, "username", None)},
             )
             issue_result = create_ytrack_issue(
                 base_url=YOUTRACK_URL,
@@ -906,21 +1002,24 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             )
             if issue_result.get("issue_id"):
                 issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
-
-        status = "passed" if not validation_errors else "failed"
         return {
             "status": status,
             "mr": bundle.get("mr") or {},
             "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],
             "final_target": final_target,
+            "final_target_from_sql": final_target_from_sql,
+            "resolved_entity_name": resolved_entity_name,
             "key_attributes": key_attributes,
             "auto_detected_key_attributes": detected_keys,
             "dependencies": dependencies,
+            "preparation": preparation,
             "execution": execution,
             "checks": checks,
             "impact": impact,
             "validation_errors": validation_errors,
+            "validation_warnings": validation_warnings,
             "status_reason": status_reason,
+            "task_context": task_context,
             "issue": issue_result,
         }
     except Exception as exc:

@@ -67,6 +67,12 @@ def _split_lines_block(value: str) -> list[str]:
     return [line.strip() for line in str(value or "").splitlines() if line.strip()]
 
 
+def _strip_sql_comments(sql: str) -> str:
+    cleaned = re.sub(r"/\*.*?\*/", " ", str(sql or ""), flags=re.DOTALL)
+    cleaned = re.sub(r"(?m)--.*?$", " ", cleaned)
+    return cleaned
+
+
 def _is_valid_dependency_fqn(value: Optional[str], known_schemas: Optional[set[str]] = None) -> bool:
     if not value or "." not in value:
         return False

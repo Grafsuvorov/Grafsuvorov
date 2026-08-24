@@ -64,15 +64,6 @@ function parseTaskText(text) {
 export default function AdminPrototypeReviewPage() {
   const [mrInput, setMrInput] = useState("");
   const [taskText, setTaskText] = useState("");
-  const [issueSummary, setIssueSummary] = useState("");
-  const [targetTableFqn, setTargetTableFqn] = useState("");
-  const [entityName, setEntityName] = useState("");
-  const [loadMode, setLoadMode] = useState("Полный");
-  const [standDev, setStandDev] = useState(true);
-  const [standProd, setStandProd] = useState(true);
-  const [copyToClickhouse, setCopyToClickhouse] = useState(true);
-  const [dependentViewsText, setDependentViewsText] = useState("");
-  const [linkedIssuesText, setLinkedIssuesText] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [createIssue, setCreateIssue] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -84,20 +75,6 @@ export default function AdminPrototypeReviewPage() {
     accountApi.me().then(setCurrentUser).catch(() => {});
   }, []);
 
-  const applyTaskTemplate = () => {
-    const parsed = parseTaskText(taskText);
-    if (parsed.issue_summary) setIssueSummary(parsed.issue_summary);
-    if (parsed.target_table_fqn) setTargetTableFqn(parsed.target_table_fqn);
-    if (parsed.entity_name) setEntityName(parsed.entity_name);
-    if (parsed.load_mode) setLoadMode(parsed.load_mode);
-    if (parsed.dependent_views?.length) setDependentViewsText(parsed.dependent_views.join(", "));
-    if (parsed.linked_issues?.length) setLinkedIssuesText(parsed.linked_issues.join(", "));
-    if (parsed.key_attributes?.length) setKeyAttributesText(parsed.key_attributes.join(", "));
-    if (typeof parsed.copy_to_clickhouse === "boolean") setCopyToClickhouse(parsed.copy_to_clickhouse);
-    setStandDev(parsed.stand_dev !== false);
-    setStandProd(parsed.stand_prod !== false);
-  };
-
   const handleRun = async () => {
     const trimmed = String(mrInput || "").trim();
     if (!trimmed || loading) return;
@@ -105,28 +82,24 @@ export default function AdminPrototypeReviewPage() {
     setError(null);
     setResult(null);
     try {
+      const parsed = parseTaskText(taskText);
+      const overrideKeys = keyAttributesText
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
       const payload = await adminApi.prototypeReviewRun({
         mr_input: trimmed,
         task_text: taskText,
-        issue_summary: issueSummary.trim(),
-        target_table_fqn: targetTableFqn.trim(),
-        entity_name: entityName.trim(),
-        load_mode: loadMode.trim(),
-        stand_dev: standDev,
-        stand_prod: standProd,
-        copy_to_clickhouse: copyToClickhouse,
-        dependent_views: dependentViewsText
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        linked_issues: linkedIssuesText
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        key_attributes: keyAttributesText
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        issue_summary: parsed.issue_summary || "",
+        target_table_fqn: parsed.target_table_fqn || "",
+        entity_name: parsed.entity_name || "",
+        load_mode: parsed.load_mode || "",
+        stand_dev: parsed.stand_dev !== false,
+        stand_prod: parsed.stand_prod !== false,
+        copy_to_clickhouse: parsed.copy_to_clickhouse,
+        dependent_views: parsed.dependent_views || [],
+        linked_issues: parsed.linked_issues || [],
+        key_attributes: overrideKeys.length ? overrideKeys : (parsed.key_attributes || []),
         create_issue: createIssue,
       });
       setResult(payload || null);
@@ -159,48 +132,12 @@ export default function AdminPrototypeReviewPage() {
             />
           </div>
           <div className="slow-select-group" style={{ minWidth: 340, flex: "1 1 340px" }}>
-            <span className="slow-select-label">Финальная таблица</span>
-            <input
-              className="slow-entity-select"
-              value={targetTableFqn}
-              onChange={(event) => setTargetTableFqn(event.target.value)}
-              placeholder="dm.sales_foreign_metal_stock_balance_analysis"
-            />
-          </div>
-          <div className="slow-select-group" style={{ minWidth: 300, flex: "1 1 300px" }}>
-            <span className="slow-select-label">Сущность</span>
-            <input
-              className="slow-entity-select"
-              value={entityName}
-              onChange={(event) => setEntityName(event.target.value)}
-              placeholder="BI_SB_WUC"
-            />
-          </div>
-          <div className="slow-select-group" style={{ minWidth: 340, flex: "1 1 340px" }}>
             <span className="slow-select-label">Override key attributes</span>
             <input
               className="slow-entity-select"
               value={keyAttributesText}
               onChange={(event) => setKeyAttributesText(event.target.value)}
-              placeholder="id, load_dt"
-            />
-          </div>
-          <div className="slow-select-group" style={{ minWidth: 280, flex: "1 1 280px" }}>
-            <span className="slow-select-label">Summary задачи</span>
-            <input
-              className="slow-entity-select"
-              value={issueSummary}
-              onChange={(event) => setIssueSummary(event.target.value)}
-              placeholder="(ДМЛ) Настроить обновление витрины ..."
-            />
-          </div>
-          <div className="slow-select-group" style={{ minWidth: 220 }}>
-            <span className="slow-select-label">Режим обновления</span>
-            <input
-              className="slow-entity-select"
-              value={loadMode}
-              onChange={(event) => setLoadMode(event.target.value)}
-              placeholder="Полный"
+              placeholder="Оставьте пустым для автоподстановки из меты/текста задачи"
             />
           </div>
           <label className="slow-select-group" style={{ minWidth: 220 }}>
@@ -215,69 +152,25 @@ export default function AdminPrototypeReviewPage() {
               Создать задачу при success
             </span>
           </label>
-          <label className="slow-select-group" style={{ minWidth: 180 }}>
-            <span className="slow-select-label">Стенды</span>
-            <span className="muted">
-              <input type="checkbox" checked={standDev} onChange={(event) => setStandDev(event.target.checked)} style={{ marginRight: 8 }} />
-              DEV
-            </span>
-            <span className="muted" style={{ marginTop: 6 }}>
-              <input type="checkbox" checked={standProd} onChange={(event) => setStandProd(event.target.checked)} style={{ marginRight: 8 }} />
-              PROD
-            </span>
-          </label>
-          <label className="slow-select-group" style={{ minWidth: 220 }}>
-            <span className="slow-select-label">ClickHouse</span>
-            <span className="muted">
-              <input
-                type="checkbox"
-                checked={copyToClickhouse}
-                onChange={(event) => setCopyToClickhouse(event.target.checked)}
-                style={{ marginRight: 8 }}
-              />
-              Нужна загрузка в CH
-            </span>
-          </label>
           <button className="btn btn-primary" onClick={handleRun} disabled={loading || !mrInput.trim()}>
             {loading ? "Выполняем..." : "Запустить review"}
           </button>
         </div>
-        <div className="slow-controls-row slow-entity-controls" style={{ alignItems: "stretch", flexWrap: "wrap", marginTop: 12 }}>
-          <div className="slow-select-group" style={{ minWidth: 520, flex: "2 1 520px" }}>
-            <span className="slow-select-label">Текст задачи / описание карточки</span>
-            <textarea
-              className="slow-entity-select"
-              value={taskText}
-              onChange={(event) => setTaskText(event.target.value)}
-              placeholder="Вставьте описание задачи целиком"
-              style={{ minHeight: 180, resize: "vertical" }}
-            />
-          </div>
-          <div className="slow-select-group" style={{ minWidth: 280, flex: "1 1 280px" }}>
-            <span className="slow-select-label">Зависимые view</span>
-            <textarea
-              className="slow-entity-select"
-              value={dependentViewsText}
-              onChange={(event) => setDependentViewsText(event.target.value)}
-              placeholder="dm_view.sales_..."
-              style={{ minHeight: 84, resize: "vertical" }}
-            />
-            <span className="slow-select-label" style={{ marginTop: 12 }}>Связанные тикеты</span>
-            <textarea
-              className="slow-entity-select"
-              value={linkedIssuesText}
-              onChange={(event) => setLinkedIssuesText(event.target.value)}
-              placeholder="DWH-15089, DWH-15539"
-              style={{ minHeight: 84, resize: "vertical" }}
-            />
-            <button type="button" className="btn btn-ghost" onClick={applyTaskTemplate} style={{ marginTop: 12 }}>
-              Заполнить поля из текста
-            </button>
-          </div>
+        <div className="slow-select-group" style={{ marginTop: 12 }}>
+          <span className="slow-select-label">Текст задачи / описание карточки</span>
+          <textarea
+            className="slow-entity-select"
+            value={taskText}
+            onChange={(event) => setTaskText(event.target.value)}
+            placeholder="Вставьте описание задачи целиком. Таблица, сущность, ключи, view, тикеты и summary будут извлечены автоматически."
+            style={{ minHeight: 220, resize: "vertical" }}
+          />
         </div>
         <div className="muted" style={{ marginTop: 8 }}>
-          Задача в YouTrack будет создана сервисным токеном. Инициатором в описании будет указан
-          {" "}
+          Минимальный сценарий: укажите MR и вставьте текст задачи. Остальное экран попытается собрать по шаблону задачи и по мете таблицы.
+        </div>
+        <div className="muted" style={{ marginTop: 4 }}>
+          Задача в YouTrack будет создана сервисным токеном. Инициатором в описании будет указан{" "}
           <span className="mono">{currentUser?.username || currentUser?.email || "текущий пользователь"}</span>.
         </div>
       </section>
@@ -303,11 +196,6 @@ export default function AdminPrototypeReviewPage() {
               <div className="label">SQL файлов</div>
               <div className="value">{(result.files || []).length}</div>
             </div>
-            <div className="slow-summary-card">
-              <div className="label">Потенциальное влияние</div>
-              <div className="value">{result.impact?.count ?? 0}</div>
-              <div className="hint">{result.impact?.truncated ? "Показан неполный список downstream-таблиц" : "Downstream-таблицы из графа меты"}</div>
-            </div>
           </section>
 
           <section className="cc-surface">
@@ -318,15 +206,6 @@ export default function AdminPrototypeReviewPage() {
               <div>Ветка: {result.mr?.source_branch || "—"} → {result.mr?.target_branch || "—"}</div>
               <div>Автор: {result.mr?.author || "—"}</div>
               {result.mr?.web_url ? <div><a href={result.mr.web_url} target="_blank" rel="noreferrer">{result.mr.web_url}</a></div> : null}
-            </div>
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">Подготовка DEV</div>
-            <div className="card muted">
-              <div><strong>{formatStatus(result.preparation?.status === "ok" ? "ok" : result.preparation?.status === "warning" ? "warning" : "error")}</strong></div>
-              <div>{result.preparation?.message || "—"}</div>
-              {result.preparation?.target_fqn ? <div className="mono" style={{ marginTop: 8 }}>{result.preparation.target_fqn}</div> : null}
             </div>
           </section>
 
@@ -369,7 +248,7 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Выполнение SQL</div>
+            <div className="section-title">Результат выполнения</div>
             <div className="table-wrapper">
               <table className="incidents-table slow-table">
                 <thead>
@@ -395,50 +274,18 @@ export default function AdminPrototypeReviewPage() {
                 </tbody>
               </table>
             </div>
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">SQL зависимости</div>
-            <div className="card muted">
-              {(result.dependencies || []).length ? (
-                result.dependencies.map((item) => (
-                  <div key={item} className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                    {item}
-                  </div>
-                ))
-              ) : (
-                "Не нашли боевых schema.table зависимостей в SQL."
-              )}
-            </div>
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">Потенциальное влияние</div>
-            <div className="table-wrapper">
-              <table className="incidents-table slow-table">
-                <thead>
-                  <tr>
-                    <th>Таблица</th>
-                    <th>Сущность</th>
-                    <th>Глубина</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(result.impact?.tables || []).length ? (
-                    result.impact.tables.map((item) => (
-                      <tr key={item.fqn}>
-                        <td className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{item.fqn}</td>
-                        <td>{item.entity_name || "—"}</td>
-                        <td>{item.depth ?? "—"}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={3}>Downstream-зависимости по графу меты не найдены.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="card muted" style={{ marginTop: 16 }}>
+              <div><strong>Подготовка DEV:</strong> {result.preparation?.message || "—"}</div>
+              <div style={{ marginTop: 8 }}><strong>Потенциальное влияние:</strong> {result.impact?.count ?? 0}</div>
+              {result.impact?.tables?.length ? (
+                <div style={{ marginTop: 8 }}>
+                  {(result.impact.tables || []).slice(0, 8).map((item) => (
+                    <div key={item.fqn} className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                      {item.fqn}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </section>
         </>

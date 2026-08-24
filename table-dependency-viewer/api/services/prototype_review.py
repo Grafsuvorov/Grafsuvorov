@@ -95,10 +95,33 @@ def parse_prototype_gitlab_ref(value: str, default_project: str) -> PrototypeGit
         if not project:
             raise ValueError("Не настроен ANALYST_GITLAB_PROJECT / GITLAB_PROJECT")
         return PrototypeGitLabRef(project=project, mr_iid=int(raw_value))
-    match = re.search(r"/([^/]+/[^/]+)/-/merge_requests/(\d+)", raw_value)
+
+    short_match = re.fullmatch(r"[#!]\s*(\d+)", raw_value)
+    if short_match:
+        project = _parse_gitlab_project(default_project)
+        if not project:
+            raise ValueError("Не настроен ANALYST_GITLAB_PROJECT / GITLAB_PROJECT")
+        return PrototypeGitLabRef(project=project, mr_iid=int(short_match.group(1)))
+
+    project_ref_match = re.fullmatch(r"(.+?)[!/](\d+)", raw_value)
+    if project_ref_match and "/" in project_ref_match.group(1):
+        return PrototypeGitLabRef(
+            project=project_ref_match.group(1).strip("/"),
+            mr_iid=int(project_ref_match.group(2)),
+        )
+
+    parsed = urlparse.urlparse(raw_value)
+    path_value = urlparse.unquote(parsed.path or "")
+
+    match = re.search(r"/(.+?)/-/merge_requests/(\d+)(?:/.*)?$", path_value)
     if match:
-        return PrototypeGitLabRef(project=match.group(1), mr_iid=int(match.group(2)))
-    match = re.search(r"/merge_requests/(\d+)", raw_value)
+        return PrototypeGitLabRef(project=match.group(1).strip("/"), mr_iid=int(match.group(2)))
+
+    match = re.search(r"^(.+?)/-/merge_requests/(\d+)(?:/.*)?$", path_value or raw_value)
+    if match:
+        return PrototypeGitLabRef(project=match.group(1).strip("/"), mr_iid=int(match.group(2)))
+
+    match = re.search(r"/merge_requests/(\d+)(?:/.*)?$", path_value or raw_value)
     if match:
         project = _parse_gitlab_project(default_project)
         if not project:

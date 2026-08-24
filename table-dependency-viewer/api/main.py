@@ -187,9 +187,13 @@ app.add_middleware(
 )
 
 # Подключение
-engine = create_engine(DATABASE_URL)
-dbt_logs_engine = create_engine(DBT_LOGS_DATABASE_URL) if DBT_LOGS_DATABASE_URL else None
-dev_engine = create_engine(DEV_DATABASE_URL) if DEV_DATABASE_URL else engine
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
+dbt_logs_engine = (
+    create_engine(DBT_LOGS_DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
+    if DBT_LOGS_DATABASE_URL
+    else None
+)
+dev_engine = create_engine(DEV_DATABASE_URL, pool_pre_ping=True, pool_recycle=1800) if DEV_DATABASE_URL else engine
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -9057,48 +9061,62 @@ def get_dependency_violations():
 
     # Load last N successful runs per table so we can compare the latest source and target refreshes.
     last_loads = {}
-    with engine.connect() as conn:
-        tables_by_schema = {}
-        for schema, table in all_tables:
-            tables_by_schema.setdefault(schema, set()).add(table)
+    tables_by_schema = {}
+    for schema, table in all_tables:
+        tables_by_schema.setdefault(schema, set()).add(table)
 
-        for schema, tables in tables_by_schema.items():
-            if not schema or not tables:
-                continue
-            query = text(
-                f"""
-                WITH base AS (
-                    SELECT
-                        COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
-                        COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
-                        l.loading_finish_dttm
-                    FROM {TABLE_LOADING_HISTORY} l
-                    LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
-                    WHERE l.object_type = 'table'
-                      AND l.loading_state IN ('SUCCESS', 'LOADED')
-                      AND l.loading_finish_dttm IS NOT NULL
-                      AND t.table_schema = :schema
-                      AND t.table_name = ANY(:tables)
-                )
-                SELECT table_schema, table_name, loading_finish_dttm
-                FROM (
-                    SELECT
-                        table_schema,
-                        table_name,
-                        loading_finish_dttm,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY table_schema, table_name
-                            ORDER BY loading_finish_dttm DESC
-                        ) AS rn
-                    FROM base
-                ) x
-                WHERE rn <= :limit
-                """
-            )
-            result = conn.execute(
-                query,
-                {"schema": schema, "tables": list(tables), "limit": 6},
-            ).mappings().all()
+    batch_size = 250
+    query = text(
+        f"""
+        WITH base AS (
+            SELECT
+                COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
+                l.loading_finish_dttm
+            FROM {TABLE_LOADING_HISTORY} l
+            LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+            WHERE l.object_type = 'table'
+              AND l.loading_state IN ('SUCCESS', 'LOADED')
+              AND l.loading_finish_dttm IS NOT NULL
+              AND t.table_schema = :schema
+              AND t.table_name = ANY(:tables)
+        )
+        SELECT table_schema, table_name, loading_finish_dttm
+        FROM (
+            SELECT
+                table_schema,
+                table_name,
+                loading_finish_dttm,
+                ROW_NUMBER() OVER (
+                    PARTITION BY table_schema, table_name
+                    ORDER BY loading_finish_dttm DESC
+                ) AS rn
+            FROM base
+        ) x
+        WHERE rn <= :limit
+        """
+    )
+
+    for schema, tables in tables_by_schema.items():
+        if not schema or not tables:
+            continue
+
+        ordered_tables = sorted(tables)
+        for start in range(0, len(ordered_tables), batch_size):
+            batch_tables = ordered_tables[start:start + batch_size]
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(
+                        query,
+                        {"schema": schema, "tables": batch_tables, "limit": 6},
+                    ).mappings().all()
+            except OperationalError:
+                # Refresh the pooled connection and retry once with a new DB session.
+                with engine.connect() as conn:
+                    result = conn.execute(
+                        query,
+                        {"schema": schema, "tables": batch_tables, "limit": 6},
+                    ).mappings().all()
 
             for row in result:
                 key = (row.get("table_schema"), row.get("table_name"))

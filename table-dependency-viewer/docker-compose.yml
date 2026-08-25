@@ -1,6 +1,10 @@
 services:
   frontend:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_AUTH_ENABLED: ${AUTH_ENABLED:-false}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     ports:
       - "8090:8080"
   api:

@@ -15,7 +15,6 @@ const DEFAULT_FORM = {
   target_table_fqn: "",
   load_mode: "",
   load_condition: "",
-  load_schedule: "",
   script_runtime: "",
   business_key: "",
   dependent_views: "",
@@ -30,7 +29,6 @@ const DEFAULT_SKIPS = {
   source_key: false,
   source_access: false,
   load_condition: false,
-  load_schedule: false,
   script_runtime: false,
   business_key: false,
   dependent_views: false,
@@ -53,7 +51,7 @@ const STEP_BLOCKS = [
   {
     title: "Шаг 3. Таргет",
     description: "Основные параметры загрузки целевой таблицы и MR.",
-    fields: ["entity_name", "target_table_fqn", "git_reference", "load_mode", "load_condition", "load_schedule"],
+    fields: ["entity_name", "target_table_fqn", "git_reference", "load_mode", "load_condition"],
   },
   {
     title: "Шаг 4. Проверки",
@@ -80,7 +78,6 @@ const FIELD_META = {
   target_table_fqn: { label: "Название таблицы в таргете", placeholder: "dm.sales_foreign_metal_stock_balance_analysis", kind: "text" },
   load_mode: { label: "Способ обновления", placeholder: "Полный / Псевдоинкрементальный", kind: "text" },
   load_condition: { label: "Условие при загрузке", placeholder: "where dt >= current_date - 7", kind: "textarea", optional: true },
-  load_schedule: { label: "Расписание загрузки", placeholder: "ежедневно 08:00", kind: "text", optional: true },
   script_runtime: { label: "Время работы скрипта", placeholder: "5-10 мин", kind: "text", optional: true },
   business_key: { label: "Бизнес-ключ для проверки на дубли", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
   dependent_views: { label: "Зависимые представления", placeholder: "dm_view.sales_...", kind: "textarea", optional: true },
@@ -129,7 +126,6 @@ function parseTaskText(text) {
     target_table_fqn: get(/(?:Название таблицы Greenplum|Название таблицы в таргете):\s*(.+)/i),
     load_mode: get(/Способ обновления:\s*(.+)/i),
     load_condition: get(/Условие при загрузке:\s*(.+)/i),
-    load_schedule: get(/Расписание загрузки:\s*(.+)/i),
     script_runtime: get(/Время работы скрипта:\s*(.+)/i),
     business_key: multilineField("Бизнес-ключ(?: для проверки на дубли)?"),
     dependent_views: multilineField("Зависимые представления|Зависимые представление"),
@@ -169,10 +165,9 @@ function buildTemplateText(form, options) {
   pushField("Название схемы на источнике", "source_schema");
   pushField("Название таблицы на источнике", "source_table");
   pushField("Ключ на источнике", "source_key");
-  if (options.isStg) {
+  if (options.isConditionLayer) {
     pushField("Условие при загрузке", "load_condition");
   }
-  pushField("Расписание загрузки", "load_schedule");
   lines.push(`Стенд: ${options.standDev && options.standProd ? "DEV/PROD" : options.standDev ? "DEV" : options.standProd ? "PROD" : ""}`);
   pushField("Доступ к таблице на источнике", "source_access");
   pushField("Ссылка на гит", "git_reference");
@@ -234,7 +229,8 @@ export default function AdminPrototypeReviewPage() {
   }, []);
 
   const targetSchema = String(form.target_table_fqn || "").trim().split(".", 1)[0].toLowerCase();
-  const isStg = targetSchema === "stg" || targetSchema === "dict_stg";
+  const isSourceLayer = targetSchema === "stg" || targetSchema === "dict_stg";
+  const isConditionLayer = targetSchema === "stg";
 
   const formatLoadInterval = (intervalValue) => {
     if (!intervalValue || typeof intervalValue !== "object") return "";
@@ -281,9 +277,14 @@ export default function AdminPrototypeReviewPage() {
   }, []);
 
   const normalizedTaskText = useMemo(
-    () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues, isStg }),
-    [form, skips, standDev, standProd, copyToClickhouse, linkedIssues, isStg],
+    () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer }),
+    [form, skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer],
   );
+
+  const shouldShowField = (fieldKey) => {
+    if (fieldKey === "load_condition") return isConditionLayer;
+    return true;
+  };
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -304,12 +305,18 @@ export default function AdminPrototypeReviewPage() {
     setTableMetaLoading(true);
     setError(null);
     try {
-      const [meta, clickViews] = await Promise.all([
+      const [meta, clickViewSearchResult, clickMetaResult] = await Promise.all([
         adminApi.tableCard(tableItem.schema, tableItem.table, { source: "current" }),
         adminApi.clickViewSearch(tableItem.schema, tableItem.table).catch(() => []),
+        adminApi.clickMeta(tableItem.schema, tableItem.table).catch(() => null),
       ]);
       const keyAttributes = Array.isArray(meta?.key_attributes) ? meta.key_attributes : [];
-      const clickOrderBy = Array.isArray(meta?.order_by) ? meta.order_by : [];
+      const clickOrderBy = Array.isArray(clickMetaResult?.meta?.order_by) ? clickMetaResult.meta.order_by : [];
+      const clickViews = Array.isArray(clickViewSearchResult?.matches)
+        ? clickViewSearchResult.matches
+        : Array.isArray(clickViewSearchResult)
+          ? clickViewSearchResult
+          : [];
       const dependentViews = Array.isArray(clickViews)
         ? clickViews
             .map((item) => {
@@ -330,10 +337,8 @@ export default function AdminPrototypeReviewPage() {
         entity_name: String(meta?.entity_name || tableItem.entity_name || prev.entity_name || ""),
         target_table_fqn: String(meta?.table_schema && meta?.table_name ? `${meta.table_schema}.${meta.table_name}` : tableItem.fqn || prev.target_table_fqn || ""),
         load_mode: String(meta?.table_load_mode || prev.load_mode || ""),
-        load_schedule: String(formatLoadInterval(meta?.table_load_interval) || prev.load_schedule || ""),
-        script_runtime: meta?.avg_duration_minutes ? `${meta.avg_duration_minutes} мин` : prev.script_runtime,
         business_key: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.business_key)),
-        clickhouse_keys: joinItems(clickOrderBy.length ? clickOrderBy : keyAttributes.length ? keyAttributes : splitItems(prev.clickhouse_keys)),
+        clickhouse_keys: joinItems(clickOrderBy.length ? clickOrderBy : splitItems(prev.clickhouse_keys)),
         dependent_views: joinItems(dependentViews.length ? dependentViews : splitItems(prev.dependent_views)),
       }));
     } catch (err) {
@@ -367,7 +372,9 @@ export default function AdminPrototypeReviewPage() {
       });
       setResult(payload || null);
       if (Array.isArray(payload?.execution) && payload.execution.length) {
-        const totalSec = payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0);
+        const totalSec =
+          Number(payload?.preparation?.duration_sec || 0) +
+          payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0);
         if (totalSec > 0) {
           setForm((prev) => ({
             ...prev,
@@ -494,7 +501,7 @@ export default function AdminPrototypeReviewPage() {
         )}
       </section>
 
-      {STEP_BLOCKS.filter((block) => !block.stgOnly || isStg).map((block) => (
+      {STEP_BLOCKS.filter((block) => !block.stgOnly || isSourceLayer).map((block) => (
         <section key={block.title} className="cc-surface">
           <div className="section-title">{block.title}</div>
           <div className="muted" style={{ marginBottom: 14 }}>{block.description}</div>
@@ -532,7 +539,7 @@ export default function AdminPrototypeReviewPage() {
             </div>
           ) : (
             <div className="prototype-step-grid">
-              {block.fields.map(renderField)}
+              {block.fields.filter(shouldShowField).map(renderField)}
             </div>
           )}
         </section>

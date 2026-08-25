@@ -1,75 +1,66 @@
 services:
-  frontend:
-    build:
-      context: .
-      args:
-        VITE_AUTH_ENABLED: ${AUTH_ENABLED:-false}
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-    ports:
-      - "8090:8080"
-  api:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
-    env_file:
-      - ./api/.env
-    volumes:
-      - ./api:/app/api
-      - ./scripts:/app/scripts
-      - ./config_files:/app/config_files
-      - /var/lib/table-dependency-viewer/meta-workspaces:/var/lib/table-dependency-viewer/meta-workspaces
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - META_PARENT_DIR=/app/etl_loads_entity
-      - CLICK_META_DIR=${CLICK_META_DIR}
-      - DEV_CLICK_META_DIR=${DEV_CLICK_META_DIR}
-      - DEV_DATABASE_URL=${DEV_DATABASE_URL}
-      - DBT_LOGS_DATABASE_URL=${DBT_LOGS_DATABASE_URL}
-      - TABLE_DBT_MODEL_CATALOG=${TABLE_DBT_MODEL_CATALOG}
-      - TABLE_DBT_MODEL_LOG=${TABLE_DBT_MODEL_LOG}
-      - TABLE_DBT_RUN_LOG=${TABLE_DBT_RUN_LOG}
-      - AIRFLOW_DEV_BASE_URL=${AIRFLOW_DEV_BASE_URL}
-      - AIRFLOW_DEV_DAG_ID=${AIRFLOW_DEV_DAG_ID}
-      - AIRFLOW_DEV_USERNAME=${AIRFLOW_DEV_USERNAME}
-      - AIRFLOW_DEV_PASSWORD=${AIRFLOW_DEV_PASSWORD}
-      - DEV_META_LOCK_TTL_MIN=${DEV_META_LOCK_TTL_MIN}
-      - AUTH_ENABLED=${AUTH_ENABLED}
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
-      - AUTH_ACCESS_TTL_MIN=${AUTH_ACCESS_TTL_MIN}
-      - AUTH_ALLOW_REGISTER=${AUTH_ALLOW_REGISTER}
-      - AUTH_BOOTSTRAP_ADMIN_EMAIL=${AUTH_BOOTSTRAP_ADMIN_EMAIL}
-      - AUTH_BOOTSTRAP_ADMIN_PASSWORD=${AUTH_BOOTSTRAP_ADMIN_PASSWORD}
-      - CORP_AI_API_KEY=${CORP_AI_API_KEY}
-      - CORP_AI_BASE_URL=${CORP_AI_BASE_URL}
-      - CORP_AI_MODEL=${CORP_AI_MODEL}
-      - CORP_AI_SSL_VERIFY=${CORP_AI_SSL_VERIFY}
-      - CORP_AI_TIMEOUT_SEC=${CORP_AI_TIMEOUT_SEC}
-      - ANALYST_GITLAB_PROJECT=dwh_analyst/Sql Queries Storage
-      - YOUTRACK_URL=${YOUTRACK_URL}
-      - YOUTRACK_TOKEN=${YOUTRACK_TOKEN}
-      - YOUTRACK_QUEUE=${YOUTRACK_QUEUE}
-      - YOUTRACK_ISSUE_TYPE=${YOUTRACK_ISSUE_TYPE}
-      - YOUTRACK_SSL_VERIFY=${YOUTRACK_SSL_VERIFY}
-      - META_WORKSPACE_ROOT=/var/lib/table-dependency-viewer/meta-workspaces
+    frontend:
+      build: .
+      ports:
+        - "15312:8080"
+    api:
+      build:
+        context: .
+        dockerfile: api/Dockerfile
+      volumes:
+        - /root/table-dependency-viewer/scripts:/app/scripts:ro
+        - /root/table-dependency-viewer/meta_info:/app/meta_info
+        - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+        - /root/table-dependency-viewer/config_files:/app/config_files
+        - /root/git_dir:/root/git_dir
+        - /var/lib/table-dependency-viewer/meta-workspaces:/var/lib/table-dependency-viewer/meta-workspaces
+      ports:
+        - "5312:8000"
+      env_file:
+        - ./api/.env
+      environment:
+        - DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.201:5432/dwh
+        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+        - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+        - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+        - CLICK_META_DIR=/app/config_files/meta
+        - DEV_CLICK_META_DIR=/app/config_files/meta_dev
+        - DEV_DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.171:5432/dwh
+        - DEV_META_DEPLOY_HOST=10.66.129.237
+        - DEV_META_DEPLOY_PORT=22
+        - DEV_META_DEPLOY_USER=root
+        - DEV_META_DEPLOY_PASSWORD=rootuserdwh
+        - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
+        - DEV_META_DEPLOY_SSH_KEY_PATH=
+        - DEV_META_DEPLOY_STRICT_HOST_KEY=false
+        - AIRFLOW_DEV_BASE_URL=http://rgm-s-dwhair01.hq.root.ad:8080
+        - AIRFLOW_DEV_DAG_ID=
+        - AIRFLOW_DEV_USERNAME=admin
+        - AIRFLOW_DEV_PASSWORD=admin
+        - DEV_META_LOCK_TTL_MIN=30
+        - AUTH_ENABLED=true
+        - AUTH_SECRET_KEY=change_me_please
+        - AUTH_ACCESS_TTL_MIN=7200
+        - AUTH_ALLOW_REGISTER=false
+        - AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
+        - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
+        - ENTITY_META_GIT_REPO=/root/git_dir/etl
+        - ENTITY_META_GIT_META_ROOT=meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+        - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4
+        - GITLAB_PROJECT=dwh/etl
+        - GITLAB_TOKEN=glpat-a08MAgfsFNPj3RysL0Mly286MQp1OjM5CA.01.0y0x2wmrd
+        - GITLAB_SSL_VERIFY=false
+        - CORP_AI_API_KEY=${CORP_AI_API_KEY}
+        - CORP_AI_BASE_URL=${CORP_AI_BASE_URL}
+        - CORP_AI_MODEL=${CORP_AI_MODEL}
+        - CORP_AI_SSL_VERIFY=${CORP_AI_SSL_VERIFY}
+        - CORP_AI_TIMEOUT_SEC=${CORP_AI_TIMEOUT_SEC}
+        - ANALYST_GITLAB_PROJECT=dwh_analyst/Sql Queries Storage
+        - YOUTRACK_URL=${YOUTRACK_URL}
+        - YOUTRACK_TOKEN=${YOUTRACK_TOKEN}
+        - YOUTRACK_QUEUE=${YOUTRACK_QUEUE}
+        - YOUTRACK_ISSUE_TYPE=${YOUTRACK_ISSUE_TYPE}
+        - YOUTRACK_SSL_VERIFY=${YOUTRACK_SSL_VERIFY}
+        - META_WORKSPACE_ROOT=/var/lib/table-dependency-viewer/meta-workspaces
 
-# --- PROD пример (раскомментируй нужные строки) ---
-#services:
-#  frontend:
-#    build: .
-#    ports:
-#      - "80:80"
-#  api:
-#    build:
-#      context: .
-#      dockerfile: api/Dockerfile
-#    ports:
-#      - "8000:8000"
-#    # Вариант А: брать переменные из api/.env
-#    #env_file:
-#    #  - ./api/.env
-#    # Вариант Б: задать явно (если не хочешь env_file)
-#    #environment:
-#    #  - DATABASE_URL=postgresql://user:pass@db-host:5432/db
-#    #  - META_PARENT_DIR=/app/etl_loads_entity
+

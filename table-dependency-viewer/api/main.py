@@ -95,6 +95,7 @@ from .config import (
     AIRFLOW_DEV_PASSWORD,
     DEV_META_LOCK_TTL_MIN,
     YOUTRACK_URL,
+    YOUTRACK_PROJECT,
     YOUTRACK_TOKEN,
     YOUTRACK_QUEUE,
     YOUTRACK_ISSUE_TYPE,
@@ -993,6 +994,7 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             )
             issue_result = create_ytrack_issue(
                 base_url=YOUTRACK_URL,
+                project=YOUTRACK_PROJECT,
                 token=YOUTRACK_TOKEN,
                 queue=YOUTRACK_QUEUE,
                 issue_type=YOUTRACK_ISSUE_TYPE,

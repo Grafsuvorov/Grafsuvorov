@@ -89,6 +89,7 @@ CORP_AI_MODEL = os.getenv("CORP_AI_MODEL", "coder-ultra")
 CORP_AI_SSL_VERIFY = os.getenv("CORP_AI_SSL_VERIFY", "false")
 CORP_AI_TIMEOUT_SEC = _env_int("CORP_AI_TIMEOUT_SEC", 60)
 YOUTRACK_QUEUE = os.getenv("YOUTRACK_QUEUE", "")
+YOUTRACK_PROJECT = os.getenv("YOUTRACK_PROJECT", "КХД")
 YOUTRACK_ISSUE_TYPE = os.getenv("YOUTRACK_ISSUE_TYPE", "task")
 YOUTRACK_SSL_VERIFY = os.getenv("YOUTRACK_SSL_VERIFY", "false")
 

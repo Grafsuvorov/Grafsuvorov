@@ -17,6 +17,7 @@ export const adminApi = {
   prototypeReviewRun: (body) => apiClient.post("/api/admin/prototype-review/run", body),
   tablesDetailed: () => apiClient.getCached("/api/tables", { ttlMs: 10 * 60 * 1000, params: { detailed: true } }),
   tableCard: (schema, table, params) => apiClient.get(`/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, { params }),
+  clickViewSearch: (schema, table) => apiClient.get("/api/click/view/search", { params: { schema, table } }),
   refreshCache: () => apiClient.post("/api/admin/refresh-cache"),
   runCiCd: () => apiClient.post("/api/admin/run-ci-cd"),
   createUser: (body) => apiClient.post("/auth/users", body),

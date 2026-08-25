@@ -17,7 +17,6 @@ const DEFAULT_FORM = {
   load_condition: "",
   load_schedule: "",
   script_runtime: "",
-  release_article_url: "",
   business_key: "",
   dependent_views: "",
   clickhouse_keys: "",
@@ -33,7 +32,6 @@ const DEFAULT_SKIPS = {
   load_condition: false,
   load_schedule: false,
   script_runtime: false,
-  release_article_url: false,
   business_key: false,
   dependent_views: false,
   clickhouse_keys: false,
@@ -50,6 +48,7 @@ const STEP_BLOCKS = [
     title: "Шаг 2. Источник",
     description: "Данные об источнике и доступе. Если данных нет, поле можно пропустить.",
     fields: ["subject_area", "source_name", "source_schema", "source_table", "source_key", "source_access"],
+    stgOnly: true,
   },
   {
     title: "Шаг 3. Таргет",
@@ -64,7 +63,7 @@ const STEP_BLOCKS = [
   {
     title: "Шаг 5. Релиз",
     description: "Контекст релиза и документации. Нужен для однотипного создания задач.",
-    fields: ["summary", "script_runtime", "release_article_url"],
+    fields: ["summary", "script_runtime"],
   },
 ];
 
@@ -83,7 +82,6 @@ const FIELD_META = {
   load_condition: { label: "Условие при загрузке", placeholder: "where dt >= current_date - 7", kind: "textarea", optional: true },
   load_schedule: { label: "Расписание загрузки", placeholder: "ежедневно 08:00", kind: "text", optional: true },
   script_runtime: { label: "Время работы скрипта", placeholder: "5-10 мин", kind: "text", optional: true },
-  release_article_url: { label: "Ссылка на статью релиза", placeholder: "https://...", kind: "text", optional: true },
   business_key: { label: "Бизнес-ключ для проверки на дубли", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
   dependent_views: { label: "Зависимые представления", placeholder: "dm_view.sales_...", kind: "textarea", optional: true },
   clickhouse_keys: { label: "Ключевые поля для загрузки в ClickHouse", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
@@ -133,7 +131,6 @@ function parseTaskText(text) {
     load_condition: get(/Условие при загрузке:\s*(.+)/i),
     load_schedule: get(/Расписание загрузки:\s*(.+)/i),
     script_runtime: get(/Время работы скрипта:\s*(.+)/i),
-    release_article_url: get(/Ссылка на статью релиза:\s*(.+)/i),
     business_key: multilineField("Бизнес-ключ(?: для проверки на дубли)?"),
     dependent_views: multilineField("Зависимые представления|Зависимые представление"),
     clickhouse_keys: multilineField("Ключевые поля для загрузки в ClickHosue|Ключевые поля для загрузки в ClickHouse"),
@@ -172,7 +169,9 @@ function buildTemplateText(form, options) {
   pushField("Название схемы на источнике", "source_schema");
   pushField("Название таблицы на источнике", "source_table");
   pushField("Ключ на источнике", "source_key");
-  pushField("Условие при загрузке", "load_condition");
+  if (options.isStg) {
+    pushField("Условие при загрузке", "load_condition");
+  }
   pushField("Расписание загрузки", "load_schedule");
   lines.push(`Стенд: ${options.standDev && options.standProd ? "DEV/PROD" : options.standDev ? "DEV" : options.standProd ? "PROD" : ""}`);
   pushField("Доступ к таблице на источнике", "source_access");
@@ -180,7 +179,6 @@ function buildTemplateText(form, options) {
   pushField("Название таблицы Greenplum", "target_table_fqn");
   pushField("Способ обновления", "load_mode");
   pushField("Время работы скрипта", "script_runtime");
-  pushField("Ссылка на статью релиза", "release_article_url");
   pushField("Бизнес-ключ для проверки на дубли", "business_key", { multiline: true });
   pushField("Зависимые представления", "dependent_views", { multiline: true });
   lines.push(`Копировать в ClickHouse: ${options.copyToClickhouse ? "необходимо обновить данные в витрине" : "не нужно"}`);
@@ -235,6 +233,23 @@ export default function AdminPrototypeReviewPage() {
     accountApi.me().then(setCurrentUser).catch(() => {});
   }, []);
 
+  const targetSchema = String(form.target_table_fqn || "").trim().split(".", 1)[0].toLowerCase();
+  const isStg = targetSchema === "stg" || targetSchema === "dict_stg";
+
+  const formatLoadInterval = (intervalValue) => {
+    if (!intervalValue || typeof intervalValue !== "object") return "";
+    const parts = [];
+    const days = Number(intervalValue.days || 0);
+    const hours = Number(intervalValue.hours || 0);
+    const minutes = Number(intervalValue.minutes || 0);
+    const seconds = Number(intervalValue.seconds || 0);
+    if (days) parts.push(`${days} д`);
+    if (hours) parts.push(`${hours} ч`);
+    if (minutes) parts.push(`${minutes} мин`);
+    if (seconds) parts.push(`${seconds} сек`);
+    return parts.join(" ") || "";
+  };
+
   useEffect(() => {
     let cancelled = false;
     setTablesLoading(true);
@@ -266,8 +281,8 @@ export default function AdminPrototypeReviewPage() {
   }, []);
 
   const normalizedTaskText = useMemo(
-    () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues }),
-    [form, skips, standDev, standProd, copyToClickhouse, linkedIssues],
+    () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues, isStg }),
+    [form, skips, standDev, standProd, copyToClickhouse, linkedIssues, isStg],
   );
 
   const handleFieldChange = (field, value) => {
@@ -289,8 +304,21 @@ export default function AdminPrototypeReviewPage() {
     setTableMetaLoading(true);
     setError(null);
     try {
-      const meta = await adminApi.tableCard(tableItem.schema, tableItem.table, { source: "current" });
+      const [meta, clickViews] = await Promise.all([
+        adminApi.tableCard(tableItem.schema, tableItem.table, { source: "current" }),
+        adminApi.clickViewSearch(tableItem.schema, tableItem.table).catch(() => []),
+      ]);
       const keyAttributes = Array.isArray(meta?.key_attributes) ? meta.key_attributes : [];
+      const clickOrderBy = Array.isArray(meta?.order_by) ? meta.order_by : [];
+      const dependentViews = Array.isArray(clickViews)
+        ? clickViews
+            .map((item) => {
+              const viewSchema = String(item?.view_schema || "").trim();
+              const viewName = String(item?.view_name || "").trim();
+              return viewSchema && viewName ? `${viewSchema}.${viewName}` : "";
+            })
+            .filter(Boolean)
+        : [];
       const summary = form.summary.trim() && !selectedTable
         ? form.summary
         : `(ДМЛ) Настроить обновление витрины ${tableItem.fqn}`;
@@ -302,8 +330,11 @@ export default function AdminPrototypeReviewPage() {
         entity_name: String(meta?.entity_name || tableItem.entity_name || prev.entity_name || ""),
         target_table_fqn: String(meta?.table_schema && meta?.table_name ? `${meta.table_schema}.${meta.table_name}` : tableItem.fqn || prev.target_table_fqn || ""),
         load_mode: String(meta?.table_load_mode || prev.load_mode || ""),
+        load_schedule: String(formatLoadInterval(meta?.table_load_interval) || prev.load_schedule || ""),
+        script_runtime: meta?.avg_duration_minutes ? `${meta.avg_duration_minutes} мин` : prev.script_runtime,
         business_key: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.business_key)),
-        clickhouse_keys: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.clickhouse_keys)),
+        clickhouse_keys: joinItems(clickOrderBy.length ? clickOrderBy : keyAttributes.length ? keyAttributes : splitItems(prev.clickhouse_keys)),
+        dependent_views: joinItems(dependentViews.length ? dependentViews : splitItems(prev.dependent_views)),
       }));
     } catch (err) {
       setError(err?.message || "Не удалось подтянуть мету таблицы");
@@ -335,6 +366,15 @@ export default function AdminPrototypeReviewPage() {
         create_issue: createIssue,
       });
       setResult(payload || null);
+      if (Array.isArray(payload?.execution) && payload.execution.length) {
+        const totalSec = payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0);
+        if (totalSec > 0) {
+          setForm((prev) => ({
+            ...prev,
+            script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : `${totalSec.toFixed(3)} сек`,
+          }));
+        }
+      }
     } catch (err) {
       setError(err?.message || "Не удалось выполнить prototype review");
     } finally {
@@ -454,7 +494,7 @@ export default function AdminPrototypeReviewPage() {
         )}
       </section>
 
-      {STEP_BLOCKS.map((block) => (
+      {STEP_BLOCKS.filter((block) => !block.stgOnly || isStg).map((block) => (
         <section key={block.title} className="cc-surface">
           <div className="section-title">{block.title}</div>
           <div className="muted" style={{ marginBottom: 14 }}>{block.description}</div>

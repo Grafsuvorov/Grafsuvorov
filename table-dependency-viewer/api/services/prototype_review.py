@@ -556,6 +556,7 @@ def query_dev_table_checks(
 def create_ytrack_issue(
     *,
     base_url: str,
+    project: str,
     token: str,
     queue: str,
     issue_type: str,
@@ -571,6 +572,7 @@ def create_ytrack_issue(
         "Accept": "application/json",
     }
     payload = {
+        "project": {"name": project},
         "queue": queue,
         "summary": summary,
         "description": description,

@@ -97,29 +97,49 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
     lines = _split_lines_block(raw_text)
     result: dict[str, Any] = {
         "summary": lines[0] if lines else None,
+        "source_name": None,
+        "source_schema": None,
+        "source_table": None,
+        "source_key": None,
+        "source_access": None,
         "target_table_fqn": None,
         "entity_name": None,
         "subject_area": None,
         "git_reference": None,
         "load_mode": None,
+        "load_condition": None,
+        "load_schedule": None,
         "environments": [],
         "dependent_views": [],
         "copy_to_clickhouse": None,
         "clickhouse_keys": [],
+        "business_key": [],
+        "script_runtime": None,
+        "release_article_url": None,
+        "pseudo_increment_steps": None,
         "linked_issues": [],
         "parent_issue": None,
         "dashboard_name": None,
     }
 
     field_patterns = {
-        "target_table_fqn": r"Название таблицы Greenplum:\s*(.+)",
+        "source_name": r"Источник:\s*(.+)",
+        "source_schema": r"Название схемы на источнике:\s*(.+)",
+        "source_table": r"Название таблицы на источнике:\s*(.+)",
+        "source_key": r"Ключ на источнике:\s*(.+)",
+        "source_access": r"Доступ к таблице на источнике:\s*(.+)",
+        "target_table_fqn": r"(?:Название таблицы Greenplum|Название таблицы в таргете):\s*(.+)",
         "entity_name": r"Сущность загрузки:\s*(.+)",
         "subject_area": r"Предметная область:\s*(.+)",
-        "git_reference": r"Ссылка на гит:\s*(.+)",
+        "git_reference": r"(?:Ссылка на гит|Ссылка на описание шаблона):\s*(.+)",
         "load_mode": r"Способ обновления:\s*(.+)",
+        "load_condition": r"Условие при загрузке:\s*(.+)",
+        "load_schedule": r"Расписание загрузки:\s*(.+)",
         "environments": r"Стенд:\s*(.+)",
-        "dependent_views": r"Зависимые представления:\s*(.+)",
+        "dependent_views": r"(?:Зависимые представления|Зависимые представление):\s*(.+)",
         "dashboard_name": r"Дашборд КХД/Направление\s*(.+)",
+        "script_runtime": r"Время работы скрипта:\s*(.+)",
+        "release_article_url": r"Ссылка на статью релиза:\s*(.+)",
     }
     for field_name, pattern in field_patterns.items():
         match = re.search(pattern, raw_text, re.IGNORECASE)
@@ -153,6 +173,27 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
             if key:
                 clickhouse_keys.append(key)
         result["clickhouse_keys"] = clickhouse_keys
+
+    business_key_match = re.search(
+        r"Бизнес-ключ.*?:\s*(.+?)(?:\n\s*\n|\n[А-ЯA-Z][^:\n]{0,80}:|\nсвязана с|\nподзадача для|\Z)",
+        raw_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if business_key_match:
+        business_keys: list[str] = []
+        for line in business_key_match.group(1).splitlines():
+            key = str(line or "").strip(" \t-•,;")
+            if key:
+                business_keys.append(key)
+        result["business_key"] = business_keys
+
+    pseudo_increment_match = re.search(
+        r"Последовательность действий при \(псевдо\)инкрементальном обновлении таблицы:\s*(.+?)(?:\n\s*\n|\n[А-ЯA-Z][^:\n]{0,80}:|\Z)",
+        raw_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if pseudo_increment_match:
+        result["pseudo_increment_steps"] = pseudo_increment_match.group(1).strip()
 
     related = []
     for issue_id in re.findall(r"\b[A-Z]+-\d+\b", raw_text):

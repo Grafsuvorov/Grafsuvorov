@@ -1,13 +1,199 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { adminApi } from "../api/admin.js";
 import { accountApi } from "../api/account.js";
+
+const DEFAULT_FORM = {
+  summary: "",
+  subject_area: "",
+  entity_name: "",
+  git_reference: "",
+  source_name: "",
+  source_schema: "",
+  source_table: "",
+  source_key: "",
+  source_access: "",
+  target_table_fqn: "",
+  load_mode: "",
+  load_condition: "",
+  load_schedule: "",
+  script_runtime: "",
+  release_article_url: "",
+  business_key: "",
+  dependent_views: "",
+  clickhouse_keys: "",
+  pseudo_increment_steps: "",
+};
+
+const DEFAULT_SKIPS = {
+  source_name: false,
+  source_schema: false,
+  source_table: false,
+  source_key: false,
+  source_access: false,
+  load_condition: false,
+  load_schedule: false,
+  script_runtime: false,
+  release_article_url: false,
+  business_key: false,
+  dependent_views: false,
+  clickhouse_keys: false,
+  pseudo_increment_steps: false,
+};
+
+const STEP_BLOCKS = [
+  {
+    title: "Шаг 1. Карточка",
+    description: "Вставьте пример карточки или шаблон. Поля ниже заполнятся автоматически, их можно поправить.",
+    fields: [],
+  },
+  {
+    title: "Шаг 2. Источник",
+    description: "Данные об источнике и доступе. Если данных нет, поле можно пропустить.",
+    fields: ["subject_area", "source_name", "source_schema", "source_table", "source_key", "source_access"],
+  },
+  {
+    title: "Шаг 3. Таргет",
+    description: "Основные параметры загрузки целевой таблицы и MR.",
+    fields: ["entity_name", "target_table_fqn", "git_reference", "load_mode", "load_condition", "load_schedule"],
+  },
+  {
+    title: "Шаг 4. Проверки",
+    description: "Что использовать для duplicate-check и что ещё затрагивается.",
+    fields: ["business_key", "clickhouse_keys", "dependent_views", "pseudo_increment_steps"],
+  },
+  {
+    title: "Шаг 5. Релиз",
+    description: "Контекст релиза и документации. Нужен для однотипного создания задач.",
+    fields: ["summary", "script_runtime", "release_article_url"],
+  },
+];
+
+const FIELD_META = {
+  summary: { label: "Название задачи", placeholder: "(ДМЛ) Настроить обновление витрины ...", kind: "text" },
+  subject_area: { label: "Предметная область", placeholder: "SD", kind: "text" },
+  entity_name: { label: "Сущность загрузки", placeholder: "BI_SB_WUC", kind: "text" },
+  git_reference: { label: "Ссылка на гит / шаблон", placeholder: "https://gitlab... / ссылка на шаблон", kind: "textarea" },
+  source_name: { label: "Источник", placeholder: "SAP / Oracle / CSV / ...", kind: "text", optional: true },
+  source_schema: { label: "Название схемы на источнике", placeholder: "public", kind: "text", optional: true },
+  source_table: { label: "Название таблицы на источнике", placeholder: "source_table", kind: "text", optional: true },
+  source_key: { label: "Ключ на источнике", placeholder: "id, dt", kind: "textarea", optional: true },
+  source_access: { label: "Доступ к таблице на источнике", placeholder: "есть / нет / запросить", kind: "textarea", optional: true },
+  target_table_fqn: { label: "Название таблицы в таргете", placeholder: "dm.sales_foreign_metal_stock_balance_analysis", kind: "text" },
+  load_mode: { label: "Способ обновления", placeholder: "Полный / Псевдоинкрементальный", kind: "text" },
+  load_condition: { label: "Условие при загрузке", placeholder: "where dt >= current_date - 7", kind: "textarea", optional: true },
+  load_schedule: { label: "Расписание загрузки", placeholder: "ежедневно 08:00", kind: "text", optional: true },
+  script_runtime: { label: "Время работы скрипта", placeholder: "5-10 мин", kind: "text", optional: true },
+  release_article_url: { label: "Ссылка на статью релиза", placeholder: "https://...", kind: "text", optional: true },
+  business_key: { label: "Бизнес-ключ для проверки на дубли", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
+  dependent_views: { label: "Зависимые представления", placeholder: "dm_view.sales_...", kind: "textarea", optional: true },
+  clickhouse_keys: { label: "Ключевые поля для загрузки в ClickHouse", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
+  pseudo_increment_steps: { label: "Последовательность действий при (псевдо)инкременте", placeholder: "1. ...", kind: "textarea", optional: true },
+};
+
+function splitItems(value) {
+  return String(value || "")
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinItems(value) {
+  return Array.isArray(value) ? value.join(", ") : String(value || "");
+}
+
+function parseTaskText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return {};
+  const get = (pattern) => {
+    const match = raw.match(pattern);
+    return match ? String(match[1] || "").trim() : "";
+  };
+  const multilineField = (label) => {
+    const match = raw.match(new RegExp(`${label}:\\s*([\\s\\S]+?)(?:\\n\\s*\\n|\\n[А-ЯA-Z][^:\\n]{0,80}:|$)`, "i"));
+    if (!match) return "";
+    return match[1]
+      .split("\n")
+      .map((line) => line.replace(/^[\s\-•]+/, "").trim())
+      .filter(Boolean)
+      .join(", ");
+  };
+
+  return {
+    summary: get(/^([^\n]+)/m),
+    subject_area: get(/Предметная область:\s*(.+)/i),
+    entity_name: get(/Сущность загрузки:\s*(.+)/i),
+    git_reference: get(/(?:Ссылка на гит|Ссылка на описание шаблона):\s*(.+)/i),
+    source_name: get(/Источник:\s*(.+)/i),
+    source_schema: get(/Название схемы на источнике:\s*(.+)/i),
+    source_table: get(/Название таблицы на источнике:\s*(.+)/i),
+    source_key: get(/Ключ на источнике:\s*(.+)/i),
+    source_access: get(/Доступ к таблице на источнике:\s*(.+)/i),
+    target_table_fqn: get(/(?:Название таблицы Greenplum|Название таблицы в таргете):\s*(.+)/i),
+    load_mode: get(/Способ обновления:\s*(.+)/i),
+    load_condition: get(/Условие при загрузке:\s*(.+)/i),
+    load_schedule: get(/Расписание загрузки:\s*(.+)/i),
+    script_runtime: get(/Время работы скрипта:\s*(.+)/i),
+    release_article_url: get(/Ссылка на статью релиза:\s*(.+)/i),
+    business_key: multilineField("Бизнес-ключ(?: для проверки на дубли)?"),
+    dependent_views: multilineField("Зависимые представления|Зависимые представление"),
+    clickhouse_keys: multilineField("Ключевые поля для загрузки в ClickHosue|Ключевые поля для загрузки в ClickHouse"),
+    pseudo_increment_steps: multilineField("Последовательность действий при \\(псевдо\\)инкрементальном обновлении таблицы"),
+    stand_dev: /Стенд:\s*.*DEV/i.test(raw),
+    stand_prod: /Стенд:\s*.*PROD/i.test(raw),
+    copy_to_clickhouse: !/Копировать в ClickHouse:\s*.*не нужно/i.test(raw),
+    linked_issues: Array.from(new Set(raw.match(/\b[A-Z]+-\d+\b/g) || [])).join(", "),
+  };
+}
+
+function buildTemplateText(form, options) {
+  const lines = [];
+  const pushField = (label, key, { multiline = false } = {}) => {
+    if (options.skips[key]) {
+      lines.push(`${label}: пропустить`);
+      return;
+    }
+    const value = String(form[key] || "").trim();
+    if (!value) {
+      lines.push(`${label}:`);
+      return;
+    }
+    if (!multiline) {
+      lines.push(`${label}: ${value}`);
+      return;
+    }
+    lines.push(`${label}:`);
+    splitItems(value).forEach((item) => lines.push(item));
+  };
+
+  if (form.summary.trim()) lines.push(form.summary.trim(), "");
+  pushField("Предметная область", "subject_area");
+  pushField("Сущность загрузки", "entity_name");
+  pushField("Источник", "source_name");
+  pushField("Название схемы на источнике", "source_schema");
+  pushField("Название таблицы на источнике", "source_table");
+  pushField("Ключ на источнике", "source_key");
+  pushField("Условие при загрузке", "load_condition");
+  pushField("Расписание загрузки", "load_schedule");
+  lines.push(`Стенд: ${options.standDev && options.standProd ? "DEV/PROD" : options.standDev ? "DEV" : options.standProd ? "PROD" : ""}`);
+  pushField("Доступ к таблице на источнике", "source_access");
+  pushField("Ссылка на гит", "git_reference");
+  pushField("Название таблицы Greenplum", "target_table_fqn");
+  pushField("Способ обновления", "load_mode");
+  pushField("Время работы скрипта", "script_runtime");
+  pushField("Ссылка на статью релиза", "release_article_url");
+  pushField("Бизнес-ключ для проверки на дубли", "business_key", { multiline: true });
+  pushField("Зависимые представления", "dependent_views", { multiline: true });
+  lines.push(`Копировать в ClickHouse: ${options.copyToClickhouse ? "необходимо обновить данные в витрине" : "не нужно"}`);
+  pushField("Ключевые поля для загрузки в ClickHouse", "clickhouse_keys", { multiline: true });
+  pushField("Последовательность действий при (псевдо)инкрементальном обновлении таблицы", "pseudo_increment_steps");
+  if (options.linkedIssues.trim()) lines.push(`Связанные тикеты: ${options.linkedIssues.trim()}`);
+  return lines.join("\n");
+}
 
 function formatDuration(value) {
   const numeric = Number(value || 0);
   if (!Number.isFinite(numeric)) return "—";
-  if (numeric >= 60) {
-    return `${(numeric / 60).toFixed(numeric >= 600 ? 1 : 2)} мин`;
-  }
+  if (numeric >= 60) return `${(numeric / 60).toFixed(numeric >= 600 ? 1 : 2)} мин`;
   return `${numeric.toFixed(3)} сек`;
 }
 
@@ -25,46 +211,15 @@ function formatIssueStatus(issue) {
   return issue?.status || "skipped";
 }
 
-function parseTaskText(text) {
-  const raw = String(text || "").trim();
-  if (!raw) return {};
-  const get = (pattern) => {
-    const match = raw.match(pattern);
-    return match ? String(match[1] || "").trim() : "";
-  };
-  const splitList = (value) =>
-    String(value || "")
-      .split(/[,;/\n]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-  const clickhouseKeysMatch = raw.match(/Ключевые поля.*?:\s*([\s\S]+?)(?:\n\s*\n|\nсвязана с|\nподзадача для|$)/i);
-  const clickhouseKeys = clickhouseKeysMatch
-    ? clickhouseKeysMatch[1]
-        .split("\n")
-        .map((line) => line.replace(/^[\s\-•]+/, "").trim())
-        .filter(Boolean)
-    : [];
-
-  const relatedIssues = Array.from(new Set(raw.match(/\b[A-Z]+-\d+\b/g) || []));
-  return {
-    issue_summary: get(/^([^\n]+)/m),
-    entity_name: get(/Сущность загрузки:\s*(.+)/i),
-    target_table_fqn: get(/Название таблицы Greenplum:\s*(.+)/i),
-    load_mode: get(/Способ обновления:\s*(.+)/i),
-    dependent_views: splitList(get(/Зависимые представления:\s*(.+)/i)),
-    copy_to_clickhouse: !/Копировать в ClickHouse:\s*.*не нужно/i.test(raw),
-    linked_issues: relatedIssues,
-    stand_dev: /Стенд:\s*.*DEV/i.test(raw),
-    stand_prod: /Стенд:\s*.*PROD/i.test(raw),
-    key_attributes: clickhouseKeys,
-  };
-}
-
 export default function AdminPrototypeReviewPage() {
   const [mrInput, setMrInput] = useState("");
-  const [taskText, setTaskText] = useState("");
-  const [keyAttributesText, setKeyAttributesText] = useState("");
+  const [importText, setImportText] = useState("");
+  const [form, setForm] = useState(DEFAULT_FORM);
+  const [skips, setSkips] = useState(DEFAULT_SKIPS);
+  const [linkedIssues, setLinkedIssues] = useState("");
+  const [standDev, setStandDev] = useState(true);
+  const [standProd, setStandProd] = useState(true);
+  const [copyToClickhouse, setCopyToClickhouse] = useState(true);
   const [createIssue, setCreateIssue] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -75,31 +230,53 @@ export default function AdminPrototypeReviewPage() {
     accountApi.me().then(setCurrentUser).catch(() => {});
   }, []);
 
+  const normalizedTaskText = useMemo(
+    () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues }),
+    [form, skips, standDev, standProd, copyToClickhouse, linkedIssues],
+  );
+
+  const applyImport = () => {
+    const parsed = parseTaskText(importText);
+    setForm((prev) => ({
+      ...prev,
+      ...Object.fromEntries(
+        Object.keys(DEFAULT_FORM).map((key) => [key, parsed[key] || prev[key] || ""]),
+      ),
+    }));
+    setLinkedIssues(parsed.linked_issues || "");
+    setStandDev(parsed.stand_dev !== false);
+    setStandProd(parsed.stand_prod !== false);
+    if (typeof parsed.copy_to_clickhouse === "boolean") setCopyToClickhouse(parsed.copy_to_clickhouse);
+  };
+
+  const handleFieldChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSkipChange = (field, checked) => {
+    setSkips((prev) => ({ ...prev, [field]: checked }));
+  };
+
   const handleRun = async () => {
-    const trimmed = String(mrInput || "").trim();
-    if (!trimmed || loading) return;
+    const trimmedMr = String(mrInput || "").trim();
+    if (!trimmedMr || loading) return;
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const parsed = parseTaskText(taskText);
-      const overrideKeys = keyAttributesText
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
       const payload = await adminApi.prototypeReviewRun({
-        mr_input: trimmed,
-        task_text: taskText,
-        issue_summary: parsed.issue_summary || "",
-        target_table_fqn: parsed.target_table_fqn || "",
-        entity_name: parsed.entity_name || "",
-        load_mode: parsed.load_mode || "",
-        stand_dev: parsed.stand_dev !== false,
-        stand_prod: parsed.stand_prod !== false,
-        copy_to_clickhouse: parsed.copy_to_clickhouse,
-        dependent_views: parsed.dependent_views || [],
-        linked_issues: parsed.linked_issues || [],
-        key_attributes: overrideKeys.length ? overrideKeys : (parsed.key_attributes || []),
+        mr_input: trimmedMr,
+        task_text: normalizedTaskText,
+        issue_summary: form.summary.trim(),
+        target_table_fqn: form.target_table_fqn.trim(),
+        entity_name: form.entity_name.trim(),
+        load_mode: form.load_mode.trim(),
+        stand_dev: standDev,
+        stand_prod: standProd,
+        copy_to_clickhouse: copyToClickhouse,
+        dependent_views: skips.dependent_views ? [] : splitItems(form.dependent_views),
+        linked_issues: splitItems(linkedIssues),
+        key_attributes: skips.clickhouse_keys ? [] : splitItems(form.clickhouse_keys || form.business_key),
         create_issue: createIssue,
       });
       setResult(payload || null);
@@ -110,19 +287,51 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
+  const renderField = (fieldKey) => {
+    const meta = FIELD_META[fieldKey];
+    const value = form[fieldKey] || "";
+    const isSkipped = Boolean(skips[fieldKey]);
+    const InputTag = meta.kind === "textarea" ? "textarea" : "input";
+    return (
+      <div key={fieldKey} className="cc-surface prototype-step-field" style={{ margin: 0 }}>
+        <div className="prototype-step-head">
+          <span className="slow-select-label">{meta.label}</span>
+          {meta.optional ? (
+            <label className="prototype-skip-toggle">
+              <input
+                type="checkbox"
+                checked={isSkipped}
+                onChange={(event) => handleSkipChange(fieldKey, event.target.checked)}
+              />
+              <span>Пропустить</span>
+            </label>
+          ) : null}
+        </div>
+        <InputTag
+          className="slow-entity-select"
+          value={value}
+          disabled={isSkipped}
+          onChange={(event) => handleFieldChange(fieldKey, event.target.value)}
+          placeholder={meta.placeholder}
+          style={meta.kind === "textarea" ? { minHeight: 110, resize: "vertical" } : undefined}
+        />
+      </div>
+    );
+  };
+
   return (
-    <div className="container cc-page slow-page">
+    <div className="container cc-page slow-page prototype-review-page">
       <section className="cc-header-zone">
         <h1>Prototype Review</h1>
         <div className="cc-subtitle">
-          Берет SQL из merge request аналитика, выполняет в DEV, проверяет финальную витрину и при успехе создает задачу в YTrack.
+          Цель: сократить время заведения задачи и собрать однотипную карточку из шаблона, MR и меты таблицы.
         </div>
       </section>
 
-      <section className="slow-controls">
-        <div className="section-title">Запуск</div>
-        <div className="slow-controls-row slow-entity-controls" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div className="slow-select-group" style={{ minWidth: 420, flex: "1 1 420px" }}>
+      <section className="cc-surface">
+        <div className="section-title">Быстрый Старт</div>
+        <div className="prototype-top-grid">
+          <div className="prototype-step-field" style={{ margin: 0 }}>
             <span className="slow-select-label">MR URL или IID</span>
             <input
               className="slow-entity-select"
@@ -131,47 +340,90 @@ export default function AdminPrototypeReviewPage() {
               placeholder="https://gitlab.../-/merge_requests/123"
             />
           </div>
-          <div className="slow-select-group" style={{ minWidth: 340, flex: "1 1 340px" }}>
-            <span className="slow-select-label">Override key attributes</span>
-            <input
-              className="slow-entity-select"
-              value={keyAttributesText}
-              onChange={(event) => setKeyAttributesText(event.target.value)}
-              placeholder="Оставьте пустым для автоподстановки из меты/текста задачи"
-            />
-          </div>
-          <label className="slow-select-group" style={{ minWidth: 220 }}>
+          <div className="prototype-step-field" style={{ margin: 0 }}>
             <span className="slow-select-label">Создание задачи</span>
-            <span className="muted">
-              <input
-                type="checkbox"
-                checked={createIssue}
-                onChange={(event) => setCreateIssue(event.target.checked)}
-                style={{ marginRight: 8 }}
-              />
-              Создать задачу при success
-            </span>
-          </label>
+            <label className="prototype-skip-toggle" style={{ marginTop: 10 }}>
+              <input type="checkbox" checked={createIssue} onChange={(event) => setCreateIssue(event.target.checked)} />
+              <span>Создать задачу автоматически после проверки</span>
+            </label>
+            <div className="muted" style={{ marginTop: 10 }}>
+              Инициатор в описании:
+              {" "}
+              <span className="mono">{currentUser?.username || currentUser?.email || "текущий пользователь"}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="cc-surface">
+        <div className="section-title">Импорт Карточки</div>
+        <textarea
+          className="slow-entity-select"
+          value={importText}
+          onChange={(event) => setImportText(event.target.value)}
+          placeholder="Вставьте карточку или шаблон задачи. Дальше можно всё поправить по шагам."
+          style={{ minHeight: 200, resize: "vertical" }}
+        />
+        <div className="prototype-import-actions">
+          <button type="button" className="btn btn-ghost" onClick={applyImport}>
+            Разобрать шаблон
+          </button>
+          <div className="muted">Если таблица уже есть в мете, сущность и ключи затем подтянутся автоматически на backend.</div>
+        </div>
+      </section>
+
+      {STEP_BLOCKS.map((block) => (
+        <section key={block.title} className="cc-surface">
+          <div className="section-title">{block.title}</div>
+          <div className="muted" style={{ marginBottom: 14 }}>{block.description}</div>
+          {block.title === "Шаг 1. Карточка" ? (
+            <div className="prototype-step-grid">
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Стенд</span>
+                <div className="prototype-chip-row">
+                  <label className="prototype-skip-toggle">
+                    <input type="checkbox" checked={standDev} onChange={(event) => setStandDev(event.target.checked)} />
+                    <span>DEV</span>
+                  </label>
+                  <label className="prototype-skip-toggle">
+                    <input type="checkbox" checked={standProd} onChange={(event) => setStandProd(event.target.checked)} />
+                    <span>PROD</span>
+                  </label>
+                </div>
+              </div>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Связанные тикеты</span>
+                <input
+                  className="slow-entity-select"
+                  value={linkedIssues}
+                  onChange={(event) => setLinkedIssues(event.target.value)}
+                  placeholder="DWH-15089, DWH-15539"
+                />
+              </div>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">ClickHouse</span>
+                <label className="prototype-skip-toggle" style={{ marginTop: 10 }}>
+                  <input type="checkbox" checked={copyToClickhouse} onChange={(event) => setCopyToClickhouse(event.target.checked)} />
+                  <span>Нужна загрузка / обновление в ClickHouse</span>
+                </label>
+              </div>
+            </div>
+          ) : (
+            <div className="prototype-step-grid">
+              {block.fields.map(renderField)}
+            </div>
+          )}
+        </section>
+      ))}
+
+      <section className="cc-surface">
+        <div className="section-title">Собранный Шаблон</div>
+        <textarea className="slow-entity-select mono" value={normalizedTaskText} readOnly style={{ minHeight: 260, resize: "vertical" }} />
+        <div className="prototype-import-actions">
+          <div className="muted">Это итоговый нормализованный шаблон, который уйдёт в backend и в описание задачи.</div>
           <button className="btn btn-primary" onClick={handleRun} disabled={loading || !mrInput.trim()}>
             {loading ? "Выполняем..." : "Запустить review"}
           </button>
-        </div>
-        <div className="slow-select-group" style={{ marginTop: 12 }}>
-          <span className="slow-select-label">Текст задачи / описание карточки</span>
-          <textarea
-            className="slow-entity-select"
-            value={taskText}
-            onChange={(event) => setTaskText(event.target.value)}
-            placeholder="Вставьте описание задачи целиком. Таблица, сущность, ключи, view, тикеты и summary будут извлечены автоматически."
-            style={{ minHeight: 220, resize: "vertical" }}
-          />
-        </div>
-        <div className="muted" style={{ marginTop: 8 }}>
-          Минимальный сценарий: укажите MR и вставьте текст задачи. Остальное экран попытается собрать по шаблону задачи и по мете таблицы.
-        </div>
-        <div className="muted" style={{ marginTop: 4 }}>
-          Задача в YouTrack будет создана сервисным токеном. Инициатором в описании будет указан{" "}
-          <span className="mono">{currentUser?.username || currentUser?.email || "текущий пользователь"}</span>.
         </div>
       </section>
 
@@ -193,19 +445,8 @@ export default function AdminPrototypeReviewPage() {
               <div className="hint">{result.resolved_entity_name || "Сущность не определена"}</div>
             </div>
             <div className="slow-summary-card">
-              <div className="label">SQL файлов</div>
-              <div className="value">{(result.files || []).length}</div>
-            </div>
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">MR</div>
-            <div className="card muted">
-              <div><strong>{result.mr?.title || "—"}</strong></div>
-              <div>Проект: {result.mr?.project || "—"}</div>
-              <div>Ветка: {result.mr?.source_branch || "—"} → {result.mr?.target_branch || "—"}</div>
-              <div>Автор: {result.mr?.author || "—"}</div>
-              {result.mr?.web_url ? <div><a href={result.mr.web_url} target="_blank" rel="noreferrer">{result.mr.web_url}</a></div> : null}
+              <div className="label">YTrack</div>
+              <div className="value">{formatIssueStatus(result.issue)}</div>
             </div>
           </section>
 
@@ -215,10 +456,10 @@ export default function AdminPrototypeReviewPage() {
               <table className="incidents-table slow-table">
                 <thead>
                   <tr>
-                    <th>Key attributes</th>
+                    <th>Ключи проверки</th>
                     <th>Row count</th>
                     <th>Duplicate groups</th>
-                    <th>YTrack</th>
+                    <th>Потенциальное влияние</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -226,29 +467,25 @@ export default function AdminPrototypeReviewPage() {
                     <td>{(result.key_attributes || []).length ? result.key_attributes.join(", ") : "—"}</td>
                     <td>{result.checks?.row_count ?? "—"}</td>
                     <td>{result.checks?.duplicate_groups ?? "—"}</td>
-                    <td>{formatIssueStatus(result.issue)}</td>
+                    <td>{result.impact?.count ?? 0}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
             {Array.isArray(result.validation_errors) && result.validation_errors.length > 0 ? (
               <div className="card muted" style={{ marginTop: 16 }}>
-                {result.validation_errors.map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
+                {result.validation_errors.map((item) => <div key={item}>• {item}</div>)}
               </div>
             ) : null}
             {Array.isArray(result.validation_warnings) && result.validation_warnings.length > 0 ? (
               <div className="card muted" style={{ marginTop: 16 }}>
-                {result.validation_warnings.map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
+                {result.validation_warnings.map((item) => <div key={item}>• {item}</div>)}
               </div>
             ) : null}
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Результат выполнения</div>
+            <div className="section-title">Выполнение SQL</div>
             <div className="table-wrapper">
               <table className="incidents-table slow-table">
                 <thead>
@@ -273,19 +510,6 @@ export default function AdminPrototypeReviewPage() {
                   })}
                 </tbody>
               </table>
-            </div>
-            <div className="card muted" style={{ marginTop: 16 }}>
-              <div><strong>Подготовка DEV:</strong> {result.preparation?.message || "—"}</div>
-              <div style={{ marginTop: 8 }}><strong>Потенциальное влияние:</strong> {result.impact?.count ?? 0}</div>
-              {result.impact?.tables?.length ? (
-                <div style={{ marginTop: 8 }}>
-                  {(result.impact.tables || []).slice(0, 8).map((item) => (
-                    <div key={item.fqn} className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                      {item.fqn}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
             </div>
           </section>
         </>

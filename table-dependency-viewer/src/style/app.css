@@ -16453,3 +16453,58 @@ html[data-theme="light"] .architecture-badge.accent {
     grid-template-columns: 1fr;
   }
 }
+
+.prototype-review-page .prototype-top-grid,
+.prototype-review-page .prototype-step-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.prototype-review-page .prototype-step-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prototype-review-page .prototype-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prototype-review-page .prototype-skip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.prototype-review-page .prototype-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.prototype-review-page .prototype-import-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 960px) {
+  .prototype-review-page .prototype-top-grid,
+  .prototype-review-page .prototype-step-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prototype-review-page .prototype-step-head,
+  .prototype-review-page .prototype-import-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

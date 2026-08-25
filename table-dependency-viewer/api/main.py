@@ -4921,17 +4921,19 @@ def get_cached_meta_and_index():
         if m.get("table_schema") and m.get("table_name")
     }
     reverse = {}
-    external_missing_schemas = {"api", "landing", "raw_ext", "dict_raw_ext"}
-    missing_meta_consumers: dict[tuple[str, str], set[str]] = {}
     for m in all_meta:
         consumer = (m["table_schema"], m["table_name"])
         for src_schema, tables in m["depends_on"].items():
             for src_table in tables:
-                if (src_schema or "").lower() in external_missing_schemas:
+                if (src_schema or "").lower() in ("raw_ext", "dict_raw_ext"):
                     continue
                 if (src_schema, src_table) not in meta_lookup:
-                    missing_meta_consumers.setdefault((src_schema, src_table), set()).add(
-                        f"{consumer[0]}.{consumer[1]}"
+                    print(
+                        "❌ BROKEN DEP:",
+                        f"{consumer[0]}.{consumer[1]}",
+                        "depends on",
+                        f"{src_schema}.{src_table}",
+                        "BUT META NOT FOUND",
                     )
                 reverse.setdefault((src_schema, src_table), []).append({
                     "schema": consumer[0],
@@ -4940,25 +4942,6 @@ def get_cached_meta_and_index():
                     "entity_name": m["entity_name"],
                     "table_id": m["table_id"],
                 })
-
-    if missing_meta_consumers:
-        total_refs = sum(len(consumers) for consumers in missing_meta_consumers.values())
-        print(
-            "⚠️ missing dependency metadata:",
-            f"{len(missing_meta_consumers)} unique tables, {total_refs} consumer references",
-        )
-        for (src_schema, src_table), consumers in sorted(
-            missing_meta_consumers.items(),
-            key=lambda item: (-len(item[1]), item[0][0], item[0][1]),
-        )[:50]:
-            sample_consumers = ", ".join(sorted(consumers)[:3])
-            suffix = "..." if len(consumers) > 3 else ""
-            print(
-                "⚠️ MISSING META:",
-                f"{src_schema}.{src_table}",
-                f"referenced by {len(consumers)} table(s)",
-                f"[{sample_consumers}{suffix}]",
-            )
 
     _cached_meta_index = (all_meta, reverse)
     _cache_timestamp = now

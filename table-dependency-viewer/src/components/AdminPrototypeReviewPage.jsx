@@ -378,6 +378,7 @@ export default function AdminPrototypeReviewPage() {
     const value = form[fieldKey] || "";
     const isSkipped = Boolean(skips[fieldKey]);
     const InputTag = meta.kind === "textarea" ? "textarea" : "input";
+    const readOnlyForExistingTable = tableMode === "existing" && selectedTable && fieldKey === "load_mode";
     return (
       <div key={fieldKey} className="cc-surface prototype-step-field" style={{ margin: 0 }}>
         <div className="prototype-step-head">
@@ -396,11 +397,14 @@ export default function AdminPrototypeReviewPage() {
         <InputTag
           className="slow-entity-select"
           value={value}
-          disabled={isSkipped}
+          disabled={isSkipped || readOnlyForExistingTable}
           onChange={(event) => handleFieldChange(fieldKey, event.target.value)}
-          placeholder={meta.placeholder}
+          placeholder={readOnlyForExistingTable ? "Подтягивается из меты таблицы" : meta.placeholder}
           style={meta.kind === "textarea" ? { minHeight: 110, resize: "vertical" } : undefined}
         />
+        {readOnlyForExistingTable ? (
+          <div className="muted">Для существующей таблицы способ обновления берётся из меты. Изменить его можно в режиме новой таблицы.</div>
+        ) : null}
       </div>
     );
   };

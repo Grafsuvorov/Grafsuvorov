@@ -6,7 +6,6 @@ const DEFAULT_FORM = {
   summary: "",
   subject_area: "",
   entity_name: "",
-  git_reference: "",
   source_name: "",
   source_schema: "",
   source_table: "",
@@ -15,7 +14,6 @@ const DEFAULT_FORM = {
   target_table_fqn: "",
   load_mode: "",
   load_condition: "",
-  load_schedule: "",
   script_runtime: "",
   business_key: "",
   dependent_views: "",
@@ -53,7 +51,7 @@ const STEP_BLOCKS = [
   {
     title: "Шаг 3. Таргет",
     description: "Основные параметры загрузки целевой таблицы и MR.",
-    fields: ["entity_name", "target_table_fqn", "git_reference", "load_mode", "load_condition", "load_schedule"],
+    fields: ["entity_name", "target_table_fqn", "load_mode", "load_condition"],
   },
   {
     title: "Шаг 4. Проверки",
@@ -71,7 +69,6 @@ const FIELD_META = {
   summary: { label: "Название задачи", placeholder: "(ДМЛ) Настроить обновление витрины ...", kind: "text" },
   subject_area: { label: "Предметная область", placeholder: "SD", kind: "text" },
   entity_name: { label: "Сущность загрузки", placeholder: "BI_SB_WUC", kind: "text" },
-  git_reference: { label: "Ссылка на гит / шаблон", placeholder: "https://gitlab... / ссылка на шаблон", kind: "textarea" },
   source_name: { label: "Источник", placeholder: "SAP / Oracle / CSV / ...", kind: "text", optional: true },
   source_schema: { label: "Название схемы на источнике", placeholder: "public", kind: "text", optional: true },
   source_table: { label: "Название таблицы на источнике", placeholder: "source_table", kind: "text", optional: true },
@@ -80,7 +77,6 @@ const FIELD_META = {
   target_table_fqn: { label: "Название таблицы в таргете", placeholder: "dm.sales_foreign_metal_stock_balance_analysis", kind: "text" },
   load_mode: { label: "Способ обновления", placeholder: "Полный / Псевдоинкрементальный", kind: "text" },
   load_condition: { label: "Условие при загрузке", placeholder: "where dt >= current_date - 7", kind: "textarea", optional: true },
-  load_schedule: { label: "Расписание загрузки", placeholder: "ежедневно 08:00", kind: "text", optional: true },
   script_runtime: { label: "Время работы скрипта", placeholder: "5-10 мин", kind: "text", optional: true },
   business_key: { label: "Бизнес-ключ для проверки на дубли", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
   dependent_views: { label: "Зависимые представления", placeholder: "dm_view.sales_...", kind: "textarea", optional: true },
@@ -120,7 +116,6 @@ function parseTaskText(text) {
     summary: get(/^([^\n]+)/m),
     subject_area: get(/Предметная область:\s*(.+)/i),
     entity_name: get(/Сущность загрузки:\s*(.+)/i),
-    git_reference: get(/(?:Ссылка на гит|Ссылка на описание шаблона):\s*(.+)/i),
     source_name: get(/Источник:\s*(.+)/i),
     source_schema: get(/Название схемы на источнике:\s*(.+)/i),
     source_table: get(/Название таблицы на источнике:\s*(.+)/i),
@@ -129,7 +124,6 @@ function parseTaskText(text) {
     target_table_fqn: get(/(?:Название таблицы Greenplum|Название таблицы в таргете):\s*(.+)/i),
     load_mode: get(/Способ обновления:\s*(.+)/i),
     load_condition: get(/Условие при загрузке:\s*(.+)/i),
-    load_schedule: get(/Расписание загрузки:\s*(.+)/i),
     script_runtime: get(/Время работы скрипта:\s*(.+)/i),
     business_key: multilineField("Бизнес-ключ(?: для проверки на дубли)?"),
     dependent_views: multilineField("Зависимые представления|Зависимые представление"),
@@ -172,10 +166,8 @@ function buildTemplateText(form, options) {
   if (options.isStg) {
     pushField("Условие при загрузке", "load_condition");
   }
-  pushField("Расписание загрузки", "load_schedule");
   lines.push(`Стенд: ${options.standDev && options.standProd ? "DEV/PROD" : options.standDev ? "DEV" : options.standProd ? "PROD" : ""}`);
   pushField("Доступ к таблице на источнике", "source_access");
-  pushField("Ссылка на гит", "git_reference");
   pushField("Название таблицы Greenplum", "target_table_fqn");
   pushField("Способ обновления", "load_mode");
   pushField("Время работы скрипта", "script_runtime");
@@ -330,7 +322,6 @@ export default function AdminPrototypeReviewPage() {
         entity_name: String(meta?.entity_name || tableItem.entity_name || prev.entity_name || ""),
         target_table_fqn: String(meta?.table_schema && meta?.table_name ? `${meta.table_schema}.${meta.table_name}` : tableItem.fqn || prev.target_table_fqn || ""),
         load_mode: String(meta?.table_load_mode || prev.load_mode || ""),
-        load_schedule: String(formatLoadInterval(meta?.table_load_interval) || prev.load_schedule || ""),
         script_runtime: meta?.avg_duration_minutes ? `${meta.avg_duration_minutes} мин` : prev.script_runtime,
         business_key: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.business_key)),
         clickhouse_keys: joinItems(clickOrderBy.length ? clickOrderBy : keyAttributes.length ? keyAttributes : splitItems(prev.clickhouse_keys)),

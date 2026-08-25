@@ -213,13 +213,18 @@ function formatIssueStatus(issue) {
 
 export default function AdminPrototypeReviewPage() {
   const [mrInput, setMrInput] = useState("");
-  const [importText, setImportText] = useState("");
   const [form, setForm] = useState(DEFAULT_FORM);
   const [skips, setSkips] = useState(DEFAULT_SKIPS);
   const [linkedIssues, setLinkedIssues] = useState("");
   const [standDev, setStandDev] = useState(true);
   const [standProd, setStandProd] = useState(true);
   const [copyToClickhouse, setCopyToClickhouse] = useState(true);
+  const [tableMode, setTableMode] = useState("existing");
+  const [tableQuery, setTableQuery] = useState("");
+  const [tableOptions, setTableOptions] = useState([]);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [tablesLoading, setTablesLoading] = useState(true);
+  const [tableMetaLoading, setTableMetaLoading] = useState(false);
   const [createIssue, setCreateIssue] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -230,24 +235,40 @@ export default function AdminPrototypeReviewPage() {
     accountApi.me().then(setCurrentUser).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setTablesLoading(true);
+    adminApi.tablesDetailed()
+      .then((data) => {
+        if (cancelled) return;
+        const rows = (Array.isArray(data) ? data : [])
+          .filter((item) => (item?.source || "current") === "current")
+          .map((item) => ({
+            ...item,
+            fqn: String(item?.fqn || "").toLowerCase(),
+            __search: [
+              item?.fqn,
+              item?.entity_name,
+              item?.label,
+            ].filter(Boolean).join(" ").toLowerCase(),
+          }));
+        setTableOptions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setTableOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTablesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const normalizedTaskText = useMemo(
     () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues }),
     [form, skips, standDev, standProd, copyToClickhouse, linkedIssues],
   );
-
-  const applyImport = () => {
-    const parsed = parseTaskText(importText);
-    setForm((prev) => ({
-      ...prev,
-      ...Object.fromEntries(
-        Object.keys(DEFAULT_FORM).map((key) => [key, parsed[key] || prev[key] || ""]),
-      ),
-    }));
-    setLinkedIssues(parsed.linked_issues || "");
-    setStandDev(parsed.stand_dev !== false);
-    setStandProd(parsed.stand_prod !== false);
-    if (typeof parsed.copy_to_clickhouse === "boolean") setCopyToClickhouse(parsed.copy_to_clickhouse);
-  };
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -255,6 +276,40 @@ export default function AdminPrototypeReviewPage() {
 
   const handleSkipChange = (field, checked) => {
     setSkips((prev) => ({ ...prev, [field]: checked }));
+  };
+
+  const filteredTables = useMemo(() => {
+    const q = String(tableQuery || "").trim().toLowerCase();
+    if (!q) return tableOptions.slice(0, 8);
+    return tableOptions.filter((item) => item.__search.includes(q)).slice(0, 8);
+  }, [tableOptions, tableQuery]);
+
+  const applyTableMeta = async (tableItem) => {
+    if (!tableItem?.schema || !tableItem?.table) return;
+    setTableMetaLoading(true);
+    setError(null);
+    try {
+      const meta = await adminApi.tableCard(tableItem.schema, tableItem.table, { source: "current" });
+      const keyAttributes = Array.isArray(meta?.key_attributes) ? meta.key_attributes : [];
+      const summary = form.summary.trim() && !selectedTable
+        ? form.summary
+        : `(ДМЛ) Настроить обновление витрины ${tableItem.fqn}`;
+      setSelectedTable(tableItem);
+      setTableQuery(tableItem.fqn);
+      setForm((prev) => ({
+        ...prev,
+        summary,
+        entity_name: String(meta?.entity_name || tableItem.entity_name || prev.entity_name || ""),
+        target_table_fqn: String(meta?.table_schema && meta?.table_name ? `${meta.table_schema}.${meta.table_name}` : tableItem.fqn || prev.target_table_fqn || ""),
+        load_mode: String(meta?.table_load_mode || prev.load_mode || ""),
+        business_key: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.business_key)),
+        clickhouse_keys: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.clickhouse_keys)),
+      }));
+    } catch (err) {
+      setError(err?.message || "Не удалось подтянуть мету таблицы");
+    } finally {
+      setTableMetaLoading(false);
+    }
   };
 
   const handleRun = async () => {
@@ -356,20 +411,47 @@ export default function AdminPrototypeReviewPage() {
       </section>
 
       <section className="cc-surface">
-        <div className="section-title">Импорт Карточки</div>
-        <textarea
-          className="slow-entity-select"
-          value={importText}
-          onChange={(event) => setImportText(event.target.value)}
-          placeholder="Вставьте карточку или шаблон задачи. Дальше можно всё поправить по шагам."
-          style={{ minHeight: 200, resize: "vertical" }}
-        />
-        <div className="prototype-import-actions">
-          <button type="button" className="btn btn-ghost" onClick={applyImport}>
-            Разобрать шаблон
-          </button>
-          <div className="muted">Если таблица уже есть в мете, сущность и ключи затем подтянутся автоматически на backend.</div>
+        <div className="section-title">Таблица</div>
+        <div className="muted" style={{ marginBottom: 14 }}>
+          Если таблица уже существует, выберите её из каталога и форма подтянет сущность, ключи и базовые поля шаблона. Если таблица новая, переключитесь в ручной ввод.
         </div>
+        <div className="prototype-chip-row" style={{ marginBottom: 14 }}>
+          <button type="button" className={`btn ${tableMode === "existing" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTableMode("existing")}>
+            Выбрать существующую
+          </button>
+          <button type="button" className={`btn ${tableMode === "new" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTableMode("new")}>
+            Новая таблица
+          </button>
+        </div>
+        {tableMode === "existing" ? (
+          <div className="prototype-step-field" style={{ margin: 0 }}>
+            <span className="slow-select-label">Поиск по каталогу</span>
+            <input
+              className="slow-entity-select"
+              value={tableQuery}
+              onChange={(event) => setTableQuery(event.target.value)}
+              placeholder={tablesLoading ? "Загрузка каталога..." : "Например: dm.sales_foreign_metal_stock_balance_analysis"}
+            />
+            <div className="prototype-table-list">
+              {filteredTables.map((item) => (
+                <button
+                  key={item.fqn}
+                  type="button"
+                  className={`prototype-table-option ${selectedTable?.fqn === item.fqn ? "active" : ""}`}
+                  onClick={() => applyTableMeta(item)}
+                >
+                  <span className="mono">{item.fqn}</span>
+                  <span>{item.entity_name || "—"}</span>
+                </button>
+              ))}
+            </div>
+            <div className="muted">
+              {tableMetaLoading ? "Подтягиваем мету таблицы..." : "После выбора таблицы поля ниже останутся редактируемыми."}
+            </div>
+          </div>
+        ) : (
+          <div className="muted">Для новой таблицы просто заполните поля в шагах ниже вручную.</div>
+        )}
       </section>
 
       {STEP_BLOCKS.map((block) => (

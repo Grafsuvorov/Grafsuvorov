@@ -16496,6 +16496,30 @@ html[data-theme="light"] .architecture-badge.accent {
   margin-top: 14px;
 }
 
+.prototype-review-page .prototype-table-list {
+  display: grid;
+  gap: 10px;
+}
+
+.prototype-review-page .prototype-table-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.28);
+  color: inherit;
+  text-align: left;
+}
+
+.prototype-review-page .prototype-table-option.active {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(37, 99, 235, 0.12);
+}
+
 @media (max-width: 960px) {
   .prototype-review-page .prototype-top-grid,
   .prototype-review-page .prototype-step-grid {

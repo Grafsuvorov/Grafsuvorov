@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -315,41 +314,15 @@ def _ensure_users_table() -> None:
         )
 
 
-def _relation_exists(schema_name: str, relation_name: str, relkind: str) -> bool:
-    with engine.begin() as conn:
-        return bool(
-            conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM pg_class c
-                    JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = :schema_name
-                      AND c.relname = :relation_name
-                      AND c.relkind = :relkind
-                    LIMIT 1
-                    """
-                ),
-                {
-                    "schema_name": schema_name,
-                    "relation_name": relation_name,
-                    "relkind": relkind,
-                },
-            ).scalar()
-        )
-
-
-def _ensure_sequence(sequence_fqn: str) -> None:
-    schema_name, sequence_name = sequence_fqn.split(".", 1)
-    if _relation_exists(schema_name, sequence_name, "S"):
-        return
-    with engine.begin() as conn:
-        conn.execute(text(f"CREATE SEQUENCE {sequence_fqn}"))
-
-
 def _ensure_audit_table() -> None:
-    _ensure_sequence("tech_etl.app_user_event_id_seq")
     with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE SEQUENCE IF NOT EXISTS tech_etl.app_user_event_id_seq
+                """
+            )
+        )
         conn.execute(
             text(
                 """
@@ -410,8 +383,14 @@ def _ensure_audit_table() -> None:
 
 
 def _ensure_favorites_table() -> None:
-    _ensure_sequence("tech_etl.app_user_favorite_id_seq")
     with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE SEQUENCE IF NOT EXISTS tech_etl.app_user_favorite_id_seq
+                """
+            )
+        )
         conn.execute(
             text(
                 """

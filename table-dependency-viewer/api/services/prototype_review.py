@@ -564,6 +564,10 @@ def create_ytrack_issue(
     description: str,
     default_estimate_minutes: int = 60,
     estimate_field_name: str = "Оценка (чел./час.)",
+    card_type_field_name: str = "Тип карточки",
+    card_type_value: str = "Task",
+    assignee_field_name: str = "Assignee",
+    assignee_query: str = "Suvorov Nikita",
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -586,21 +590,60 @@ def create_ytrack_issue(
         "description": description,
         "type": issue_type or "task",
     }
-    resolved_estimate_field_name = _resolve_ytrack_estimate_field_name(
+    project_custom_fields = _get_ytrack_project_custom_fields(
         base_url=base_url,
         token=token,
         project_id=resolved_project_id,
         ssl_verify=ssl_verify,
-        estimate_field_name=estimate_field_name,
     )
-    if resolved_estimate_field_name:
-        payload["customFields"] = [
-            {
-                "name": resolved_estimate_field_name,
-                "$type": "PeriodIssueCustomField",
-                "value": {"minutes": max(1, int(default_estimate_minutes or 60))},
-            }
-        ]
+    custom_fields_payload: list[dict[str, Any]] = []
+
+    estimate_field = _resolve_ytrack_custom_field(
+        items=project_custom_fields,
+        field_name=estimate_field_name,
+        fallback_contains="оценк",
+    )
+    if estimate_field:
+        custom_fields_payload.append(
+            _build_ytrack_estimate_payload(
+                estimate_field=estimate_field,
+                default_estimate_minutes=default_estimate_minutes,
+            )
+        )
+
+    card_type_field = _resolve_ytrack_custom_field(
+        items=project_custom_fields,
+        field_name=card_type_field_name,
+    )
+    if card_type_field and str(card_type_value or "").strip():
+        custom_fields_payload.append(
+            _build_ytrack_named_value_payload(
+                field_item=card_type_field,
+                raw_value=str(card_type_value).strip(),
+            )
+        )
+
+    assignee_field = _resolve_ytrack_custom_field(
+        items=project_custom_fields,
+        field_name=assignee_field_name,
+    )
+    if assignee_field and str(assignee_query or "").strip():
+        user_value = _resolve_ytrack_user_value(
+            base_url=base_url,
+            token=token,
+            ssl_verify=ssl_verify,
+            user_query=str(assignee_query).strip(),
+        )
+        if user_value:
+            custom_fields_payload.append(
+                _build_ytrack_user_payload(
+                    field_item=assignee_field,
+                    user_value=user_value,
+                )
+            )
+
+    if custom_fields_payload:
+        payload["customFields"] = custom_fields_payload
     req = urlrequest.Request(
         f"{base_url.rstrip('/')}/api/issues",
         data=json.dumps(payload).encode("utf-8"),
@@ -625,18 +668,135 @@ def create_ytrack_issue(
     }
 
 
-def _resolve_ytrack_estimate_field_name(
+def _get_ytrack_project_custom_fields(
     *,
     base_url: str,
     token: str,
     project_id: str,
     ssl_verify: str,
-    estimate_field_name: str,
-) -> str:
+) -> list[dict[str, Any]]:
     req = urlrequest.Request(
         (
             f"{base_url.rstrip('/')}/api/admin/projects/{urlparse.quote(project_id, safe='')}/customFields"
-            "?fields=canBeEmpty,field(name,fieldType(id,valueType))"
+            "?fields=id,$type,canBeEmpty,field(name,fieldType(id,valueType))"
+        ),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else []
+    except Exception:
+        return []
+
+def _resolve_ytrack_custom_field(
+    *,
+    items: list[dict[str, Any]],
+    field_name: str,
+    fallback_contains: str = "",
+) -> dict[str, str] | None:
+    configured_name = str(field_name or "").strip()
+    configured_name_lower = configured_name.lower()
+    fallback_match = None
+    for item in items or []:
+        item_id = str((item or {}).get("id") or "").strip()
+        project_field_type = str((item or {}).get("$type") or "").strip()
+        field = (item or {}).get("field") or {}
+        field_name = str(field.get("name") or "").strip()
+        field_type = field.get("fieldType") or {}
+        field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
+        field_value_type = str(field_type.get("valueType") or field_type.get("id") or "").strip().lower()
+        if not field_name:
+            continue
+        issue_custom_field_type = (
+            f"{project_field_type[:-18]}IssueCustomField"
+            if project_field_type.endswith("ProjectCustomField")
+            else ("PeriodIssueCustomField" if field_type_id == "period" else "SimpleIssueCustomField")
+        )
+        if field_name.lower() == configured_name_lower:
+            return {
+                "id": item_id,
+                "name": field_name,
+                "issue_custom_field_type": issue_custom_field_type,
+                "field_type_id": field_type_id,
+                "field_value_type": field_value_type,
+            }
+        if fallback_match is None and fallback_contains and fallback_contains in field_name.lower():
+            fallback_match = {
+                "id": item_id,
+                "name": field_name,
+                "issue_custom_field_type": issue_custom_field_type,
+                "field_type_id": field_type_id,
+                "field_value_type": field_value_type,
+            }
+    return fallback_match
+
+
+def _build_ytrack_estimate_payload(*, estimate_field: dict[str, str], default_estimate_minutes: int) -> dict[str, Any]:
+    issue_custom_field_type = str(estimate_field.get("issue_custom_field_type") or "SimpleIssueCustomField").strip()
+    field_value_type = str(estimate_field.get("field_value_type") or estimate_field.get("field_type_id") or "").strip().lower()
+    minutes = max(1, int(default_estimate_minutes or 60))
+
+    if field_value_type == "period" or issue_custom_field_type == "PeriodIssueCustomField":
+        value: Any = {"minutes": minutes}
+    elif field_value_type in {"integer", "int"}:
+        value = minutes
+    else:
+        value = f"{minutes // 60 if minutes % 60 == 0 else round(minutes / 60, 2)}ч"
+
+    payload = {
+        "name": str(estimate_field.get("name") or "").strip(),
+        "$type": issue_custom_field_type,
+        "value": value,
+    }
+    field_id = str(estimate_field.get("id") or "").strip()
+    if field_id:
+        payload["id"] = field_id
+    return payload
+
+
+def _build_ytrack_named_value_payload(*, field_item: dict[str, str], raw_value: str) -> dict[str, Any]:
+    payload = {
+        "name": str(field_item.get("name") or "").strip(),
+        "$type": str(field_item.get("issue_custom_field_type") or "SimpleIssueCustomField").strip(),
+        "value": {"name": raw_value},
+    }
+    field_id = str(field_item.get("id") or "").strip()
+    if field_id:
+        payload["id"] = field_id
+    return payload
+
+
+def _build_ytrack_user_payload(*, field_item: dict[str, str], user_value: dict[str, str]) -> dict[str, Any]:
+    payload = {
+        "name": str(field_item.get("name") or "").strip(),
+        "$type": str(field_item.get("issue_custom_field_type") or "SingleUserIssueCustomField").strip(),
+        "value": user_value,
+    }
+    field_id = str(field_item.get("id") or "").strip()
+    if field_id:
+        payload["id"] = field_id
+    return payload
+
+
+def _resolve_ytrack_user_value(
+    *,
+    base_url: str,
+    token: str,
+    ssl_verify: str,
+    user_query: str,
+) -> dict[str, str] | None:
+    query = str(user_query or "").strip()
+    if not query:
+        return None
+    req = urlrequest.Request(
+        (
+            f"{base_url.rstrip('/')}/api/users"
+            f"?fields=id,login,name,fullName,email&query={urlparse.quote(query, safe='')}"
         ),
         headers={
             "Authorization": f"Bearer {token}",
@@ -649,23 +809,23 @@ def _resolve_ytrack_estimate_field_name(
             body = resp.read().decode("utf-8")
             items = json.loads(body) if body else []
     except Exception:
-        return str(estimate_field_name or "").strip()
+        return None
 
-    configured_name = str(estimate_field_name or "").strip()
-    configured_name_lower = configured_name.lower()
-    fallback_match = ""
+    normalized_query = query.lower()
     for item in items or []:
-        field = (item or {}).get("field") or {}
-        field_name = str(field.get("name") or "").strip()
-        field_type = field.get("fieldType") or {}
-        field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
-        if not field_name or field_type_id != "period":
-            continue
-        if field_name.lower() == configured_name_lower:
-            return field_name
-        if not fallback_match and "оценк" in field_name.lower():
-            fallback_match = field_name
-    return fallback_match or configured_name
+        login = str((item or {}).get("login") or "").strip()
+        name = str((item or {}).get("name") or "").strip()
+        full_name = str((item or {}).get("fullName") or "").strip()
+        email = str((item or {}).get("email") or "").strip()
+        if normalized_query in {login.lower(), name.lower(), full_name.lower(), email.lower()}:
+            return {"login": login} if login else {"name": full_name or name}
+
+    first = (items or [None])[0]
+    if not first:
+        return None
+    login = str((first or {}).get("login") or "").strip()
+    name = str((first or {}).get("fullName") or (first or {}).get("name") or "").strip()
+    return {"login": login} if login else {"name": name} if name else None
 
 
 def _resolve_ytrack_project_id(

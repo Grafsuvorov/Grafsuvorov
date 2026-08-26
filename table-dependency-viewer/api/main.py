@@ -103,6 +103,10 @@ from .config import (
     YOUTRACK_SSL_VERIFY,
     YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
     YOUTRACK_ESTIMATE_FIELD_NAME,
+    YOUTRACK_CARD_TYPE_FIELD_NAME,
+    YOUTRACK_CARD_TYPE_VALUE,
+    YOUTRACK_ASSIGNEE_FIELD_NAME,
+    YOUTRACK_ASSIGNEE_QUERY,
 )
 
 
@@ -1007,6 +1011,10 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                 description=description,
                 default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
                 estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME,
+                card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
+                card_type_value=YOUTRACK_CARD_TYPE_VALUE,
+                assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
+                assignee_query=YOUTRACK_ASSIGNEE_QUERY,
             )
             if issue_result.get("issue_id"):
                 issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))

@@ -1085,7 +1085,12 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                     dependency_seen.add(dep)
                     all_dependencies.append(dep)
             checks = {"row_count": None, "duplicate_groups": None}
-            if not validation_errors and str(target_item.get("object_type") or "TABLE").upper() == "TABLE":
+            execution_row = exec_by_path.get(str(target_item.get("path") or "")) or {"status": "skipped", "duration_sec": 0.0}
+            if (
+                not validation_errors
+                and str(target_item.get("object_type") or "TABLE").upper() == "TABLE"
+                and execution_row.get("status") == "ok"
+            ):
                 checks = query_dev_table_checks(
                     dev_database_url=DEV_DATABASE_URL,
                     target_fqn=target_fqn,
@@ -1114,6 +1119,10 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                 item_warnings.append("Новая таблица: проверьте и заполните сущность вручную при необходимости")
             if not key_attributes:
                 item_warnings.append("Ключевые поля не найдены автоматически")
+            if execution_row.get("status") == "error":
+                item_warnings.append(
+                    f"Ошибка в файле `{target_item.get('path')}`: {execution_row.get('error_message') or 'SQL не выполнился'}"
+                )
             if checks.get("duplicate_groups") not in (None, 0):
                 item_warnings.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
             requires_item_input, missing_fields = _prototype_item_needs_attention({
@@ -1134,8 +1143,8 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                     "business_key": detected_keys,
                     "dependencies": dependencies,
                     "preparation": prep_by_target.get(target_fqn) or {"status": "skipped"},
-                    "execution": exec_by_path.get(str(target_item.get("path") or "")) or {"status": "skipped", "duration_sec": 0.0},
-                    "duration_sec": float((exec_by_path.get(str(target_item.get("path") or "")) or {}).get("duration_sec") or 0.0),
+                    "execution": execution_row,
+                    "duration_sec": float(execution_row.get("duration_sec") or 0.0),
                     "checks": checks,
                     "impact": impact,
                     "yaml_bundle": yaml_bundle,
@@ -1145,6 +1154,12 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                     "warnings": item_warnings,
                 }
             )
+        execution_errors = [item for item in execution_rows if item.get("status") == "error"]
+        if execution_errors:
+            for item in execution_errors:
+                validation_errors.append(
+                    f"Файл `{item.get('path')}`: {item.get('error_message') or 'SQL не выполнился'}"
+                )
         if any(item.get("warnings") for item in review_items):
             for item in review_items:
                 for warning in item.get("warnings") or []:

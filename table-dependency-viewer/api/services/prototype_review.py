@@ -551,12 +551,23 @@ def execute_sql_review_items_in_dev(
             file_item = file_map.get(path_value) or {}
             target_fqn = str(review_item.get("target_fqn") or "").strip()
             if review_item.get("requires_pretruncate") and target_fqn:
-                preparation_rows.append(
-                    prepare_target_table_in_dev(
-                        dev_database_url=dev_database_url,
-                        target_fqn=target_fqn,
+                try:
+                    preparation_rows.append(
+                        prepare_target_table_in_dev(
+                            dev_database_url=dev_database_url,
+                            target_fqn=target_fqn,
+                        )
                     )
-                )
+                except Exception as exc:
+                    preparation_rows.append(
+                        {
+                            "status": "error",
+                            "action": "truncate",
+                            "target_fqn": target_fqn or None,
+                            "message": f"Не удалось выполнить предварительную очистку: {exc}",
+                            "duration_sec": 0.0,
+                        }
+                    )
             else:
                 preparation_rows.append(
                     {
@@ -572,22 +583,34 @@ def execute_sql_review_items_in_dev(
                 execution_rows.append({"path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
                 continue
             started = time.perf_counter()
-            cursor.execute(sql_text)
-            connection.commit()
-            execution_rows.append(
-                {
-                    "path": path_value,
-                    "target_fqn": target_fqn or None,
-                    "status": "ok",
-                    "duration_sec": round(time.perf_counter() - started, 3),
-                }
-            )
-    except Exception as exc:
-        if connection is not None:
             try:
-                connection.rollback()
-            except Exception:
-                pass
+                cursor.execute(sql_text)
+                connection.commit()
+                execution_rows.append(
+                    {
+                        "path": path_value,
+                        "target_fqn": target_fqn or None,
+                        "status": "ok",
+                        "duration_sec": round(time.perf_counter() - started, 3),
+                    }
+                )
+            except Exception as exc:
+                if connection is not None:
+                    try:
+                        connection.rollback()
+                    except Exception:
+                        pass
+                execution_rows.append(
+                    {
+                        "path": path_value,
+                        "target_fqn": target_fqn or None,
+                        "status": "error",
+                        "duration_sec": round(time.perf_counter() - started, 3),
+                        "error_message": str(exc),
+                    }
+                )
+                continue
+    except Exception as exc:
         raise ValueError(f"Не удалось выполнить SQL в DEV: {exc}") from exc
     finally:
         if cursor is not None:

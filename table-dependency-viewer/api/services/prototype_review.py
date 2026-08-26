@@ -554,7 +554,6 @@ def query_dev_table_checks(
 def create_ytrack_issue(
     *,
     base_url: str,
-    project_id: str,
     project: str,
     token: str,
     queue: str,
@@ -565,20 +564,13 @@ def create_ytrack_issue(
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
-    resolved_project_id = _resolve_ytrack_project_id(
-        base_url=base_url,
-        token=token,
-        project_id=project_id,
-        project=project,
-        ssl_verify=ssl_verify,
-    )
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
     payload = {
-        "project": {"id": resolved_project_id},
+        "project": {"name": project},
         "queue": queue,
         "summary": summary,
         "description": description,
@@ -606,55 +598,3 @@ def create_ytrack_issue(
         "url": data.get("self"),
         "raw": data,
     }
-
-
-def _resolve_ytrack_project_id(
-    *,
-    base_url: str,
-    token: str,
-    project_id: str,
-    project: str,
-    ssl_verify: str,
-) -> str:
-    explicit_id = str(project_id or "").strip()
-    if explicit_id:
-        return explicit_id
-
-    project_value = str(project or "").strip()
-    if not project_value:
-        raise ValueError("Не настроен YOUTRACK_PROJECT или YOUTRACK_PROJECT_ID")
-    if re.fullmatch(r"\d+-\d+", project_value):
-        return project_value
-
-    req = urlrequest.Request(
-        f"{base_url.rstrip('/')}/api/admin/projects?fields=id,shortName,name",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json",
-        },
-        method="GET",
-    )
-    try:
-        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
-            body = resp.read().decode("utf-8")
-            projects = json.loads(body) if body else []
-    except urlerror.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")
-        raise ValueError(f"Не удалось определить project.id в YTrack, admin/projects вернул {exc.code}: {body}") from exc
-    except Exception as exc:
-        raise ValueError(f"Не удалось определить project.id в YTrack: {exc}") from exc
-
-    project_value_lower = project_value.lower()
-    for item in projects or []:
-        item_id = str((item or {}).get("id") or "").strip()
-        short_name = str((item or {}).get("shortName") or "").strip()
-        name = str((item or {}).get("name") or "").strip()
-        if not item_id:
-            continue
-        if short_name.lower() == project_value_lower or name.lower() == project_value_lower:
-            return item_id
-
-    raise ValueError(
-        f"Не удалось найти project.id для YTrack проекта `{project_value}`. "
-        "Укажите YOUTRACK_PROJECT_ID или проверьте YOUTRACK_PROJECT."
-    )

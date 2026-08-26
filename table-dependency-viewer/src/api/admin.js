@@ -19,7 +19,6 @@ export const adminApi = {
   tableCard: (schema, table, params) => apiClient.get(`/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, { params }),
   clickMeta: (schema, table) => apiClient.get(`/api/click/meta/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`),
   clickViewSearch: (schema, table) => apiClient.get("/api/click/view/search", { params: { schema, table } }),
-  dependencyNodes: (schema, table, params) => apiClient.get(`/api/dependencies-nodes/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, { params }),
   refreshCache: () => apiClient.post("/api/admin/refresh-cache"),
   runCiCd: () => apiClient.post("/api/admin/run-ci-cd"),
   createUser: (body) => apiClient.post("/auth/users", body),

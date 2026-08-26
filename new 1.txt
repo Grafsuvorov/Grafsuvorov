@@ -1,59 +1,1774 @@
-Автоматически создано из Prototype Review. убрать
+Предметная область: Сбыт;
 
-Инициатор в приложении: admin убрать
-Email инициатора: Nikita.Suvorov@rusal.com оставить
-MR: https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/2202 оставить
-Проект: dwh_analyst/sql_queries_storage убрать
-Ветка: ChernyshevaMV_DWH-15641 -> main оставить
-Автор MR: Чернышёва Мария Владиславовна (ChernyshevaMV) оставить
+Сущность загрузки: для новых таблиц dm_calc.delivery_schema_general_info, dm.sales_metal_stock_at_plant_for_transportation_reporting - BI_SB_WUC, для уже загружаемых - не менять;
 
-Финальная витрина: dm.sales_foreign_metal_stock_balance_analysis ( просто витрина) объединить этот блок с нижним чтьо бы например сущность не дублировать
-Сущность: BI_SB_WUC
-Ключ: warehouse_code, dt_report
-Row count: 39383
-Duplicate groups: 0
+Ссылка на гит: VyaltsevSV_DWH-15405 (!2190) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab;
 
-Подготовка DEV: Целевая таблица очищена перед выполнением SQL - убрать
+Название таблицы Greenplum (последовательность загрузки таблиц соответствует указанному ниже списку):
 
-Файлы и время выполнения: убрать
+dm_calc
 
-Контекст задачи:убрать
+dm_calc.delivery_schema_general_info
+dm_calc.delivery_schema_for_other_routes
+dm_calc.delivery_schema_for_overland_routes
+dm
 
-Summary: (ДМЛ) Настроить обновление витрины dm.sales_foreign_metal_stock_balance_analysis - убрать уже есть в названии задачи
-Предметная область: Сущность загрузки: BI_SB_WUC
-Сущность: BI_SB_WUC
-Режим обновления: TRUNCATE_INIT
-Стенды: DEV, PROD
-Git ref: https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/2202/diffs
-Copy to ClickHouse: да
-ClickHouse keys: warehouse_code, dt_report
-Зависимые view: —
-Связанные тикеты: DWH-15089 - тоже не нужно оно есть в связаных
-dm/dm.sales_foreign_metal_stock_balance_analysis.sql: ok · 199.571 сек больше 60 секунд писать в минутах и добавить время работы
-Зависимости SQL:
+dm.sales_metal_in_supply_chain_for_transportation_reporting
+dm.sales_metal_stock_at_plant_for_transportation_reporting
+dm_view
 
-dict_dds.settings_and_parameters_sap
-dict_dds.foreign_warehouse_priority_definition
-dm.sales_material_turnover_detailed
-ods.ral_map_transportation_external_location_metal_stock
-dict_dds.location_sales
-dict_dds.transport_hub_texts
-dict_dds.map_location_and_transport_hub_to_responsible
-dict_dds.transport_hub
-dict_dds.address
-dict_dds.country_texts
-dict_dds.country
-dict_dds.market_region1_texts
-Потенциальное downstream-влияние:
+dm_view.sales_metal_in_supply_chain_for_transportation_reporting
+dm_view.sales_metal_stock_at_plant_for_transportation_reporting
+dm_view.sales_supply_chain_metal_realization_forecast
+dm_view.sales_supply_chain_metal_transportation
+Способ обновления: полный;
 
-dm_view.sales_foreign_metal_stock_balance_analysis · BI_SB_WUC - классно - но в редакторе оно почему-то не показалось + нужно выделить жирным часть что бы лучше смотрелась и разбить на заголовки 
+Стенд: DEV и PROD;
 
-и в названии немного поменять
-Копировать в ClickHouse: необходимо обновить данные в витрине (структуру обновлять не нужно)
-Ключевые поля для загрузки в ClickHouse:
-warehouse_code
-dt_report
-Бизнес ключ: 
-ну и там где дубли колв-во строк наверное все на русском лучше написать
+Время работы скрипта: общее время работы всех скриптов - 5 минут;
 
-ну и тое самое в ui сделать и задача сейчас вот так 2-87099 при переходе по ссылке видно нормальное название DWH-15241
+Бизнес-ключ для проверки на дубли: для dm.sales_metal_in_supply_chain_for_transportation_reporting не менять, для dm.sales_metal_stock_at_plant_for_transportation_reporting - batch, transport_departure_hub_code, transport_destination_hub_code;
+
+Зависимые представление:
+
+dm_view.sales_metal_in_supply_chain_for_transportation_reporting
+dm_view.sales_metal_stock_at_plant_for_transportation_reporting
+dm_view.sales_supply_chain_metal_realization_forecast
+dm_view.sales_supply_chain_metal_transportation;
+Ключевые поля для загрузки в ClickHouse: для dm.sales_metal_in_supply_chain_for_transportation_reporting не менять, для dm.sales_metal_stock_at_plant_for_transportation_reporting - batch;
+
+Последовательность действий при (псевдо)инкрементальном обновлении таблицы: не требуется
+
+
+
+связана с
+1
+
+подзадача для
+1
+
+
+
+Пример что в ветке для пары таблиц
+drop table if exists dm.sales_metal_stock_at_plant_for_transportation_reporting cascade;
+
+create table if not exists dm.sales_metal_stock_at_plant_for_transportation_reporting (
+	batch varchar,
+	weight_net_with_wirerod numeric(13, 3),
+	business_location_for_cargo_reporting_code varchar,
+	business_location_for_cargo_reporting_name varchar,
+	business_location_group_for_cargo_reporting_name varchar,
+	transport_departure_hub_code varchar,
+	transport_destination_hub_code varchar,
+	dt_business_location_status_acquired date,
+	dttm_inserted timestamp not null default now(),
+	dttm_updated timestamp not null default now(),
+	job_name varchar(60) not null default 'airflow'::character varying,
+	deleted_flag bool not null default false
+)
+with (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (batch, dt_business_location_status_acquired);
+
+comment on table dm.sales_metal_stock_at_plant_for_transportation_reporting is 'Остатки металла на складах готовой продукции завода для витрин по грузоперевозкам';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.batch is 'Партия | Номер партии метала, формируется на заводе производителе, либо при закупке на операторе от внешних поставщиков | dm_calc.finish_goods_warehouse_stock_plant_by_date.batch';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.weight_net_with_wirerod is 'Вес Н&K | Вес нетто + катанки | dm_calc.finish_goods_warehouse_stock_plant_by_date.weight_net';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.business_location_for_cargo_reporting_code is
+'ID статуса - отчётность по грузоперевозкам | ID статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам (например, M01, M02 и прочие) 
+Сформированные на основании витрины "Отчет по стокам (плановый и реализованный металл)" или "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату.
+ | "M01"';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.business_location_for_cargo_reporting_name is
+'Имя статуса - отчётность по грузоперевозкам | Имя статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам, основанный на статусе цепочки поставок, к примеру "Принято на первом иностранном складе", и прочие статусы согласно мэппингу устанвленному бизнесом, указанного в таблице ZSD4270M_STATKHD.
+Поставки для статуса имеют срезы, согласно  витрины "Отчет по стокам (плановый и реализованный металл)" или "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату. | dict_dds.transportation_status_texts.transportation_status_name';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.business_location_group_for_cargo_reporting_name is
+'Группа статуса - отчётность по грузоперевозкам | Группа статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам такие как:
+"Отправки грузов из пункта отправления (из точки А)",
+"Приходы грузов в пункт назначения (в точку А)",
+"Остатки металла на складах хранения, и выбытия металла со складов"
+В группы входит соответствующий статус по "ID статуса - отчётность по грузоперевозкам" | dict_dds.transportation_status.transportation_status_group_code';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.transport_departure_hub_code is
+'Пункт отправления | Пункт отправления для соответствующего "Имя статуса - отчётность по грузоперевозкам"
+К примеру, если статус = "В морском транзите 1" то, пункт отправления, это "Порт погрузки" | dm_calc.finish_goods_warehouse_stock_plant_by_date.plant_manufact';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.transport_destination_hub_code is
+'Пункт назначения | Пункт назначения для соответствующего "Имя статуса - отчётность по грузоперевозкам"
+К примеру, если статус = "В морском транзите 1" то, пункт назначения, это "Порт выгрузки" | dm_calc.finish_goods_warehouse_stock_plant_by_date.plant_manufact';
+comment on column dm.sales_metal_stock_at_plant_for_transportation_reporting.dt_business_location_status_acquired is
+'Дата события | Дата при которой наступил статус "Имя статуса - отчётность по грузоперевозкам" или завершился.
+К примеру, если статус = "В морском транзите 1" то, Дата события, это "Дата коносамента" | dm_calc.finish_goods_warehouse_stock_plant_by_date.dt_report';
+
+insert into dm.sales_metal_stock_at_plant_for_transportation_reporting (
+	batch,
+	weight_net_with_wirerod,
+	business_location_for_cargo_reporting_code,
+	business_location_for_cargo_reporting_name,
+	business_location_group_for_cargo_reporting_name,
+	transport_departure_hub_code,
+	transport_destination_hub_code,
+	dt_business_location_status_acquired
+)
+select 
+	sgp.batch as batch,
+	sum(sgp.weight_net) as weight_net_with_wirerod,
+	'M01' as business_location_for_cargo_reporting_code,
+	tst.transportation_status_name as business_location_for_cargo_reporting_name,
+	ts.transportation_status_group_code as business_location_group_for_cargo_reporting_name,
+	sgp.plant_manufact as transport_departure_hub_code,
+	sgp.plant_manufact as transport_destination_hub_code,
+	sgp.dt_report as dt_business_location_status_acquired
+from dm_calc.finish_goods_warehouse_stock_plant_by_date as sgp
+left join dict_dds.transportation_status_texts as tst
+	on tst.transportation_status_code = 'M01'
+	and tst.language_code = 'R'
+left join dict_dds.transportation_status as ts
+	on ts.transportation_status_code = 'M01'
+where sgp.dt_report = current_date - 1
+group by
+	sgp.batch,
+	tst.transportation_status_name,
+	ts.transportation_status_group_code,
+	sgp.plant_manufact,
+	sgp.dt_report
+;
+
+второй файл
+drop table if exists dm.sales_metal_in_supply_chain_for_transportation_reporting cascade;
+
+create table if not exists dm.sales_metal_in_supply_chain_for_transportation_reporting (
+    transport_route_type_name                     varchar,
+    delivery_number_sales                         varchar,
+    batch                                         varchar,
+    weight_net_with_wirerod 					  numeric(13, 3),
+    transport_route_technical_code                varchar,
+    dt_delivery_plan                              date,
+    dt_delivery_actual                            date,
+    business_location_transport_departure_hub_code varchar,
+    business_location_transport_destination_hub_code varchar,
+    business_location_stay_duration_days_quantity int,
+    dt_delivery_estimated                         date,
+    is_delivery_plan_date_overdue                 bool,
+    dt_realization_estimated                      date,
+    dt_realization_basis_document				  date,
+    destination_warehouse_code					  varchar,
+    destination_transport_hub_code			      varchar,
+    dt_delivery_to_customer_estimated                   date,
+    business_location_at_report_date_code         varchar,
+    business_location_for_cargo_reporting_code    varchar,
+    business_location_for_cargo_reporting_name    varchar,
+    business_location_group_for_cargo_reporting_name varchar,
+    transport_departure_hub_code				  varchar,
+    transport_destination_hub_code				  varchar,
+	cargo_document_code							  varchar,
+    transport_type_name							  varchar,
+    route_plant_code                              varchar,
+    transport_hub_enroute_code					  varchar,
+    border_cross_to_final_station_normative_days  int,
+    normative_route_trip_duration_days_quantity   int,
+    normative_railway_trip_duration_days_quantity int,
+    storage_before_repacking_normative_days       int,
+    arrival_to_port_after_repacking_normative_days int,
+    route_delivery_after_repacking_normative_days int,
+    acceptance_normative_russian_port_days_amount int,
+    port_of_loading_storage_normative_days        int,
+    normative_marine_transit1_duration_days_quantity int,
+    acceptance_normative_foreign_port_days_amount int,
+    foreign_port_storage_normative_days           int,
+    acceptance_normative_second_foreign_port_days_amount int,
+    second_foreign_port_storage_normative_days    int,
+    foreign_port_vessel_loading_normative_days    int,
+    normative_marine_transit2_duration_days_quantity int,
+    foreign_port_delivery_to_customer_normative_days int,
+    foreign_port_storage_before_vessel_loading_norm_days int,
+    route_trip_railway_plant_to_border_normative_days int,
+    location_stay_duration_average_weighted_days int,
+    location_stay_duration_average_days int,
+    transportation_reporting_indicator	varchar,
+    dttm_inserted timestamp not null default now(),
+    dttm_updated timestamp not null default now(),
+    job_name varchar(60) not null default 'airflow'::character varying,
+    deleted_flag bool not null default false
+)
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+distributed by (delivery_number_sales, batch, transport_route_technical_code);
+
+comment on table dm.sales_metal_in_supply_chain_for_transportation_reporting is 'Баланс металла в цепочке поставок (без СГП,  с СВХ + реализованный металл) для витрин по грузоперевозкам';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transport_route_type_name is
+'Тип маршрута в цепочке поставок Морской/Сухопутный/Внутренний рынок | Определение типа маршрута в зависимости от направления, если направление через пограничную станцию ЖД, к примеру в Китай, то поле пустое, иначе, если дислокация в порт или отгрузка Внутреннего рынка, то устанавливается метка для обозначения Морского направления/отгрузки Внутреннего рынка | dm_calc.delivery_schema_for_overland_routes.transport_route_type_name / dm_calc.delivery_schema_for_other_routes.transport_route_type_name';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.delivery_number_sales is
+'Продажная поставка | Если поставка разделена, то деленная поставка, если нет, то Исходная поставка. Если отгрузка через агента (РТД) - выводится поставка завода производителя | dm_calc.delivery_schema_for_overland_routes.delivery_number_sales / dm_calc.delivery_schema_for_other_routes.delivery_number_sales';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.batch is
+'Партия | Номер партии метала, формируется на заводе производителе, либо при закупке на операторе от внешних поставщиков. | dm_calc.delivery_schema_for_overland_routes.batch / dm_calc.delivery_schema_for_other_routes.batch';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.weight_net_with_wirerod is
+'Вес Н&K | Н&К (N&K) - нетто и катанка. Вес нетто + катанки | dm_calc.delivery_schema_for_overland_routes.weight_net_with_wirerod / dm_calc.delivery_schema_for_other_routes.weight_net_with_wirerod';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transport_route_technical_code is
+'ID маршрута в цепочке поставок | Тех.поле для определения доступного или возможного последующего этапа транпортировки для поставки, в зависимости от наличия плановых или фактических дат транпортировки. | dm_calc.delivery_schema_for_overland_routes.transport_route_technical_code / dm_calc.delivery_schema_for_other_routes.transport_route_technical_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.dt_delivery_plan is
+'Плановая дата в цепочке доставки | Плановая дата доставки для уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.dt_delivery_plan / dm_calc.delivery_schema_for_other_routes.dt_delivery_plan';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.dt_delivery_actual is
+'Фактическая дата в цепочке доставки | Фактическая дата доставки для уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.dt_delivery_actual / dm_calc.delivery_schema_for_other_routes.dt_delivery_actual';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_transport_departure_hub_code is
+'Код реперной точки отправления | Узел отправления, к примеру KNOTE = P00000025, для соответствующего этапа транпортировки для уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.business_location_transport_departure_hub_code / dm_calc.delivery_schema_for_other_routes.business_location_transport_departure_hub_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_transport_destination_hub_code is
+'Код реперной точки назначения | Узел назначения, к примеру, KNOTE - S0000782, для соответствующего этапа транпортировки для уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.business_location_transport_destination_hub_code / dm_calc.delivery_schema_for_other_routes.business_location_transport_destination_hub_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_stay_duration_days_quantity is
+'Кол.дней на этапе маршрута | фактическое или плановое количествло дней нахождения на этапе транпортировки, для соответствующего уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.business_location_stay_duration_days_quantity / dm_calc.delivery_schema_for_other_routes.business_location_stay_duration_days_quantity';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.dt_delivery_estimated is
+'Прогнозная дата окончания этапа в маршруте | Прогнозная дата завершения этапа транпортировки, для соответствующего уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.dt_delivery_estimated / dm_calc.delivery_schema_for_other_routes.dt_delivery_estimated';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.is_delivery_plan_date_overdue is
+'Признак просроченной "Прогнозная дата окончания этапа в маршруте" | Отображает признак X, для строки, где "Плановая дата завершения этапа транпортировки" просрочена, для соответствующего уникального "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.is_delivery_plan_date_overdue / dm_calc.delivery_schema_for_other_routes.is_delivery_plan_date_overdue';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.dt_realization_estimated is
+'Расчетная дата реализации в цепочке поставок | Дата реализации, основанная на Плановых или Фактических датах этапа дислокации поставки, с учетом доступных нормативов | dm_calc.delivery_schema_for_overland_routes.dt_realization_estimated / dm_calc.delivery_schema_for_other_routes.dt_realization_estimated';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.dt_delivery_to_customer_estimated is
+'Расчетная дата доставки в цепочке поставок | Расчетная дата когда будет доставлен метал клиенту, основанная на Плановых или Фактических датах этапа дислокации поставки, с учетом доступных нормативов | dm_calc.delivery_schema_for_overland_routes.dt_delivery_to_customer_estimated / dm_calc.delivery_schema_for_other_routes.dt_delivery_to_customer_estimated';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_at_report_date_code is
+'ID Статуса Среза | ID Статуса Suply chain для поставки на дату среза (например, S01, S02 и прочие) сформированные на основании витрины "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату. | dm_calc.delivery_schema_for_overland_routes.business_location_at_report_date_code / dm_calc.delivery_schema_for_other_routes.business_location_at_report_date_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_for_cargo_reporting_code is
+'ID статуса - отчётность по грузоперевозкам | ID статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам (например, M01, M02 и прочие). Сформированные на основании витрины "Отчет по стокам (плановый и реализованный металл)" или "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату. | dm_calc.delivery_schema_for_overland_routes.business_location_for_cargo_reporting_code / dm_calc.delivery_schema_for_other_routes.business_location_for_cargo_reporting_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_for_cargo_reporting_name is
+'Имя статуса - отчётность по грузоперевозкам | Имя статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам, основанный на статусе цепочки поставок, к примеру "Принято на первом иностранном складе", и прочие статусы согласно мэппингу устанвленному бизнесом, указанного в таблице ZSD4270M_STATKHD. Поставки для статуса имеют срезы, согласно витрины "Отчет по стокам (плановый и реализованный металл)" или "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату. | dm_calc.delivery_schema_for_overland_routes.business_location_for_cargo_reporting_name / dm_calc.delivery_schema_for_other_routes.business_location_for_cargo_reporting_name';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.business_location_group_for_cargo_reporting_name is
+'Группа статуса - отчётность по грузоперевозкам | Группа статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам такие как: "Отправки грузов из пункта отправления (из точки А)", "Приходы грузов в пункт назначения (в точку А)", "Остатки металла на складах хранения, и выбытия металла со складов". В группы входит соответствующий статус по "ID статуса - отчётность по грузоперевозкам" | dm_calc.delivery_schema_for_overland_routes.business_location_group_for_cargo_reporting_name / dm_calc.delivery_schema_for_other_routes.business_location_group_for_cargo_reporting_name';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transport_departure_hub_code is
+'Пункт отправления | Пункт отправления для соответствующего "Имя статуса - отчётность по грузоперевозкам". К примеру, если статус = "В морском транзите 1" то, пункт отправления, это "Порт погрузки" | dm_calc.delivery_schema_for_overland_routes.transport_departure_hub_code / dm_calc.delivery_schema_for_other_routes.transport_departure_hub_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transport_destination_hub_code is
+'Пункт назначения | Пункт отправления для соответствующего "Имя статуса - отчётность по грузоперевозкам". К примеру, если статус = "В морском транзите 1" то, пункт отправления, это "Порт выгрузки" | dm_calc.delivery_schema_for_overland_routes.transport_destination_hub_code / dm_calc.delivery_schema_for_other_routes.transport_destination_hub_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.cargo_document_code is
+'Сопроводительный документ | Сопутствующий документ для статуса "Имя статуса - отчётность по грузоперевозкам". К примеру, если статус = "В морском транзите 1", то документ, это "Номер коносамента" | dm_calc.delivery_schema_for_overland_routes.cargo_document_code / dm_calc.delivery_schema_for_other_routes.cargo_document_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transport_type_name is
+'Тип ТС в дислокации | Сопутствующий тип транпортного средства для статуса "Имя статуса - отчётность по грузоперевозкам". К примеру, если статус = "В морском транзите 1" то, тип ТС, это обозначение тары в которой дислоцируется материал, к примеру "Морской контейнер" | dm_calc.delivery_schema_for_overland_routes.transport_type_name / dm_calc.delivery_schema_for_other_routes.transport_type_name';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.route_plant_code is
+'Маршрут завода | Системный номер маршрута завода, который указывается в поставке завода производителя | dm_calc.delivery_schema_for_overland_routes.route_plant_code / dm_calc.delivery_schema_for_other_routes.route_plant_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transport_hub_enroute_code is
+'Промежуточный пункт назначения в маршруте завода (код) | Код узла, к примеру, KNOTE - S0000782, пограничнойстанции в доставке от завода. Для напрвления пограничных станций, будет промежуточная точка "пограничная станция" | dm_calc.delivery_schema_for_overland_routes.transport_hub_enroute_code';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.border_cross_to_final_station_normative_days is
+'Норматив Пограничный переход-Конечная станция | Значение норматива доставки по ЖД, рассчитанное в зависимости от наличия документа Вывоза (пограничного перехода) | dm_calc.delivery_schema_for_overland_routes.border_cross_to_final_station_normative_days / dm_calc.delivery_schema_for_other_routes.border_cross_to_final_station_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.normative_route_trip_duration_days_quantity is
+'Норма доставки по маршруту завода | Норма доставки по маршруту завода | dm_calc.delivery_schema_for_overland_routes.normative_route_trip_duration_days_quantity / dm_calc.delivery_schema_for_other_routes.normative_route_trip_duration_days_quantity';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.normative_railway_trip_duration_days_quantity is
+'Норма движения по жд (дни) | Норма движения по жд (дни) | dm_calc.delivery_schema_for_overland_routes.normative_railway_trip_duration_days_quantity / dm_calc.delivery_schema_for_other_routes.normative_railway_trip_duration_days_quantity';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.storage_before_repacking_normative_days is
+'Норма хранения до перетарки | Значение норматива по хранению до перетарки в порту РФ | dm_calc.delivery_schema_for_overland_routes.storage_before_repacking_normative_days / dm_calc.delivery_schema_for_other_routes.storage_before_repacking_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.arrival_to_port_after_repacking_normative_days is
+'Норма прибытия в порт после перетарки | Значение норматива по количеству дней движения после перетарки в порт РФ | dm_calc.delivery_schema_for_overland_routes.arrival_to_port_after_repacking_normative_days / dm_calc.delivery_schema_for_other_routes.arrival_to_port_after_repacking_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.route_delivery_after_repacking_normative_days is
+'Норма доставки по маршруту перетарки | Значение норматива по количеству дней движения после перетарки до клиента | dm_calc.delivery_schema_for_overland_routes.route_delivery_after_repacking_normative_days / dm_calc.delivery_schema_for_other_routes.route_delivery_after_repacking_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.acceptance_normative_russian_port_days_amount is
+'Норма приемки контейнера в портy | Норма приемки груза в портy | dm_calc.delivery_schema_for_overland_routes.acceptance_normative_russian_port_days_amount / dm_calc.delivery_schema_for_other_routes.acceptance_normative_russian_port_days_amount';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.port_of_loading_storage_normative_days is
+'Норма хранения в порту погрузки | Значение норматива по количеству дней хранения в порту РФ до появления коносамента | dm_calc.delivery_schema_for_overland_routes.port_of_loading_storage_normative_days / dm_calc.delivery_schema_for_other_routes.port_of_loading_storage_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.normative_marine_transit1_duration_days_quantity is
+'Норма морского транзита | Норма морского транзита | dm_calc.delivery_schema_for_overland_routes.normative_marine_transit1_duration_days_quantity / dm_calc.delivery_schema_for_other_routes.normative_marine_transit1_duration_days_quantity';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.acceptance_normative_foreign_port_days_amount is
+'Норма приемки терминал/склад ин. порта | Норма приемки груза в ин. портy | dm_calc.delivery_schema_for_overland_routes.acceptance_normative_foreign_port_days_amount / dm_calc.delivery_schema_for_other_routes.acceptance_normative_foreign_port_days_amount';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.foreign_port_storage_normative_days is
+'Норма хранения в ин.порту | Значение норматива по количеству дней хранения в первом иностранном порту | dm_calc.delivery_schema_for_overland_routes.foreign_port_storage_normative_days / dm_calc.delivery_schema_for_other_routes.foreign_port_storage_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.acceptance_normative_second_foreign_port_days_amount is
+'Норма приемки терминал/склад ин. порта 2 | Норма приемки груза в ин. портy 2 | dm_calc.delivery_schema_for_overland_routes.acceptance_normative_second_foreign_port_days_amount / dm_calc.delivery_schema_for_other_routes.acceptance_normative_second_foreign_port_days_amount';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.second_foreign_port_storage_normative_days is
+'Норма хранения в ин.порту 2 | Значение норматива по количеству дней хранения во втором иностранном порту | dm_calc.delivery_schema_for_overland_routes.second_foreign_port_storage_normative_days / dm_calc.delivery_schema_for_other_routes.second_foreign_port_storage_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.foreign_port_vessel_loading_normative_days is
+'Норма погрузки на судно в ин. порту | Значение норматива по количеству дней для погрузки судна в иностранном порту | dm_calc.delivery_schema_for_overland_routes.foreign_port_vessel_loading_normative_days / dm_calc.delivery_schema_for_other_routes.foreign_port_vessel_loading_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.normative_marine_transit2_duration_days_quantity is
+'Норма морского транзита 2 | Норма морского транзита 2 | dm_calc.delivery_schema_for_overland_routes.normative_marine_transit2_duration_days_quantity / dm_calc.delivery_schema_for_other_routes.normative_marine_transit2_duration_days_quantity';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.foreign_port_delivery_to_customer_normative_days is
+'Норма доставки по маршруту со склада ин. порта | Значение норматива по количеству дней движения от порта до клиента | dm_calc.delivery_schema_for_overland_routes.foreign_port_delivery_to_customer_normative_days / dm_calc.delivery_schema_for_other_routes.foreign_port_delivery_to_customer_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.transportation_reporting_indicator is
+'Индикатор релевантности поставки и партии для отчетности по грузоперевозкам | Индикатор релевантности поставки и партии для отчетности по грузоперевозкам | Расчетное';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.dt_realization_basis_document is
+'Дата основания для реализации | Дата появления документа для основания проведения реализации, такие как Нотис, Финальный релиз, Коносамент | Расчетное';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.destination_warehouse_code is
+'Склад грузополучателя по маршруту завода (код) | Код склада, к примеру G000000100, на который отправляют металл по пункту назначения в маршруте завода | Расчетное';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.destination_transport_hub_code is
+'Конечный пункт назначения в маршруте завода (код) | Код узла, к примеру, KNOTE - S0000782, куда направляется материал в доставке от завода, с учетом возможного перенаправления отгрузки. Для напрвления пограничных станций, будет не промежуточная точка "пограничная станция", а последующая/финальная точка в доставке. | Расчетное';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.foreign_port_storage_before_vessel_loading_norm_days is
+'Норма хранения до погрузки на судно в ин.порту | Значение норматива по количеству дней храненения перед погрузкой на судно в иностранных портах | dm_calc.delivery_schema_for_overland_routes.foreign_port_storage_before_vessel_loading_norm_days / dm_calc.delivery_schema_for_other_routes.foreign_port_storage_before_vessel_loading_norm_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.route_trip_railway_plant_to_border_normative_days is
+'Норма движения по ЖД (дни) от Завода до Пограничного перехода в Китай | Норматив движения по ЖД в днях, от Завода до Пограничного перехода по направлению Китай | dm_calc.delivery_schema_for_overland_routes.route_trip_railway_plant_to_border_normative_days / dm_calc.delivery_schema_for_other_routes.route_trip_railway_plant_to_border_normative_days';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.location_stay_duration_average_weighted_days is
+'Средневзвешенное количество дней в локации | Средневзвешенное количество рассчитанное для каждой локации в разрезе уникального значения полей: "ID маршрута в цепочке поставок" (этап транзита/склада), "Код реперной точки отправления" (точки отправлени в Этапе транпортировке/складирования), "Код реперной точки назначения" (точки назначения в Этапе транпортировке/складирования) по витрине "Цепочка поставок ГП/нормативов (схема доставки) | Расчетное';
+
+comment on column dm.sales_metal_in_supply_chain_for_transportation_reporting.location_stay_duration_average_days is
+'Среднее количество дней в локации | Среднее количество рассчитанное для каждой локации в разрезе уникального значения полей: "ID маршрута в цепочке поставок" (этап транзита/склада), "Код реперной точки отправления" (точки отправлени в Этапе транпортировке/складирования), "Код реперной точки назначения" (точки назначения в Этапе транпортировке/складирования) по витрине "Цепочка поставок ГП/нормативов (схема доставки)" | Расчетное';
+
+insert into dm.sales_metal_in_supply_chain_for_transportation_reporting (
+    transport_route_type_name,
+    delivery_number_sales,
+    batch,
+    weight_net_with_wirerod,
+    transport_route_technical_code,
+    dt_delivery_plan,
+    dt_delivery_actual,
+    business_location_transport_departure_hub_code,
+    business_location_transport_destination_hub_code,
+    business_location_stay_duration_days_quantity,
+    dt_delivery_estimated,
+    is_delivery_plan_date_overdue,
+    dt_realization_estimated,
+    dt_realization_basis_document,
+	destination_warehouse_code,
+	destination_transport_hub_code,
+    dt_delivery_to_customer_estimated,
+    business_location_at_report_date_code,
+    business_location_for_cargo_reporting_code,
+    business_location_for_cargo_reporting_name,
+    business_location_group_for_cargo_reporting_name,
+    transport_departure_hub_code,
+    transport_destination_hub_code,
+	cargo_document_code,
+    transport_type_name,
+    route_plant_code,
+    transport_hub_enroute_code,
+    border_cross_to_final_station_normative_days,
+    normative_route_trip_duration_days_quantity,
+    normative_railway_trip_duration_days_quantity,
+    storage_before_repacking_normative_days,
+    arrival_to_port_after_repacking_normative_days,
+    route_delivery_after_repacking_normative_days,
+    acceptance_normative_russian_port_days_amount,
+    port_of_loading_storage_normative_days,
+    normative_marine_transit1_duration_days_quantity,
+    acceptance_normative_foreign_port_days_amount,
+    foreign_port_storage_normative_days,
+    acceptance_normative_second_foreign_port_days_amount,
+    second_foreign_port_storage_normative_days,
+    foreign_port_vessel_loading_normative_days,
+    normative_marine_transit2_duration_days_quantity,
+    foreign_port_delivery_to_customer_normative_days,
+    foreign_port_storage_before_vessel_loading_norm_days,
+    route_trip_railway_plant_to_border_normative_days,
+    location_stay_duration_average_weighted_days,
+    location_stay_duration_average_days,
+    transportation_reporting_indicator
+)
+with delivery_schema as (
+	select
+	    transport_route_type_name,
+	    delivery_number_sales,
+	    batch,
+	    weight_net_with_wirerod,
+	    transport_route_technical_code,
+	    dt_delivery_plan,
+	    dt_delivery_actual,
+	    business_location_transport_departure_hub_code,
+	    business_location_transport_destination_hub_code,
+	    business_location_stay_duration_days_quantity,
+	    dt_delivery_estimated,
+	    is_delivery_plan_date_overdue,
+	    dt_realization_estimated,
+   		dt_realization_basis_document,
+		destination_warehouse_code,
+		destination_transport_hub_code,
+	    dt_delivery_to_customer_estimated,
+	    business_location_at_report_date_code,
+	    business_location_for_cargo_reporting_code,
+	    business_location_for_cargo_reporting_name,
+	    business_location_group_for_cargo_reporting_name,
+	    transport_departure_hub_code,
+	    transport_destination_hub_code,
+		cargo_document_code,
+	    transport_type_name,
+	    route_plant_code,
+	    transport_hub_enroute_code,
+	    border_cross_to_final_station_normative_days,
+	    normative_route_trip_duration_days_quantity,
+	    normative_railway_trip_duration_days_quantity,
+	    storage_before_repacking_normative_days,
+	    arrival_to_port_after_repacking_normative_days,
+	    route_delivery_after_repacking_normative_days,
+	    acceptance_normative_russian_port_days_amount,
+	    port_of_loading_storage_normative_days,
+	    normative_marine_transit1_duration_days_quantity,
+	    acceptance_normative_foreign_port_days_amount,
+	    foreign_port_storage_normative_days,
+	    acceptance_normative_second_foreign_port_days_amount,
+	    second_foreign_port_storage_normative_days,
+	    foreign_port_vessel_loading_normative_days,
+	    normative_marine_transit2_duration_days_quantity,
+	    foreign_port_delivery_to_customer_normative_days,
+    	foreign_port_storage_before_vessel_loading_norm_days,
+    	route_trip_railway_plant_to_border_normative_days
+	from dm_calc.delivery_schema_for_overland_routes
+	union all
+	select
+	    transport_route_type_name,
+	    delivery_number_sales,
+	    batch,
+	    weight_net_with_wirerod,
+	    transport_route_technical_code,
+	    dt_delivery_plan,
+	    dt_delivery_actual,
+	    business_location_transport_departure_hub_code,
+	    business_location_transport_destination_hub_code,
+	    business_location_stay_duration_days_quantity,
+	    dt_delivery_estimated,
+	    is_delivery_plan_date_overdue,
+	    dt_realization_estimated,
+   		dt_realization_basis_document,
+		destination_warehouse_code,
+		destination_transport_hub_code,
+	    dt_delivery_to_customer_estimated,
+	    business_location_at_report_date_code,
+	    business_location_for_cargo_reporting_code,
+	    business_location_for_cargo_reporting_name,
+	    business_location_group_for_cargo_reporting_name,
+	    transport_departure_hub_code,
+	    transport_destination_hub_code,
+		cargo_document_code,
+	    transport_type_name,
+	    route_plant_code,
+	    null as transport_hub_enroute_code,
+	    border_cross_to_final_station_normative_days,
+	    normative_route_trip_duration_days_quantity,
+	    normative_railway_trip_duration_days_quantity,
+	    storage_before_repacking_normative_days,
+	    arrival_to_port_after_repacking_normative_days,
+	    route_delivery_after_repacking_normative_days,
+	    acceptance_normative_russian_port_days_amount,
+	    port_of_loading_storage_normative_days,
+	    normative_marine_transit1_duration_days_quantity,
+	    acceptance_normative_foreign_port_days_amount,
+	    foreign_port_storage_normative_days,
+	    acceptance_normative_second_foreign_port_days_amount,
+	    second_foreign_port_storage_normative_days,
+	    foreign_port_vessel_loading_normative_days,
+	    normative_marine_transit2_duration_days_quantity,
+	    foreign_port_delivery_to_customer_normative_days,
+    	foreign_port_storage_before_vessel_loading_norm_days,
+    	route_trip_railway_plant_to_border_normative_days
+	from dm_calc.delivery_schema_for_other_routes
+),
+realized_delivery as (
+	select distinct
+			scm.delivery_number_sales,
+			scm.batch
+	from dm_calc.sales_stock_realised_by_date as scm
+	left join dict_dds.settings_and_parameters_sap as chargexp_params
+		on chargexp_params.abap_program_code = '/RUSAL/SD2973M'
+		and chargexp_params.case_code = 'KHD'
+		and chargexp_params.parameter_code = 'CHARGEXP'
+		and chargexp_params.range_low_value is not null
+		and chargexp_params.range_low_value = scm.batch
+	where scm.dt_report <= current_date - 1
+		and (scm.dt_report > current_date - 31
+			or (scm.dt_storage_start_in_second_foreign_warehouse is not null
+				and scm.dt_storage_end_in_second_foreign_warehouse is null
+				and scm.is_shipped_via_overseas_second_foreign_warehouse = 'X'
+				and scm.dt_realization >= '2026-01-01'
+			   )
+			or (scm.dt_storage_start_in_foreign_port is not null
+				and scm.dt_storage_end_in_foreign_port is null
+				and scm.is_shipped_via_overseas_warehouse = 'X'
+				and scm.dt_storage_start_in_second_foreign_warehouse is null
+				and scm.dt_realization >= '2026-01-01'
+			   )
+			)
+		and chargexp_params.abap_program_code is null
+),
+precalc as (
+	select 
+		base.transport_route_type_name,
+		base.delivery_number_sales,
+		base.batch,
+		base.weight_net_with_wirerod,
+		base.transport_route_technical_code,
+		base.dt_delivery_plan,
+		base.dt_delivery_actual,
+		base.business_location_transport_departure_hub_code,
+		base.business_location_transport_destination_hub_code,
+		base.business_location_stay_duration_days_quantity,
+		base.dt_delivery_estimated,
+		base.is_delivery_plan_date_overdue,
+		base.dt_realization_estimated,
+	   	base.dt_realization_basis_document,
+		base.destination_warehouse_code,
+		base.destination_transport_hub_code,
+		base.dt_delivery_to_customer_estimated,
+		base.business_location_at_report_date_code,
+		base.business_location_for_cargo_reporting_code,
+		base.business_location_for_cargo_reporting_name,
+		base.business_location_group_for_cargo_reporting_name,
+		base.transport_departure_hub_code,
+		base.transport_destination_hub_code,
+		base.cargo_document_code,
+		base.transport_type_name,
+		base.route_plant_code,
+		base.transport_hub_enroute_code,
+		base.border_cross_to_final_station_normative_days,
+		base.normative_route_trip_duration_days_quantity,
+		base.normative_railway_trip_duration_days_quantity,
+		base.storage_before_repacking_normative_days,
+		base.arrival_to_port_after_repacking_normative_days,
+		base.route_delivery_after_repacking_normative_days,
+		base.acceptance_normative_russian_port_days_amount,
+		base.port_of_loading_storage_normative_days,
+		base.normative_marine_transit1_duration_days_quantity,
+		base.acceptance_normative_foreign_port_days_amount,
+		base.foreign_port_storage_normative_days,
+		base.acceptance_normative_second_foreign_port_days_amount,
+		base.second_foreign_port_storage_normative_days,
+		base.foreign_port_vessel_loading_normative_days,
+		base.normative_marine_transit2_duration_days_quantity,
+		base.foreign_port_delivery_to_customer_normative_days,
+    	base.foreign_port_storage_before_vessel_loading_norm_days,
+    	base.route_trip_railway_plant_to_border_normative_days,
+		case 
+			when stock.delivery_number_sales is not null
+				or svh.delivery_number_sales is not null
+				or realized.delivery_number_sales is not null
+				then 'X'
+			else null
+		end as transportation_reporting_indicator
+	from delivery_schema as base
+	left join dm_calc.sd_sales_stock_by_date as stock
+		on stock.dt_report = current_date - 1
+		and stock.delivery_number_sales = base.delivery_number_sales
+		and stock.batch = base.batch
+		and stock.dt_realization is null
+		and ((stock.warehouse_shipment_type_name is not null and stock.shipment_market_code in ('1', '4'))
+	        or stock.warehouse_shipment_type_name is null)
+	left join dm_calc.sd_sales_svh_stock_by_date as svh
+		on svh.dt_report = current_date - 1
+		and svh.dt_realization is null
+		and svh.delivery_number_sales = base.delivery_number_sales
+		and svh.batch = base.batch
+	left join realized_delivery as realized
+		on realized.delivery_number_sales = base.delivery_number_sales
+		and realized.batch = base.batch
+),
+unique_routes as (
+	select
+	    transport_route_technical_code,						-- SD.001670 ID маршрута в цепочке поставок
+		business_location_transport_departure_hub_code,  	-- SD.001673 Код реперной точки отправления
+	    business_location_transport_destination_hub_code, 	-- SD.001674 Код реперной точки назначения
+	    max(dt_delivery_actual)	as 	dt_delivery_actual		-- SD.001672 Фактическая дата в цепочке доставки
+	from delivery_schema
+	where dt_delivery_actual is not null
+	group by
+	    transport_route_technical_code,
+		business_location_transport_departure_hub_code,
+	    business_location_transport_destination_hub_code
+),
+preliminary_routes as (
+	select
+		base.transport_route_technical_code, 										-- SD.001670 ID маршрута в цепочке поставок
+		base.business_location_transport_departure_hub_code,  						-- SD.001673 Код реперной точки отправления
+		base.business_location_transport_destination_hub_code, 						-- SD.001674 Код реперной точки назначения
+		-- SD.001675 Кол.дней на этапе маршрута (сумма)
+		sum(base.business_location_stay_duration_days_quantity) as sum_business_location_stay_duration_days_quantity,
+		-- количество уникальных строк для каждой найденной группы
+		count(*) as count_rows_unique_group,
+		-- сумма "Кол.дней на этапе маршрута"
+		sum(base.business_location_stay_duration_days_quantity * ssms.weight_net) as sum_w_business_location_stay_duration_days_quantity,
+		-- сумма "Вес нетто"
+		sum(ssms.weight_net) as sum_weight_net
+	from precalc as base
+	inner join unique_routes as ur
+		on ur.transport_route_technical_code = base.transport_route_technical_code
+		and ur.business_location_transport_departure_hub_code = base.business_location_transport_departure_hub_code
+		and ur.business_location_transport_destination_hub_code = base.business_location_transport_destination_hub_code
+		and ur.dt_delivery_actual >= (base.dt_delivery_actual - 90)
+	left join dm_calc.sd_sales_main_scm as ssms
+		on ssms.delivery_number_sales = base.delivery_number_sales
+		and ssms.batch = base.batch
+	group by base.transport_route_technical_code,
+			 base.business_location_transport_departure_hub_code,
+			 base.business_location_transport_destination_hub_code
+),
+avg_metrics as (
+	select
+		base.transport_route_technical_code, 										-- SD.001670 ID маршрута в цепочке поставок
+		base.business_location_transport_departure_hub_code,  						-- SD.001673 Код реперной точки отправления
+		base.business_location_transport_destination_hub_code, 						-- SD.001674 Код реперной точки назначения
+		-- SD.001778 Средневзвешенное количество дней в локации
+		round(base.sum_w_business_location_stay_duration_days_quantity / nullif(base.sum_weight_net, 0)) as location_stay_duration_average_weighted_days,
+		-- SD.001779 Среднее количество дней в локации
+		round(base.sum_business_location_stay_duration_days_quantity / nullif(base.count_rows_unique_group, 0)) as location_stay_duration_average_days
+	from preliminary_routes as base
+)
+select
+    base.transport_route_type_name,
+    base.delivery_number_sales,
+    base.batch,
+    base.weight_net_with_wirerod,
+    base.transport_route_technical_code,
+    base.dt_delivery_plan,
+    base.dt_delivery_actual,
+    base.business_location_transport_departure_hub_code,
+    base.business_location_transport_destination_hub_code,
+    base.business_location_stay_duration_days_quantity,
+    base.dt_delivery_estimated,
+    base.is_delivery_plan_date_overdue,
+    (base.dt_realization_estimated
+    +
+	coalesce(
+	        sum(coalesce(m.location_stay_duration_average_weighted_days, 0)) over (
+	            partition by base.delivery_number_sales, base.batch
+	            order by base.transport_route_technical_code
+	            rows between 1 following and unbounded following
+        	),
+       		0
+    )::int) as dt_realization_estimated,
+    base.dt_realization_basis_document,
+	base.destination_warehouse_code,
+	base.destination_transport_hub_code,
+    (base.dt_delivery_to_customer_estimated
+    +
+	coalesce(
+	        sum(coalesce(m.location_stay_duration_average_weighted_days, 0)) over (
+	            partition by base.delivery_number_sales, base.batch
+	            order by base.transport_route_technical_code
+	            rows between 1 following and unbounded following
+	        ),
+	        0
+    )::int) as dt_delivery_to_customer_estimated,	
+    base.business_location_at_report_date_code,
+    base.business_location_for_cargo_reporting_code,
+    base.business_location_for_cargo_reporting_name,
+    base.business_location_group_for_cargo_reporting_name,
+    base.transport_departure_hub_code,
+    base.transport_destination_hub_code,
+	base.cargo_document_code,
+    base.transport_type_name,
+    base.route_plant_code,
+    base.transport_hub_enroute_code,
+    base.border_cross_to_final_station_normative_days,
+    base.normative_route_trip_duration_days_quantity,
+    base.normative_railway_trip_duration_days_quantity,
+    base.storage_before_repacking_normative_days,
+    base.arrival_to_port_after_repacking_normative_days,
+    base.route_delivery_after_repacking_normative_days,
+    base.acceptance_normative_russian_port_days_amount,
+    base.port_of_loading_storage_normative_days,
+    base.normative_marine_transit1_duration_days_quantity,
+    base.acceptance_normative_foreign_port_days_amount,
+    base.foreign_port_storage_normative_days,
+    base.acceptance_normative_second_foreign_port_days_amount,
+    base.second_foreign_port_storage_normative_days,
+    base.foreign_port_vessel_loading_normative_days,
+    base.normative_marine_transit2_duration_days_quantity,
+    base.foreign_port_delivery_to_customer_normative_days,
+    base.foreign_port_storage_before_vessel_loading_norm_days,
+    base.route_trip_railway_plant_to_border_normative_days,
+    m.location_stay_duration_average_weighted_days,
+    m.location_stay_duration_average_days,
+    base.transportation_reporting_indicator
+from precalc as base
+left join avg_metrics as m
+	on m.transport_route_technical_code = base.transport_route_technical_code
+	and m.business_location_transport_departure_hub_code = base.business_location_transport_departure_hub_code
+	and m.business_location_transport_destination_hub_code = base.business_location_transport_destination_hub_code
+;
+
+3
+drop table if exists dm_calc.delivery_schema_for_other_routes;
+
+create table if not exists dm_calc.delivery_schema_for_other_routes (
+    transport_route_type_name                     varchar,
+    delivery_number_sales                         varchar,
+    batch                                         varchar,
+    weight_net_with_wirerod 					  numeric(13, 3),
+    transport_route_technical_code                varchar,
+    dt_delivery_plan                              date,
+    dt_delivery_actual                            date,
+    business_location_transport_departure_hub_code varchar,
+    business_location_transport_destination_hub_code varchar,
+    business_location_stay_duration_days_quantity int,
+    dt_delivery_estimated                         date,
+    is_delivery_plan_date_overdue                 bool,
+    dt_realization_estimated                      date,
+    dt_realization_basis_document				  date,
+    destination_warehouse_code					  varchar,
+    destination_transport_hub_code			      varchar,
+    dt_delivery_to_customer_estimated             date,
+    business_location_at_report_date_code         varchar,
+    business_location_for_cargo_reporting_code    varchar,
+    business_location_for_cargo_reporting_name    varchar,
+    business_location_group_for_cargo_reporting_name varchar,
+    transport_departure_hub_code				  varchar,
+    transport_destination_hub_code				  varchar,
+    cargo_document_code							  varchar,
+    transport_type_name							  varchar,
+    route_plant_code                              varchar,
+    border_cross_to_final_station_normative_days  int,
+    normative_route_trip_duration_days_quantity   int,
+    normative_railway_trip_duration_days_quantity int,
+    storage_before_repacking_normative_days       int,
+    arrival_to_port_after_repacking_normative_days int,
+    route_delivery_after_repacking_normative_days int,
+    acceptance_normative_russian_port_days_amount int,
+    port_of_loading_storage_normative_days        int,
+    normative_marine_transit1_duration_days_quantity int,
+    acceptance_normative_foreign_port_days_amount int,
+    foreign_port_storage_normative_days           int,
+    acceptance_normative_second_foreign_port_days_amount int,
+    second_foreign_port_storage_normative_days    int,
+    foreign_port_vessel_loading_normative_days    int,
+    normative_marine_transit2_duration_days_quantity int,
+    foreign_port_delivery_to_customer_normative_days int,
+    foreign_port_storage_before_vessel_loading_norm_days int,
+    route_trip_railway_plant_to_border_normative_days int,
+    dttm_inserted timestamp not null default now(),
+    dttm_updated timestamp not null default now(),
+    job_name varchar(60) not null default 'airflow'::character varying,
+    deleted_flag bool not null default false
+)
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+distributed by (delivery_number_sales, batch, transport_route_technical_code);
+
+comment on table dm_calc.delivery_schema_for_other_routes is 'Схема доставки для прочих маршрутов';
+
+comment on column dm_calc.delivery_schema_for_other_routes.transport_route_type_name is
+'Тип маршрута в цепочке поставок Морской/Сухопутный/Внутренний рынок | Определение типа маршрута в зависимости от напрвления, если направление через пограничную станцию ЖД, к примеру в Китай, то поле пустое, иначе, если дислокация в порт или отгрузка Внутрренего рынка, то устанавливается метка для обозначения Морского направления/отгрузки Внутреннего рынка | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.delivery_number_sales is
+'Продажная поставка | Если поставка разделена, то деленная поставка, если нет, то Исходная поставка. Если отгрузка через агента (РТД) - выводится поставка завода производителя | dm_calc.sd_sales_main_scm.delivery_number_sales';
+
+comment on column dm_calc.delivery_schema_for_other_routes.batch is
+'Партия | Номер партии метала, формируется на заводе производителе, либо при закупке на операторе от внешних поставщиков. | dm_calc.sd_sales_main_scm.batch';
+
+comment on column dm_calc.delivery_schema_for_other_routes.weight_net_with_wirerod is
+'Вес Н&K | Н&К (N&K) - нетто и катанка Вес нетто + катанки | dm_calc.sd_sales_main_scm.weight_net_with_wirerod';
+
+comment on column dm_calc.delivery_schema_for_other_routes.transport_route_technical_code is
+'ID маршрута в цепочке поставок | Тех.поле для определения доступного или возможного последующего этапа транпортировки для поставки, в зависимости от наличия плановых или фактических дат транпортировки. | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.dt_delivery_plan is
+'Плановая дата в цепочке доставки | Плановая дата доставки для уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.dt_delivery_actual is
+'Фактическая дата в цепочке доставки | Фактическая дата доставки для уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_transport_departure_hub_code is
+'Код реперной точки отправления | Узел отправления, к примеру KNOTE = P00000025, для соответствующего этапа транпортировки для уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_transport_destination_hub_code is
+'Код реперной точки назначения | Узел назначения, к примеру KNOTE = P00000025, для соответствующего этапа транпортировки для уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_stay_duration_days_quantity is
+'Кол.дней на этапе маршрута | фактическое или плановое количествло дней нахождения на этапе транпортировки, для соответствующего уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.dt_delivery_estimated is
+'Прогнозная дата окончания этапа в маршруте | Прогнозная дата завершения этапа транпортировки, для соответствующего уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.is_delivery_plan_date_overdue is
+'Признак просроченной "Прогнозная дата окончания этапа в маршруте" | Отображает признак X, для строки, где "Плановая дата завершения этапа транпортировки" просрочена, для соответствующего уникального "ID статуса - отчётность по грузоперевозкам" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.dt_realization_estimated is
+'Расчетная дата реализации в цепочке поставок | Дата реализации, основанная на Плановых или Фактических датах этапа дислокации поставки, с учетом доступных нормативов | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_for_cargo_reporting_code is
+'ID статуса - отчётность по грузоперевозкам | ID статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам (например, M01, M02 и прочие) Сформированные на основании витрины "Отчет по стокам (плановый и реализованный металл)" или "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату. | Расчётное из dict_dds.business_location.transportation_status_code';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_for_cargo_reporting_name is
+'Имя статуса - отчётность по грузоперевозкам | Имя статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам, основанный на статусе цепочки поставок, к примеру "Принято на первом иностранном складе", и прочие статусы согласно мэппингу устанвленному бизнесом, указанного в таблице ZSD4270M_STATKHD. Поставки для статуса имеют срезы, согласно витрины "Отчет по стокам (плановый и реализованный металл)" или "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации | Расчётное из dict_dds.transportation_status_texts.transportation_status_name';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_group_for_cargo_reporting_name is
+'Группа статуса - отчётность по грузоперевозкам | Группа статуса витрины Цепочка поставок ГП - отчётность по грузоперевозкам такие как: "Отправки грузов из пункта отправления (из точки А)", "Приходы грузов в пункт назначения (в точку А)", "Остатки металла на складах хранения, и выбытия металла со складов" В группы входит соответствующий статус по "ID статуса - отчётность по грузоперевозкам" | Расчётное из dict_dds.transportation_status.transportation_status_group_code';
+
+comment on column dm_calc.delivery_schema_for_other_routes.transport_departure_hub_code is
+'Пункт отправления | Пункт отправления для соответствующего "Имя статуса - отчётность по грузоперевозкам" К примеру, если статус = "В морском транзите 1" то, пункт отправления, это "Порт погрузки" | Расчётное из dict_dds.transport_hub_texts.transport_hub_name';
+
+comment on column dm_calc.delivery_schema_for_other_routes.transport_destination_hub_code is
+'Пункт назначения | Пункт отправления для соответствующего "Имя статуса - отчётность по грузоперевозкам" К примеру, если статус = "В морском транзите 1" то, пункт отправления, это "Порт выгрузки" | Расчётное из dict_dds.transport_hub_texts.transport_hub_name';
+
+comment on column dm_calc.delivery_schema_for_other_routes.cargo_document_code is
+'Сопроводительный документ | Сопутствующий документ для статуса "Имя статуса - отчётность по грузоперевозкам" К примеру, если статус = "В морском транзите 1",то документ, это "Номер коносамента" | Расчётное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.transport_type_name is
+'Тип ТС в дислокации | Сопутствующий тип транпортного средства для статуса "Имя статуса - отчётность по грузоперевозкам" К примеру, если статус = "В морском транзите 1" то, тип ТС, это обозначение тары в которой дислоцируется материал, к примеру "Морской контейнер" | Расчётное из dm_calc.sd_sales_main_scm.transport_railcar_type_code, dm_calc.sd_sales_main_scm.container_after_repacking, dm_calc.sd_sales_main_scm.transport_type_at_plant_code';
+
+comment on column dm_calc.delivery_schema_for_other_routes.route_plant_code is
+'Маршрут завода | Системный номер маршрута завода, который указывается в поставке завода производителя | dm_calc.sd_sales_main_scm.route_plant_code';
+
+comment on column dm_calc.delivery_schema_for_other_routes.border_cross_to_final_station_normative_days is
+'Норматив Пограничный переход-Конечная станция | Значение норматива доставки по ЖД, рассчитанное в зависимости от наличия документа Вывоза (пограничного перехода) | ods.map_zmk_track_exp_keys."TERM_DURATION2_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.normative_route_trip_duration_days_quantity is
+'Норма доставки по маршруту завода | Норма доставки по маршруту завода | Расчётное из dict_dds.transport_route.route_trip_duration_container_normative_hours_amount, dict_dds.transport_route.route_trip_duration_bulk_normative_hours_amount';
+
+comment on column dm_calc.delivery_schema_for_other_routes.normative_railway_trip_duration_days_quantity is
+'Норма движения по жд (дни) | Норма движения по жд (дни) | dm_calc.sd_sales_main_scm.normative_railway_trip_duration_days_quantity';
+
+comment on column dm_calc.delivery_schema_for_other_routes.storage_before_repacking_normative_days is
+'Норма хранения до перетарки | Значение норматива по хранению до перетарки в порту РФ | ods.map_zmk_track_exp_keys."DAYS3_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.arrival_to_port_after_repacking_normative_days is
+'Норма прибытия в порт после перетарки | Значение норматива по количеству дней движения после перетарки в порт РФ | ods.map_zmk_track_exp_keys."DAYS4_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.route_delivery_after_repacking_normative_days is
+'Норма доставки по маршруту перетарки | Значение норматива по количеству дней движения после перетарки до клиента | ods.map_zmk_track_exp_keys."GESZTD_PERETAR_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.acceptance_normative_russian_port_days_amount is
+'Норма приемки контейнера в портy | Норма приемки груза в портy | dm_calc.sd_sales_main_scm.acceptance_normative_russian_port_days_amount';
+
+comment on column dm_calc.delivery_schema_for_other_routes.port_of_loading_storage_normative_days is
+'Норма хранения в порту погрузки | Значение норматива по количеству дней хранения в порту РФ до появления коносамента | ods.map_zmk_track_exp_keys."DAYS2_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.normative_marine_transit1_duration_days_quantity is
+'Норма морского транзита | Норма морского транзита | dm_calc.sd_sales_main_scm.normative_marine_transit1_duration_days_quantity';
+
+comment on column dm_calc.delivery_schema_for_other_routes.acceptance_normative_foreign_port_days_amount is
+'Норма приемки терминал/склад ин. порта | Норма приемки груза в ин. портy | dm_calc.sd_sales_main_scm.acceptance_normative_foreign_port_days_amount';
+
+comment on column dm_calc.delivery_schema_for_other_routes.foreign_port_storage_normative_days is
+'Норма хранения в ин.порту | Значение норматива по количеству дней хранения в первом иностранном порту | ods.map_zmk_track_exp_keys."FWH_DAYS2_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.acceptance_normative_second_foreign_port_days_amount is
+'Норма приемки терминал/склад ин. порта 2 | Норма приемки груза в ин. портy 2 | dm_calc.sd_sales_main_scm.acceptance_normative_second_foreign_port_days_amount';
+
+comment on column dm_calc.delivery_schema_for_other_routes.second_foreign_port_storage_normative_days is
+'Норма хранения в ин.порту 2 | Значение норматива по количеству дней хранения во втором иностранном порту | ods.map_zmk_track_exp_keys."FWH2_DAYS2_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.foreign_port_vessel_loading_normative_days is
+'Норма погрузки на судно в ин. порту | Значение норматива по количеству дней для погрузки судна в иностранном порту | ods.map_zmk_track_exp_keys."FWH_DAYS5_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.normative_marine_transit2_duration_days_quantity is
+'Норма морского транзита 2 | Норма морского транзита 2 | Расчётное из dict_dds.transport_route.route_trip_duration_container_normative_hours_amount, dict_dds.transport_route.route_trip_duration_bulk_normative_hours_amount';
+
+comment on column dm_calc.delivery_schema_for_other_routes.foreign_port_delivery_to_customer_normative_days is
+'Норма доставки по маршруту со склада ин. порта | Значение норматива по количеству дней движения от порта до клиента | ods.map_zmk_track_exp_keys."ROUTE_GESZTD_55_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.dt_delivery_to_customer_estimated is
+'Расчетная дата доставки в цепочке поставок | Расчетная дата когда будет доставлен метал клиенту, основанная на Плановых или Фактических датах этапа дислокации поставки, с учетом доступных нормативов | Расчетное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.business_location_at_report_date_code is
+'ID Статус в Supply chain | Поставки для статуса имеют срезы, согласно витрины "Прогнозные даты и статусы поставки" в которой, в рамках пероида нахождения поставки в балансе компании можно выявить статус дислокации на любую дату. Так же, в логике поля присутствуют  частные случаи витрины Supply chain, к примеру при пустом значение, присвоение ID S17 (Реализован), причина в том, что витрина "Прогнозные даты и статусы поставки" не учитывает поставки вне баланса компании. | dm_calc.sales_delivery_actual_business_location_by_date.business_location_code';
+
+comment on column dm_calc.delivery_schema_for_other_routes.dt_realization_basis_document is
+'Дата основания для реализации | Дата появления документа для основания проведения реализации, такие как Нотис, Финальный релиз, Коносамент | Расчетное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.destination_warehouse_code is
+'Склад грузополучателя по маршруту завода (код) | Код склада, к примеру G000000100, на который отправляют металл по пункту назначения в маршруте завода | Расчетное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.destination_transport_hub_code is
+'Конечный пункт назначения в маршруте завода (код) | Код узла, к примеру, KNOTE - S0000782, куда направляется материал в доставке от завода, с учетом возможного перенаправления отгрузки. Для напрвления пограничных станций, будет не промежуточная точка "пограничная станция", а последующая/финальная точка в доставке. | Расчетное';
+
+comment on column dm_calc.delivery_schema_for_other_routes.foreign_port_storage_before_vessel_loading_norm_days is
+'Норма хранения до погрузки на судно в ин.порту | Значение норматива по количеству дней храненения перед погрузкой на судно в иностранных портах | ods.map_zmk_track_exp_keys."FWH_DAYS3_exp04"';
+
+comment on column dm_calc.delivery_schema_for_other_routes.route_trip_railway_plant_to_border_normative_days is
+'Норма движения по ЖД (дни) от Завода до Пограничного перехода в Китай | Норматив движения по ЖД в днях, от Завода до Пограничного перехода по направлению Китай | Расчетное: разница между dm_calc.sd_sales_main_scm.normative_railway_trip_duration_days_quantity и ods.map_zmk_track_exp_keys."TERM_DURATION2_exp04"';
+
+insert into dm_calc.delivery_schema_for_other_routes (
+    transport_route_type_name,
+    delivery_number_sales,
+    batch,
+    weight_net_with_wirerod,
+    transport_route_technical_code,
+    dt_delivery_plan,
+    dt_delivery_actual,
+    business_location_transport_departure_hub_code,
+    business_location_transport_destination_hub_code,
+    business_location_stay_duration_days_quantity,
+    dt_delivery_estimated,
+    is_delivery_plan_date_overdue,
+    dt_realization_estimated,
+    dt_realization_basis_document,
+	destination_warehouse_code,
+	destination_transport_hub_code,
+    dt_delivery_to_customer_estimated,
+    business_location_at_report_date_code,
+    business_location_for_cargo_reporting_code,
+    business_location_for_cargo_reporting_name,
+    business_location_group_for_cargo_reporting_name,
+    transport_departure_hub_code,
+    transport_destination_hub_code,
+    cargo_document_code,
+    transport_type_name,
+    route_plant_code,
+    border_cross_to_final_station_normative_days,
+    normative_route_trip_duration_days_quantity,
+    normative_railway_trip_duration_days_quantity,
+    storage_before_repacking_normative_days,
+    arrival_to_port_after_repacking_normative_days,
+    route_delivery_after_repacking_normative_days,
+    acceptance_normative_russian_port_days_amount,
+    port_of_loading_storage_normative_days,
+    normative_marine_transit1_duration_days_quantity,
+    acceptance_normative_foreign_port_days_amount,
+    foreign_port_storage_normative_days,
+    acceptance_normative_second_foreign_port_days_amount,
+    second_foreign_port_storage_normative_days,
+    foreign_port_vessel_loading_normative_days,
+    normative_marine_transit2_duration_days_quantity,
+    foreign_port_delivery_to_customer_normative_days,
+    foreign_port_storage_before_vessel_loading_norm_days,
+    route_trip_railway_plant_to_border_normative_days
+)
+with route_types as (
+    select
+		route_code,
+		route_name,
+		type_code,
+		type_name
+	from (values
+        ('ROUTE010', 'Появление статуса "На станции" потом можно будет проверять сколько времени от коплектования до факта отгрузки было', '1', 'Сухопутный'),
+        ('ROUTE020', 'план / факт отрузки с завода', '1', 'Сухопутный'),
+        ('ROUTE030', 'план / факт прибытия авто или ЖД', '1', 'Сухопутный'),
+        ('ROUTE040', 'факт прибытия на склад в порту РФ', '1', 'Сухопутный'),
+        ('ROUTE050', 'план / факт коносамента', '1', 'Сухопутный'),
+        ('ROUTE060', 'план / факт прибытия в порт выгрузки', '1', 'Сухопутный'),
+        ('ROUTE070', 'факт начала хранения в ин.порту', '1', 'Сухопутный'),
+        ('ROUTE080', 'план / факт окончания хранения в ин.порту 1', '1', 'Сухопутный'),
+        ('ROUTE090', 'факт коносамента в ин порту', '1', 'Сухопутный'),
+        ('ROUTE100', 'план / факт прибытия в порт выгрузи 2', '1', 'Сухопутный'),
+        ('ROUTE110', 'факт начала хранения в ин.порт2', '1', 'Сухопутный'),
+        ('ROUTE120', 'план / факт окончания хранения в ин.порту 2', '1', 'Сухопутный'),
+        ('ROUTE130', 'Основание для реализации / факт реализации', '1', 'Сухопутный')
+    ) as rt (route_code, route_name, type_code, type_name)
+),
+delivery_routes_base as (
+	select
+		di.transport_route_type_name,  								-- SD.001669 Тип маршрута в цепочке поставок Морской/Сухопутный/Внутренний рынок
+		di.delivery_number_sales as delivery_number_sales,  		-- SD.000002 Продажная поставка
+		di.batch as batch,											-- SD.000004 Партия
+		di.weight_net_with_wirerod,									-- SD.000033 Вес Н&K
+		rt.route_code as transport_route_technical_code,  			-- SD.001670 ID маршрута в цепочке поставок
+		-- индикатор релевантности маршрута
+		case
+			when rt.route_code = 'ROUTE010' and di.dt_collection is not null then true
+			when rt.route_code = 'ROUTE020' and ( di.dt_shipment_plan is not null
+												  or di.dt_shipment is not null
+												)
+											then true
+			when rt.route_code = 'ROUTE030' and ( di.dt_train_scheduled_arrival is not null
+												  or coalesce(di.dt_arrival_by_railway, di.dt_arrived_via_ul_system) is not null
+												)
+											then true
+			when rt.route_code = 'ROUTE040' and di.dt_warehouse is not null then true
+			when rt.route_code = 'ROUTE050' and ( di.dt_expected_bill_of_lading is not null
+												  or di.dt_bill_of_lading is not null
+												)
+											then true
+			when rt.route_code = 'ROUTE060' and ((di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null) and di.is_shipped_via_overseas_warehouse is not null
+												or ( di.delivery_basis != 'FOB' and inco1_params.range_low_value is null)
+												)
+											and ( di.dt_arrival_in_port_of_discharge_plan is not null
+												or di.dt_arrival_in_port_of_discharge is not null
+												)
+											and di.is_shipped_via_overseas_warehouse is not null
+											then true
+			when rt.route_code = 'ROUTE070' and di.dt_storage_start_in_foreign_port is not null
+											and di.is_shipped_via_overseas_warehouse is not null
+											then true
+			when rt.route_code = 'ROUTE080' and di.is_shipped_via_overseas_warehouse is not null
+											and ( di.dt_shipment_from_foreign_port_planned is not null
+												or di.dt_storage_end_in_foreign_port is not null
+												)
+											 then true
+			when rt.route_code = 'ROUTE090' and di.dt_bill_of_lading_in_foreign_port is not null then true
+			when rt.route_code = 'ROUTE100' and not (di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null)
+											and (di.dt_arrival_in_second_port_of_discharge is not null
+												or di.dt_arrival_in_second_port_of_discharge_plan is not null
+												)
+											then true
+			when rt.route_code = 'ROUTE110' and di.dt_storage_start_in_second_foreign_warehouse is not null
+											and di.is_shipped_via_overseas_second_foreign_warehouse is not null
+											then true
+			when rt.route_code = 'ROUTE120' and di.is_shipped_via_overseas_second_foreign_warehouse is not null
+											and ( di.dt_storage_end_in_second_foreign_warehouse is not null
+												or di.dt_shipment_from_second_foreign_port_planned is not null
+												)
+											then true
+			when rt.route_code = 'ROUTE130' and ( di.dt_realization_basis_document is not null
+												  or di.dt_realization is not null
+												)
+											then true
+			else false
+		end as is_relevant_route,
+		-- SD.001671 Плановая дата в цепочке доставки
+		case
+			when rt.route_code = 'ROUTE010' then null
+			when rt.route_code = 'ROUTE020' then di.dt_shipment_plan
+			when rt.route_code = 'ROUTE030' then di.dt_train_scheduled_arrival
+			when rt.route_code = 'ROUTE040' then null
+			when rt.route_code = 'ROUTE050' then di.dt_expected_bill_of_lading
+			when rt.route_code = 'ROUTE060' and ((di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null) and di.is_shipped_via_overseas_warehouse is not null
+												or (di.delivery_basis != 'FOB' and inco1_params.range_low_value is null)
+												)
+											then di.dt_arrival_in_port_of_discharge_plan
+			when rt.route_code = 'ROUTE070' then null
+			when rt.route_code = 'ROUTE080' and di.is_shipped_via_overseas_warehouse is not null then di.dt_shipment_from_foreign_port_planned
+			when rt.route_code = 'ROUTE090' then null
+			when rt.route_code = 'ROUTE100' and not (di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null)
+											then di.dt_arrival_in_second_port_of_discharge_plan
+			when rt.route_code = 'ROUTE110' then null
+			when rt.route_code = 'ROUTE120' and di.is_shipped_via_overseas_second_foreign_warehouse is not null
+											then di.dt_shipment_from_second_foreign_port_planned
+			when rt.route_code = 'ROUTE130' then di.dt_realization_basis_document
+			else null		
+		end as dt_delivery_plan,
+		-- SD.001672 Фактическая дата в цепочке доставки
+		case
+			when rt.route_code = 'ROUTE010' then di.dt_collection
+			when rt.route_code = 'ROUTE020' then di.dt_shipment
+			when rt.route_code = 'ROUTE030' then coalesce(di.dt_arrival_by_railway, di.dt_arrived_via_ul_system)
+			when rt.route_code = 'ROUTE040' then di.dt_warehouse
+			when rt.route_code = 'ROUTE050' then di.dt_bill_of_lading
+			when rt.route_code = 'ROUTE060' and ((di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null) and di.is_shipped_via_overseas_warehouse is not null
+												or (di.delivery_basis != 'FOB' and inco1_params.range_low_value is null)
+												)
+											then di.dt_arrival_in_port_of_discharge
+			when rt.route_code = 'ROUTE070' and di.is_shipped_via_overseas_warehouse is not null
+											then di.dt_storage_start_in_foreign_port
+			when rt.route_code = 'ROUTE080' and di.is_shipped_via_overseas_warehouse is not null
+											then di.dt_storage_end_in_foreign_port
+			when rt.route_code = 'ROUTE090' then di.dt_bill_of_lading_in_foreign_port
+			when rt.route_code = 'ROUTE100' and not (di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null)
+											then di.dt_arrival_in_second_port_of_discharge
+			when rt.route_code = 'ROUTE110' and di.is_shipped_via_overseas_second_foreign_warehouse is not null
+											then di.dt_storage_start_in_second_foreign_warehouse
+			when rt.route_code = 'ROUTE120' and di.is_shipped_via_overseas_second_foreign_warehouse is not null
+											then di.dt_storage_end_in_second_foreign_warehouse
+			when rt.route_code = 'ROUTE130' then di.dt_realization
+			else null
+		end as dt_delivery_actual,
+		--	SD.001673 Код реперной точки отправления
+		case
+			when rt.route_code in ('ROUTE010', 'ROUTE020', 'ROUTE030') then trs_dep.transport_route_stage_departure_hub_code
+			when rt.route_code = 'ROUTE040' then di.destination_warehouse_code
+			when rt.route_code in ('ROUTE050', 'ROUTE060') then di.port_of_loading_code
+			when rt.route_code in ('ROUTE070', 'ROUTE080') 
+				then coalesce( case
+								 when di.shipment_market_code in ('2', '3') then di.destination_warehouse_code
+							   end,
+							   th.warehouse_transport_hub_code,
+							   tht_1.transport_hub_code,
+							   di.port_of_discharge_code
+							 ) 								
+			when rt.route_code in ('ROUTE090', 'ROUTE100') then di.port_of_discharge_code
+			when rt.route_code in ('ROUTE110', 'ROUTE120', 'ROUTE130')
+				then coalesce( case
+								 when di.shipment_market_code in ('2', '3') then di.destination_warehouse_code
+							   end,
+							   th.warehouse_transport_hub_code,
+							   tht_2.transport_hub_code,
+							   di.port_of_discharge_code
+							 ) 			
+			else null
+		end as business_location_transport_departure_hub_code,
+		--	SD.001674 Код реперной точки назначения
+		case
+			when rt.route_code in ('ROUTE010', 'ROUTE020') then trs_dest.transport_route_stage_destination_hub_code
+			when rt.route_code = 'ROUTE030' then coalesce(trs_con.transport_route_stage_destination_hub_code, trs_dest.transport_route_stage_destination_hub_code)
+			when rt.route_code = 'ROUTE040' then di.destination_warehouse_code
+			when rt.route_code = 'ROUTE050' then di.port_of_loading_code
+			when rt.route_code = 'ROUTE060' then di.port_of_discharge_code
+			when rt.route_code in ('ROUTE070', 'ROUTE080') 
+				then coalesce( case
+								 when di.shipment_market_code in ('2', '3') then di.destination_warehouse_code
+							   end,
+							   th.warehouse_transport_hub_code,
+							   tht_1.transport_hub_code,
+							   di.port_of_discharge_code
+							 ) 								
+			when rt.route_code = 'ROUTE090' then di.port_of_discharge_code
+			when rt.route_code = 'ROUTE100' then di.port_of_discharge_in_foreign_port_code
+			when rt.route_code in ('ROUTE110', 'ROUTE120')
+				then coalesce( case
+								 when di.shipment_market_code in ('2', '3') then di.destination_warehouse_code
+							   end,
+							   th.warehouse_transport_hub_code,
+							   tht_2.transport_hub_code,
+							   di.port_of_discharge_code
+							 ) 	
+			when rt.route_code = 'ROUTE130'
+				then case
+						when di.shipment_market_code = '3' then ls.transport_hub_code
+						else il.transport_hub_code
+					 end
+			else null
+		end as business_location_transport_destination_hub_code,
+		di.route_plant_code,  										-- SD.000118 Маршрут завода
+		0 as border_cross_to_final_station_normative_days,			-- SD.001683 Норматив Пограничный переход-Конечная станция
+		-- SD.000775 Норма доставки по маршруту завода
+		case
+			when rt.route_code = 'ROUTE020' then di.normative_route_trip_duration_days_quantity::int
+			else 0
+		end as normative_route_trip_duration_days_quantity,  			
+		-- SD.000774 Норма движения по жд (дни)	
+		case
+			when rt.route_code = 'ROUTE020' then di.normative_railway_trip_duration_days_quantity
+			else 0
+		end as normative_railway_trip_duration_days_quantity,  		
+		-- SD.001684 Норма хранения до перетарки
+		case
+			when rt.route_code = 'ROUTE030' then di.storage_before_repacking_normative_days
+			else 0
+		end as storage_before_repacking_normative_days,  		
+		-- SD.001685 Норма прибытия в порт после перетарки
+		case
+			when rt.route_code = 'ROUTE030' then di.arrival_to_port_after_repacking_normative_days
+			else 0
+		end as arrival_to_port_after_repacking_normative_days,  		
+		-- SD.001686 Норма доставки по маршруту перетарки
+		case
+			when rt.route_code = 'ROUTE030' then di.route_delivery_after_repacking_normative_days
+			else 0
+		end as route_delivery_after_repacking_normative_days,  		
+		-- SD.000708 Норма приемки контейнера в порту
+		case
+			when rt.route_code = 'ROUTE030' then di.acceptance_normative_russian_port_days_amount
+			else 0
+		end as acceptance_normative_russian_port_days_amount,  		
+		-- SD.001687 Норма хранения в порту погрузки
+		case
+			when rt.route_code = 'ROUTE040' then di.port_of_loading_storage_normative_days
+			else 0
+		end as port_of_loading_storage_normative_days,
+		-- SD.000776 Норма морского транзита
+		case
+			when rt.route_code = 'ROUTE060' and ((di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null) and di.is_shipped_via_overseas_warehouse is not null
+												or (di.delivery_basis != 'FOB' and inco1_params.range_low_value is null)
+												)
+				then di.normative_marine_transit1_duration_days_quantity
+			else 0
+		end as normative_marine_transit1_duration_days_quantity,
+		-- SD.000776 Норма морского транзита для расчета даты доставки БЕЗ условий на базис поставки
+		case
+			when rt.route_code = 'ROUTE060' then di.normative_marine_transit1_duration_days_quantity
+			else 0
+		end as normative_marine_transit1_duration_days_quantity_wo_delivery_basis,	
+		-- SD.000709 Норма приемки терминал/склад ин. порта
+		case
+			when rt.route_code = 'ROUTE060' and ((di.delivery_basis = 'FOB' or inco1_params.range_low_value is not null) and di.is_shipped_via_overseas_warehouse is not null
+												or (di.delivery_basis != 'FOB' and inco1_params.range_low_value is null)
+												)
+				then di.acceptance_normative_foreign_port_days_amount
+			else 0
+		end as acceptance_normative_foreign_port_days_amount,
+		-- SD.000709 Норма приемки терминал/склад ин. порта БЕЗ условий на базис поставки
+		case 
+			when rt.route_code = 'ROUTE060' then di.acceptance_normative_foreign_port_days_amount
+			else 0
+		end as acceptance_normative_foreign_port_days_amount_wo_delivery_basis,
+		-- SD.001688 Норма хранения в ин.порту
+		case
+			when rt.route_code = 'ROUTE070' and di.is_shipped_via_overseas_warehouse is not null then di.foreign_port_storage_normative_days
+			else 0
+		end as foreign_port_storage_normative_days,
+		-- SD.000710 Норма приемки терминал/склад ин. порта 2
+		case
+			when rt.route_code = 'ROUTE100' then di.acceptance_normative_second_foreign_port_days_amount
+			else 0
+		end as acceptance_normative_second_foreign_port_days_amount,
+		-- SD.001689 Норма хранения в ин.порту 2
+		case
+			when rt.route_code = 'ROUTE110' and di.is_shipped_via_overseas_second_foreign_warehouse is not null then di.second_foreign_port_storage_normative_days
+			else 0
+		end as second_foreign_port_storage_normative_days,
+		-- SD.001690 Норма погрузки на судно в ин. порту
+		case
+			when rt.route_code = 'ROUTE080' and di.is_shipped_via_overseas_warehouse is not null then di.foreign_port_vessel_loading_normative_days
+			else 0
+		end as foreign_port_vessel_loading_normative_days,
+		-- SD.000777 Норма морского транзита 2
+		case
+			when rt.route_code = 'ROUTE100' then di.normative_marine_transit2_duration_days_quantity::int
+			else 0
+		end as normative_marine_transit2_duration_days_quantity,
+		-- SD.001691 Норма доставки по маршруту со склада ин. порта
+		case
+			when rt.route_code = 'ROUTE120' and di.is_shipped_via_overseas_second_foreign_warehouse is not null then di.foreign_port_delivery_to_customer_normative_days
+			else 0
+		end as foreign_port_delivery_to_customer_normative_days,
+		-- SD.001780 Норма хранения до погрузки на судно в ин.порту
+		case
+			when rt.route_code = 'ROUTE070' and di.is_shipped_via_overseas_warehouse is not null then di.foreign_port_storage_before_vessel_loading_norm_days
+			else 0
+		end as foreign_port_storage_before_vessel_loading_norm_days,		
+		-- SD.001668 Тип ТС в дислокации
+		case
+			when rt.route_code in ('ROUTE130', 'ROUTE120', 'ROUTE110', 'ROUTE100', 'ROUTE090')
+				then di.transport_railcar_type_code
+			when rt.route_code in ('ROUTE080', 'ROUTE070', 'ROUTE060', 'ROUTE050') and di.dt_repacked is not null
+				then di.container_after_repacking
+			when rt.route_code in ('ROUTE080', 'ROUTE070', 'ROUTE060', 'ROUTE050', 
+                         		   'ROUTE040', 'ROUTE030', 'ROUTE020', 'ROUTE010')
+                then di.transport_type_at_plant_code
+		end as transport_type_name,
+		di.dt_realization_basis_document,				-- SD.001679 Дата основания для реализации
+		di.destination_warehouse_code,					-- SD.001680 Склад грузополучателя по маршруту завода (код)
+		-- SD.001681 Конечный пункт назначения в маршруте завода (код)	
+		coalesce(trs_con.transport_route_stage_destination_hub_code, trs_dest.transport_route_stage_destination_hub_code) as destination_transport_hub_code,
+		di.delivery_basis,								-- SD.000067 Базис поставки
+		di.final_release_code,							-- SD.000588 Номер Финальный релиз
+		di.delivery_notice_number,						-- SD.000133 Номер нотиса о доставке
+		di.bill_of_lading_in_foreign_port,				-- SD.000048 Коносамент в ин.порту
+		di.bill_of_lading_number,						-- SD.000041 Номер коносамента
+		di.transport_bill,								-- SD.000014 Накладная
+		-- SD.001781 Норма движения по ЖД (дни) от Завода до Пограничного перехода в Китай
+		0 as route_trip_railway_plant_to_border_normative_days
+	from dm_calc.delivery_schema_general_info as di
+	left join route_types as rt
+		on rt.type_code = '1'
+	left join  (
+				select distinct range_low_value
+				from dict_dds.settings_and_parameters_sap
+				where abap_program_code = '/RUSAL/MK_TRACK_ROUTE'
+					and parameter_code in ('INCO1CIF', 'INCO1CIP')
+					and range_low_value is not null
+			  ) as inco1_params
+		on inco1_params.range_low_value = di.delivery_basis
+	left join ( select distinct on (transport_route_code)
+					transport_route_code,
+					transport_route_stage_departure_hub_code
+				from dict_dds.transport_route_stage
+				order by 
+						transport_route_code,
+						transport_route_stage_number
+			) as trs_dep
+		on trs_dep.transport_route_code = di.route_plant_code
+	left join ( select distinct on (transport_route_code)
+					transport_route_code,
+					transport_route_stage_destination_hub_code
+				from dict_dds.transport_route_stage
+				order by 
+						transport_route_code,
+						transport_route_stage_number desc
+			) as trs_dest
+		on trs_dest.transport_route_code = di.route_plant_code
+	-- SD.001681 Конечный пункт назначения в маршруте завода (код)
+	left join ( select distinct on (transport_route_code)
+					transport_route_code,
+					transport_route_stage_destination_hub_code
+				from dict_dds.transport_route_stage
+				order by 
+						transport_route_code,
+						transport_route_stage_number desc
+			) as trs_con
+		on trs_con.transport_route_code = di.bill_of_lading_route
+	--	Определение реперных точек
+	left join dict_dds.transport_hub as th
+		on th.transport_hub_code = di.port_of_discharge_code
+	left join dict_dds.transport_hub_texts as tht_1
+		on tht_1.language_code = 'R'
+		and tht_1.transport_hub_code like 'G%'
+		and tht_1.transport_hub_name = di.foreigh_port_terminal_name
+	left join dict_dds.transport_hub_texts as tht_2
+		on tht_2.language_code = 'R'
+		and tht_2.transport_hub_code like 'G%'
+		and tht_2.transport_hub_name = di.fwrd_info_second_foreign_warehouse_location_name
+	left join dict_dds.location_sales as ls
+		on ls.location_code = di.tsw_location_code
+	left join dict_dds.incoterms_location as il
+		on il.incoterms_location_code = di.delivery_point_name
+	where di.transport_route_type_name = 'X'
+	order by
+			delivery_number_sales,
+			batch,
+			transport_route_technical_code
+),
+delivery_routes_adv as (
+	select
+		drb.transport_route_type_name,  							-- SD.001669 Тип маршрута в цепочке поставок Морской/Сухопутный/Внутренний рынок
+		drb.delivery_number_sales,  								-- SD.000002 Продажная поставка
+		drb.batch,													-- SD.000004 Партия
+		drb.weight_net_with_wirerod,								-- SD.000033 Вес Н&K
+		drb.transport_route_technical_code,  						-- SD.001670 ID маршрута в цепочке поставок
+		drb.dt_delivery_plan,										-- SD.001671 Плановая дата в цепочке доставки
+		drb.is_relevant_route,										-- признак релевантности маршрута
+		-- предыдущее значение SD.001671 относительно текущего маршрута SD.001670
+		lag(drb.dt_delivery_plan) over (partition by 
+										drb.delivery_number_sales,
+										drb.batch
+									order by drb.transport_route_technical_code) as dt_delivery_plan_prev, 
+		-- последующее значение SD.001671 относительно текущего маршрута SD.001670
+		lead(drb.dt_delivery_plan) over (partition by 
+													drb.delivery_number_sales,
+													drb.batch
+									order by drb.transport_route_technical_code) as dt_delivery_plan_next, 
+		drb.dt_delivery_actual,										-- SD.001672 Фактическая дата в цепочке доставки
+		-- предыдущее значение SD.001672 относительно текущего маршрута SD.001670
+		lag(drb.dt_delivery_actual) over (partition by 
+													drb.delivery_number_sales,
+													drb.batch
+									order by drb.transport_route_technical_code) as dt_delivery_actual_prev, 
+		-- последующее значение SD.001672 относительно текущего маршрута SD.001670
+		lead(drb.dt_delivery_actual) over (partition by 
+													drb.delivery_number_sales,
+													drb.batch
+									order by drb.transport_route_technical_code) as dt_delivery_actual_next, 
+		drb.business_location_transport_departure_hub_code,			-- SD.001673 Код реперной точки отправления
+		drb.business_location_transport_destination_hub_code,		-- SD.001674 Код реперной точки назначения
+		-- SD.001676 Прогнозная дата окончания этапа в маршруте
+		case
+			when drb.transport_route_technical_code in ('ROUTE010', 'ROUTE050', 'ROUTE090', 'ROUTE130')
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual
+						else drb.dt_delivery_plan
+					 end
+			when drb.transport_route_technical_code = 'ROUTE020'
+				then case
+						when drb.dt_delivery_actual is not null
+							then drb.dt_delivery_actual + drb.normative_route_trip_duration_days_quantity + drb.normative_railway_trip_duration_days_quantity
+						else drb.dt_delivery_plan + drb.normative_route_trip_duration_days_quantity + drb.normative_railway_trip_duration_days_quantity
+					 end
+			when drb.transport_route_technical_code = 'ROUTE030'
+				then case
+						when drb.dt_delivery_actual is not null
+							then drb.dt_delivery_actual + drb.storage_before_repacking_normative_days + drb.arrival_to_port_after_repacking_normative_days + drb.route_delivery_after_repacking_normative_days + drb.port_of_loading_storage_normative_days 
+						else drb.dt_delivery_plan + drb.storage_before_repacking_normative_days + drb.arrival_to_port_after_repacking_normative_days + drb.route_delivery_after_repacking_normative_days + drb.port_of_loading_storage_normative_days
+					 end
+			when drb.transport_route_technical_code = 'ROUTE040'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.port_of_loading_storage_normative_days
+						else drb.dt_delivery_plan + drb.port_of_loading_storage_normative_days
+					 end
+			when drb.transport_route_technical_code = 'ROUTE060'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.normative_marine_transit1_duration_days_quantity + drb.acceptance_normative_foreign_port_days_amount
+						else drb.dt_delivery_plan + drb.normative_marine_transit1_duration_days_quantity + drb.acceptance_normative_foreign_port_days_amount
+					 end
+			when drb.transport_route_technical_code = 'ROUTE070'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.foreign_port_storage_normative_days + drb.foreign_port_vessel_loading_normative_days + drb.foreign_port_storage_before_vessel_loading_norm_days
+						else drb.dt_delivery_plan + drb.foreign_port_storage_normative_days + drb.foreign_port_vessel_loading_normative_days + drb.foreign_port_storage_before_vessel_loading_norm_days
+					 end
+			when drb.transport_route_technical_code = 'ROUTE080'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.foreign_port_vessel_loading_normative_days
+						else drb.dt_delivery_plan + drb.foreign_port_vessel_loading_normative_days
+					 end
+			when drb.transport_route_technical_code = 'ROUTE100'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.normative_marine_transit2_duration_days_quantity + drb.acceptance_normative_second_foreign_port_days_amount
+						else drb.dt_delivery_plan + drb.normative_marine_transit2_duration_days_quantity + drb.acceptance_normative_second_foreign_port_days_amount
+					 end
+			when drb.transport_route_technical_code = 'ROUTE110'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.second_foreign_port_storage_normative_days
+						else drb.dt_delivery_plan + drb.second_foreign_port_storage_normative_days
+					 end
+			when drb.transport_route_technical_code = 'ROUTE120'
+				then case
+						when drb.dt_delivery_actual is not null then drb.dt_delivery_actual + drb.foreign_port_delivery_to_customer_normative_days
+						else drb.dt_delivery_plan + drb.foreign_port_delivery_to_customer_normative_days
+					 end
+			else null
+			end as dt_delivery_estimated,
+		sde.business_location_code as business_location_at_report_date_code,								-- SD.001272 ID Статуса Среза
+		bl.transportation_status_code as business_location_for_cargo_reporting_code,						-- SD.001661 ID статуса - отчётность по грузоперевозкам
+		tstext.transportation_status_name as business_location_for_cargo_reporting_name,					-- SD.001662 Имя статуса - отчётность по грузоперевозкам
+		ts.transportation_status_group_code as business_location_group_for_cargo_reporting_name,			-- SD.001663 Группа статуса - отчётность по грузоперевозкам
+		coalesce(dep_en.transport_hub_name, dep_ru.transport_hub_name) as transport_departure_hub_code, 	-- SD.001664 Пункт отправления
+		coalesce(dest_en.transport_hub_name, dest_ru.transport_hub_name) as transport_destination_hub_code, -- SD.001665 Пункт назначения
+		drb.dt_realization_basis_document,																	-- SD.001679 Дата основания для реализации
+		drb.destination_warehouse_code,																		-- SD.001680 Склад грузополучателя по маршруту завода (код)
+		drb.destination_transport_hub_code,																	-- SD.001681 Конечный пункт назначения в маршруте завода (код)
+		drb.transport_type_name,																			-- SD.001668 Тип ТС в дислокации
+		drb.route_plant_code,  																				-- SD.000118 Маршрут завода
+		drb.border_cross_to_final_station_normative_days,  													-- SD.001683 Норматив Пограничный переход-Конечная станция
+		drb.normative_route_trip_duration_days_quantity,  													-- SD.000775 Норма доставки по маршруту завода
+		drb.normative_railway_trip_duration_days_quantity,  												-- SD.000774 Норма движения по жд (дни)
+		drb.storage_before_repacking_normative_days,  														-- SD.001684 Норма хранения до перетарки
+		drb.arrival_to_port_after_repacking_normative_days,  												-- SD.001685 Норма прибытия в порт после перетарки
+		drb.route_delivery_after_repacking_normative_days,  												-- SD.001686 Норма доставки по маршруту перетарки
+		drb.acceptance_normative_russian_port_days_amount,  												-- SD.000708 Норма приемки контейнера в порту
+		drb.port_of_loading_storage_normative_days,  														-- SD.001687 Норма хранения в порту погрузки
+		drb.normative_marine_transit1_duration_days_quantity,  												-- SD.000776 Норма морского транзита
+		drb.acceptance_normative_foreign_port_days_amount,  												-- SD.000709 Норма приемки терминал/склад ин. порта
+		drb.foreign_port_storage_normative_days,  															-- SD.001688 Норма хранения в ин.порту
+		drb.acceptance_normative_second_foreign_port_days_amount,  											-- SD.000710 Норма приемки терминал/склад ин. порта 2
+		drb.second_foreign_port_storage_normative_days,  													-- SD.001689 Норма хранения в ин.порту 2
+		drb.foreign_port_vessel_loading_normative_days,  													-- SD.001690 Норма погрузки на судно в ин. порту
+		drb.normative_marine_transit2_duration_days_quantity,  												-- SD.000777 Норма морского транзита 2
+		drb.foreign_port_delivery_to_customer_normative_days,  												-- SD.001691 Норма доставки по маршруту со склада ин. порта
+		drb.foreign_port_storage_before_vessel_loading_norm_days,											-- SD.001780 Норма хранения до погрузки на судно в ин.порту
+		drb.route_trip_railway_plant_to_border_normative_days, 												-- SD.001781 Норма движения по ЖД (дни) от Завода до Пограничного перехода в Китай
+		-- SD.001667 Сопроводительный документ
+		case
+			when drb.transport_route_technical_code = 'ROUTE130' then
+				case 
+					when ildr.logistics_document_type_code = 'X' then drb.final_release_code
+					when ildr.logistics_document_type_code = 'Д' then drb.delivery_notice_number
+					when drb.bill_of_lading_in_foreign_port is not null then drb.bill_of_lading_in_foreign_port
+					when drb.bill_of_lading_number is not null then drb.bill_of_lading_number
+					else drb.transport_bill
+				end
+			when drb.transport_route_technical_code in ('ROUTE120', 'ROUTE110', 'ROUTE100', 'ROUTE090') then
+				case
+					when drb.bill_of_lading_in_foreign_port is not null then drb.bill_of_lading_in_foreign_port
+					when drb.bill_of_lading_number is not null then drb.bill_of_lading_number
+					else drb.transport_bill
+				end
+			when drb.transport_route_technical_code in ('ROUTE080', 'ROUTE070', 'ROUTE060', 'ROUTE050') then
+				case
+					when drb.bill_of_lading_number is not null then drb.bill_of_lading_number
+					else drb.transport_bill
+				end			
+			when drb.transport_route_technical_code in ('ROUTE040', 'ROUTE030', 'ROUTE020', 'ROUTE010') then drb.transport_bill
+		end as cargo_document_code,
+		-- расчет кумулятивных нормативов относительно текущего маршрута
+		case 
+			when drb.transport_route_technical_code <> 'ROUTE130' then
+				( 
+				-- сумма SD.001683 Норматив Пограничный переход-Конечная станция, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.border_cross_to_final_station_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.000775 Норма доставки по маршруту завода, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.normative_route_trip_duration_days_quantity) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.000774 Норма движения по жд (дни), начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.normative_railway_trip_duration_days_quantity) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001684 Норма хранения до перетарки, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.storage_before_repacking_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001685 Норма прибытия в порт после перетарки, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.arrival_to_port_after_repacking_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001686 Норма доставки по маршруту перетарки, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.route_delivery_after_repacking_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.000708 Норма приемки контейнера в порту, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.acceptance_normative_russian_port_days_amount) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001687 Норма хранения в порту погрузки, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.port_of_loading_storage_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.000776 Норма морского транзита, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.normative_marine_transit1_duration_days_quantity) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.000709 Норма приемки терминал/склад ин. порта, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.acceptance_normative_foreign_port_days_amount) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001688 Норма хранения в ин.порту, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.foreign_port_storage_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																  )
+				+
+				-- сумма SD.000710 Норма приемки терминал/склад ин. порта 2, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.acceptance_normative_second_foreign_port_days_amount) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001689 Норма хранения в ин.порту 2, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.second_foreign_port_storage_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001690 Норма погрузки на судно в ин. порту, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.foreign_port_vessel_loading_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.000777 Норма морского транзита 2, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.normative_marine_transit2_duration_days_quantity) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001691 Норма доставки по маршруту со склада ин. порта, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.foreign_port_delivery_to_customer_normative_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+				+
+				-- сумма SD.001780 Норма хранения до погрузки на судно в ин.порту, начиная с последующего (относительно текущего) маршрута в рамках поставки и партии
+				sum(drb.foreign_port_storage_before_vessel_loading_norm_days) over ( partition by 
+																			 		drb.delivery_number_sales,
+																			 		drb.batch
+																		    order by drb.transport_route_technical_code
+																		    rows between 1 following and unbounded following
+																		  )
+			)
+			else 0
+		end as cumulative_normatives		
+	from delivery_routes_base as drb
+	-- определение SD.001664 Пункт отправления
+	left join dict_dds.transport_hub_texts as dep_en
+		on dep_en.transport_hub_code = drb.business_location_transport_departure_hub_code
+		and dep_en.language_code = 'E'
+	left join dict_dds.transport_hub_texts as dep_ru
+		on dep_ru.transport_hub_code = drb.business_location_transport_departure_hub_code
+		and dep_ru.language_code = 'R'
+	-- определение SD.001665 Пункт назначения
+	left join dict_dds.transport_hub_texts as dest_en
+		on dest_en.transport_hub_code = drb.business_location_transport_destination_hub_code
+		and dest_en.language_code = 'E'
+	left join dict_dds.transport_hub_texts as dest_ru
+		on dest_ru.transport_hub_code = drb.business_location_transport_destination_hub_code
+		and dest_ru.language_code = 'R'
+	left join dm_calc.sales_delivery_actual_business_location_by_date as sde
+	    on sde.dt_business_location = drb.dt_delivery_actual
+	    and sde.sales_delivery_code = drb.delivery_number_sales
+	    and sde.batch = drb.batch
+	left join dict_dds.business_location as bl
+		on bl.business_location_code = sde.business_location_code
+	left join dict_dds.transportation_status_texts as tstext
+		on tstext.transportation_status_code = bl.transportation_status_code
+		and tstext.language_code = 'R'
+	left join dict_dds.transportation_status as ts
+		on ts.transportation_status_code = bl.transportation_status_code
+	left join dict_dds.incoterms_and_logistics_document_relation as ildr
+		on ildr.incoterms_code = drb.delivery_basis
+		and ildr.ownership_transfer_code = '001'
+		and ildr.purchase_document_type_code = 'ZRT'
+--	where drb.is_relevant_route is true
+),
+final_calc as (
+	select
+		drb.transport_route_type_name,								-- SD.001669 Тип маршрута в цепочке поставок Морской/Сухопутный/Внутренний рынок
+		drb.delivery_number_sales,									-- SD.000002 Продажная поставка
+		drb.batch,													-- SD.000004 Партия
+		drb.weight_net_with_wirerod,								-- SD.000033 Вес Н&K
+		drb.transport_route_technical_code,							-- SD.001670 ID маршрута в цепочке поставок
+		drb.dt_delivery_plan,										-- SD.001671 Плановая дата в цепочке доставки
+		drb.dt_delivery_actual,										-- SD.001672 Фактическая дата в цепочке доставки
+		drb.business_location_transport_departure_hub_code,			-- SD.001673 Код реперной точки отправления
+		drb.business_location_transport_destination_hub_code,		-- SD.001674 Код реперной точки назначения
+		case
+			when drb.dt_delivery_actual is not null then (drb.dt_delivery_actual - drb.dt_delivery_actual_prev)
+			else (drb.dt_delivery_plan - drb.dt_delivery_actual_prev)
+		end as business_location_stay_duration_days_quantity,		-- SD.001675 Кол.дней на этапе маршрута
+		drb.dt_delivery_estimated,									-- SD.001676 Прогнозная дата окончания этапа в маршруте
+		case
+			when drb.dt_delivery_estimated < drb.dt_delivery_actual_next then true
+			else false
+		end as is_delivery_plan_date_overdue,						-- SD.001677 Признак просроченной "Прогнозная дата окончания этапа в маршруте"
+		case
+			when drb.dt_delivery_actual is not null
+				then case
+						when (case when (drb.dt_delivery_estimated < drb.dt_delivery_actual_next) then true	else false end) is true
+							then (drb.dt_delivery_actual + drb.cumulative_normatives::int + 10)
+						else (drb.dt_delivery_actual + drb.cumulative_normatives::int)
+					 end
+			else case
+					when (case when (drb.dt_delivery_estimated < drb.dt_delivery_actual_next) then true	else false end) is true
+						then (drb.dt_delivery_plan + drb.cumulative_normatives::int + 10)
+					else (drb.dt_delivery_plan + drb.cumulative_normatives::int)
+				end
+		end as dt_realization_estimated,							-- SD.001678 Расчетная дата реализации в цепочке поставок
+		drb.dt_realization_basis_document,							-- SD.001679 Дата основания для реализации
+		drb.destination_warehouse_code,								-- SD.001680 Склад грузополучателя по маршруту завода (код)
+		drb.destination_transport_hub_code,							-- SD.001681 Конечный пункт назначения в маршруте завода (код)
+		case
+			when drb.dt_delivery_actual is not null
+				then case
+						when (case when (drb.dt_delivery_estimated < drb.dt_delivery_actual_next) then true	else false end) is true
+							then (drb.dt_delivery_actual + drb.cumulative_normatives::int + 10)
+						else (drb.dt_delivery_actual + drb.cumulative_normatives::int)
+					 end
+			else case
+					when (case when (drb.dt_delivery_estimated < drb.dt_delivery_actual_next) then true	else false end) is true
+						then (drb.dt_delivery_plan + drb.cumulative_normatives::int + 10)
+					else (drb.dt_delivery_plan + drb.cumulative_normatives::int)
+				end
+		end as dt_delivery_to_customer_estimated,					-- SD.001682 Расчетная дата доставки в цепочке поставок
+		drb.business_location_at_report_date_code,					-- SD.001272 ID Статуса Среза
+		drb.business_location_for_cargo_reporting_code,				-- SD.001661 ID статуса — отчётность по грузоперевозкам
+		drb.business_location_for_cargo_reporting_name,				-- SD.001662 Имя статуса — отчётность по грузоперевозкам
+		drb.business_location_group_for_cargo_reporting_name,		-- SD.001663 Группа статуса - отчётность по грузоперевозкам
+		drb.transport_departure_hub_code,							-- SD.001664 Пункт отправления
+		drb.transport_destination_hub_code,							-- SD.001665 Пункт назначения
+		drb.cargo_document_code,									-- SD.001667 Сопроводительный документ
+		drb.transport_type_name,				 					-- SD.001668 Тип ТС в дислокации
+		drb.route_plant_code,										-- SD.000118 Маршрут завода
+		drb.border_cross_to_final_station_normative_days,			-- SD.001683 Норматив Пограничный переход-Конечная станция
+		drb.normative_route_trip_duration_days_quantity,			-- SD.000775 Норма доставки по маршруту завода
+		drb.normative_railway_trip_duration_days_quantity,			-- SD.000774 Норма движения по жд (дни)
+		drb.storage_before_repacking_normative_days,				-- SD.001684 Норма хранения до перетарки
+		drb.arrival_to_port_after_repacking_normative_days,			-- SD.001685 Норма прибытия в порт после перетарки
+		drb.route_delivery_after_repacking_normative_days,			-- SD.001686 Норма доставки по маршруту перетарки
+		drb.acceptance_normative_russian_port_days_amount,			-- SD.000708 Норма приемки контейнера в порту
+		drb.port_of_loading_storage_normative_days,					-- SD.001687 Норма хранения в порту погрузки
+		drb.normative_marine_transit1_duration_days_quantity,		-- SD.000776 Норма морского транзита
+		drb.acceptance_normative_foreign_port_days_amount,			-- SD.000709 Норма приемки терминал/склад ин. порта
+		drb.foreign_port_storage_normative_days,					-- SD.001688 Норма хранения в ин.порту
+		drb.acceptance_normative_second_foreign_port_days_amount,	-- SD.000710 Норма приемки терминал/склад ин. порта 2
+		drb.second_foreign_port_storage_normative_days,				-- SD.001689 Норма хранения в ин.порту 2
+		drb.foreign_port_vessel_loading_normative_days,				-- SD.001690 Норма погрузки на судно в ин. порту
+		drb.normative_marine_transit2_duration_days_quantity,		-- SD.000777 Норма морского транзита 2
+		drb.foreign_port_delivery_to_customer_normative_days,		-- SD.001691 Норма доставки по маршруту со склада ин. порта
+		drb.foreign_port_storage_before_vessel_loading_norm_days,	-- SD.001780 Норма хранения до погрузки на судно в ин.порту
+		drb.route_trip_railway_plant_to_border_normative_days 		-- SD.001781 Норма движения по ЖД (дни) от Завода до Пограничного перехода в Китай
+	from delivery_routes_adv as drb
+	where drb.is_relevant_route is true	
+)
+select
+		fc.transport_route_type_name,								-- SD.001669 Тип маршрута в цепочке поставок Морской/Сухопутный/Внутренний рынок
+		fc.delivery_number_sales,									-- SD.000002 Продажная поставка
+		fc.batch,													-- SD.000004 Партия
+		fc.weight_net_with_wirerod,									-- SD.000033 Вес Н&K
+		fc.transport_route_technical_code,							-- SD.001670 ID маршрута в цепочке поставок
+		fc.dt_delivery_plan,										-- SD.001671 Плановая дата в цепочке доставки
+		fc.dt_delivery_actual,										-- SD.001672 Фактическая дата в цепочке доставки
+		fc.business_location_transport_departure_hub_code,			-- SD.001673 Код реперной точки отправления
+		fc.business_location_transport_destination_hub_code,		-- SD.001674 Код реперной точки назначения
+		fc.business_location_stay_duration_days_quantity,			-- SD.001675 Кол.дней на этапе маршрута
+		fc.dt_delivery_estimated,									-- SD.001676 Прогнозная дата окончания этапа в маршруте
+		fc.is_delivery_plan_date_overdue,							-- SD.001677 Признак просроченной "Прогнозная дата окончания этапа в маршруте"		 
+		case when 
+				fc.transport_route_technical_code = 'ROUTE130'
+				and fc.dt_delivery_actual is null
+				and to_char(fc.dt_realization_estimated, 'YYYYMM') < to_char(current_date - 1, 'YYYYMM')
+				and pcs.is_period_currently_opened_code is false
+			then (date_trunc('month', current_date - 1) + INTERVAL '1 month' - INTERVAL '1 day')::date
+			else fc.dt_realization_estimated
+		end as dt_realization_estimated, 							-- SD.001678 Расчетная дата реализации в цепочке поставок
+		fc.dt_realization_basis_document,							-- SD.001679 Дата основания для реализации
+		fc.destination_warehouse_code,								-- SD.001680 Склад грузополучателя по маршруту завода (код)
+		fc.destination_transport_hub_code,							-- SD.001681 Конечный пункт назначения в маршруте завода (код)
+		fc.dt_delivery_to_customer_estimated,						-- SD.001682 Расчетная дата доставки в цепочке поставок
+		fc.business_location_at_report_date_code,					-- SD.001272 ID Статуса Среза
+		fc.business_location_for_cargo_reporting_code,				-- SD.001661 ID статуса — отчётность по грузоперевозкам
+		fc.business_location_for_cargo_reporting_name,				-- SD.001662 Имя статуса — отчётность по грузоперевозкам
+		fc.business_location_group_for_cargo_reporting_name,		-- SD.001663 Группа статуса - отчётность по грузоперевозкам
+		fc.transport_departure_hub_code,							-- SD.001664 Пункт отправления
+		fc.transport_destination_hub_code,							-- SD.001665 Пункт назначения
+		fc.cargo_document_code,										-- SD.001667 Сопроводительный документ
+		fc.transport_type_name,				 						-- SD.001668 Тип ТС в дислокации
+		fc.route_plant_code,										-- SD.000118 Маршрут завода
+		fc.border_cross_to_final_station_normative_days,			-- SD.001683 Норматив Пограничный переход-Конечная станция
+		fc.normative_route_trip_duration_days_quantity,				-- SD.000775 Норма доставки по маршруту завода
+		fc.normative_railway_trip_duration_days_quantity,			-- SD.000774 Норма движения по жд (дни)
+		fc.storage_before_repacking_normative_days,					-- SD.001684 Норма хранения до перетарки
+		fc.arrival_to_port_after_repacking_normative_days,			-- SD.001685 Норма прибытия в порт после перетарки
+		fc.route_delivery_after_repacking_normative_days,			-- SD.001686 Норма доставки по маршруту перетарки
+		fc.acceptance_normative_russian_port_days_amount,			-- SD.000708 Норма приемки контейнера в порту
+		fc.port_of_loading_storage_normative_days,					-- SD.001687 Норма хранения в порту погрузки
+		fc.normative_marine_transit1_duration_days_quantity,		-- SD.000776 Норма морского транзита
+		fc.acceptance_normative_foreign_port_days_amount,			-- SD.000709 Норма приемки терминал/склад ин. порта
+		fc.foreign_port_storage_normative_days,						-- SD.001688 Норма хранения в ин.порту
+		fc.acceptance_normative_second_foreign_port_days_amount,	-- SD.000710 Норма приемки терминал/склад ин. порта 2
+		fc.second_foreign_port_storage_normative_days,				-- SD.001689 Норма хранения в ин.порту 2
+		fc.foreign_port_vessel_loading_normative_days,				-- SD.001690 Норма погрузки на судно в ин. порту
+		fc.normative_marine_transit2_duration_days_quantity,		-- SD.000777 Норма морского транзита 2
+		fc.foreign_port_delivery_to_customer_normative_days,		-- SD.001691 Норма доставки по маршруту со склада ин. порта
+		fc.foreign_port_storage_before_vessel_loading_norm_days,	-- SD.001780 Норма хранения до погрузки на судно в ин.порту
+		fc.route_trip_railway_plant_to_border_normative_days 		-- SD.001781 Норма движения по ЖД (дни) от Завода до Пограничного перехода в Китай		
+from final_calc as fc
+left join (
+			select distinct 
+						to_char(dt_report, 'YYYYMM') as period,
+						is_period_currently_opened_code
+		    from dm.sales_sap_period_closure_status
+		   ) as pcs
+on pcs.period = to_char(fc.dt_realization_estimated, 'YYYYMM');

@@ -563,6 +563,7 @@ def create_ytrack_issue(
     summary: str,
     description: str,
     default_estimate_minutes: int = 60,
+    estimate_field_name: str = "Оценка (чел./час.)",
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -585,20 +586,20 @@ def create_ytrack_issue(
         "description": description,
         "type": issue_type or "task",
     }
-    required_period_fields = _load_required_ytrack_period_fields(
+    resolved_estimate_field_name = _resolve_ytrack_estimate_field_name(
         base_url=base_url,
         token=token,
         project_id=resolved_project_id,
         ssl_verify=ssl_verify,
+        estimate_field_name=estimate_field_name,
     )
-    if required_period_fields:
+    if resolved_estimate_field_name:
         payload["customFields"] = [
             {
-                "name": field_name,
+                "name": resolved_estimate_field_name,
                 "$type": "PeriodIssueCustomField",
                 "value": {"minutes": max(1, int(default_estimate_minutes or 60))},
             }
-            for field_name in required_period_fields
         ]
     req = urlrequest.Request(
         f"{base_url.rstrip('/')}/api/issues",
@@ -624,13 +625,14 @@ def create_ytrack_issue(
     }
 
 
-def _load_required_ytrack_period_fields(
+def _resolve_ytrack_estimate_field_name(
     *,
     base_url: str,
     token: str,
     project_id: str,
     ssl_verify: str,
-) -> list[str]:
+    estimate_field_name: str,
+) -> str:
     req = urlrequest.Request(
         (
             f"{base_url.rstrip('/')}/api/admin/projects/{urlparse.quote(project_id, safe='')}/customFields"
@@ -647,19 +649,23 @@ def _load_required_ytrack_period_fields(
             body = resp.read().decode("utf-8")
             items = json.loads(body) if body else []
     except Exception:
-        return []
+        return str(estimate_field_name or "").strip()
 
-    result: list[str] = []
+    configured_name = str(estimate_field_name or "").strip()
+    configured_name_lower = configured_name.lower()
+    fallback_match = ""
     for item in items or []:
-        if (item or {}).get("canBeEmpty", True):
-            continue
         field = (item or {}).get("field") or {}
         field_name = str(field.get("name") or "").strip()
         field_type = field.get("fieldType") or {}
         field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
-        if field_name and field_type_id == "period":
-            result.append(field_name)
-    return result
+        if not field_name or field_type_id != "period":
+            continue
+        if field_name.lower() == configured_name_lower:
+            return field_name
+        if not fallback_match and "оценк" in field_name.lower():
+            fallback_match = field_name
+    return fallback_match or configured_name
 
 
 def _resolve_ytrack_project_id(

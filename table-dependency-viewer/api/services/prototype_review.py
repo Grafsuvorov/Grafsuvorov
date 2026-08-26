@@ -27,6 +27,13 @@ DEPENDENCY_PATTERNS = [
     re.compile(r"\bjoin\s+([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
     re.compile(r"\bupdate\s+([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
 ]
+DROP_TARGET_PATTERNS = [
+    re.compile(r"\bdrop\s+(?:table|view)\s+(?:if\s+exists\s+)?([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
+]
+CREATE_OBJECT_PATTERNS = [
+    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?table\s+(?:if\s+not\s+exists\s+)?([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
+    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?view\s+([a-zA-Z0-9_`\"\.]+)", re.IGNORECASE),
+]
 
 
 @dataclass
@@ -376,6 +383,76 @@ def infer_final_target(files: list[dict[str, Any]]) -> Optional[str]:
     return targets[-1] if targets else None
 
 
+def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in files:
+        path_value = str(item.get("path") or "").strip()
+        sql_text = str(item.get("sql") or "")
+        statements = item.get("statements") or []
+        targets: list[str] = []
+        object_type = None
+        has_create = False
+        has_drop = False
+        has_self_mutation = False
+
+        for statement in statements:
+            for pattern in TARGET_PATTERNS:
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized:
+                        targets.append(normalized)
+            for pattern in CREATE_OBJECT_PATTERNS:
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized:
+                        targets.append(normalized)
+                        has_create = True
+                        if " view " in statement.lower() or statement.lower().lstrip().startswith("create view") or "or replace view" in statement.lower():
+                            object_type = "VIEW"
+                        elif object_type is None:
+                            object_type = "TABLE"
+            for pattern in DROP_TARGET_PATTERNS:
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized:
+                        targets.append(normalized)
+                        has_drop = True
+
+        deduped_targets: list[str] = []
+        seen: set[str] = set()
+        for target in targets:
+            if target not in seen:
+                seen.add(target)
+                deduped_targets.append(target)
+        target_fqn = deduped_targets[-1] if deduped_targets else None
+        if target_fqn:
+            lowered_sql = _strip_sql_comments(sql_text).lower()
+            has_self_mutation = any(
+                token in lowered_sql
+                for token in (
+                    f"truncate table {target_fqn}",
+                    f"truncate {target_fqn}",
+                    f"delete from {target_fqn}",
+                    f"drop table if exists {target_fqn}",
+                    f"drop table {target_fqn}",
+                    f"drop view if exists {target_fqn}",
+                    f"drop view {target_fqn}",
+                )
+            )
+        if object_type is None and target_fqn:
+            object_type = "VIEW" if target_fqn.split(".", 1)[0].endswith("_view") else "TABLE"
+        result.append(
+            {
+                "path": path_value,
+                "target_fqn": target_fqn,
+                "all_targets": deduped_targets,
+                "object_type": object_type or "TABLE",
+                "requires_pretruncate": bool(target_fqn and not (has_create or has_drop or has_self_mutation) and (object_type or "TABLE") == "TABLE"),
+            }
+        )
+    return result
+
+
 def extract_sql_dependencies(
     files: list[dict[str, Any]],
     *,
@@ -450,6 +527,81 @@ def execute_sql_files_in_dev(
                 pass
         exec_engine.dispose()
     return results
+
+
+def execute_sql_review_items_in_dev(
+    *,
+    dev_database_url: str,
+    files: list[dict[str, Any]],
+    review_targets: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not dev_database_url:
+        raise ValueError("Не настроен DEV_DATABASE_URL")
+    file_map = {str(item.get("path") or "").strip(): item for item in files}
+    preparation_rows: list[dict[str, Any]] = []
+    execution_rows: list[dict[str, Any]] = []
+    exec_engine = create_engine(dev_database_url)
+    connection = None
+    cursor = None
+    try:
+        connection = exec_engine.raw_connection()
+        cursor = connection.cursor()
+        for review_item in review_targets:
+            path_value = str(review_item.get("path") or "").strip()
+            file_item = file_map.get(path_value) or {}
+            target_fqn = str(review_item.get("target_fqn") or "").strip()
+            if review_item.get("requires_pretruncate") and target_fqn:
+                preparation_rows.append(
+                    prepare_target_table_in_dev(
+                        dev_database_url=dev_database_url,
+                        target_fqn=target_fqn,
+                    )
+                )
+            else:
+                preparation_rows.append(
+                    {
+                        "status": "skipped",
+                        "action": "truncate",
+                        "target_fqn": target_fqn or None,
+                        "message": "Предварительная очистка не требуется",
+                        "duration_sec": 0.0,
+                    }
+                )
+            sql_text = str(file_item.get("sql") or "").strip()
+            if not sql_text:
+                execution_rows.append({"path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
+                continue
+            started = time.perf_counter()
+            cursor.execute(sql_text)
+            connection.commit()
+            execution_rows.append(
+                {
+                    "path": path_value,
+                    "target_fqn": target_fqn or None,
+                    "status": "ok",
+                    "duration_sec": round(time.perf_counter() - started, 3),
+                }
+            )
+    except Exception as exc:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        raise ValueError(f"Не удалось выполнить SQL в DEV: {exc}") from exc
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+        exec_engine.dispose()
+    return preparation_rows, execution_rows
 
 
 def prepare_target_table_in_dev(

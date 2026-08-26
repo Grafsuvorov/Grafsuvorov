@@ -15,6 +15,7 @@ export const adminApi = {
   exportReportPdf: (body) => apiClient.post("/api/admin/reports/export-pdf", body, { expect: "response" }),
   feedback: (params) => apiClient.get("/api/admin/feedback", { params }),
   prototypeReviewRun: (body) => apiClient.post("/api/admin/prototype-review/run", body),
+  prototypeReviewCreateIssue: (body) => apiClient.post("/api/admin/prototype-review/create-issue", body),
   tablesDetailed: () => apiClient.getCached("/api/tables", { ttlMs: 10 * 60 * 1000, params: { detailed: true } }),
   tableCard: (schema, table, params) => apiClient.get(`/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, { params }),
   clickMeta: (schema, table) => apiClient.get(`/api/click/meta/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`),

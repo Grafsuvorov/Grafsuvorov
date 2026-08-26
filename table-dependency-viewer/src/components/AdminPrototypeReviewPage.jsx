@@ -241,12 +241,13 @@ export default function AdminPrototypeReviewPage() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tableMetaLoading, setTableMetaLoading] = useState(false);
-  const [createIssue, setCreateIssue] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [creatingIssue, setCreatingIssue] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [yamlCopied, setYamlCopied] = useState(false);
+  const [reviewItemsDraft, setReviewItemsDraft] = useState([]);
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -302,8 +303,14 @@ export default function AdminPrototypeReviewPage() {
     [form, skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer],
   );
   const totalExecutionSec = useMemo(
-    () => Number(result?.preparation?.duration_sec || 0) + (Array.isArray(result?.execution) ? result.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0) : 0),
+    () => (Array.isArray(result?.execution) ? result.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0) : 0),
     [result],
+  );
+  const unresolvedItemsCount = useMemo(
+    () => reviewItemsDraft.filter((item) => item.requires_user_input && (
+      !String(item.entity_name || "").trim() || !splitItems(item.key_attributes_text).length
+    )).length,
+    [reviewItemsDraft],
   );
 
   useEffect(() => {
@@ -311,6 +318,18 @@ export default function AdminPrototypeReviewPage() {
     const timer = window.setTimeout(() => setYamlCopied(false), 1600);
     return () => window.clearTimeout(timer);
   }, [yamlCopied]);
+
+  useEffect(() => {
+    const items = Array.isArray(result?.review_items) ? result.review_items : [];
+    setReviewItemsDraft(items.map((item) => ({
+      ...item,
+      entity_name: item.entity_name || "",
+      key_attributes_text: joinItems(item.key_attributes || []),
+      clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
+      business_key_text: joinItems(item.business_key || []),
+      dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
+    })));
+  }, [result]);
 
   const shouldShowField = (fieldKey) => {
     if (fieldKey === "load_condition") return isConditionLayer;
@@ -407,12 +426,11 @@ export default function AdminPrototypeReviewPage() {
         dependent_views: skips.dependent_views ? [] : splitItems(form.dependent_views),
         linked_issues: splitItems(linkedIssues),
         key_attributes: skips.clickhouse_keys ? [] : splitItems(form.clickhouse_keys || form.business_key),
-        create_issue: createIssue,
+        create_issue: false,
       });
       setResult(payload || null);
       if (Array.isArray(payload?.execution) && payload.execution.length) {
         const totalSec =
-          Number(payload?.preparation?.duration_sec || 0) +
           payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0);
         if (totalSec > 0) {
           setForm((prev) => ({
@@ -428,14 +446,66 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleCopyYaml = async () => {
-    const content = String(result?.yaml_bundle?.yaml_content || "").trim();
-    if (!content) return;
+  const handleReviewItemChange = (targetFqn, field, value) => {
+    setReviewItemsDraft((prev) => prev.map((item) => {
+      if (item.target_fqn !== targetFqn) return item;
+      const next = { ...item, [field]: value };
+      const needsEntity = !String(next.entity_name || "").trim();
+      const needsKeys = !splitItems(next.key_attributes_text).length;
+      next.requires_user_input = Boolean(item.is_new || item.missing_fields?.length || needsEntity || needsKeys);
+      return next;
+    }));
+  };
+
+  const handleCopyYaml = async (content) => {
+    const value = String(content || "").trim();
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(value);
       setYamlCopied(true);
     } catch (_) {
       setYamlCopied(false);
+    }
+  };
+
+  const handleCreateIssue = async () => {
+    const trimmedMr = String(mrInput || "").trim();
+    if (!trimmedMr || creatingIssue) return;
+    setCreatingIssue(true);
+    setError(null);
+    try {
+      const payload = await adminApi.prototypeReviewCreateIssue({
+        mr_input: trimmedMr,
+        task_text: normalizedTaskText,
+        issue_summary: form.summary.trim(),
+        load_mode: form.load_mode.trim(),
+        stand_dev: standDev,
+        stand_prod: standProd,
+        copy_to_clickhouse: copyToClickhouse,
+        linked_issues: splitItems(linkedIssues),
+        review_items: reviewItemsDraft.map((item) => ({
+          path: item.path,
+          target_fqn: item.target_fqn,
+          entity_name: String(item.entity_name || "").trim(),
+          key_attributes: splitItems(item.key_attributes_text),
+          clickhouse_keys: splitItems(item.clickhouse_keys_text),
+          business_key: splitItems(item.business_key_text),
+          dependent_views: splitItems(item.dependent_views_text),
+          is_new: item.is_new,
+          object_type: item.object_type,
+          duration_sec: item.duration_sec,
+          row_count: item.checks?.row_count ?? null,
+          duplicate_groups: item.checks?.duplicate_groups ?? null,
+          dependencies: item.dependencies || [],
+          impact_tables: item.impact?.tables || [],
+          yaml_content: item.yaml_bundle?.yaml_content || "",
+        })),
+      });
+      setResult((prev) => ({ ...(prev || {}), issue: payload?.issue || null }));
+    } catch (err) {
+      setError(err?.message || "Не удалось создать задачу");
+    } finally {
+      setCreatingIssue(false);
     }
   };
 
@@ -494,10 +564,9 @@ export default function AdminPrototypeReviewPage() {
           </div>
           <div className="prototype-step-field" style={{ margin: 0 }}>
             <span className="slow-select-label">Создание задачи</span>
-            <label className="prototype-skip-toggle" style={{ marginTop: 10 }}>
-              <input type="checkbox" checked={createIssue} onChange={(event) => setCreateIssue(event.target.checked)} />
-              <span>Создать задачу автоматически после проверки</span>
-            </label>
+            <div className="muted" style={{ marginTop: 10 }}>
+              После `Запустить проверки` все найденные таблицы появятся ниже. Новые таблицы и объекты без ключей будут подсвечены, после ручной правки можно создать одну задачу по всему MR.
+            </div>
             <div className="muted" style={{ marginTop: 10 }}>
               Инициатор в описании:
               {" "}
@@ -617,11 +686,11 @@ export default function AdminPrototypeReviewPage() {
               <div className="hint">{result.status_reason || "—"}</div>
             </div>
             <div className="slow-summary-card">
-              <div className="label">Витрина</div>
-              <div className="value mono" style={{ fontSize: "1rem", overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                {result.final_target || "—"}
+              <div className="label">Таблицы MR</div>
+              <div className="value">{Array.isArray(reviewItemsDraft) ? reviewItemsDraft.length : 0}</div>
+              <div className="hint">
+                {result.requires_user_input ? `Требуют ручной проверки: ${unresolvedItemsCount}` : "Все обязательные поля заполнены автоматически"}
               </div>
-              <div className="hint">{result.resolved_entity_name ? `Сущность: ${result.resolved_entity_name}` : "Сущность не определена"}</div>
             </div>
             <div className="slow-summary-card">
               <div className="label">YTrack</div>
@@ -630,28 +699,153 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Витрина и проверка</div>
-            <div className="table-wrapper">
-              <table className="incidents-table slow-table">
-                <thead>
-                  <tr>
-                    <th>Сущность</th>
-                    <th>Ключевые поля</th>
-                    <th>Количество строк</th>
-                    <th>Кол-во дублей</th>
-                    <th>Время выполнения SQL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{result.resolved_entity_name || "—"}</td>
-                    <td>{(result.key_attributes || []).length ? result.key_attributes.join(", ") : "—"}</td>
-                    <td>{result.checks?.row_count !== undefined && result.checks?.row_count !== null ? formatCount(result.checks.row_count) : "—"}</td>
-                    <td>{result.checks?.duplicate_groups !== undefined && result.checks?.duplicate_groups !== null ? formatCount(result.checks.duplicate_groups) : "—"}</td>
-                    <td>{totalExecutionSec > 0 ? formatDuration(totalExecutionSec) : "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div className="section-title">Объекты MR</div>
+            <div className="muted" style={{ marginBottom: 14 }}>
+              Целевые таблицы определены автоматически по SQL-файлам MR. Для новых таблиц и объектов без ключей заполните поля вручную перед созданием задачи.
+            </div>
+            <div style={{ display: "grid", gap: 16 }}>
+              {reviewItemsDraft.map((item) => {
+                const needsEntity = !String(item.entity_name || "").trim();
+                const needsKeys = !splitItems(item.key_attributes_text).length;
+                const needsAttention = Boolean(item.is_new || item.requires_user_input || needsEntity || needsKeys);
+                return (
+                  <div
+                    key={item.target_fqn}
+                    className="cc-surface"
+                    style={{
+                      margin: 0,
+                      border: needsAttention ? "1px solid rgba(214, 86, 46, 0.45)" : undefined,
+                      boxShadow: needsAttention ? "0 0 0 1px rgba(214, 86, 46, 0.08) inset" : undefined,
+                    }}
+                  >
+                    <div className="prototype-chip-row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <div>
+                        <div className="mono" style={{ fontSize: "1rem", fontWeight: 700 }}>{item.target_fqn || "—"}</div>
+                        <div className="muted">{item.path || "—"}</div>
+                      </div>
+                      <div className="prototype-chip-row">
+                        <span className="card" style={{ padding: "6px 10px", margin: 0 }}>{item.object_type || "TABLE"}</span>
+                        <span className="card" style={{ padding: "6px 10px", margin: 0 }}>{item.is_new ? "Новая таблица" : "Существующий объект"}</span>
+                        {needsAttention ? <span className="card" style={{ padding: "6px 10px", margin: 0, color: "#b54708" }}>Нужно заполнить</span> : null}
+                      </div>
+                    </div>
+
+                    <div className="table-wrapper" style={{ marginBottom: 14 }}>
+                      <table className="incidents-table slow-table">
+                        <thead>
+                          <tr>
+                            <th>Сущность</th>
+                            <th>Ключевые поля</th>
+                            <th>Количество строк</th>
+                            <th>Кол-во дублей</th>
+                            <th>Время выполнения SQL</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>{item.entity_name || "—"}</td>
+                            <td>{splitItems(item.key_attributes_text).join(", ") || "—"}</td>
+                            <td>{item.checks?.row_count !== undefined && item.checks?.row_count !== null ? formatCount(item.checks.row_count) : "—"}</td>
+                            <td>{item.checks?.duplicate_groups !== undefined && item.checks?.duplicate_groups !== null ? formatCount(item.checks.duplicate_groups) : "—"}</td>
+                            <td>{item.duration_sec ? formatDuration(item.duration_sec) : "—"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="prototype-step-grid">
+                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Сущность загрузки</span>
+                        <input
+                          className="slow-entity-select"
+                          value={item.entity_name || ""}
+                          onChange={(event) => handleReviewItemChange(item.target_fqn, "entity_name", event.target.value)}
+                          placeholder="BI_SB_WUC"
+                        />
+                      </div>
+                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Ключевые поля</span>
+                        <textarea
+                          className="slow-entity-select"
+                          value={item.key_attributes_text || ""}
+                          onChange={(event) => handleReviewItemChange(item.target_fqn, "key_attributes_text", event.target.value)}
+                          placeholder="warehouse_code, dt_report"
+                          style={{ minHeight: 100, resize: "vertical" }}
+                        />
+                      </div>
+                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Ключевые поля ClickHouse</span>
+                        <textarea
+                          className="slow-entity-select"
+                          value={item.clickhouse_keys_text || ""}
+                          onChange={(event) => handleReviewItemChange(item.target_fqn, "clickhouse_keys_text", event.target.value)}
+                          placeholder="warehouse_code, dt_report"
+                          style={{ minHeight: 100, resize: "vertical" }}
+                        />
+                      </div>
+                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Бизнес ключ</span>
+                        <textarea
+                          className="slow-entity-select"
+                          value={item.business_key_text || ""}
+                          onChange={(event) => handleReviewItemChange(item.target_fqn, "business_key_text", event.target.value)}
+                          placeholder="warehouse_code, dt_report"
+                          style={{ minHeight: 100, resize: "vertical" }}
+                        />
+                      </div>
+                    </div>
+
+                    {(item.warnings || []).length ? (
+                      <div className="card muted" style={{ marginTop: 14 }}>
+                        {(item.warnings || []).map((warning) => <div key={warning}>• {warning}</div>)}
+                      </div>
+                    ) : null}
+
+                    <div className="prototype-step-grid" style={{ marginTop: 14 }}>
+                      <div className="cc-surface" style={{ margin: 0 }}>
+                        <div className="section-title">Зависимости SQL</div>
+                        {Array.isArray(item.dependencies) && item.dependencies.length > 0 ? (
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {item.dependencies.map((dependency) => <div key={dependency} className="mono">{dependency}</div>)}
+                          </div>
+                        ) : <div className="muted">Зависимости не найдены.</div>}
+                      </div>
+                      <div className="cc-surface" style={{ margin: 0 }}>
+                        <div className="section-title">Downstream-влияние</div>
+                        {Array.isArray(item.impact?.tables) && item.impact.tables.length > 0 ? (
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {item.impact.tables.map((row) => (
+                              <div key={row.fqn}>
+                                <div style={{ fontWeight: 700 }}>{row.fqn || "—"}</div>
+                                <div className="muted">{row.entity_name || "—"}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : <div className="muted">Downstream-объекты не найдены.</div>}
+                      </div>
+                    </div>
+
+                    <div className="cc-surface" style={{ margin: "14px 0 0" }}>
+                      <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
+                        <div className="muted">
+                          Источник YAML:
+                          {" "}
+                          <strong>{formatYamlSource(item.yaml_bundle)}</strong>
+                        </div>
+                        <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(item.yaml_bundle?.yaml_content)}>
+                          {yamlCopied ? "Скопировано" : "Скопировать YAML"}
+                        </button>
+                      </div>
+                      <textarea
+                        className="slow-entity-select mono"
+                        readOnly
+                        value={item.yaml_bundle?.yaml_content || ""}
+                        style={{ minHeight: 220, resize: "vertical" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {Array.isArray(result.validation_errors) && result.validation_errors.length > 0 ? (
               <div className="card muted" style={{ marginTop: 16 }}>
@@ -666,7 +860,7 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Параметры загрузки</div>
+            <div className="section-title">Общие параметры</div>
             <div className="table-wrapper">
               <table className="incidents-table slow-table">
                 <thead>
@@ -694,62 +888,30 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Зависимости SQL</div>
-            {Array.isArray(result.dependencies) && result.dependencies.length > 0 ? (
-              <div className="card" style={{ display: "grid", gap: 10 }}>
-                {result.dependencies.map((item) => (
-                  <div key={item} className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{item}</div>
-                ))}
+            <div className="section-title">Создание задачи</div>
+            <div className="prototype-import-actions">
+              <div className="muted">
+                Одна задача будет создана на весь MR. В описании MR и diff будут указаны один раз, а по каждой таблице пойдет отдельный структурированный блок.
               </div>
-            ) : (
-              <div className="muted">Зависимости не найдены.</div>
-            )}
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">Потенциальное downstream-влияние</div>
-            {Array.isArray(result.impact?.tables) && result.impact.tables.length > 0 ? (
-              <div className="card" style={{ display: "grid", gap: 12 }}>
-                {result.impact.tables.map((item) => (
-                  <div key={item.fqn}>
-                    <div style={{ fontWeight: 700 }}>{item.fqn || "—"}</div>
-                    <div className="muted">{item.entity_name || "—"}</div>
-                  </div>
-                ))}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleCreateIssue}
+                disabled={creatingIssue || unresolvedItemsCount > 0 || !reviewItemsDraft.length}
+              >
+                {creatingIssue ? "Создаем задачу..." : "Создать задачу"}
+              </button>
+            </div>
+            {unresolvedItemsCount > 0 ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Сначала заполните обязательные поля у {unresolvedItemsCount} таблиц.
               </div>
-            ) : (
-              <div className="muted">Downstream-объекты не найдены.</div>
-            )}
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">Черновик YAML</div>
-            {result.yaml_bundle?.yaml_content ? (
-              <>
-                <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
-                  <div className="muted">
-                    Источник:
-                    {" "}
-                    <strong>{formatYamlSource(result.yaml_bundle)}</strong>
-                    {" · "}
-                    Объект:
-                    {" "}
-                    <span className="mono">{result.final_target || "—"}</span>
-                  </div>
-                  <button type="button" className="btn btn-ghost" onClick={handleCopyYaml}>
-                    {yamlCopied ? "Скопировано" : "Скопировать YAML"}
-                  </button>
-                </div>
-                <textarea
-                  className="slow-entity-select mono"
-                  readOnly
-                  value={result.yaml_bundle.yaml_content}
-                  style={{ minHeight: 420, resize: "vertical" }}
-                />
-              </>
-            ) : (
-              <div className="muted">Не удалось автоматически собрать YAML для этой таблицы.</div>
-            )}
+            ) : null}
+            <div className="muted" style={{ marginTop: 12 }}>
+              Общее время выполнения SQL:
+              {" "}
+              <strong>{totalExecutionSec > 0 ? formatDuration(totalExecutionSec) : "—"}</strong>
+            </div>
           </section>
         </>
       ) : null}

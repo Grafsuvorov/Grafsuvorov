@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi } from "../api/admin.js";
 import { accountApi } from "../api/account.js";
+import { apiClient } from "../api/client.js";
 
 const DEFAULT_FORM = {
   summary: "",
@@ -228,23 +229,20 @@ export default function AdminPrototypeReviewPage() {
     accountApi.me().then(setCurrentUser).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const mrValue = String(mrInput || "").trim();
+    if (!mrValue) return;
+    setForm((prev) => {
+      const currentRef = String(prev.git_reference || "").trim();
+      if (currentRef && currentRef !== mrValue) return prev;
+      if (currentRef === mrValue) return prev;
+      return { ...prev, git_reference: mrValue };
+    });
+  }, [mrInput]);
+
   const targetSchema = String(form.target_table_fqn || "").trim().split(".", 1)[0].toLowerCase();
   const isSourceLayer = targetSchema === "stg" || targetSchema === "dict_stg";
   const isConditionLayer = targetSchema === "stg";
-
-  const formatLoadInterval = (intervalValue) => {
-    if (!intervalValue || typeof intervalValue !== "object") return "";
-    const parts = [];
-    const days = Number(intervalValue.days || 0);
-    const hours = Number(intervalValue.hours || 0);
-    const minutes = Number(intervalValue.minutes || 0);
-    const seconds = Number(intervalValue.seconds || 0);
-    if (days) parts.push(`${days} д`);
-    if (hours) parts.push(`${hours} ч`);
-    if (minutes) parts.push(`${minutes} мин`);
-    if (seconds) parts.push(`${seconds} сек`);
-    return parts.join(" ") || "";
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -305,10 +303,13 @@ export default function AdminPrototypeReviewPage() {
     setTableMetaLoading(true);
     setError(null);
     try {
-      const [meta, clickViewSearchResult, clickMetaResult] = await Promise.all([
+      const [meta, clickViewSearchResult, clickMetaResult, dependencyNodesResult] = await Promise.all([
         adminApi.tableCard(tableItem.schema, tableItem.table, { source: "current" }),
         adminApi.clickViewSearch(tableItem.schema, tableItem.table).catch(() => []),
         adminApi.clickMeta(tableItem.schema, tableItem.table).catch(() => null),
+        apiClient.get(`/api/dependencies-nodes/${encodeURIComponent(tableItem.schema)}/${encodeURIComponent(tableItem.table)}`, {
+          params: { max_depth: 1, max_nodes: 200 },
+        }).catch(() => null),
       ]);
       const keyAttributes = Array.isArray(meta?.key_attributes) ? meta.key_attributes : [];
       const clickOrderBy = Array.isArray(clickMetaResult?.meta?.order_by) ? clickMetaResult.meta.order_by : [];
@@ -326,20 +327,28 @@ export default function AdminPrototypeReviewPage() {
             })
             .filter(Boolean)
         : [];
+      const dependencyNodes = Array.isArray(dependencyNodesResult?.nodes) ? dependencyNodesResult.nodes : [];
+      const metaDependentViews = dependencyNodes.filter((fqn) => {
+        const normalized = String(fqn || "").trim().toLowerCase();
+        return normalized.startsWith("dm_view.") && normalized !== String(tableItem.fqn || "").trim().toLowerCase();
+      });
+      const mergedDependentViews = Array.from(new Set([...dependentViews, ...metaDependentViews]));
       const summary = form.summary.trim() && !selectedTable
         ? form.summary
         : `(ДМЛ) Настроить обновление витрины ${tableItem.fqn}`;
+      const mrValue = String(mrInput || "").trim();
       setSelectedTable(tableItem);
       setTableQuery(tableItem.fqn);
       setForm((prev) => ({
         ...prev,
         summary,
+        git_reference: mrValue || prev.git_reference || "",
         entity_name: String(meta?.entity_name || tableItem.entity_name || prev.entity_name || ""),
         target_table_fqn: String(meta?.table_schema && meta?.table_name ? `${meta.table_schema}.${meta.table_name}` : tableItem.fqn || prev.target_table_fqn || ""),
         load_mode: String(meta?.table_load_mode || prev.load_mode || ""),
         business_key: joinItems(keyAttributes.length ? keyAttributes : splitItems(prev.business_key)),
         clickhouse_keys: joinItems(clickOrderBy.length ? clickOrderBy : splitItems(prev.clickhouse_keys)),
-        dependent_views: joinItems(dependentViews.length ? dependentViews : splitItems(prev.dependent_views)),
+        dependent_views: joinItems(mergedDependentViews.length ? mergedDependentViews : splitItems(prev.dependent_views)),
       }));
     } catch (err) {
       setError(err?.message || "Не удалось подтянуть мету таблицы");

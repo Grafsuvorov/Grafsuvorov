@@ -835,6 +835,13 @@ def _prototype_issue_description(
             return f"{numeric / 60.0:.2f} мин"
         return f"{numeric:.3f} сек"
 
+    def _format_count(value: Any) -> str:
+        try:
+            numeric = int(value)
+        except Exception:
+            return "—" if value in (None, "") else str(value)
+        return f"{numeric:,}".replace(",", " ")
+
     total_execution_sec = sum(float(item.get("duration_sec") or 0) for item in (execution or []))
     duplicate_groups = (
         checks.get("duplicate_groups")
@@ -854,8 +861,8 @@ def _prototype_issue_description(
         f"**Витрина:** {final_target or 'не определена'}",
         f"**Сущность:** {entity_name or 'не определена'}",
         f"**Ключевые поля:** {', '.join(key_attributes) if key_attributes else 'не заданы'}",
-        f"**Количество строк:** {checks.get('row_count') if checks else '—'}",
-        f"**Групп дублей:** {duplicate_groups}",
+        f"**Количество строк:** {_format_count(checks.get('row_count') if checks else None)}",
+        f"**Кол-во дублей:** {_format_count(duplicate_groups)}",
     ]
     if task_context:
         lines.extend(

@@ -199,6 +199,12 @@ function formatDuration(value) {
   return `${numeric.toFixed(3)} сек`;
 }
 
+function formatCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value ?? "—";
+  return new Intl.NumberFormat("ru-RU").format(numeric);
+}
+
 function formatStatus(status) {
   if (status === "ok") return "OK";
   if (status === "warning") return "WARNING";
@@ -632,7 +638,7 @@ export default function AdminPrototypeReviewPage() {
                     <th>Сущность</th>
                     <th>Ключевые поля</th>
                     <th>Количество строк</th>
-                    <th>Групп дублей</th>
+                    <th>Кол-во дублей</th>
                     <th>Время выполнения SQL</th>
                   </tr>
                 </thead>
@@ -640,8 +646,8 @@ export default function AdminPrototypeReviewPage() {
                   <tr>
                     <td>{result.resolved_entity_name || "—"}</td>
                     <td>{(result.key_attributes || []).length ? result.key_attributes.join(", ") : "—"}</td>
-                    <td>{result.checks?.row_count ?? "—"}</td>
-                    <td>{result.checks?.duplicate_groups ?? "—"}</td>
+                    <td>{result.checks?.row_count !== undefined && result.checks?.row_count !== null ? formatCount(result.checks.row_count) : "—"}</td>
+                    <td>{result.checks?.duplicate_groups !== undefined && result.checks?.duplicate_groups !== null ? formatCount(result.checks.duplicate_groups) : "—"}</td>
                     <td>{totalExecutionSec > 0 ? formatDuration(totalExecutionSec) : "—"}</td>
                   </tr>
                 </tbody>

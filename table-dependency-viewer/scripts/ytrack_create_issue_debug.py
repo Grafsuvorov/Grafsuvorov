@@ -186,6 +186,16 @@ def get_bundle_values(bundle_id: str) -> list[dict[str, Any]]:
 
 
 def normalize_issue_custom_field_type(project_field_type: str, field_type_id: str) -> str:
+    if project_field_type == "EnumProjectCustomField":
+        return "SingleEnumIssueCustomField"
+    if project_field_type == "OwnedProjectCustomField":
+        return "SingleOwnedIssueCustomField"
+    if project_field_type == "UserProjectCustomField":
+        return "SingleUserIssueCustomField"
+    if project_field_type == "StateProjectCustomField":
+        return "StateIssueCustomField"
+    if project_field_type == "VersionProjectCustomField":
+        return "SingleVersionIssueCustomField"
     if project_field_type.endswith("ProjectCustomField"):
         return f"{project_field_type[:-18]}IssueCustomField"
     if field_type_id == "period":

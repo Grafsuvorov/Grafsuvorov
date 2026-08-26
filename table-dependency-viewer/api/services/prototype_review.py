@@ -173,7 +173,7 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
         result["clickhouse_keys"] = clickhouse_keys
 
     business_key_match = re.search(
-        r"Бизнес-ключ.*?:\s*(.+?)(?:\n\s*\n|\n[А-ЯA-Z][^:\n]{0,80}:|\nсвязана с|\nподзадача для|\Z)",
+        r"Бизнес[- ]ключ.*?:\s*(.+?)(?:\n\s*\n|\n[А-ЯA-Z][^:\n]{0,80}:|\nсвязана с|\nподзадача для|\Z)",
         raw_text,
         re.IGNORECASE | re.DOTALL,
     )
@@ -645,7 +645,7 @@ def create_ytrack_issue(
     if custom_fields_payload:
         payload["customFields"] = custom_fields_payload
     req = urlrequest.Request(
-        f"{base_url.rstrip('/')}/api/issues",
+        f"{base_url.rstrip('/')}/api/issues?fields=id,idReadable,key,summary",
         data=json.dumps(payload).encode("utf-8"),
         headers=headers,
         method="POST",
@@ -659,7 +659,7 @@ def create_ytrack_issue(
         raise ValueError(f"YTrack вернул {exc.code}: {body}") from exc
     except Exception as exc:
         raise ValueError(f"Не удалось создать задачу в YTrack: {exc}") from exc
-    issue_id = data.get("key") or data.get("id")
+    issue_id = data.get("idReadable") or data.get("key") or data.get("id")
     return {
         "status": "created",
         "issue_id": issue_id,

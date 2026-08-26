@@ -826,53 +826,60 @@ def _prototype_issue_description(
     task_context: dict[str, Any],
     initiator: dict[str, Any],
 ) -> str:
+    def _format_duration(seconds: Any) -> str:
+        try:
+            numeric = float(seconds or 0)
+        except Exception:
+            return "—"
+        if numeric >= 60:
+            return f"{numeric / 60.0:.2f} мин"
+        return f"{numeric:.3f} сек"
+
+    total_execution_sec = sum(float(item.get("duration_sec") or 0) for item in (execution or []))
+    duplicate_groups = (
+        checks.get("duplicate_groups")
+        if checks.get("duplicate_groups") is not None
+        else "не проверялось"
+    )
+    clickhouse_keys = task_context.get("clickhouse_keys") or key_attributes
+    business_keys = task_context.get("business_key") or key_attributes
     lines = [
-        "Автоматически создано из Prototype Review.",
+        "## MR",
+        f"**Email инициатора:** {initiator.get('email') or '—'}",
+        f"**MR:** {mr.get('web_url') or '—'}",
+        f"**Ветка:** {mr.get('source_branch') or '—'} -> {mr.get('target_branch') or '—'}",
+        f"**Автор MR:** {mr.get('author') or '—'}",
         "",
-        f"Инициатор в приложении: {initiator.get('username') or initiator.get('email') or '—'}",
-        f"Email инициатора: {initiator.get('email') or '—'}",
-        f"MR: {mr.get('web_url') or '—'}",
-        f"Проект: {mr.get('project') or '—'}",
-        f"Ветка: {mr.get('source_branch') or '—'} -> {mr.get('target_branch') or '—'}",
-        f"Автор MR: {mr.get('author') or '—'}",
-        "",
-        f"Финальная витрина: {final_target or 'не определена'}",
-        f"Сущность: {entity_name or 'не определена'}",
-        f"Ключ: {', '.join(key_attributes) if key_attributes else 'не задан'}",
-        f"Row count: {checks.get('row_count') if checks else '—'}",
-        f"Duplicate groups: {checks.get('duplicate_groups') if checks.get('duplicate_groups') is not None else 'не проверялось'}",
-        "",
-        f"Подготовка DEV: {preparation.get('message') or '—'}",
-        "",
-        "Файлы и время выполнения:",
+        "## Витрина",
+        f"**Витрина:** {final_target or 'не определена'}",
+        f"**Сущность:** {entity_name or 'не определена'}",
+        f"**Ключевые поля:** {', '.join(key_attributes) if key_attributes else 'не заданы'}",
+        f"**Количество строк:** {checks.get('row_count') if checks else '—'}",
+        f"**Групп дублей:** {duplicate_groups}",
     ]
     if task_context:
         lines.extend(
             [
                 "",
-                "Контекст задачи:",
-                f"- Summary: {task_context.get('summary') or '—'}",
-                f"- Предметная область: {task_context.get('subject_area') or '—'}",
-                f"- Сущность: {task_context.get('entity_name') or entity_name or '—'}",
-                f"- Режим обновления: {task_context.get('load_mode') or '—'}",
-                f"- Стенды: {', '.join(task_context.get('environments') or []) or '—'}",
-                f"- Git ref: {task_context.get('git_reference') or '—'}",
-                f"- Copy to ClickHouse: {'да' if task_context.get('copy_to_clickhouse') else 'нет'}",
-                f"- ClickHouse keys: {', '.join(task_context.get('clickhouse_keys') or []) or '—'}",
-                f"- Зависимые view: {', '.join(task_context.get('dependent_views') or []) or '—'}",
-                f"- Связанные тикеты: {', '.join(task_context.get('linked_issues') or []) or '—'}",
+                "## Параметры загрузки",
+                f"**Предметная область:** {task_context.get('subject_area') or '—'}",
+                f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
+                f"**Стенды:** {', '.join(task_context.get('environments') or []) or '—'}",
+                f"**Git ref:** {task_context.get('git_reference') or '—'}",
+                f"**Копировать в ClickHouse:** {'необходимо обновить данные в витрине (структуру обновлять не нужно)' if task_context.get('copy_to_clickhouse') else 'не нужно'}",
+                f"**Ключевые поля для загрузки в ClickHouse:** {', '.join(clickhouse_keys) if clickhouse_keys else '—'}",
+                f"**Бизнес ключ:** {', '.join(business_keys) if business_keys else '—'}",
+                f"**Время выполнения SQL:** {_format_duration(total_execution_sec)}",
             ]
         )
-    for item in execution:
-        lines.append(f"- {item.get('path')}: {item.get('status')} · {item.get('duration_sec', 0)} сек")
     if dependencies:
-        lines.extend(["", "Зависимости SQL:"])
+        lines.extend(["", "## Зависимости SQL"])
         lines.extend(f"- {item}" for item in dependencies[:40])
     impact_tables = impact.get("tables") or []
     if impact_tables:
-        lines.extend(["", "Потенциальное downstream-влияние:"])
+        lines.extend(["", "## Потенциальное downstream-влияние"])
         lines.extend(
-            f"- {item.get('fqn')} · {item.get('entity_name') or '—'}"
+            f"- **{item.get('fqn')}** · {item.get('entity_name') or '—'}"
             for item in impact_tables[:25]
         )
     return "\n".join(lines)
@@ -974,6 +981,7 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             "load_mode": (payload.load_mode or "").strip() or parsed_task.get("load_mode"),
             "entity_name": resolved_entity_name,
             "target_table_fqn": final_target,
+            "business_key": parsed_task.get("business_key") or key_attributes,
             "dependent_views": payload.dependent_views or parsed_task.get("dependent_views") or [],
             "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
             "environments": [

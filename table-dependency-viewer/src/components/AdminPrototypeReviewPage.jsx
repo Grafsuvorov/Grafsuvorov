@@ -80,7 +80,7 @@ const FIELD_META = {
   load_mode: { label: "Способ обновления", placeholder: "Полный / Псевдоинкрементальный", kind: "text" },
   load_condition: { label: "Условие при загрузке", placeholder: "where dt >= current_date - 7", kind: "textarea", optional: true },
   script_runtime: { label: "Время работы скрипта", placeholder: "5-10 мин", kind: "text", optional: true },
-  business_key: { label: "Бизнес-ключ для проверки на дубли", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
+  business_key: { label: "Бизнес ключ", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
   dependent_views: { label: "Зависимые представления", placeholder: "dm_view.sales_...", kind: "textarea", optional: true },
   clickhouse_keys: { label: "Ключевые поля для загрузки в ClickHouse", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
   pseudo_increment_steps: { label: "Последовательность действий при (псевдо)инкременте", placeholder: "1. ...", kind: "textarea", optional: true },
@@ -136,7 +136,7 @@ function parseTaskText(text) {
     load_mode: get(/Способ обновления:\s*(.+)/i),
     load_condition: get(/Условие при загрузке:\s*(.+)/i),
     script_runtime: get(/Время работы скрипта:\s*(.+)/i),
-    business_key: multilineField("Бизнес-ключ(?: для проверки на дубли)?"),
+    business_key: multilineField("Бизнес[- ]ключ(?: для проверки на дубли)?"),
     dependent_views: multilineField("Зависимые представления|Зависимые представление"),
     clickhouse_keys: multilineField("Ключевые поля для загрузки в ClickHosue|Ключевые поля для загрузки в ClickHouse"),
     pseudo_increment_steps: multilineField("Последовательность действий при \\(псевдо\\)инкрементальном обновлении таблицы"),
@@ -183,9 +183,9 @@ function buildTemplateText(form, options) {
   pushField("Название таблицы Greenplum", "target_table_fqn");
   pushField("Способ обновления", "load_mode");
   pushField("Время работы скрипта", "script_runtime");
-  pushField("Бизнес-ключ для проверки на дубли", "business_key", { multiline: true });
+  pushField("Бизнес ключ", "business_key", { multiline: true });
   pushField("Зависимые представления", "dependent_views", { multiline: true });
-  lines.push(`Копировать в ClickHouse: ${options.copyToClickhouse ? "необходимо обновить данные в витрине" : "не нужно"}`);
+  lines.push(`Копировать в ClickHouse: ${options.copyToClickhouse ? "необходимо обновить данные в витрине (структуру обновлять не нужно)" : "не нужно"}`);
   pushField("Ключевые поля для загрузки в ClickHouse", "clickhouse_keys", { multiline: true });
   pushField("Последовательность действий при (псевдо)инкрементальном обновлении таблицы", "pseudo_increment_steps");
   if (options.linkedIssues.trim()) lines.push(`Связанные тикеты: ${options.linkedIssues.trim()}`);
@@ -285,6 +285,10 @@ export default function AdminPrototypeReviewPage() {
   const normalizedTaskText = useMemo(
     () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer }),
     [form, skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer],
+  );
+  const totalExecutionSec = useMemo(
+    () => Number(result?.preparation?.duration_sec || 0) + (Array.isArray(result?.execution) ? result.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0) : 0),
+    [result],
   );
 
   const shouldShowField = (fieldKey) => {
@@ -438,7 +442,7 @@ export default function AdminPrototypeReviewPage() {
   return (
     <div className="container cc-page slow-page prototype-review-page">
       <section className="cc-header-zone">
-        <h1>Prototype Review</h1>
+        <h1>Prototype Review / MR Review</h1>
         <div className="cc-subtitle">
           Цель: сократить время заведения задачи и собрать однотипную карточку из шаблона, MR и меты таблицы.
         </div>
@@ -581,11 +585,11 @@ export default function AdminPrototypeReviewPage() {
               <div className="hint">{result.status_reason || "—"}</div>
             </div>
             <div className="slow-summary-card">
-              <div className="label">Финальная витрина</div>
+              <div className="label">Витрина</div>
               <div className="value mono" style={{ fontSize: "1rem", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                 {result.final_target || "—"}
               </div>
-              <div className="hint">{result.resolved_entity_name || "Сущность не определена"}</div>
+              <div className="hint">{result.resolved_entity_name ? `Сущность: ${result.resolved_entity_name}` : "Сущность не определена"}</div>
             </div>
             <div className="slow-summary-card">
               <div className="label">YTrack</div>
@@ -594,23 +598,25 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Проверки</div>
+            <div className="section-title">Витрина и проверка</div>
             <div className="table-wrapper">
               <table className="incidents-table slow-table">
                 <thead>
                   <tr>
-                    <th>Ключи проверки</th>
-                    <th>Row count</th>
-                    <th>Duplicate groups</th>
-                    <th>Потенциальное влияние</th>
+                    <th>Сущность</th>
+                    <th>Ключевые поля</th>
+                    <th>Количество строк</th>
+                    <th>Групп дублей</th>
+                    <th>Время выполнения SQL</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
+                    <td>{result.resolved_entity_name || "—"}</td>
                     <td>{(result.key_attributes || []).length ? result.key_attributes.join(", ") : "—"}</td>
                     <td>{result.checks?.row_count ?? "—"}</td>
                     <td>{result.checks?.duplicate_groups ?? "—"}</td>
-                    <td>{result.impact?.count ?? 0}</td>
+                    <td>{totalExecutionSec > 0 ? formatDuration(totalExecutionSec) : "—"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -628,32 +634,60 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Выполнение SQL</div>
+            <div className="section-title">Параметры загрузки</div>
             <div className="table-wrapper">
               <table className="incidents-table slow-table">
                 <thead>
                   <tr>
-                    <th>Файл</th>
-                    <th>SQL statements</th>
-                    <th>Статус</th>
-                    <th>Время</th>
+                    <th>Предметная область</th>
+                    <th>Режим обновления</th>
+                    <th>Стенды</th>
+                    <th>Копировать в ClickHouse</th>
+                    <th>Ключевые поля ClickHouse</th>
+                    <th>Бизнес ключ</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(result.files || []).map((item) => {
-                    const execRow = (result.execution || []).find((entry) => entry.path === item.path) || {};
-                    return (
-                      <tr key={item.path}>
-                        <td className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{item.path}</td>
-                        <td>{item.statements_count ?? "—"}</td>
-                        <td>{execRow.status || "—"}</td>
-                        <td>{execRow.duration_sec !== undefined ? formatDuration(execRow.duration_sec) : "—"}</td>
-                      </tr>
-                    );
-                  })}
+                  <tr>
+                    <td>{result.task_context?.subject_area || "—"}</td>
+                    <td>{result.task_context?.load_mode || "—"}</td>
+                    <td>{Array.isArray(result.task_context?.environments) && result.task_context.environments.length ? result.task_context.environments.join(", ") : "—"}</td>
+                    <td>{result.task_context?.copy_to_clickhouse ? "необходимо обновить данные в витрине (структуру обновлять не нужно)" : "не нужно"}</td>
+                    <td>{Array.isArray(result.task_context?.clickhouse_keys) && result.task_context.clickhouse_keys.length ? result.task_context.clickhouse_keys.join(", ") : "—"}</td>
+                    <td>{Array.isArray(result.task_context?.business_key) && result.task_context.business_key.length ? result.task_context.business_key.join(", ") : "—"}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">Зависимости SQL</div>
+            {Array.isArray(result.dependencies) && result.dependencies.length > 0 ? (
+              <div className="card" style={{ display: "grid", gap: 10 }}>
+                {result.dependencies.map((item) => (
+                  <div key={item} className="mono" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{item}</div>
+                ))}
+              </div>
+            ) : (
+              <div className="muted">Зависимости не найдены.</div>
+            )}
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">Потенциальное downstream-влияние</div>
+            {Array.isArray(result.impact?.tables) && result.impact.tables.length > 0 ? (
+              <div className="card" style={{ display: "grid", gap: 12 }}>
+                {result.impact.tables.map((item) => (
+                  <div key={item.fqn}>
+                    <div style={{ fontWeight: 700 }}>{item.fqn || "—"}</div>
+                    <div className="muted">{item.entity_name || "—"}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="muted">Downstream-объекты не найдены.</div>
+            )}
           </section>
         </>
       ) : null}

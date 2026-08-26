@@ -712,11 +712,7 @@ def _resolve_ytrack_custom_field(
         field_value_type = str(field_type.get("valueType") or field_type.get("id") or "").strip().lower()
         if not field_name:
             continue
-        issue_custom_field_type = (
-            f"{project_field_type[:-18]}IssueCustomField"
-            if project_field_type.endswith("ProjectCustomField")
-            else ("PeriodIssueCustomField" if field_type_id == "period" else "SimpleIssueCustomField")
-        )
+        issue_custom_field_type = _normalize_ytrack_issue_custom_field_type(project_field_type, field_type_id)
         if field_name.lower() == configured_name_lower:
             return {
                 "id": item_id,
@@ -734,6 +730,24 @@ def _resolve_ytrack_custom_field(
                 "field_value_type": field_value_type,
             }
     return fallback_match
+
+
+def _normalize_ytrack_issue_custom_field_type(project_field_type: str, field_type_id: str) -> str:
+    if project_field_type == "EnumProjectCustomField":
+        return "SingleEnumIssueCustomField"
+    if project_field_type == "OwnedProjectCustomField":
+        return "SingleOwnedIssueCustomField"
+    if project_field_type == "UserProjectCustomField":
+        return "SingleUserIssueCustomField"
+    if project_field_type == "StateProjectCustomField":
+        return "StateIssueCustomField"
+    if project_field_type == "VersionProjectCustomField":
+        return "SingleVersionIssueCustomField"
+    if project_field_type.endswith("ProjectCustomField"):
+        return f"{project_field_type[:-18]}IssueCustomField"
+    if field_type_id == "period":
+        return "PeriodIssueCustomField"
+    return "SimpleIssueCustomField"
 
 
 def _build_ytrack_estimate_payload(*, estimate_field: dict[str, str], default_estimate_minutes: int) -> dict[str, Any]:

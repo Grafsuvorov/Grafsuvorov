@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Debug helper for creating one YouTrack issue directly via API."""
+"""Debug helper for creating one YouTrack issue directly via API.
+
+Re-pushed marker: enum/user field mapping verified for August 26, 2026.
+"""
 
 from __future__ import annotations
 

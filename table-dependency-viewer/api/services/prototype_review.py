@@ -562,6 +562,7 @@ def create_ytrack_issue(
     ssl_verify: str,
     summary: str,
     description: str,
+    default_estimate_minutes: int = 60,
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -584,6 +585,21 @@ def create_ytrack_issue(
         "description": description,
         "type": issue_type or "task",
     }
+    required_period_fields = _load_required_ytrack_period_fields(
+        base_url=base_url,
+        token=token,
+        project_id=resolved_project_id,
+        ssl_verify=ssl_verify,
+    )
+    if required_period_fields:
+        payload["customFields"] = [
+            {
+                "name": field_name,
+                "$type": "PeriodIssueCustomField",
+                "value": {"minutes": max(1, int(default_estimate_minutes or 60))},
+            }
+            for field_name in required_period_fields
+        ]
     req = urlrequest.Request(
         f"{base_url.rstrip('/')}/api/issues",
         data=json.dumps(payload).encode("utf-8"),
@@ -606,6 +622,44 @@ def create_ytrack_issue(
         "url": data.get("self"),
         "raw": data,
     }
+
+
+def _load_required_ytrack_period_fields(
+    *,
+    base_url: str,
+    token: str,
+    project_id: str,
+    ssl_verify: str,
+) -> list[str]:
+    req = urlrequest.Request(
+        (
+            f"{base_url.rstrip('/')}/api/admin/projects/{urlparse.quote(project_id, safe='')}/customFields"
+            "?fields=canBeEmpty,field(name,fieldType(id,valueType))"
+        ),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            body = resp.read().decode("utf-8")
+            items = json.loads(body) if body else []
+    except Exception:
+        return []
+
+    result: list[str] = []
+    for item in items or []:
+        if (item or {}).get("canBeEmpty", True):
+            continue
+        field = (item or {}).get("field") or {}
+        field_name = str(field.get("name") or "").strip()
+        field_type = field.get("fieldType") or {}
+        field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
+        if field_name and field_type_id == "period":
+            result.append(field_name)
+    return result
 
 
 def _resolve_ytrack_project_id(

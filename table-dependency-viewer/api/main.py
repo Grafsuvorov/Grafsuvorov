@@ -101,6 +101,7 @@ from .config import (
     YOUTRACK_QUEUE,
     YOUTRACK_ISSUE_TYPE,
     YOUTRACK_SSL_VERIFY,
+    YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
 )
 
 
@@ -1003,6 +1004,7 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
                 ssl_verify=YOUTRACK_SSL_VERIFY,
                 summary=summary,
                 description=description,
+                default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
             )
             if issue_result.get("issue_id"):
                 issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))

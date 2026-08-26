@@ -97,6 +97,14 @@ function joinItems(value) {
   return Array.isArray(value) ? value.join(", ") : String(value || "");
 }
 
+function isViewLikeFqn(value, currentTableFqn = "") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || !normalized.includes(".")) return false;
+  if (normalized === String(currentTableFqn || "").trim().toLowerCase()) return false;
+  const [schemaName] = normalized.split(".", 1);
+  return schemaName.includes("view");
+}
+
 function parseTaskText(text) {
   const raw = String(text || "").trim();
   if (!raw) return {};
@@ -328,10 +336,7 @@ export default function AdminPrototypeReviewPage() {
             .filter(Boolean)
         : [];
       const dependencyNodes = Array.isArray(dependencyNodesResult?.nodes) ? dependencyNodesResult.nodes : [];
-      const metaDependentViews = dependencyNodes.filter((fqn) => {
-        const normalized = String(fqn || "").trim().toLowerCase();
-        return normalized.startsWith("dm_view.") && normalized !== String(tableItem.fqn || "").trim().toLowerCase();
-      });
+      const metaDependentViews = dependencyNodes.filter((fqn) => isViewLikeFqn(fqn, tableItem.fqn));
       const mergedDependentViews = Array.from(new Set([...dependentViews, ...metaDependentViews]));
       const summary = form.summary.trim() && !selectedTable
         ? form.summary

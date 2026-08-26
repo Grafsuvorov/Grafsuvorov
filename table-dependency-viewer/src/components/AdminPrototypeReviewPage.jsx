@@ -213,6 +213,14 @@ function formatIssueStatus(issue) {
   return issue?.status || "skipped";
 }
 
+function formatYamlSource(bundle) {
+  if (!bundle) return "—";
+  if (bundle.source === "new") return "Новая таблица";
+  if (bundle.source === "dev") return "DEV meta";
+  if (bundle.source === "prod") return "PROD meta";
+  return bundle.source || "—";
+}
+
 export default function AdminPrototypeReviewPage() {
   const [mrInput, setMrInput] = useState("");
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -232,6 +240,7 @@ export default function AdminPrototypeReviewPage() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [yamlCopied, setYamlCopied] = useState(false);
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -290,6 +299,12 @@ export default function AdminPrototypeReviewPage() {
     () => Number(result?.preparation?.duration_sec || 0) + (Array.isArray(result?.execution) ? result.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0) : 0),
     [result],
   );
+
+  useEffect(() => {
+    if (!yamlCopied) return undefined;
+    const timer = window.setTimeout(() => setYamlCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [yamlCopied]);
 
   const shouldShowField = (fieldKey) => {
     if (fieldKey === "load_condition") return isConditionLayer;
@@ -404,6 +419,17 @@ export default function AdminPrototypeReviewPage() {
       setError(err?.message || "Не удалось выполнить prototype review");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyYaml = async () => {
+    const content = String(result?.yaml_bundle?.yaml_content || "").trim();
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setYamlCopied(true);
+    } catch (_) {
+      setYamlCopied(false);
     }
   };
 
@@ -687,6 +713,36 @@ export default function AdminPrototypeReviewPage() {
               </div>
             ) : (
               <div className="muted">Downstream-объекты не найдены.</div>
+            )}
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">Черновик YAML</div>
+            {result.yaml_bundle?.yaml_content ? (
+              <>
+                <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
+                  <div className="muted">
+                    Источник:
+                    {" "}
+                    <strong>{formatYamlSource(result.yaml_bundle)}</strong>
+                    {" · "}
+                    Объект:
+                    {" "}
+                    <span className="mono">{result.final_target || "—"}</span>
+                  </div>
+                  <button type="button" className="btn btn-ghost" onClick={handleCopyYaml}>
+                    {yamlCopied ? "Скопировано" : "Скопировать YAML"}
+                  </button>
+                </div>
+                <textarea
+                  className="slow-entity-select mono"
+                  readOnly
+                  value={result.yaml_bundle.yaml_content}
+                  style={{ minHeight: 420, resize: "vertical" }}
+                />
+              </>
+            ) : (
+              <div className="muted">Не удалось автоматически собрать YAML для этой таблицы.</div>
             )}
           </section>
         </>

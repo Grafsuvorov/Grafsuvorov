@@ -963,6 +963,22 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             key_attributes=key_attributes,
         ) if final_target and not validation_errors else {"row_count": None, "duplicate_groups": None}
         impact = _prototype_impact_summary(final_target)
+        yaml_bundle = None
+        if final_target and resolved_entity_name and "." in final_target:
+            schema_name, table_name = final_target.split(".", 1)
+            try:
+                yaml_bundle = init_entity_dev_meta_bundle(
+                    engine=engine,
+                    base_dir=BASE_DIR,
+                    prod_root_value=ENTITY_META_DIR,
+                    dev_root_value=DEV_ENTITY_META_DIR,
+                    entity_name=resolved_entity_name,
+                    schema_name=schema_name,
+                    table_name=table_name,
+                    key_attributes=key_attributes,
+                )
+            except Exception as exc:
+                validation_warnings.append(f"YAML черновик не собран автоматически: {exc}")
         if checks.get("duplicate_groups") not in (None, 0):
             validation_errors.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
         status = "error" if validation_errors else ("warning" if validation_warnings else "ok")
@@ -1040,6 +1056,7 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
             "execution": execution,
             "checks": checks,
             "impact": impact,
+            "yaml_bundle": yaml_bundle,
             "validation_errors": validation_errors,
             "validation_warnings": validation_warnings,
             "status_reason": status_reason,

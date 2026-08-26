@@ -733,6 +733,7 @@ def _resolve_ytrack_custom_field(
 
 
 def _normalize_ytrack_issue_custom_field_type(project_field_type: str, field_type_id: str) -> str:
+    # Re-pushed marker: backend YouTrack custom field mapping refreshed on 2026-08-26.
     if project_field_type == "EnumProjectCustomField":
         return "SingleEnumIssueCustomField"
     if project_field_type == "OwnedProjectCustomField":

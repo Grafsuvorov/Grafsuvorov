@@ -1,106 +1,59 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrack_create_issue_debug.py
-YOUTRACK_URL=https://yt.rusal.ru
-project_id=0-30
-queue=DWH
-issue_type=task
-card_type_field=Тип карточки
-card_type_value=Task
-assignee_field=Assignee
-assignee_query=Suvorov Nikita
-estimate_field=Оценка (чел./час.)
-estimate_minutes=60
-enable_card_type=True
-enable_assignee=True
-enable_estimate=True
+Автоматически создано из Prototype Review. убрать
 
-Project custom fields:
-{"id": "134-171", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-28", "field_name": "Priority", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-174", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": true, "bundle_id": "136-17", "field_name": "Subsystem", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-288", "project_field_type": "StateProjectCustomField", "canBeEmpty": false, "bundle_id": "115-160", "field_name": "State", "field_type_id": "state[1]", "field_value_type": "state"}
-{"id": "134-394", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-29", "field_name": "Тип карточки", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-1015", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": true, "bundle_id": "136-95", "field_name": "Направление", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-1411", "project_field_type": "EnumProjectCustomField", "canBeEmpty": true, "bundle_id": "113-146", "field_name": "Дашборд SD", "field_type_id": "enum[*]", "field_value_type": "enum"}
-{"id": "134-1496", "project_field_type": "EnumProjectCustomField", "canBeEmpty": true, "bundle_id": "113-153", "field_name": "Дашборд LE", "field_type_id": "enum[*]", "field_value_type": "enum"}
-{"id": "134-1743", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-180", "field_name": "Причина инцидента", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-1864", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": false, "bundle_id": "136-140", "field_name": "Тип техдолга", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-1868", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": true, "bundle_id": "136-143", "field_name": "Тип внерелиза", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-2337", "project_field_type": "VersionProjectCustomField", "canBeEmpty": true, "bundle_id": "118-387", "field_name": "Номер релиза КХД", "field_type_id": "version[1]", "field_value_type": "version"}
-{"id": "134-2370", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-265", "field_name": "Приложение", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-2371", "project_field_type": "EnumProjectCustomField", "canBeEmpty": true, "bundle_id": "113-266", "field_name": "Тип обращения", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-2543", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-303", "field_name": "Меняется бизнес-ключ", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "135-305", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-31", "field_name": "Автор инцидента", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-590", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-583", "field_name": "Согласующий", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-708", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-701", "field_name": "Дежурный аналитик КХД", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-709", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-702", "field_name": "Согласовано DE", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-710", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-703", "field_name": "Согласовано SA", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-737", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-31", "field_name": "Assignee", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "141-32", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Затраченное время", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-450", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Spent time", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-451", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Фактические трудозатраты", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-468", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Экономия за счет ИИ", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-474", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Оценка трудозатрат", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-525", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Продолжительность отпуска", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-563", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Оценка", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-564", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Оценка трудозатрат, ч", "field_type_id": "period", "field_value_type": "period"}
-{"id": "173-140", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Оценка (чел./час.)", "field_type_id": "integer", "field_value_type": "integer"} <==
-{"id": "173-426", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Дата релиза", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-442", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Время начала сбоя", "field_type_id": "date and time", "field_value_type": "date and time"}
-{"id": "173-443", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Время обнаружения", "field_type_id": "date and time", "field_value_type": "date and time"}
-{"id": "173-444", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Время окончания работ", "field_type_id": "date and time", "field_value_type": "date and time"}
-{"id": "173-445", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Компонент", "field_type_id": "string", "field_value_type": "string"}
-{"id": "173-469", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Дата устранения", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-471", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Дата выкатки", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-627", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Дашборд КХД/Направление", "field_type_id": "string", "field_value_type": "string"}
-{"id": "173-629", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Фактическая дата релиза", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-679", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Due Date", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-721", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Дата начала отпуска", "field_type_id": "date", "field_value_type": "date"}
+Инициатор в приложении: admin убрать
+Email инициатора: Nikita.Suvorov@rusal.com оставить
+MR: https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/2202 оставить
+Проект: dwh_analyst/sql_queries_storage убрать
+Ветка: ChernyshevaMV_DWH-15641 -> main оставить
+Автор MR: Чернышёва Мария Владиславовна (ChernyshevaMV) оставить
 
-Enum values for `Тип карточки` (bundle `113-29`):
-{"id": "114-143", "name": "Bug", "description": null, "isArchived": null}
-{"id": "114-146", "name": "Feature", "description": null, "isArchived": null}
-{"id": "114-147", "name": "Task", "description": "Task", "isArchived": null}
-{"id": "114-150", "name": "Epic", "description": null, "isArchived": null}
-{"id": "114-225", "name": "User Story", "description": "User Story", "isArchived": null}
-{"id": "114-417", "name": "Incident", "description": "Инцидент", "isArchived": null}
-{"id": "114-846", "name": "Техдолг", "description": null, "isArchived": null}
-{"id": "114-850", "name": "Внерелиз", "description": null, "isArchived": null}
-{"id": "114-1234", "name": "Release Slot", "description": null, "isArchived": null}
-{"id": "114-1310", "name": "Приложения КХД", "description": null, "isArchived": null}
-{"id": "114-1361", "name": "Отпуск", "description": null, "isArchived": null}
+Финальная витрина: dm.sales_foreign_metal_stock_balance_analysis ( просто витрина) объединить этот блок с нижним чтьо бы например сущность не дублировать
+Сущность: BI_SB_WUC
+Ключ: warehouse_code, dt_report
+Row count: 39383
+Duplicate groups: 0
 
-POST /api/issues payload:
-{
-  "project": {
-    "id": "0-30"
-  },
-  "queue": "DWH",
-  "summary": "Debug issue from API",
-  "description": "Created by debug script.",
-  "type": "task",
-  "customFields": [
-    {
-      "id": "173-140",
-      "name": "Оценка (чел./час.)",
-      "$type": "SimpleIssueCustomField",
-      "value": 60
-    },
-    {
-      "id": "134-394",
-      "name": "Тип карточки",
-      "$type": "EnumIssueCustomField",
-      "value": {
-        "name": "Task"
-      }
-    },
-    {
-      "id": "135-737",
-      "name": "Assignee",
-      "$type": "SingleUserIssueCustomField",
-      "value": {
-        "login": "SuvorovND"
-      }
-    }
-  ]
-}
+Подготовка DEV: Целевая таблица очищена перед выполнением SQL - убрать
 
-CREATE ERROR: POST /api/issues -> 400: {"error":"Cannot interpret value as jetbrains.charisma.persistence.customfields.IssueCustomField","error_description":"Error in field unknown","error_developer_message":"Error in field unknown","error_field":"unknown"}
+Файлы и время выполнения: убрать
+
+Контекст задачи:убрать
+
+Summary: (ДМЛ) Настроить обновление витрины dm.sales_foreign_metal_stock_balance_analysis - убрать уже есть в названии задачи
+Предметная область: Сущность загрузки: BI_SB_WUC
+Сущность: BI_SB_WUC
+Режим обновления: TRUNCATE_INIT
+Стенды: DEV, PROD
+Git ref: https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/2202/diffs
+Copy to ClickHouse: да
+ClickHouse keys: warehouse_code, dt_report
+Зависимые view: —
+Связанные тикеты: DWH-15089 - тоже не нужно оно есть в связаных
+dm/dm.sales_foreign_metal_stock_balance_analysis.sql: ok · 199.571 сек больше 60 секунд писать в минутах и добавить время работы
+Зависимости SQL:
+
+dict_dds.settings_and_parameters_sap
+dict_dds.foreign_warehouse_priority_definition
+dm.sales_material_turnover_detailed
+ods.ral_map_transportation_external_location_metal_stock
+dict_dds.location_sales
+dict_dds.transport_hub_texts
+dict_dds.map_location_and_transport_hub_to_responsible
+dict_dds.transport_hub
+dict_dds.address
+dict_dds.country_texts
+dict_dds.country
+dict_dds.market_region1_texts
+Потенциальное downstream-влияние:
+
+dm_view.sales_foreign_metal_stock_balance_analysis · BI_SB_WUC - классно - но в редакторе оно почему-то не показалось + нужно выделить жирным часть что бы лучше смотрелась и разбить на заголовки 
+
+и в названии немного поменять
+Копировать в ClickHouse: необходимо обновить данные в витрине (структуру обновлять не нужно)
+Ключевые поля для загрузки в ClickHouse:
+warehouse_code
+dt_report
+Бизнес ключ: 
+ну и там где дубли колв-во строк наверное все на русском лучше написать
+
+ну и тое самое в ui сделать и задача сейчас вот так 2-87099 при переходе по ссылке видно нормальное название DWH-15241

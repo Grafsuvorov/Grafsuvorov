@@ -1,1 +1,1 @@
-Не удалось выполнить SQL в DEV: syntax error at or near "on" LINE 17: comment on view dm_view.sales_metal_stock_at_plant_for_trans... ^
+Dn.prototypeReviewRunStart is not a function

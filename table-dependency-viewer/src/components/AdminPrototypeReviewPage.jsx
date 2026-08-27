@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi } from "../api/admin.js";
 import { accountApi } from "../api/account.js";
-import { apiClient } from "../api/client.js";
 
 const DEFAULT_FORM = {
   summary: "",
@@ -85,6 +84,10 @@ const FIELD_META = {
   clickhouse_keys: { label: "Ключевые поля для загрузки в ClickHouse", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
   pseudo_increment_steps: { label: "Последовательность действий при (псевдо)инкременте", placeholder: "1. ...", kind: "textarea", optional: true },
 };
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 function splitItems(value) {
   return String(value || "")
@@ -242,6 +245,7 @@ export default function AdminPrototypeReviewPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [yamlCopied, setYamlCopied] = useState(false);
   const [reviewItemsDraft, setReviewItemsDraft] = useState([]);
+  const [runProgress, setRunProgress] = useState(null);
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -289,7 +293,7 @@ export default function AdminPrototypeReviewPage() {
       entity_name: item.entity_name || "",
       key_attributes_text: joinItems(item.key_attributes || []),
       clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
-      business_key_text: joinItems(item.business_key || []),
+      business_key_text: joinItems(item.business_key || item.key_attributes || []),
       dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
     })));
   }, [result]);
@@ -310,8 +314,9 @@ export default function AdminPrototypeReviewPage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setRunProgress(null);
     try {
-      const payload = await adminApi.prototypeReviewRun({
+      const startPayload = await adminApi.prototypeReviewRunStart({
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
@@ -326,7 +331,25 @@ export default function AdminPrototypeReviewPage() {
         key_attributes: skips.clickhouse_keys ? [] : splitItems(form.clickhouse_keys || form.business_key),
         create_issue: false,
       });
-      setResult(payload || null);
+
+      const jobId = String(startPayload?.job_id || "").trim();
+      if (!jobId) {
+        throw new Error("Backend не вернул job_id для prototype review");
+      }
+
+      let statusPayload = null;
+      for (;;) {
+        statusPayload = await adminApi.prototypeReviewRunStatus(jobId);
+        setRunProgress(statusPayload || null);
+        if (statusPayload?.status === "completed") break;
+        if (statusPayload?.status === "error") {
+          throw new Error(statusPayload?.error || "Prototype review завершился с ошибкой");
+        }
+        await sleep(1200);
+      }
+
+      const payload = statusPayload?.result || null;
+      setResult(payload);
       const firstTarget = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.target_fqn : "";
       const firstEntity = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.entity_name : "";
       const totalSec = Array.isArray(payload?.execution)
@@ -483,6 +506,18 @@ export default function AdminPrototypeReviewPage() {
             {loading ? "Запускаем review..." : "Запустить review"}
           </button>
         </div>
+        {loading && runProgress ? (
+          <div className="card muted" style={{ marginTop: 14 }}>
+            <div>
+              Статус: <strong>{runProgress.status || "running"}</strong>
+              {Number.isFinite(Number(runProgress.current)) || Number.isFinite(Number(runProgress.total))
+                ? ` (${Number(runProgress.current || 0)}/${Number(runProgress.total || 0)})`
+                : ""}
+            </div>
+            <div>Файл: <span className="mono">{runProgress.current_file || "—"}</span></div>
+            <div>Таблица: <span className="mono">{runProgress.current_target || "—"}</span></div>
+          </div>
+        ) : null}
       </section>
 
       {result ? STEP_BLOCKS.filter((block) => block.title !== "Шаг 2. Источник" && (!block.stgOnly || false)).map((block) => (

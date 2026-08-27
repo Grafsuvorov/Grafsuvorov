@@ -1,6 +1,10 @@
 services:
     frontend:
-      build: .
+      build:
+        context: .
+        args:
+          VITE_AUTH_ENABLED: "true"
+          VITE_API_BASE_URL: ""
       ports:
         - "15312:8080"
     api:
@@ -62,5 +66,4 @@ services:
         - YOUTRACK_ISSUE_TYPE=${YOUTRACK_ISSUE_TYPE}
         - YOUTRACK_SSL_VERIFY=${YOUTRACK_SSL_VERIFY}
         - META_WORKSPACE_ROOT=/var/lib/table-dependency-viewer/meta-workspaces
-
 

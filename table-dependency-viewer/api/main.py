@@ -31,6 +31,8 @@ from html import unescape
 from itertools import combinations
 from zoneinfo import ZoneInfo
 from io import BytesIO
+import threading
+from uuid import uuid4
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -160,6 +162,7 @@ from .services.meta_workspace import (
 from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
 from .services.prototype_review import (
+    attach_ytrack_issue_files,
     create_ytrack_issue,
     execute_sql_review_items_in_dev,
     extract_sql_dependencies,
@@ -226,6 +229,9 @@ _ci_cd_status = {
     "stdout": None,
     "stderr": None,
 }
+
+_prototype_review_jobs: dict[str, dict[str, Any]] = {}
+_prototype_review_jobs_lock = threading.Lock()
 
 
 class DevMetaFilePayload(BaseModel):
@@ -1001,193 +1007,282 @@ def _prototype_multi_issue_description(
     return "\n".join(lines)
 
 
+def _prototype_review_job_update(job_id: str, **fields: Any) -> None:
+    with _prototype_review_jobs_lock:
+        current = dict(_prototype_review_jobs.get(job_id) or {})
+        current.update(fields)
+        _prototype_review_jobs[job_id] = current
+
+
+def _prototype_review_attachment_name(review_item: dict[str, Any]) -> str:
+    target_fqn = str((review_item or {}).get("target_fqn") or "").strip().lower()
+    path_value = str((review_item or {}).get("path") or "").strip()
+    if target_fqn:
+        safe_name = re.sub(r"[^a-z0-9._-]+", "_", target_fqn).strip("._-")
+        if safe_name:
+            return f"{safe_name}__generated_yaml.sql"
+    if path_value:
+        safe_name = re.sub(r"[^a-zA-Z0-9._/-]+", "_", path_value).split("/")[-1].strip("._-")
+        if safe_name:
+            return f"{safe_name}__generated_yaml.sql"
+    return "prototype_review_generated_yaml.sql"
+
+
+def _prototype_review_build_result(
+    payload: PrototypeReviewRunPayload,
+    user,
+    progress_callback=None,
+) -> dict[str, Any]:
+    bundle = load_merge_request_sql_bundle(
+        gitlab_api_url=GITLAB_API_URL,
+        gitlab_project=GITLAB_PROJECT,
+        gitlab_token=GITLAB_TOKEN,
+        gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+        mr_input=payload.mr_input,
+        default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
+    )
+    files = bundle.get("files") or []
+    parsed_task = parse_prototype_task_text(payload.task_text or "")
+    sql_validation = validate_prototype_sql(files)
+    all_meta, _ = get_cached_meta_and_index()
+    known_schemas = {
+        str(meta.get("table_schema") or "").strip().lower()
+        for meta in all_meta
+        if str(meta.get("table_schema") or "").strip()
+    }
+    validation_errors = list(sql_validation.get("errors") or [])
+    validation_warnings = list(sql_validation.get("warnings") or [])
+    review_targets = infer_review_targets(files)
+    if not any(item.get("target_fqn") for item in review_targets):
+        validation_errors.append("Не удалось определить целевые таблицы по SQL-файлам MR")
+
+    status_reason = "; ".join(validation_errors) if validation_errors else ""
+    task_context = {
+        **parsed_task,
+        "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
+        "dependent_views": payload.dependent_views or parsed_task.get("dependent_views") or [],
+        "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
+        "environments": [
+            label
+            for enabled, label in ((payload.stand_dev, "DEV"), (payload.stand_prod, "PROD"))
+            if enabled
+        ] or parsed_task.get("environments") or [],
+        "copy_to_clickhouse": payload.copy_to_clickhouse if payload.copy_to_clickhouse is not None else parsed_task.get("copy_to_clickhouse"),
+    }
+    preparation_rows: list[dict[str, Any]] = []
+    execution_rows: list[dict[str, Any]] = []
+    if not validation_errors:
+        preparation_rows, execution_rows = execute_sql_review_items_in_dev(
+            dev_database_url=DEV_DATABASE_URL,
+            files=files,
+            review_targets=review_targets,
+            progress_callback=progress_callback,
+        )
+
+    click_idx = get_click_meta_index()
+    exec_by_path = {str(item.get("path") or ""): item for item in execution_rows}
+    prep_by_target = {str(item.get("target_fqn") or ""): item for item in preparation_rows}
+    review_items: list[dict[str, Any]] = []
+    all_dependencies: list[str] = []
+    dependency_seen: set[str] = set()
+    requires_user_input = False
+    for target_item in review_targets:
+        target_fqn = str(target_item.get("target_fqn") or "").strip()
+        if not target_fqn:
+            validation_warnings.append(f"Для файла `{target_item.get('path')}` не удалось определить целевой объект")
+            continue
+        meta = _prototype_find_meta_by_fqn(target_fqn)
+        execution_row = exec_by_path.get(str(target_item.get("path") or "")) or {"status": "skipped", "duration_sec": 0.0}
+        schema_name, table_name = target_fqn.split(".", 1)
+        yaml_bundle = None
+        yaml_key_attributes: list[str] = []
+        yaml_entity_name = None
+        if "." in target_fqn:
+            try:
+                yaml_bundle = init_entity_dev_meta_bundle(
+                    engine=engine,
+                    base_dir=BASE_DIR,
+                    prod_root_value=ENTITY_META_DIR,
+                    dev_root_value=DEV_ENTITY_META_DIR,
+                    entity_name=str((meta or {}).get("entity_name") or (payload.entity_name or "").strip() or str(parsed_task.get("entity_name") or "").strip() or ""),
+                    schema_name=schema_name,
+                    table_name=table_name,
+                    key_attributes=None,
+                )
+            except Exception:
+                yaml_bundle = None
+        if yaml_bundle:
+            yaml_key_attributes = list(yaml_bundle.get("key_attributes") or [])
+            yaml_entity_name = str(yaml_bundle.get("entity_name") or "").strip() or None
+        detected_keys = yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
+        key_attributes = detected_keys
+        entity_name = (
+            yaml_entity_name
+            or str((meta or {}).get("entity_name") or "").strip()
+            or str(parsed_task.get("entity_name") or "").strip()
+            or None
+        )
+        click_meta = (click_idx.get("meta") or {}).get((schema_name.lower(), table_name.lower())) or (click_idx.get("meta") or {}).get((schema_name.lower(), _clean_table_name(table_name.lower())))
+        clickhouse_keys = list(((click_meta or {}).get("order_by") or []))
+        load_mode = str((yaml_bundle or {}).get("yaml_content") or "")
+        yaml_payload = None
+        if yaml_bundle and yaml_bundle.get("yaml_content"):
+            try:
+                yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content")) or {}
+            except Exception:
+                yaml_payload = {}
+        table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or payload.load_mode or parsed_task.get("load_mode") or "").strip()
+        dependencies = extract_sql_dependencies(
+            [next((file_item for file_item in files if str(file_item.get("path") or "") == str(target_item.get("path") or "")), {})],
+            known_schemas=known_schemas,
+            exclude_fqns={target_fqn},
+        )
+        for dep in dependencies:
+            if dep not in dependency_seen:
+                dependency_seen.add(dep)
+                all_dependencies.append(dep)
+        checks = {"row_count": None, "duplicate_groups": None}
+        if str(target_item.get("object_type") or "TABLE").upper() == "TABLE" and execution_row.get("status") == "ok":
+            checks = query_dev_table_checks(
+                dev_database_url=DEV_DATABASE_URL,
+                target_fqn=target_fqn,
+                key_attributes=key_attributes,
+            )
+        impact = _prototype_impact_summary(target_fqn)
+        is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
+        item_warnings: list[str] = []
+        if is_new:
+            item_warnings.append("Новая таблица: проверьте и заполните сущность вручную при необходимости")
+        if not key_attributes:
+            item_warnings.append("Бизнес ключ не найден автоматически")
+        if execution_row.get("status") == "error":
+            item_warnings.append(f"Ошибка в файле `{target_item.get('path')}`: {execution_row.get('error_message') or 'SQL не выполнился'}")
+        if checks.get("duplicate_groups") not in (None, 0):
+            item_warnings.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
+        requires_item_input, missing_fields = _prototype_item_needs_attention({
+            "is_new": is_new,
+            "entity_name": entity_name,
+            "key_attributes": key_attributes,
+        })
+        requires_user_input = requires_user_input or requires_item_input
+        review_items.append(
+            {
+                "path": target_item.get("path"),
+                "target_fqn": target_fqn,
+                "object_type": str(target_item.get("object_type") or "TABLE").upper(),
+                "entity_name": entity_name,
+                "load_mode": table_load_mode,
+                "key_attributes": key_attributes,
+                "auto_detected_key_attributes": detected_keys,
+                "clickhouse_keys": clickhouse_keys,
+                "dependencies": dependencies,
+                "preparation": prep_by_target.get(target_fqn) or {"status": "skipped"},
+                "execution": execution_row,
+                "duration_sec": float(execution_row.get("duration_sec") or 0.0),
+                "checks": checks,
+                "impact": impact,
+                "yaml_bundle": yaml_bundle,
+                "is_new": is_new,
+                "requires_user_input": requires_item_input,
+                "missing_fields": missing_fields,
+                "warnings": item_warnings,
+            }
+        )
+    execution_errors = [item for item in execution_rows if item.get("status") == "error"]
+    if execution_errors:
+        for item in execution_errors:
+            validation_errors.append(f"Файл `{item.get('path')}`: {item.get('error_message') or 'SQL не выполнился'}")
+    if any(item.get("warnings") for item in review_items):
+        for item in review_items:
+            for warning in item.get("warnings") or []:
+                if warning not in validation_warnings:
+                    validation_warnings.append(warning)
+    status = "error" if validation_errors else ("warning" if validation_warnings else "ok")
+    if not status_reason:
+        status_reason = "; ".join(validation_warnings) if validation_warnings else "Проверки завершены. Проверьте блоки по всем таблицам и затем создайте задачу."
+    return {
+        "status": status,
+        "mr": bundle.get("mr") or {},
+        "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],
+        "final_target": review_items[0].get("target_fqn") if review_items else None,
+        "review_items": review_items,
+        "dependencies": all_dependencies,
+        "preparation": preparation_rows,
+        "execution": execution_rows,
+        "validation_errors": validation_errors,
+        "validation_warnings": validation_warnings,
+        "status_reason": status_reason,
+        "task_context": task_context,
+        "issue": {"status": "skipped", "issue_id": None, "url": None, "link": None},
+        "requires_user_input": requires_user_input,
+    }
+
+
 @router.post("/api/admin/prototype-review/run")
 def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Request):
     user = _require_authenticated(request)
     try:
-        bundle = load_merge_request_sql_bundle(
-            gitlab_api_url=GITLAB_API_URL,
-            gitlab_project=GITLAB_PROJECT,
-            gitlab_token=GITLAB_TOKEN,
-            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
-            mr_input=payload.mr_input,
-            default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
-        )
-        files = bundle.get("files") or []
-        parsed_task = parse_prototype_task_text(payload.task_text or "")
-        sql_validation = validate_prototype_sql(files)
-        all_meta, _ = get_cached_meta_and_index()
-        known_schemas = {
-            str(meta.get("table_schema") or "").strip().lower()
-            for meta in all_meta
-            if str(meta.get("table_schema") or "").strip()
-        }
-        validation_errors = list(sql_validation.get("errors") or [])
-        validation_warnings = list(sql_validation.get("warnings") or [])
-        review_targets = infer_review_targets(files)
-        if not any(item.get("target_fqn") for item in review_targets):
-            validation_errors.append("Не удалось определить целевые таблицы по SQL-файлам MR")
-
-        status_reason = (
-            "; ".join(validation_errors)
-            if validation_errors else ""
-        )
-        task_context = {
-            **parsed_task,
-            "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
-            "load_mode": (payload.load_mode or "").strip() or parsed_task.get("load_mode"),
-            "dependent_views": payload.dependent_views or parsed_task.get("dependent_views") or [],
-            "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
-            "environments": [
-                label
-                for enabled, label in ((payload.stand_dev, "DEV"), (payload.stand_prod, "PROD"))
-                if enabled
-            ] or parsed_task.get("environments") or [],
-            "copy_to_clickhouse": payload.copy_to_clickhouse if payload.copy_to_clickhouse is not None else parsed_task.get("copy_to_clickhouse"),
-            "clickhouse_keys": parsed_task.get("clickhouse_keys") or [],
-        }
-        preparation_rows: list[dict[str, Any]] = []
-        execution_rows: list[dict[str, Any]] = []
-        if not validation_errors:
-            preparation_rows, execution_rows = execute_sql_review_items_in_dev(
-                dev_database_url=DEV_DATABASE_URL,
-                files=files,
-                review_targets=review_targets,
-            )
-
-        exec_by_path = {str(item.get("path") or ""): item for item in execution_rows}
-        prep_by_target = {str(item.get("target_fqn") or ""): item for item in preparation_rows}
-        review_items: list[dict[str, Any]] = []
-        all_dependencies: list[str] = []
-        dependency_seen: set[str] = set()
-        requires_user_input = False
-        for target_item in review_targets:
-            target_fqn = str(target_item.get("target_fqn") or "").strip()
-            if not target_fqn:
-                validation_warnings.append(f"Для файла `{target_item.get('path')}` не удалось определить целевой объект")
-                continue
-            meta = _prototype_find_meta_by_fqn(target_fqn)
-            detected_keys = list((meta or {}).get("key_attributes") or [])
-            key_attributes = detected_keys
-            entity_name = (
-                str((meta or {}).get("entity_name") or "").strip()
-                or str(payload.entity_name or "").strip()
-                or str(parsed_task.get("entity_name") or "").strip()
-                or None
-            )
-            dependencies = extract_sql_dependencies(
-                [next((file_item for file_item in files if str(file_item.get("path") or "") == str(target_item.get("path") or "")), {})],
-                known_schemas=known_schemas,
-                exclude_fqns={target_fqn},
-            )
-            for dep in dependencies:
-                if dep not in dependency_seen:
-                    dependency_seen.add(dep)
-                    all_dependencies.append(dep)
-            checks = {"row_count": None, "duplicate_groups": None}
-            execution_row = exec_by_path.get(str(target_item.get("path") or "")) or {"status": "skipped", "duration_sec": 0.0}
-            if (
-                not validation_errors
-                and str(target_item.get("object_type") or "TABLE").upper() == "TABLE"
-                and execution_row.get("status") == "ok"
-            ):
-                checks = query_dev_table_checks(
-                    dev_database_url=DEV_DATABASE_URL,
-                    target_fqn=target_fqn,
-                    key_attributes=key_attributes,
-                )
-            impact = _prototype_impact_summary(target_fqn)
-            yaml_bundle = None
-            if entity_name and "." in target_fqn:
-                schema_name, table_name = target_fqn.split(".", 1)
-                try:
-                    yaml_bundle = init_entity_dev_meta_bundle(
-                        engine=engine,
-                        base_dir=BASE_DIR,
-                        prod_root_value=ENTITY_META_DIR,
-                        dev_root_value=DEV_ENTITY_META_DIR,
-                        entity_name=entity_name,
-                        schema_name=schema_name,
-                        table_name=table_name,
-                        key_attributes=key_attributes,
-                    )
-                except Exception as exc:
-                    validation_warnings.append(f"YAML черновик не собран автоматически для `{target_fqn}`: {exc}")
-            is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
-            item_warnings: list[str] = []
-            if is_new:
-                item_warnings.append("Новая таблица: проверьте и заполните сущность вручную при необходимости")
-            if not key_attributes:
-                item_warnings.append("Ключевые поля не найдены автоматически")
-            if execution_row.get("status") == "error":
-                item_warnings.append(
-                    f"Ошибка в файле `{target_item.get('path')}`: {execution_row.get('error_message') or 'SQL не выполнился'}"
-                )
-            if checks.get("duplicate_groups") not in (None, 0):
-                item_warnings.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
-            requires_item_input, missing_fields = _prototype_item_needs_attention({
-                "is_new": is_new,
-                "entity_name": entity_name,
-                "key_attributes": key_attributes,
-            })
-            requires_user_input = requires_user_input or requires_item_input
-            review_items.append(
-                {
-                    "path": target_item.get("path"),
-                    "target_fqn": target_fqn,
-                    "object_type": str(target_item.get("object_type") or "TABLE").upper(),
-                    "entity_name": entity_name,
-                    "key_attributes": key_attributes,
-                    "auto_detected_key_attributes": detected_keys,
-                    "clickhouse_keys": task_context.get("clickhouse_keys") or detected_keys,
-                    "business_key": detected_keys,
-                    "dependencies": dependencies,
-                    "preparation": prep_by_target.get(target_fqn) or {"status": "skipped"},
-                    "execution": execution_row,
-                    "duration_sec": float(execution_row.get("duration_sec") or 0.0),
-                    "checks": checks,
-                    "impact": impact,
-                    "yaml_bundle": yaml_bundle,
-                    "is_new": is_new,
-                    "requires_user_input": requires_item_input,
-                    "missing_fields": missing_fields,
-                    "warnings": item_warnings,
-                }
-            )
-        execution_errors = [item for item in execution_rows if item.get("status") == "error"]
-        if execution_errors:
-            for item in execution_errors:
-                validation_errors.append(
-                    f"Файл `{item.get('path')}`: {item.get('error_message') or 'SQL не выполнился'}"
-                )
-        if any(item.get("warnings") for item in review_items):
-            for item in review_items:
-                for warning in item.get("warnings") or []:
-                    if warning not in validation_warnings:
-                        validation_warnings.append(warning)
-        status = "error" if validation_errors else ("warning" if validation_warnings else "ok")
-        if not status_reason:
-            status_reason = "; ".join(validation_warnings) if validation_warnings else "Проверки завершены. Проверьте блоки по всем таблицам и затем создайте задачу."
-        return {
-            "status": status,
-            "mr": bundle.get("mr") or {},
-            "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],
-            "final_target": review_items[0].get("target_fqn") if review_items else None,
-            "review_items": review_items,
-            "dependencies": all_dependencies,
-            "preparation": preparation_rows,
-            "execution": execution_rows,
-            "validation_errors": validation_errors,
-            "validation_warnings": validation_warnings,
-            "status_reason": status_reason,
-            "task_context": task_context,
-            "issue": {"status": "skipped", "issue_id": None, "url": None, "link": None},
-            "requires_user_input": requires_user_input,
-        }
+        return _prototype_review_build_result(payload, user)
     except Exception as exc:
         print("❌ /api/admin/prototype-review/run error:", exc)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/api/admin/prototype-review/run-start")
+def start_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Request):
+    user = _require_authenticated(request)
+    job_id = uuid4().hex
+    with _prototype_review_jobs_lock:
+        _prototype_review_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "current": 0,
+            "total": 0,
+            "current_file": None,
+            "current_target": None,
+            "result": None,
+            "error": None,
+        }
+
+    def _runner():
+        try:
+            _prototype_review_job_update(job_id, status="running")
+            result = _prototype_review_build_result(
+                payload,
+                user,
+                progress_callback=lambda event: _prototype_review_job_update(
+                    job_id,
+                    status="running",
+                    current=int(event.get("current") or 0),
+                    total=int(event.get("total") or 0),
+                    current_file=event.get("path"),
+                    current_target=event.get("target_fqn"),
+                    last_event=event,
+                ),
+            )
+            _prototype_review_job_update(
+                job_id,
+                status="completed",
+                current=len(result.get("execution") or []),
+                total=len(result.get("files") or []),
+                result=result,
+            )
+        except Exception as exc:
+            _prototype_review_job_update(job_id, status="error", error=str(exc))
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return {"status": "queued", "job_id": job_id}
+
+
+@router.get("/api/admin/prototype-review/run-status/{job_id}")
+def get_admin_prototype_review_status(job_id: str, request: Request):
+    _require_authenticated(request)
+    with _prototype_review_jobs_lock:
+        payload = dict(_prototype_review_jobs.get(job_id) or {})
+    if not payload:
+        raise HTTPException(status_code=404, detail="Job не найден")
+    return payload
 
 
 @router.post("/api/admin/prototype-review/create-issue")
@@ -1247,9 +1342,32 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
             assignee_query=YOUTRACK_ASSIGNEE_QUERY,
         )
+        attachments = []
+        raw_issue_id = str((issue_result.get("raw") or {}).get("id") or "").strip()
+        if raw_issue_id:
+            attachment_files = []
+            for item in review_items:
+                yaml_content = str(item.get("yaml_content") or "").strip()
+                if not yaml_content:
+                    continue
+                attachment_files.append(
+                    {
+                        "filename": _prototype_review_attachment_name(item),
+                        "content": yaml_content,
+                        "mime_type": "text/plain; charset=utf-8",
+                    }
+                )
+            if attachment_files:
+                attachments = attach_ytrack_issue_files(
+                    base_url=YOUTRACK_URL,
+                    token=YOUTRACK_TOKEN,
+                    issue_id=raw_issue_id,
+                    ssl_verify=YOUTRACK_SSL_VERIFY,
+                    files=attachment_files,
+                )
         if issue_result.get("issue_id"):
             issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
-        return {"status": "ok", "issue": issue_result, "description": description}
+        return {"status": "ok", "issue": issue_result, "description": description, "attachments": attachments}
     except HTTPException:
         raise
     except Exception as exc:

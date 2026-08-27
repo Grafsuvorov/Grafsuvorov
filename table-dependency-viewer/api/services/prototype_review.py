@@ -4,6 +4,7 @@ import json
 import re
 import ssl
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
 from urllib import parse as urlparse
@@ -534,6 +535,7 @@ def execute_sql_review_items_in_dev(
     dev_database_url: str,
     files: list[dict[str, Any]],
     review_targets: list[dict[str, Any]],
+    progress_callback=None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not dev_database_url:
         raise ValueError("Не настроен DEV_DATABASE_URL")
@@ -546,10 +548,21 @@ def execute_sql_review_items_in_dev(
     try:
         connection = exec_engine.raw_connection()
         cursor = connection.cursor()
-        for review_item in review_targets:
+        total = len(review_targets)
+        for index, review_item in enumerate(review_targets, start=1):
             path_value = str(review_item.get("path") or "").strip()
             file_item = file_map.get(path_value) or {}
             target_fqn = str(review_item.get("target_fqn") or "").strip()
+            if callable(progress_callback):
+                progress_callback(
+                    {
+                        "stage": "running_file",
+                        "current": index,
+                        "total": total,
+                        "path": path_value,
+                        "target_fqn": target_fqn or None,
+                    }
+                )
             if review_item.get("requires_pretruncate") and target_fqn:
                 try:
                     preparation_rows.append(
@@ -594,6 +607,17 @@ def execute_sql_review_items_in_dev(
                         "duration_sec": round(time.perf_counter() - started, 3),
                     }
                 )
+                if callable(progress_callback):
+                    progress_callback(
+                        {
+                            "stage": "file_done",
+                            "current": index,
+                            "total": total,
+                            "path": path_value,
+                            "target_fqn": target_fqn or None,
+                            "status": "ok",
+                        }
+                    )
             except Exception as exc:
                 if connection is not None:
                     try:
@@ -609,6 +633,18 @@ def execute_sql_review_items_in_dev(
                         "error_message": str(exc),
                     }
                 )
+                if callable(progress_callback):
+                    progress_callback(
+                        {
+                            "stage": "file_done",
+                            "current": index,
+                            "total": total,
+                            "path": path_value,
+                            "target_fqn": target_fqn or None,
+                            "status": "error",
+                            "error_message": str(exc),
+                        }
+                    )
                 continue
     except Exception as exc:
         raise ValueError(f"Не удалось выполнить SQL в DEV: {exc}") from exc
@@ -841,6 +877,80 @@ def create_ytrack_issue(
         "url": data.get("self"),
         "raw": data,
     }
+
+
+def _sanitize_attachment_name(value: str) -> str:
+    name = str(value or "").strip().lower()
+    if not name:
+        return "prototype_review"
+    sanitized = re.sub(r"[^a-z0-9._-]+", "_", name).strip("._-")
+    return sanitized or "prototype_review"
+
+
+def attach_ytrack_issue_files(
+    *,
+    base_url: str,
+    token: str,
+    issue_id: str,
+    ssl_verify: str,
+    files: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    issue_value = str(issue_id or "").strip()
+    if not issue_value:
+        raise ValueError("Не передан issue_id для вложений YTrack")
+    upload_items = []
+    for item in files or []:
+        filename = str((item or {}).get("filename") or "").strip()
+        content = (item or {}).get("content")
+        if not filename or content in (None, ""):
+            continue
+        mime_type = str((item or {}).get("mime_type") or "text/plain; charset=utf-8").strip()
+        upload_items.append(
+            {
+                "filename": filename,
+                "content": str(content),
+                "mime_type": mime_type,
+            }
+        )
+    if not upload_items:
+        return []
+
+    boundary = f"----CodexYouTrackBoundary{uuid.uuid4().hex}"
+    body = bytearray()
+    for index, item in enumerate(upload_items, start=1):
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        disposition = (
+            f'Content-Disposition: form-data; name="upload{index}"; '
+            f'filename="{item["filename"]}"\r\n'
+        )
+        body.extend(disposition.encode("utf-8"))
+        body.extend(f"Content-Type: {item['mime_type']}\r\n\r\n".encode("utf-8"))
+        body.extend(item["content"].encode("utf-8"))
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+
+    req = urlrequest.Request(
+        (
+            f"{base_url.rstrip('/')}/api/issues/"
+            f"{urlparse.quote(issue_value, safe='')}/attachments?fields=id,name,url,mimeType,size"
+        ),
+        data=bytes(body),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=60, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            payload = resp.read().decode("utf-8")
+            return json.loads(payload) if payload else []
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"YTrack attachments вернул {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось прикрепить файлы к задаче YTrack: {exc}") from exc
 
 
 def _get_ytrack_project_custom_fields(

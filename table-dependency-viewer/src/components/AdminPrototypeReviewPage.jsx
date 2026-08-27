@@ -5,84 +5,9 @@ import { accountApi } from "../api/account.js";
 const DEFAULT_FORM = {
   summary: "",
   subject_area: "",
-  entity_name: "",
   git_reference: "",
-  source_name: "",
-  source_schema: "",
-  source_table: "",
-  source_key: "",
-  source_access: "",
-  target_table_fqn: "",
   load_mode: "",
-  load_condition: "",
   script_runtime: "",
-  business_key: "",
-  dependent_views: "",
-  clickhouse_keys: "",
-  pseudo_increment_steps: "",
-};
-
-const DEFAULT_SKIPS = {
-  source_name: false,
-  source_schema: false,
-  source_table: false,
-  source_key: false,
-  source_access: false,
-  load_condition: false,
-  script_runtime: false,
-  business_key: false,
-  dependent_views: false,
-  clickhouse_keys: false,
-  pseudo_increment_steps: false,
-};
-
-const STEP_BLOCKS = [
-  {
-    title: "Шаг 1. Карточка",
-    description: "Вставьте пример карточки или шаблон. Поля ниже заполнятся автоматически, их можно поправить.",
-    fields: [],
-  },
-  {
-    title: "Шаг 2. Источник",
-    description: "Данные об источнике и доступе. Если данных нет, поле можно пропустить.",
-    fields: ["subject_area", "source_name", "source_schema", "source_table", "source_key", "source_access"],
-    stgOnly: true,
-  },
-  {
-    title: "Шаг 3. Таргет",
-    description: "Основные параметры загрузки целевой таблицы и MR.",
-    fields: ["entity_name", "target_table_fqn", "git_reference", "load_mode", "load_condition"],
-  },
-  {
-    title: "Шаг 4. Проверки",
-    description: "Что использовать для duplicate-check и что ещё затрагивается.",
-    fields: ["business_key", "clickhouse_keys", "dependent_views", "pseudo_increment_steps"],
-  },
-  {
-    title: "Шаг 5. Релиз",
-    description: "Контекст релиза и документации. Нужен для однотипного создания задач.",
-    fields: ["summary", "script_runtime"],
-  },
-];
-
-const FIELD_META = {
-  summary: { label: "Название задачи", placeholder: "(ДМЛ) Настроить обновление витрины ...", kind: "text" },
-  subject_area: { label: "Предметная область", placeholder: "SD", kind: "text" },
-  entity_name: { label: "Сущность загрузки", placeholder: "BI_SB_WUC", kind: "text" },
-  git_reference: { label: "Ссылка на гит / шаблон", placeholder: "https://gitlab... / ссылка на шаблон", kind: "textarea" },
-  source_name: { label: "Источник", placeholder: "SAP / Oracle / CSV / ...", kind: "text", optional: true },
-  source_schema: { label: "Название схемы на источнике", placeholder: "public", kind: "text", optional: true },
-  source_table: { label: "Название таблицы на источнике", placeholder: "source_table", kind: "text", optional: true },
-  source_key: { label: "Ключ на источнике", placeholder: "id, dt", kind: "textarea", optional: true },
-  source_access: { label: "Доступ к таблице на источнике", placeholder: "есть / нет / запросить", kind: "textarea", optional: true },
-  target_table_fqn: { label: "Название таблицы в таргете", placeholder: "dm.sales_foreign_metal_stock_balance_analysis", kind: "text" },
-  load_mode: { label: "Способ обновления", placeholder: "Полный / Псевдоинкрементальный", kind: "text" },
-  load_condition: { label: "Условие при загрузке", placeholder: "where dt >= current_date - 7", kind: "textarea", optional: true },
-  script_runtime: { label: "Время работы скрипта", placeholder: "5-10 мин", kind: "text", optional: true },
-  business_key: { label: "Бизнес ключ", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
-  dependent_views: { label: "Зависимые представления", placeholder: "dm_view.sales_...", kind: "textarea", optional: true },
-  clickhouse_keys: { label: "Ключевые поля для загрузки в ClickHouse", placeholder: "warehouse_code, dt_report", kind: "textarea", optional: true },
-  pseudo_increment_steps: { label: "Последовательность действий при (псевдо)инкременте", placeholder: "1. ...", kind: "textarea", optional: true },
 };
 
 function sleep(ms) {
@@ -98,101 +23,6 @@ function splitItems(value) {
 
 function joinItems(value) {
   return Array.isArray(value) ? value.join(", ") : String(value || "");
-}
-
-function isViewLikeFqn(value, currentTableFqn = "") {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (!normalized || !normalized.includes(".")) return false;
-  if (normalized === String(currentTableFqn || "").trim().toLowerCase()) return false;
-  const [schemaName] = normalized.split(".", 1);
-  return schemaName.includes("view");
-}
-
-function parseTaskText(text) {
-  const raw = String(text || "").trim();
-  if (!raw) return {};
-  const get = (pattern) => {
-    const match = raw.match(pattern);
-    return match ? String(match[1] || "").trim() : "";
-  };
-  const multilineField = (label) => {
-    const match = raw.match(new RegExp(`${label}:\\s*([\\s\\S]+?)(?:\\n\\s*\\n|\\n[А-ЯA-Z][^:\\n]{0,80}:|$)`, "i"));
-    if (!match) return "";
-    return match[1]
-      .split("\n")
-      .map((line) => line.replace(/^[\s\-•]+/, "").trim())
-      .filter(Boolean)
-      .join(", ");
-  };
-
-  return {
-    summary: get(/^([^\n]+)/m),
-    subject_area: get(/Предметная область:\s*(.+)/i),
-    entity_name: get(/Сущность загрузки:\s*(.+)/i),
-    git_reference: get(/(?:Ссылка на гит|Ссылка на описание шаблона):\s*(.+)/i),
-    source_name: get(/Источник:\s*(.+)/i),
-    source_schema: get(/Название схемы на источнике:\s*(.+)/i),
-    source_table: get(/Название таблицы на источнике:\s*(.+)/i),
-    source_key: get(/Ключ на источнике:\s*(.+)/i),
-    source_access: get(/Доступ к таблице на источнике:\s*(.+)/i),
-    target_table_fqn: get(/(?:Название таблицы Greenplum|Название таблицы в таргете):\s*(.+)/i),
-    load_mode: get(/Способ обновления:\s*(.+)/i),
-    load_condition: get(/Условие при загрузке:\s*(.+)/i),
-    script_runtime: get(/Время работы скрипта:\s*(.+)/i),
-    business_key: multilineField("Бизнес[- ]ключ(?: для проверки на дубли)?"),
-    dependent_views: multilineField("Зависимые представления|Зависимые представление"),
-    clickhouse_keys: multilineField("Ключевые поля для загрузки в ClickHosue|Ключевые поля для загрузки в ClickHouse"),
-    pseudo_increment_steps: multilineField("Последовательность действий при \\(псевдо\\)инкрементальном обновлении таблицы"),
-    stand_dev: /Стенд:\s*.*DEV/i.test(raw),
-    stand_prod: /Стенд:\s*.*PROD/i.test(raw),
-    copy_to_clickhouse: !/Копировать в ClickHouse:\s*.*не нужно/i.test(raw),
-    linked_issues: Array.from(new Set(raw.match(/\b[A-Z]+-\d+\b/g) || [])).join(", "),
-  };
-}
-
-function buildTemplateText(form, options) {
-  const lines = [];
-  const pushField = (label, key, { multiline = false } = {}) => {
-    if (options.skips[key]) {
-      lines.push(`${label}: пропустить`);
-      return;
-    }
-    const value = String(form[key] || "").trim();
-    if (!value) {
-      lines.push(`${label}:`);
-      return;
-    }
-    if (!multiline) {
-      lines.push(`${label}: ${value}`);
-      return;
-    }
-    lines.push(`${label}:`);
-    splitItems(value).forEach((item) => lines.push(item));
-  };
-
-  if (form.summary.trim()) lines.push(form.summary.trim(), "");
-  pushField("Предметная область", "subject_area");
-  pushField("Сущность загрузки", "entity_name");
-  pushField("Источник", "source_name");
-  pushField("Название схемы на источнике", "source_schema");
-  pushField("Название таблицы на источнике", "source_table");
-  pushField("Ключ на источнике", "source_key");
-  if (options.isConditionLayer) {
-    pushField("Условие при загрузке", "load_condition");
-  }
-  lines.push(`Стенд: ${options.standDev && options.standProd ? "DEV/PROD" : options.standDev ? "DEV" : options.standProd ? "PROD" : ""}`);
-  pushField("Доступ к таблице на источнике", "source_access");
-  pushField("Ссылка на гит", "git_reference");
-  pushField("Название таблицы Greenplum", "target_table_fqn");
-  pushField("Способ обновления", "load_mode");
-  pushField("Время работы скрипта", "script_runtime");
-  pushField("Бизнес ключ", "business_key", { multiline: true });
-  pushField("Зависимые представления", "dependent_views", { multiline: true });
-  lines.push(`Копировать в ClickHouse: ${options.copyToClickhouse ? "необходимо обновить данные в витрине (структуру обновлять не нужно)" : "не нужно"}`);
-  pushField("Ключевые поля для загрузки в ClickHouse", "clickhouse_keys", { multiline: true });
-  pushField("Последовательность действий при (псевдо)инкрементальном обновлении таблицы", "pseudo_increment_steps");
-  if (options.linkedIssues.trim()) lines.push(`Связанные тикеты: ${options.linkedIssues.trim()}`);
-  return lines.join("\n");
 }
 
 function formatDuration(value) {
@@ -230,14 +60,45 @@ function formatYamlSource(bundle) {
   return bundle.source || "—";
 }
 
+function buildTaskText(form, linkedIssues) {
+  const lines = [];
+  const pushLine = (label, value) => {
+    const text = String(value || "").trim();
+    if (text) lines.push(`${label}: ${text}`);
+  };
+
+  if (String(form.summary || "").trim()) {
+    lines.push(String(form.summary).trim(), "");
+  }
+  pushLine("Предметная область", form.subject_area);
+  pushLine("Ссылка на гит", form.git_reference);
+  pushLine("Способ обновления", form.load_mode);
+  pushLine("Время работы скрипта", form.script_runtime);
+  if (splitItems(linkedIssues).length) {
+    lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+function buildDraftItem(item) {
+  return {
+    ...item,
+    entity_name: item.entity_name || "",
+    key_attributes_text: joinItems(item.key_attributes || []),
+    clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
+    stand_dev: item.stand_dev !== false,
+    stand_prod: item.stand_prod !== false,
+    copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
+    checks: item.checks || { row_count: null, duplicate_groups: null },
+    rechecking: false,
+    dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
+  };
+}
+
 export default function AdminPrototypeReviewPage() {
   const [mrInput, setMrInput] = useState("");
   const [form, setForm] = useState(DEFAULT_FORM);
-  const [skips, setSkips] = useState(DEFAULT_SKIPS);
   const [linkedIssues, setLinkedIssues] = useState("");
-  const [standDev, setStandDev] = useState(true);
-  const [standProd, setStandProd] = useState(true);
-  const [copyToClickhouse, setCopyToClickhouse] = useState(true);
   const [loading, setLoading] = useState(false);
   const [creatingIssue, setCreatingIssue] = useState(false);
   const [error, setError] = useState(null);
@@ -255,30 +116,10 @@ export default function AdminPrototypeReviewPage() {
     const mrValue = String(mrInput || "").trim();
     if (!mrValue) return;
     setForm((prev) => {
-      const currentRef = String(prev.git_reference || "").trim();
-      if (currentRef && currentRef !== mrValue) return prev;
-      if (currentRef === mrValue) return prev;
+      if (String(prev.git_reference || "").trim()) return prev;
       return { ...prev, git_reference: mrValue };
     });
   }, [mrInput]);
-
-  const targetSchema = String(form.target_table_fqn || "").trim().split(".", 1)[0].toLowerCase();
-  const isConditionLayer = targetSchema === "stg";
-
-  const normalizedTaskText = useMemo(
-    () => buildTemplateText(form, { skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer }),
-    [form, skips, standDev, standProd, copyToClickhouse, linkedIssues, isConditionLayer],
-  );
-  const totalExecutionSec = useMemo(
-    () => (Array.isArray(result?.execution) ? result.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0) : 0),
-    [result],
-  );
-  const unresolvedItemsCount = useMemo(
-    () => reviewItemsDraft.filter((item) => item.requires_user_input && (
-      !String(item.entity_name || "").trim() || !splitItems(item.key_attributes_text).length
-    )).length,
-    [reviewItemsDraft],
-  );
 
   useEffect(() => {
     if (!yamlCopied) return undefined;
@@ -288,96 +129,57 @@ export default function AdminPrototypeReviewPage() {
 
   useEffect(() => {
     const items = Array.isArray(result?.review_items) ? result.review_items : [];
-    setReviewItemsDraft(items.map((item) => ({
-      ...item,
-      entity_name: item.entity_name || "",
-      key_attributes_text: joinItems(item.key_attributes || []),
-      clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
-      business_key_text: joinItems(item.business_key || item.key_attributes || []),
-      dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
-    })));
+    setReviewItemsDraft(items.map(buildDraftItem));
   }, [result]);
 
-  const shouldShowField = (fieldKey) => (fieldKey === "load_condition" ? isConditionLayer : true);
+  const normalizedTaskText = useMemo(
+    () => buildTaskText(form, linkedIssues),
+    [form, linkedIssues],
+  );
+
+  const totalExecutionSec = useMemo(
+    () => (Array.isArray(result?.execution) ? result.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0) : 0),
+    [result],
+  );
+
+  const unresolvedItemsCount = useMemo(
+    () => reviewItemsDraft.filter((item) => (
+      !String(item.entity_name || "").trim() || !splitItems(item.key_attributes_text).length
+    )).length,
+    [reviewItemsDraft],
+  );
+
+  const progressText = useMemo(() => {
+    if (!runProgress) return "";
+    const current = Number(runProgress.current || 0);
+    const total = Number(runProgress.total || 0);
+    const remaining = total > 0 ? Math.max(total - current, 0) : null;
+    const parts = [`Статус: ${runProgress.status || "running"}`];
+    if (total > 0) {
+      parts.push(`Проверено: ${current}/${total}`);
+      parts.push(`Осталось: ${remaining}`);
+    }
+    if (runProgress.current_target) {
+      parts.push(`Текущий объект: ${runProgress.current_target}`);
+    }
+    return parts.join(" · ");
+  }, [runProgress]);
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSkipChange = (field, checked) => {
-    setSkips((prev) => ({ ...prev, [field]: checked }));
-  };
-
-  const handleRun = async () => {
-    const trimmedMr = String(mrInput || "").trim();
-    if (!trimmedMr || loading) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setRunProgress(null);
-    try {
-      const startPayload = await adminApi.prototypeReviewRunStart({
-        mr_input: trimmedMr,
-        task_text: normalizedTaskText,
-        issue_summary: form.summary.trim(),
-        target_table_fqn: form.target_table_fqn.trim(),
-        entity_name: form.entity_name.trim(),
-        load_mode: form.load_mode.trim(),
-        stand_dev: standDev,
-        stand_prod: standProd,
-        copy_to_clickhouse: copyToClickhouse,
-        dependent_views: skips.dependent_views ? [] : splitItems(form.dependent_views),
-        linked_issues: splitItems(linkedIssues),
-        key_attributes: skips.clickhouse_keys ? [] : splitItems(form.clickhouse_keys || form.business_key),
-        create_issue: false,
-      });
-
-      const jobId = String(startPayload?.job_id || "").trim();
-      if (!jobId) {
-        throw new Error("Backend не вернул job_id для prototype review");
-      }
-
-      let statusPayload = null;
-      for (;;) {
-        statusPayload = await adminApi.prototypeReviewRunStatus(jobId);
-        setRunProgress(statusPayload || null);
-        if (statusPayload?.status === "completed") break;
-        if (statusPayload?.status === "error") {
-          throw new Error(statusPayload?.error || "Prototype review завершился с ошибкой");
-        }
-        await sleep(1200);
-      }
-
-      const payload = statusPayload?.result || null;
-      setResult(payload);
-      const firstTarget = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.target_fqn : "";
-      const firstEntity = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.entity_name : "";
-      const totalSec = Array.isArray(payload?.execution)
-        ? payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0)
-        : 0;
-      setForm((prev) => ({
-        ...prev,
-        git_reference: String(mrInput || "").trim() || prev.git_reference || "",
-        target_table_fqn: firstTarget || prev.target_table_fqn || "",
-        entity_name: firstEntity || prev.entity_name || "",
-        script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
-      }));
-    } catch (err) {
-      setError(err?.message || "Не удалось выполнить prototype review");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleReviewItemChange = (targetFqn, field, value) => {
     setReviewItemsDraft((prev) => prev.map((item) => {
       if (item.target_fqn !== targetFqn) return item;
-      const next = { ...item, [field]: value };
-      const needsEntity = !String(next.entity_name || "").trim();
-      const needsKeys = !splitItems(next.key_attributes_text).length;
-      next.requires_user_input = Boolean(item.is_new || item.missing_fields?.length || needsEntity || needsKeys);
-      return next;
+      return { ...item, [field]: value };
     }));
+  };
+
+  const handleReviewItemToggle = (targetFqn, field, checked) => {
+    setReviewItemsDraft((prev) => prev.map((item) => (
+      item.target_fqn !== targetFqn ? item : { ...item, [field]: checked }
+    )));
   };
 
   const handleCopyYaml = async (content) => {
@@ -388,6 +190,97 @@ export default function AdminPrototypeReviewPage() {
       setYamlCopied(true);
     } catch (_) {
       setYamlCopied(false);
+    }
+  };
+
+  const handleRun = async () => {
+    const trimmedMr = String(mrInput || "").trim();
+    if (!trimmedMr || loading) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setRunProgress({ status: "queued", current: 0, total: 0, current_target: null, current_file: null });
+    try {
+      const startPayload = await adminApi.prototypeReviewRunStart({
+        mr_input: trimmedMr,
+        task_text: normalizedTaskText,
+        issue_summary: form.summary.trim(),
+        load_mode: form.load_mode.trim(),
+        linked_issues: splitItems(linkedIssues),
+        create_issue: false,
+      });
+      const jobId = String(startPayload?.job_id || "").trim();
+      if (!jobId) throw new Error("Backend не вернул job_id для prototype review");
+
+      let statusPayload = null;
+      for (;;) {
+        statusPayload = await adminApi.prototypeReviewRunStatus(jobId);
+        setRunProgress(statusPayload || null);
+        if (statusPayload?.status === "completed") break;
+        if (statusPayload?.status === "error") {
+          throw new Error(statusPayload?.error || "Prototype review завершился с ошибкой");
+        }
+        await sleep(1000);
+      }
+
+      const payload = statusPayload?.result || null;
+      setResult(payload);
+      const firstTarget = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.target_fqn : "";
+      const firstEntity = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.entity_name : "";
+      const firstLoadMode = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.load_mode : "";
+      const totalSec = Array.isArray(payload?.execution)
+        ? payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0)
+        : 0;
+      setForm((prev) => ({
+        ...prev,
+        summary: prev.summary || (firstTarget ? `(ДМЛ) Настроить обновление витрины ${firstTarget}` : ""),
+        git_reference: prev.git_reference || trimmedMr,
+        subject_area: prev.subject_area || String(payload?.task_context?.subject_area || ""),
+        load_mode: prev.load_mode || firstLoadMode || String(payload?.task_context?.load_mode || ""),
+        script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
+      }));
+      if (!String(linkedIssues || "").trim() && Array.isArray(payload?.task_context?.linked_issues)) {
+        setLinkedIssues(payload.task_context.linked_issues.join(", "));
+      }
+      if (!String(firstEntity || "").trim()) return;
+    } catch (err) {
+      setError(err?.message || "Не удалось выполнить prototype review");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecheckNewTable = async (targetFqn) => {
+    const current = reviewItemsDraft.find((item) => item.target_fqn === targetFqn);
+    if (!current || current.rechecking) return;
+    const keyAttributes = splitItems(current.key_attributes_text);
+    if (!keyAttributes.length) {
+      setError("Сначала укажите ключевые поля для проверки дублей");
+      return;
+    }
+    setError(null);
+    setReviewItemsDraft((prev) => prev.map((item) => (
+      item.target_fqn !== targetFqn ? item : { ...item, rechecking: true }
+    )));
+    try {
+      const payload = await adminApi.prototypeReviewCheckTable({
+        target_fqn: current.target_fqn,
+        key_attributes: keyAttributes,
+      });
+      setReviewItemsDraft((prev) => prev.map((item) => (
+        item.target_fqn !== targetFqn
+          ? item
+          : {
+              ...item,
+              checks: payload?.checks || item.checks,
+              rechecking: false,
+            }
+      )));
+    } catch (err) {
+      setError(err?.message || "Не удалось перепроверить новую таблицу");
+      setReviewItemsDraft((prev) => prev.map((item) => (
+        item.target_fqn !== targetFqn ? item : { ...item, rechecking: false }
+      )));
     }
   };
 
@@ -402,9 +295,6 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         load_mode: form.load_mode.trim(),
-        stand_dev: standDev,
-        stand_prod: standProd,
-        copy_to_clickhouse: copyToClickhouse,
         linked_issues: splitItems(linkedIssues),
         review_items: reviewItemsDraft.map((item) => ({
           path: item.path,
@@ -412,7 +302,6 @@ export default function AdminPrototypeReviewPage() {
           entity_name: String(item.entity_name || "").trim(),
           key_attributes: splitItems(item.key_attributes_text),
           clickhouse_keys: splitItems(item.clickhouse_keys_text),
-          business_key: splitItems(item.business_key_text),
           dependent_views: splitItems(item.dependent_views_text),
           is_new: item.is_new,
           object_type: item.object_type,
@@ -422,6 +311,9 @@ export default function AdminPrototypeReviewPage() {
           dependencies: item.dependencies || [],
           impact_tables: item.impact?.tables || [],
           yaml_content: item.yaml_bundle?.yaml_content || "",
+          stand_dev: Boolean(item.stand_dev),
+          stand_prod: Boolean(item.stand_prod),
+          copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
         })),
       });
       setResult((prev) => ({ ...(prev || {}), issue: payload?.issue || null }));
@@ -432,49 +324,16 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const renderField = (fieldKey) => {
-    const meta = FIELD_META[fieldKey];
-    const value = form[fieldKey] || "";
-    const isSkipped = Boolean(skips[fieldKey]);
-    const InputTag = meta.kind === "textarea" ? "textarea" : "input";
-    return (
-      <div key={fieldKey} className="cc-surface prototype-step-field" style={{ margin: 0 }}>
-        <div className="prototype-step-head">
-          <span className="slow-select-label">{meta.label}</span>
-          {meta.optional ? (
-            <label className="prototype-skip-toggle">
-              <input
-                type="checkbox"
-                checked={isSkipped}
-                onChange={(event) => handleSkipChange(fieldKey, event.target.checked)}
-              />
-              <span>Пропустить</span>
-            </label>
-          ) : null}
-        </div>
-        <InputTag
-          className="slow-entity-select"
-          value={value}
-          disabled={isSkipped}
-          onChange={(event) => handleFieldChange(fieldKey, event.target.value)}
-          placeholder={meta.placeholder}
-          style={meta.kind === "textarea" ? { minHeight: 110, resize: "vertical" } : undefined}
-        />
-      </div>
-    );
-  };
-
   return (
     <div className="container cc-page slow-page prototype-review-page">
       <section className="cc-header-zone">
         <h1>Prototype Review / MR Review</h1>
         <div className="cc-subtitle">
-          Цель: сократить время заведения задачи и собрать однотипную карточку из шаблона, MR и меты таблицы.
+          Запустите проверку MR, заполните только то, что не определилось автоматически, и создайте задачу по всему набору объектов.
         </div>
       </section>
 
       <section className="cc-surface">
-        <div className="section-title">Быстрый Старт</div>
         <div className="prototype-top-grid">
           <div className="prototype-step-field" style={{ margin: 0 }}>
             <span className="slow-select-label">MR URL или IID</span>
@@ -486,91 +345,27 @@ export default function AdminPrototypeReviewPage() {
             />
           </div>
           <div className="prototype-step-field" style={{ margin: 0 }}>
-            <span className="slow-select-label">Создание задачи</span>
+            <span className="slow-select-label">Инициатор</span>
             <div className="muted" style={{ marginTop: 10 }}>
-              После `Запустить проверки` все найденные таблицы появятся ниже. Новые таблицы и объекты без ключей будут подсвечены, после ручной правки можно создать одну задачу по всему MR.
-            </div>
-            <div className="muted" style={{ marginTop: 10 }}>
-              Инициатор в описании:
-              {" "}
               <span className="mono">{currentUser?.username || currentUser?.email || "текущий пользователь"}</span>
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="cc-surface">
         <div className="prototype-import-actions">
-          <div className="muted">Сначала достаточно указать MR. Таблицы, сущности, ключи и статусы будут определены автоматически из SQL.</div>
+          <div className="muted">После запуска появятся все целевые объекты MR и их статусы.</div>
           <button className="btn btn-primary" onClick={handleRun} disabled={loading || !mrInput.trim()}>
-            {loading ? "Запускаем review..." : "Запустить review"}
+            {loading ? "Идет review..." : "Запустить review"}
           </button>
         </div>
-        {loading && runProgress ? (
+
+        {loading || runProgress ? (
           <div className="card muted" style={{ marginTop: 14 }}>
-            <div>
-              Статус: <strong>{runProgress.status || "running"}</strong>
-              {Number.isFinite(Number(runProgress.current)) || Number.isFinite(Number(runProgress.total))
-                ? ` (${Number(runProgress.current || 0)}/${Number(runProgress.total || 0)})`
-                : ""}
-            </div>
-            <div>Файл: <span className="mono">{runProgress.current_file || "—"}</span></div>
-            <div>Таблица: <span className="mono">{runProgress.current_target || "—"}</span></div>
+            <div>{progressText || "Подготовка проверки..."}</div>
+            <div>Файл: <span className="mono">{runProgress?.current_file || "—"}</span></div>
           </div>
         ) : null}
       </section>
-
-      {result ? STEP_BLOCKS.filter((block) => block.title !== "Шаг 2. Источник" && (!block.stgOnly || false)).map((block) => (
-        <section key={block.title} className="cc-surface">
-          <div className="section-title">{block.title}</div>
-          <div className="muted" style={{ marginBottom: 14 }}>{block.description}</div>
-          {block.title === "Шаг 1. Карточка" ? (
-            <div className="prototype-step-grid">
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Стенд</span>
-                <div className="prototype-chip-row">
-                  <label className="prototype-skip-toggle">
-                    <input type="checkbox" checked={standDev} onChange={(event) => setStandDev(event.target.checked)} />
-                    <span>DEV</span>
-                  </label>
-                  <label className="prototype-skip-toggle">
-                    <input type="checkbox" checked={standProd} onChange={(event) => setStandProd(event.target.checked)} />
-                    <span>PROD</span>
-                  </label>
-                </div>
-              </div>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Связанные тикеты</span>
-                <input
-                  className="slow-entity-select"
-                  value={linkedIssues}
-                  onChange={(event) => setLinkedIssues(event.target.value)}
-                  placeholder="DWH-15089, DWH-15539"
-                />
-              </div>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">ClickHouse</span>
-                <label className="prototype-skip-toggle" style={{ marginTop: 10 }}>
-                  <input type="checkbox" checked={copyToClickhouse} onChange={(event) => setCopyToClickhouse(event.target.checked)} />
-                  <span>Нужна загрузка / обновление в ClickHouse</span>
-                </label>
-              </div>
-            </div>
-          ) : (
-            <div className="prototype-step-grid">
-              {block.fields.filter(shouldShowField).map(renderField)}
-            </div>
-          )}
-        </section>
-      )) : null}
-
-      {result ? <section className="cc-surface">
-        <div className="section-title">Собранный Шаблон</div>
-        <textarea className="slow-entity-select mono" value={normalizedTaskText} readOnly style={{ minHeight: 260, resize: "vertical" }} />
-        <div className="prototype-import-actions">
-          <div className="muted">Это итоговый нормализованный шаблон, который уйдёт в backend и в описание задачи.</div>
-        </div>
-      </section> : null}
 
       {error ? <div className="page-error">{error}</div> : null}
 
@@ -583,15 +378,57 @@ export default function AdminPrototypeReviewPage() {
               <div className="hint">{result.status_reason || "—"}</div>
             </div>
             <div className="slow-summary-card">
-              <div className="label">Таблицы MR</div>
-              <div className="value">{Array.isArray(reviewItemsDraft) ? reviewItemsDraft.length : 0}</div>
+              <div className="label">Объекты MR</div>
+              <div className="value">{reviewItemsDraft.length}</div>
               <div className="hint">
-                {result.requires_user_input ? `Требуют ручной проверки: ${unresolvedItemsCount}` : "Все обязательные поля заполнены автоматически"}
+                {unresolvedItemsCount > 0 ? `Нужно заполнить: ${unresolvedItemsCount}` : "Все обязательные поля заполнены"}
               </div>
             </div>
             <div className="slow-summary-card">
               <div className="label">YTrack</div>
               <div className="value">{formatIssueStatus(result.issue)}</div>
+            </div>
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">Параметры задачи</div>
+            <div className="prototype-step-grid">
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Название задачи</span>
+                <input
+                  className="slow-entity-select"
+                  value={form.summary}
+                  onChange={(event) => handleFieldChange("summary", event.target.value)}
+                  placeholder="(ДМЛ) Настроить обновление витрины ..."
+                />
+              </div>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Связанные тикеты</span>
+                <input
+                  className="slow-entity-select"
+                  value={linkedIssues}
+                  onChange={(event) => setLinkedIssues(event.target.value)}
+                  placeholder="DWH-15089, DWH-15539"
+                />
+              </div>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Предметная область</span>
+                <input
+                  className="slow-entity-select"
+                  value={form.subject_area}
+                  onChange={(event) => handleFieldChange("subject_area", event.target.value)}
+                  placeholder="SD"
+                />
+              </div>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Режим обновления</span>
+                <input
+                  className="slow-entity-select"
+                  value={form.load_mode}
+                  onChange={(event) => handleFieldChange("load_mode", event.target.value)}
+                  placeholder="Полный / Псевдоинкрементальный"
+                />
+              </div>
             </div>
           </section>
 
@@ -625,14 +462,11 @@ export default function AdminPrototypeReviewPage() {
 
           <section className="cc-surface">
             <div className="section-title">Объекты MR</div>
-            <div className="muted" style={{ marginBottom: 14 }}>
-              Целевые таблицы определены автоматически по SQL-файлам MR. Для новых таблиц и объектов без ключей заполните поля вручную перед созданием задачи.
-            </div>
             <div style={{ display: "grid", gap: 16 }}>
               {reviewItemsDraft.map((item) => {
                 const needsEntity = !String(item.entity_name || "").trim();
                 const needsKeys = !splitItems(item.key_attributes_text).length;
-                const needsAttention = Boolean(item.is_new || item.requires_user_input || needsEntity || needsKeys);
+                const needsAttention = Boolean(needsEntity || needsKeys);
                 return (
                   <div
                     key={item.target_fqn}
@@ -650,7 +484,7 @@ export default function AdminPrototypeReviewPage() {
                       </div>
                       <div className="prototype-chip-row">
                         <span className="card" style={{ padding: "6px 10px", margin: 0 }}>{item.object_type || "TABLE"}</span>
-                        <span className="card" style={{ padding: "6px 10px", margin: 0 }}>{item.is_new ? "Новая таблица" : "Существующий объект"}</span>
+                        {item.is_new ? <span className="card" style={{ padding: "6px 10px", margin: 0 }}>Новая таблица</span> : null}
                         {needsAttention ? <span className="card" style={{ padding: "6px 10px", margin: 0, color: "#b54708" }}>Нужно заполнить</span> : null}
                       </div>
                     </div>
@@ -709,14 +543,44 @@ export default function AdminPrototypeReviewPage() {
                         />
                       </div>
                       <div className="prototype-step-field" style={{ margin: 0 }}>
-                        <span className="slow-select-label">Бизнес ключ</span>
-                        <textarea
-                          className="slow-entity-select"
-                          value={item.business_key_text || ""}
-                          onChange={(event) => handleReviewItemChange(item.target_fqn, "business_key_text", event.target.value)}
-                          placeholder="warehouse_code, dt_report"
-                          style={{ minHeight: 100, resize: "vertical" }}
-                        />
+                        <span className="slow-select-label">Параметры объекта</span>
+                        <div className="prototype-chip-row" style={{ marginTop: 6 }}>
+                          <label className="prototype-skip-toggle">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.stand_dev)}
+                              onChange={(event) => handleReviewItemToggle(item.target_fqn, "stand_dev", event.target.checked)}
+                            />
+                            <span>DEV</span>
+                          </label>
+                          <label className="prototype-skip-toggle">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.stand_prod)}
+                              onChange={(event) => handleReviewItemToggle(item.target_fqn, "stand_prod", event.target.checked)}
+                            />
+                            <span>PROD</span>
+                          </label>
+                          <label className="prototype-skip-toggle">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.copy_to_clickhouse)}
+                              onChange={(event) => handleReviewItemToggle(item.target_fqn, "copy_to_clickhouse", event.target.checked)}
+                            />
+                            <span>Требуется ClickHouse</span>
+                          </label>
+                        </div>
+                        {item.is_new ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => handleRecheckNewTable(item.target_fqn)}
+                            disabled={item.rechecking}
+                            style={{ marginTop: 12 }}
+                          >
+                            {item.rechecking ? "Проверяем дубли..." : "Перепроверить новую таблицу"}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
 
@@ -785,38 +649,10 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Общие параметры</div>
-            <div className="table-wrapper">
-              <table className="incidents-table slow-table">
-                <thead>
-                  <tr>
-                    <th>Предметная область</th>
-                    <th>Режим обновления</th>
-                    <th>Стенды</th>
-                    <th>Копировать в ClickHouse</th>
-                    <th>Ключевые поля ClickHouse</th>
-                    <th>Бизнес ключ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{result.task_context?.subject_area || "—"}</td>
-                    <td>{result.task_context?.load_mode || "—"}</td>
-                    <td>{Array.isArray(result.task_context?.environments) && result.task_context.environments.length ? result.task_context.environments.join(", ") : "—"}</td>
-                    <td>{result.task_context?.copy_to_clickhouse ? "необходимо обновить данные в витрине (структуру обновлять не нужно)" : "не нужно"}</td>
-                    <td>{Array.isArray(result.task_context?.clickhouse_keys) && result.task_context.clickhouse_keys.length ? result.task_context.clickhouse_keys.join(", ") : "—"}</td>
-                    <td>{Array.isArray(result.task_context?.business_key) && result.task_context.business_key.length ? result.task_context.business_key.join(", ") : "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="cc-surface">
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь MR. В описании MR и diff будут указаны один раз, а по каждой таблице пойдет отдельный структурированный блок.
+                Одна задача будет создана на весь MR, а по каждому объекту в описание попадет отдельный блок со строками, дублями, стендами и YAML-вложением.
               </div>
               <button
                 type="button"
@@ -829,7 +665,7 @@ export default function AdminPrototypeReviewPage() {
             </div>
             {unresolvedItemsCount > 0 ? (
               <div className="muted" style={{ marginTop: 12 }}>
-                Сначала заполните обязательные поля у {unresolvedItemsCount} таблиц.
+                Сначала заполните обязательные поля у {unresolvedItemsCount} объектов.
               </div>
             ) : null}
             <div className="muted" style={{ marginTop: 12 }}>

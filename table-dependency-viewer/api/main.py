@@ -460,13 +460,17 @@ class PrototypeReviewRunPayload(BaseModel):
     linked_issues: Optional[List[str]] = None
 
 
+class PrototypeReviewTableCheckPayload(BaseModel):
+    target_fqn: str
+    key_attributes: Optional[List[str]] = None
+
+
 class PrototypeReviewItemPayload(BaseModel):
     path: Optional[str] = None
     target_fqn: str
     entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
     clickhouse_keys: Optional[List[str]] = None
-    business_key: Optional[List[str]] = None
     dependent_views: Optional[List[str]] = None
     is_new: Optional[bool] = None
     object_type: Optional[str] = None
@@ -476,6 +480,9 @@ class PrototypeReviewItemPayload(BaseModel):
     dependencies: Optional[List[str]] = None
     impact_tables: Optional[List[Dict[str, Any]]] = None
     yaml_content: Optional[str] = None
+    stand_dev: Optional[bool] = True
+    stand_prod: Optional[bool] = True
+    copy_to_clickhouse: Optional[bool] = None
 
 
 class PrototypeReviewCreateIssuePayload(BaseModel):
@@ -884,8 +891,6 @@ def _prototype_issue_description(
         if checks.get("duplicate_groups") is not None
         else "не проверялось"
     )
-    clickhouse_keys = task_context.get("clickhouse_keys") or key_attributes
-    business_keys = task_context.get("business_key") or key_attributes
     lines = [
         "## MR",
         f"**Email инициатора:** {initiator.get('email') or '—'}",
@@ -907,11 +912,7 @@ def _prototype_issue_description(
                 "## Параметры загрузки",
                 f"**Предметная область:** {task_context.get('subject_area') or '—'}",
                 f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
-                f"**Стенды:** {', '.join(task_context.get('environments') or []) or '—'}",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
-                f"**Копировать в ClickHouse:** {'необходимо обновить данные в витрине (структуру обновлять не нужно)' if task_context.get('copy_to_clickhouse') else 'не нужно'}",
-                f"**Ключевые поля для загрузки в ClickHouse:** {', '.join(clickhouse_keys) if clickhouse_keys else '—'}",
-                f"**Бизнес ключ:** {', '.join(business_keys) if business_keys else '—'}",
                 f"**Время выполнения SQL:** {_format_duration(total_execution_sec)}",
             ]
         )
@@ -970,12 +971,19 @@ def _prototype_multi_issue_description(
         "## Общие параметры",
         f"**Предметная область:** {task_context.get('subject_area') or '—'}",
         f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
-        f"**Стенды:** {', '.join(task_context.get('environments') or []) or '—'}",
         f"**Git ref:** {task_context.get('git_reference') or '—'}",
-        f"**Копировать в ClickHouse:** {'необходимо обновить данные в витрине (структуру обновлять не нужно)' if task_context.get('copy_to_clickhouse') else 'не нужно'}",
     ]
     for index, item in enumerate(review_items, start=1):
         needs_attention, missing = _prototype_item_needs_attention(item)
+        item_row_count = item.get("row_count")
+        if item_row_count is None:
+            item_row_count = (item.get("checks") or {}).get("row_count")
+        item_duplicate_groups = item.get("duplicate_groups")
+        if item_duplicate_groups is None:
+            item_duplicate_groups = (item.get("checks") or {}).get("duplicate_groups")
+        item_stands = [
+            label for enabled, label in ((item.get("stand_dev"), "DEV"), (item.get("stand_prod"), "PROD")) if enabled
+        ]
         lines.extend(
             [
                 "",
@@ -984,25 +992,29 @@ def _prototype_multi_issue_description(
                 f"**Сущность:** {item.get('entity_name') or '—'}",
                 f"**Статус объекта:** {'новая таблица' if item.get('is_new') else 'существующий объект'}",
                 f"**Ключевые поля:** {', '.join(item.get('key_attributes') or []) or '—'}",
-                f"**Количество строк:** {_format_count(item.get('checks', {}).get('row_count'))}",
-                f"**Кол-во дублей:** {_format_count(item.get('checks', {}).get('duplicate_groups'))}",
+                f"**Количество строк:** {_format_count(item_row_count)}",
+                f"**Кол-во дублей:** {_format_count(item_duplicate_groups)}",
                 f"**Время выполнения SQL:** {_format_duration(item.get('duration_sec'))}",
                 f"**Ключевые поля для загрузки в ClickHouse:** {', '.join(item.get('clickhouse_keys') or []) or '—'}",
-                f"**Бизнес ключ:** {', '.join(item.get('business_key') or []) or '—'}",
             ]
         )
+        if item_stands:
+            lines.append(f"**Стенды:** {', '.join(item_stands)}")
+        if item.get("copy_to_clickhouse"):
+            lines.append("**ClickHouse:** требуется")
         if needs_attention:
             lines.append(f"**Нужно заполнить вручную:** {', '.join(missing)}")
         if item.get("dependencies"):
             lines.append("")
             lines.append("**Зависимости SQL**")
             lines.extend(f"- {value}" for value in (item.get("dependencies") or [])[:40])
-        if item.get("impact", {}).get("tables"):
+        impact_tables = (item.get("impact") or {}).get("tables") or item.get("impact_tables") or []
+        if impact_tables:
             lines.append("")
             lines.append("**Потенциальное downstream-влияние**")
             lines.extend(
                 f"- **{row.get('fqn')}** · {row.get('entity_name') or '—'}"
-                for row in (item.get("impact", {}).get("tables") or [])[:25]
+                for row in impact_tables[:25]
             )
     return "\n".join(lines)
 
@@ -1062,12 +1074,6 @@ def _prototype_review_build_result(
         "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
         "dependent_views": payload.dependent_views or parsed_task.get("dependent_views") or [],
         "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
-        "environments": [
-            label
-            for enabled, label in ((payload.stand_dev, "DEV"), (payload.stand_prod, "PROD"))
-            if enabled
-        ] or parsed_task.get("environments") or [],
-        "copy_to_clickhouse": payload.copy_to_clickhouse if payload.copy_to_clickhouse is not None else parsed_task.get("copy_to_clickhouse"),
     }
     preparation_rows: list[dict[str, Any]] = []
     execution_rows: list[dict[str, Any]] = []
@@ -1151,10 +1157,8 @@ def _prototype_review_build_result(
         impact = _prototype_impact_summary(target_fqn)
         is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
         item_warnings: list[str] = []
-        if is_new:
-            item_warnings.append("Новая таблица: проверьте и заполните сущность вручную при необходимости")
         if not key_attributes:
-            item_warnings.append("Бизнес ключ не найден автоматически")
+            item_warnings.append("Ключевые поля не найдены автоматически")
         if execution_row.get("status") == "error":
             item_warnings.append(f"Ошибка в файле `{target_item.get('path')}`: {execution_row.get('error_message') or 'SQL не выполнился'}")
         if checks.get("duplicate_groups") not in (None, 0):
@@ -1183,6 +1187,9 @@ def _prototype_review_build_result(
                 "impact": impact,
                 "yaml_bundle": yaml_bundle,
                 "is_new": is_new,
+                "stand_dev": True,
+                "stand_prod": True,
+                "copy_to_clickhouse": bool(clickhouse_keys),
                 "requires_user_input": requires_item_input,
                 "missing_fields": missing_fields,
                 "warnings": item_warnings,
@@ -1285,6 +1292,22 @@ def get_admin_prototype_review_status(job_id: str, request: Request):
     return payload
 
 
+@router.post("/api/admin/prototype-review/check-table")
+def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload, request: Request):
+    _require_authenticated(request)
+    try:
+        checks = query_dev_table_checks(
+            dev_database_url=DEV_DATABASE_URL,
+            target_fqn=payload.target_fqn,
+            key_attributes=list(payload.key_attributes or []),
+        )
+        return {"status": "ok", "checks": checks}
+    except Exception as exc:
+        print("❌ /api/admin/prototype-review/check-table error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/api/admin/prototype-review/create-issue")
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
@@ -1311,12 +1334,6 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
             "load_mode": (payload.load_mode or "").strip() or parsed_task.get("load_mode"),
             "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
-            "environments": [
-                label
-                for enabled, label in ((payload.stand_dev, "DEV"), (payload.stand_prod, "PROD"))
-                if enabled
-            ] or parsed_task.get("environments") or [],
-            "copy_to_clickhouse": payload.copy_to_clickhouse if payload.copy_to_clickhouse is not None else parsed_task.get("copy_to_clickhouse"),
         }
         summary = (payload.issue_summary or "").strip() or parsed_task.get("summary") or f"[Prototype Review] {bundle.get('mr', {}).get('source_branch') or 'prototype'}"
         description = _prototype_multi_issue_description(

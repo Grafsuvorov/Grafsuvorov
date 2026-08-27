@@ -17,6 +17,7 @@ export const adminApi = {
   prototypeReviewRun: (body) => apiClient.post("/api/admin/prototype-review/run", body),
   prototypeReviewRunStart: (body) => apiClient.post("/api/admin/prototype-review/run-start", body),
   prototypeReviewRunStatus: (jobId) => apiClient.get(`/api/admin/prototype-review/run-status/${encodeURIComponent(jobId)}`),
+  prototypeReviewCheckTable: (body) => apiClient.post("/api/admin/prototype-review/check-table", body),
   prototypeReviewCreateIssue: (body) => apiClient.post("/api/admin/prototype-review/create-issue", body),
   tablesDetailed: () => apiClient.getCached("/api/tables", { ttlMs: 10 * 60 * 1000, params: { detailed: true } }),
   tableCard: (schema, table, params) => apiClient.get(`/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, { params }),

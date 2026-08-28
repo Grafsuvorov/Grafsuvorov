@@ -1,1 +1,351 @@
-YAML в инженерный репозиторий не записан: Git команда завершилась с ошибкой: git push origin HEAD:feature/DWH-15826 error: The destination you provided is not a full refname (i.e., starting with "refs/"). We tried to guess what you meant by: - Looking for a ref that matches 'feature/DWH-15826' on the remote side. - Checking if the <src> being pushed ('HEAD') is a ref in "refs/{heads,tags}/". If so we add a corresponding refs/{heads,tags}/ prefix on the remote side. Neither worked, so we gave up. You must fully qualify the ref. hint: The <src> part of the refspec is a commit object. hint: Did you mean to create a new branch by pushing to hint: 'HEAD:refs/heads/feature/DWH-15826'? error: failed to push some refs to 'https://prod.gitlab.dwh.rusal.com/dwh/etl.git'
+drop table if exists dds.accounting_balance cascade;
+create table if not exists dds.accounting_balance (
+	unit_balance_code varchar(4) not null,
+	fiscal_year varchar(4) not null,
+	general_ledger_account_code varchar(10) not null,
+	document_currency_code varchar(5) not null,
+	local_currency_code varchar(5) null,
+	second_local_currency_code  varchar(5)  null,
+	debit_or_credit_code varchar(1) not null,
+	posting_period_mm varchar(2) not null,
+	balance_opening_document_currency_amount numeric(20, 2) default 0,
+	balance_opening_local_currency_amount numeric(20, 2) default 0,
+	balance_opening_second_local_currency_amount numeric(20, 2) default 0,
+	turnover_document_currency_amount numeric(20, 2) default 0,
+	turnover_local_currency_amount numeric(20, 2) default 0,
+	turnover_second_local_currency_amount numeric(20, 2) default 0,
+	balance_closing_document_currency_amount numeric(20, 2) default 0,
+	balance_closing_local_currency_amount numeric(20, 2) default 0,
+	balance_closing_second_local_currency_amount numeric(20, 2) default 0,
+	dttm_inserted 		timestamp not null default now(),
+	dttm_updated 		timestamp not null default now(),
+	job_name 			varchar(60) not null default 'airflow'::character varying,
+	deleted_flag		bool not null default false
+)
+with (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (unit_balance_code,general_ledger_account_code);
+
+COMMENT ON TABLE dds.accounting_balance IS 'Сальдо счетов ГК';
+
+COMMENT ON COLUMN dds.accounting_balance.unit_balance_code IS 'Балансовая единица | Балансовая единица | ods.ral_glt0.bukrs, ';
+COMMENT ON COLUMN dds.accounting_balance.fiscal_year IS 'Финансовый год | Финансовый год | ods.ral_glt0.ryear, ';
+COMMENT ON COLUMN dds.accounting_balance.posting_period_mm IS 'Период | Период | Генерация с 01 по 16';
+COMMENT ON COLUMN dds.accounting_balance.general_ledger_account_code IS 'Основной счет главной книги | Основной счет главной книги | ods.ral_glt0.racct, ';
+COMMENT ON COLUMN dds.accounting_balance.debit_or_credit_code IS 'Индикатор дебета/кредита | Индикатор дебета/кредита | ods.ral_glt0.drcrk, ';
+COMMENT ON COLUMN dds.accounting_balance.document_currency_code IS 'Код валюты документа | Валюта для balance_opening_document_currency_amount | ods.ral_glt0.rtcur, ';
+COMMENT ON COLUMN dds.accounting_balance.balance_opening_document_currency_amount IS 'Сальдо на начало в валюте документа | Сальдо на начало в валюте документа | на основе ods.ral_glt0.tslvt';
+COMMENT ON COLUMN dds.accounting_balance.turnover_document_currency_amount IS 'Оборот в валюте документа | Оборот в валюте документа | на основе ods.ral_glt0.tsl01, tsl02, tsl03, tsl04, tsl05, tsl06, tsl07, tsl08, tsl09, tsl10, tsl11, tsl12, tsl13, tsl14, tsl15, tsl16';
+COMMENT ON COLUMN dds.accounting_balance.balance_closing_document_currency_amount IS 'Сальдо на конец в валюте документа | Сальдо на конец в валюте документа | на основе ods.ral_glt0.tslvt, tsl01, tsl02, tsl03, tsl04, tsl05, tsl06, tsl07, tsl08, tsl09, tsl10, tsl11, tsl12, tsl13, tsl14, tsl15, tsl16';
+COMMENT ON COLUMN dds.accounting_balance.local_currency_code IS 'Код внутренней валюты | Валюта для balance_opening_local_currency_amount | dict_dds.map_unit_balance_to_registry.currency1_code';
+COMMENT ON COLUMN dds.accounting_balance.balance_opening_local_currency_amount IS 'Сальдо на начало в валюте организации | Сальдо на начало в валюте организации | на основе ods.ral_glt0.hslvt';
+COMMENT ON COLUMN dds.accounting_balance.turnover_local_currency_amount IS 'Оборот в валюте организации | Оборот в валюте организации | на основе ods.ral_glt0.hsl01, hsl02, hsl03, hsl04, hsl05, hsl06, hsl07, hsl08, hsl09, hsl10, hsl11, hsl12, hsl13, hsl14, hsl15, hsl16';
+COMMENT ON COLUMN dds.accounting_balance.balance_closing_local_currency_amount IS 'Сальдо на конец в валюте организации | Сальдо на конец в валюте организации | на основе ods.ral_glt0.hslvt, hsl01, hsl02, hsl03, hsl04, hsl05, hsl06, hsl07, hsl08, hsl09, hsl10, hsl11, hsl12, hsl13, hsl14, hsl15, hsl16';
+COMMENT ON COLUMN dds.accounting_balance.second_local_currency_code IS 'Код второй внутренней валюты | Валюта для balance_opening_second_local_currency_amount | на основе dict_dds.map_unit_balance_to_registry.currency1_code, currency2_code';
+COMMENT ON COLUMN dds.accounting_balance.balance_opening_second_local_currency_amount IS 'Сальдо на начало во второй валюте | Сальдо на начало во второй валюте | на основе ods.ral_glt0.kslvt';
+COMMENT ON COLUMN dds.accounting_balance.turnover_second_local_currency_amount IS 'Оборот во второй валюте | Оборот во второй валюте | на основе ods.ral_glt0.ksl01, ksl02, ksl03, ksl04, ksl05, ksl06, ksl07, ksl08, ksl09, ksl10, ksl11, ksl12, ksl13, ksl14, ksl15, ksl16';
+COMMENT ON COLUMN dds.accounting_balance.balance_closing_second_local_currency_amount IS 'Сальдо на конец во второй валюте | Сальдо на конец во второй валюте | на основе ods.ral_glt0.kslvt, ksl01, ksl02, ksl03, ksl04, ksl05, ksl06, ksl07, ksl08, ksl09, ksl10, ksl11, ksl12, ksl13, ksl14, ksl15, ksl16';
+
+
+insert
+	into
+	 dds.accounting_balance
+(
+unit_balance_code,
+fiscal_year,
+general_ledger_account_code,
+document_currency_code,
+local_currency_code,
+second_local_currency_code,
+debit_or_credit_code,
+posting_period_mm,
+balance_opening_document_currency_amount,
+balance_opening_local_currency_amount,
+balance_opening_second_local_currency_amount,
+turnover_document_currency_amount,
+turnover_local_currency_amount,
+turnover_second_local_currency_amount,
+balance_closing_document_currency_amount,
+balance_closing_local_currency_amount,
+balance_closing_second_local_currency_amount
+)
+
+with precte as (
+	select 
+		unit_balance_code , 
+		max(case when cur.registry_code = '00' then cur.currency1_code else null end) as local_currency_code,
+		max(case when cur.registry_code = 'ZA' then cur.currency1_code else cur.currency2_code end) as second_local_currency_code
+	from
+		dict_dds.map_unit_balance_to_registry as cur
+	where
+		cur.registry_code = '00'
+		or cur.registry_code = 'ZA'
+	group by
+		unit_balance_code 
+),
+	cte0 as (
+select
+	bukrs as unit_balance_code,
+	ryear as fiscal_year,
+	racct as general_ledger_account_code ,
+	rtcur as document_currency_code ,
+	drcrk as debit_or_credit_code,
+	unnest(array['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16']) as posting_period_mm,
+	unnest(array[tslvt, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as balance_opening_document_currency_amount,
+	unnest(array[hslvt, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as balance_opening_local_currency_amount,
+	unnest(array[kslvt, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as balance_opening_second_local_currency_amount,
+	unnest(array[tsl01, tsl02, tsl03, tsl04, tsl05, tsl06, tsl07, tsl08, tsl09, tsl10, tsl11, tsl12, tsl13, tsl14, tsl15, tsl16]) as turnover_document_currency_amount,
+	unnest(array[hsl01, hsl02, hsl03, hsl04, hsl05, hsl06, hsl07, hsl08, hsl09, hsl10, hsl11, hsl12, hsl13, hsl14, hsl15, hsl16]) as turnover_local_currency_amount,
+	unnest(array[ksl01, ksl02, ksl03, ksl04, ksl05, ksl06, ksl07, ksl08, ksl09, ksl10, ksl11, ksl12, ksl13, ksl14, ksl15, ksl16]) as turnover_second_local_currency_amount
+from
+	ods.ral_glt0 as c
+where
+	1 = 1
+	and rldnr = '00'
+	and rrcty = '0'
+	and rvers = '001'
+union all
+select
+	bukrs as unit_balance_code,
+	ryear as fiscal_year,
+	racct as general_ledger_account_code ,
+	rtcur as document_currency_code ,
+	drcrk as debit_or_credit_code,
+	unnest(array['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16']) as posting_period_mm,
+	unnest(array[0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as balance_opening_document_currency_amount,
+	unnest(array[0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as balance_opening_local_currency_amount,
+	unnest(array[hslvt, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as balance_opening_second_local_currency_amount,
+	unnest(array[0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as turnover_document_currency_amount,
+	unnest(array[0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]) as turnover_local_currency_amount,
+	unnest(array[hsl01, hsl02, hsl03, hsl04, hsl05, hsl06, hsl07, hsl08, hsl09, hsl10, hsl11, hsl12, hsl13, hsl14, hsl15, hsl16]) as turnover_second_local_currency_amount
+from
+	ods.ral_glt0  as c
+where
+	1 = 1
+	and rldnr = 'ZA'
+	and rrcty = '0'
+	and rvers = '001'
+),
+
+ cte1 as (
+ select debit_or_credit_name, debit_or_credit_code from  
+ (values ('H','H'),
+         ('H','S'),
+         ('S','H'),
+         ('S','S')) 
+  as t(debit_or_credit_name, debit_or_credit_code)
+     ),
+cte as (
+select
+		unit_balance_code,
+		fiscal_year,
+		general_ledger_account_code ,
+		cte1.debit_or_credit_code,
+		posting_period_mm,
+		document_currency_code,
+		case when cte0.debit_or_credit_code = cte1.debit_or_credit_code then balance_opening_document_currency_amount else null end as balance_opening_document_currency_amount,
+		case when cte0.debit_or_credit_code = cte1.debit_or_credit_code then balance_opening_local_currency_amount else null end as balance_opening_local_currency_amount,
+		case when cte0.debit_or_credit_code = cte1.debit_or_credit_code then balance_opening_second_local_currency_amount else null end as balance_opening_second_local_currency_amount,
+		case when cte0.debit_or_credit_code = cte1.debit_or_credit_code then turnover_document_currency_amount else null end as turnover_document_currency_amount,
+		case when cte0.debit_or_credit_code = cte1.debit_or_credit_code then turnover_local_currency_amount else null end as turnover_local_currency_amount,
+		case when cte0.debit_or_credit_code = cte1.debit_or_credit_code then turnover_second_local_currency_amount else null end as turnover_second_local_currency_amount
+		
+from cte0
+ left join cte1 
+  on cte0.debit_or_credit_code = cte1.debit_or_credit_name
+),
+	cte2 as(
+	select
+		c.unit_balance_code,
+		fiscal_year,
+		general_ledger_account_code ,
+		debit_or_credit_code,
+		posting_period_mm,
+		document_currency_code ,
+		g.local_currency_code,
+		g.second_local_currency_code,
+		sum(coalesce(balance_opening_document_currency_amount, 0)) as balance_opening_document_currency_amount,
+		sum(coalesce(balance_opening_local_currency_amount, 0)) as balance_opening_local_currency_amount,
+		sum(coalesce(balance_opening_second_local_currency_amount, 0)) as balance_opening_second_local_currency_amount,
+		sum(coalesce(turnover_document_currency_amount, 0)) as turnover_document_currency_amount,
+		sum(coalesce(turnover_local_currency_amount, 0)) as turnover_local_currency_amount,
+		sum(coalesce(turnover_second_local_currency_amount, 0)) as turnover_second_local_currency_amount
+	from
+		cte as c
+	left join precte as g on
+		g.unit_balance_code = c.unit_balance_code
+	group by
+		c.unit_balance_code,
+		fiscal_year,
+		general_ledger_account_code ,
+		document_currency_code ,
+		g.local_currency_code,
+		g.second_local_currency_code,
+		debit_or_credit_code,
+		posting_period_mm
+	)
+	
+	-----------------------------------------------------------
+	select 	
+	t.unit_balance_code,
+	fiscal_year,
+	t.general_ledger_account_code ,
+	document_currency_code ,
+	local_currency_code,
+	second_local_currency_code,
+	debit_or_credit_code,
+	posting_period_mm, 
+	case when posting_period_mm='01' then balance_opening_document_currency_amount else  coalesce(lag(balance_closing_document_currency_amount, 1) over
+	wbalop,	0 ) end as balance_opening_document_currency_amount,
+	
+	case when posting_period_mm='01' then balance_opening_local_currency_amount else coalesce(lag(balance_closing_local_currency_amount, 1) over
+	wbalop,	0 ) end as balance_opening_local_currency_amount,
+    	
+   case when posting_period_mm='01' then balance_opening_second_local_currency_amount else coalesce(lag(balance_closing_second_local_currency_amount, 1) over
+	wbalop,0 ) end as balance_opening_second_local_currency_amount,
+	
+	turnover_document_currency_amount,
+	turnover_local_currency_amount,
+	turnover_second_local_currency_amount,
+	balance_closing_document_currency_amount,
+	balance_closing_local_currency_amount,
+    balance_closing_second_local_currency_amount
+
+		from 
+----------------------		
+(	
+	
+	select
+	g.unit_balance_code,
+	fiscal_year,
+	general_ledger_account_code ,
+	document_currency_code ,
+	local_currency_code,
+	second_local_currency_code,
+	debit_or_credit_code,
+	posting_period_mm,
+    	case
+		when debit_or_credit_code = 'H'	and 
+	        sum(balance_opening_document_currency_amount) over wbal >= 0 then 0
+		when debit_or_credit_code = 'S' and 
+			sum(balance_opening_document_currency_amount) over wbal  <= 0 then 0
+		else 
+			(sum(balance_opening_document_currency_amount) over wbal )
+			*(10 ^ (2 - coalesce(dp1.decimal_place_number,2)))::numeric(20,	2)
+	end as balance_opening_document_currency_amount,
+	
+	case
+		when debit_or_credit_code = 'H'	and 
+			sum(balance_opening_local_currency_amount) over wbal >= 0 then 0
+		when debit_or_credit_code = 'S'	and 
+			sum(balance_opening_local_currency_amount) over wbal <= 0 then 0
+		else
+			(sum(balance_opening_local_currency_amount) over wbal )
+			*(10 ^ (2 - coalesce(dp2.decimal_place_number,2)))::numeric(20,2)
+	end as balance_opening_local_currency_amount,
+	
+	case
+		when debit_or_credit_code = 'H'	and 
+			sum(balance_opening_second_local_currency_amount) over wbal >= 0 then 0
+		when debit_or_credit_code = 'S'	and 
+			sum(balance_opening_second_local_currency_amount) over wbal <= 0 then 0
+		else 
+			(sum(balance_opening_second_local_currency_amount) over wbal ) 
+			*(10 ^ (2 - coalesce(dp3.decimal_place_number,2)))::numeric(20,2)
+	end	as balance_opening_second_local_currency_amount,
+
+	
+		case
+		when debit_or_credit_code = 'H'	and 
+			sum(balance_opening_document_currency_amount) over wbal + coalesce (sum(turnover_document_currency_amount) over wbal ,0) >= 0 then 0
+		when debit_or_credit_code = 'S'	and 
+			sum(balance_opening_document_currency_amount) over wbal + coalesce (sum(turnover_document_currency_amount) over wbal ,0) <= 0 then 0
+		else 
+			(sum(balance_opening_document_currency_amount) over wbal + coalesce (sum(turnover_document_currency_amount) over wbal ,0))
+			*(10 ^ (2 - coalesce(dp1.decimal_place_number,2)))::numeric(20,2)
+	end	as balance_closing_document_currency_amount,
+
+	turnover_document_currency_amount *(10 ^ (2 - coalesce(dp1.decimal_place_number,2)))::numeric(20,2) as turnover_document_currency_amount,
+	turnover_local_currency_amount *(10 ^ (2 - coalesce(dp2.decimal_place_number,2)))::numeric(20,2) as turnover_local_currency_amount,
+	turnover_second_local_currency_amount *(10 ^ (2 - coalesce(dp3.decimal_place_number,2)))::numeric(20,2) as turnover_second_local_currency_amount,
+	
+	case
+		when debit_or_credit_code = 'H'	and 
+			sum(balance_opening_local_currency_amount) over wbal + coalesce (sum(turnover_local_currency_amount) over wbal ,0) >= 0 then 0
+		when debit_or_credit_code = 'S'	and 
+			sum(balance_opening_local_currency_amount) over wbal + coalesce (sum(turnover_local_currency_amount) over wbal ,0) <= 0 then 0
+		else 
+			(sum(balance_opening_local_currency_amount) over wbal + coalesce (sum(turnover_local_currency_amount) over wbal ,0))
+			*(10 ^ (2 - coalesce(dp2.decimal_place_number,2)))::numeric(20,2)
+	end	as balance_closing_local_currency_amount,
+	
+	case
+		when debit_or_credit_code = 'H'	and 
+			sum(balance_opening_second_local_currency_amount) over wbal + coalesce (sum(turnover_second_local_currency_amount) over wbal ,0)>= 0 then 0
+		when debit_or_credit_code = 'S'	and 
+			sum(balance_opening_second_local_currency_amount) over wbal + coalesce (sum(turnover_second_local_currency_amount) over wbal ,0)<= 0 then 0
+		else 
+			(sum(balance_opening_second_local_currency_amount) over wbal + coalesce (sum(turnover_second_local_currency_amount) over wbal ,0))
+			*(10 ^ (2 - coalesce(dp3.decimal_place_number,2)))::numeric(20,2)
+	end	as balance_closing_second_local_currency_amount
+from
+	cte2 as g
+left join dict_dds.currency_decimal_place_ral as dp1 on
+	dp1.currency_code = g.document_currency_code
+left join dict_dds.currency_decimal_place_ral as dp2 on 
+	dp2.currency_code = g.local_currency_code
+left join dict_dds.currency_decimal_place_ral as dp3 on 
+	dp3.currency_code = g.second_local_currency_code
+
+window wbal as (
+	partition by 
+		g.unit_balance_code,
+		fiscal_year,
+		general_ledger_account_code ,
+		document_currency_code
+	order by
+		posting_period_mm asc)
+
+
+) as t
+
+window	wbalop as (	
+	partition by 
+		t.unit_balance_code,
+		fiscal_year,
+		t.general_ledger_account_code,
+		document_currency_code,
+		debit_or_credit_code
+	order by
+		posting_period_mm, debit_or_credit_code );
+
+analyze dds.accounting_balance;
+
+
+ dict_dds:
+    - currency_decimal_place_ral
+    - map_unit_balance_to_registry
+  stg:
+    - GLT0
+key_attributes:
+  - unit_balance_code
+  - fiscal_year
+  - general_ledger_account_code
+  - document_currency_code
+  - debit_or_credit_code
+  - posting_period_mm
+
+
+depends_on:
+  stg:
+    - GLT0
+depends_on: {}
+verification:
+  - duplicate_check
+key_attributes:
+  - rldnr
+  - rrcty

@@ -991,13 +991,15 @@ def _prototype_multi_issue_description(
                 f"**Количество строк:** {_format_count(item_row_count)}",
                 f"**Кол-во дублей:** {_format_count(item_duplicate_groups)}",
                 f"**Время выполнения SQL:** {_format_duration(item.get('duration_sec'))}",
-                f"**Ключевые поля для загрузки в ClickHouse:** {', '.join(item.get('clickhouse_keys') or []) or '—'}",
             ]
         )
         if item_stands:
             lines.append(f"**Стенды:** {', '.join(item_stands)}")
         if item.get("copy_to_clickhouse"):
             lines.append("**ClickHouse:** требуется")
+            lines.append(
+                f"**Ключевые поля для загрузки в ClickHouse:** {', '.join(item.get('clickhouse_keys') or []) or '—'}"
+            )
         if needs_attention:
             lines.append(f"**Нужно заполнить вручную:** {', '.join(missing)}")
         if item.get("dependencies"):
@@ -1081,8 +1083,6 @@ def _prototype_review_resolve_item(
     click_idx = get_click_meta_index()
     click_meta = (click_idx.get("meta") or {}).get((schema_name.lower(), table_name.lower())) or (click_idx.get("meta") or {}).get((schema_name.lower(), _clean_table_name(table_name.lower())))
     clickhouse_keys = list(((click_meta or {}).get("order_by") or []))
-    if not clickhouse_keys and detected_keys:
-        clickhouse_keys = list(detected_keys)
     yaml_payload = None
     if yaml_bundle and yaml_bundle.get("yaml_content"):
         try:

@@ -131,7 +131,7 @@ export default function AdminPrototypeReviewPage() {
   useEffect(() => {
     const items = Array.isArray(result?.review_items) ? result.review_items : [];
     setReviewItemsDraft(items.map(buildDraftItem));
-  }, [result]);
+  }, [result?.review_items]);
 
   const normalizedTaskText = useMemo(
     () => buildTaskText(form, linkedIssues),
@@ -179,7 +179,13 @@ export default function AdminPrototypeReviewPage() {
 
   const handleReviewItemToggle = (targetFqn, field, checked) => {
     setReviewItemsDraft((prev) => prev.map((item) => (
-      item.target_fqn !== targetFqn ? item : { ...item, [field]: checked }
+      item.target_fqn !== targetFqn
+        ? item
+        : {
+            ...item,
+            [field]: checked,
+            ...(field === "copy_to_clickhouse" && !checked ? { clickhouse_keys_text: "" } : {}),
+          }
     )));
   };
 
@@ -319,7 +325,7 @@ export default function AdminPrototypeReviewPage() {
           copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
         })),
       });
-      setResult((prev) => ({ ...(prev || {}), issue: payload?.issue || null }));
+      setResult((prev) => (prev ? { ...prev, issue: payload?.issue || null } : prev));
     } catch (err) {
       setError(err?.message || "Не удалось создать задачу");
     } finally {
@@ -526,16 +532,18 @@ export default function AdminPrototypeReviewPage() {
                           style={{ minHeight: 100, resize: "vertical" }}
                         />
                         </div>
-                        <div className="prototype-step-field" style={{ margin: 0 }}>
-                        <span className="slow-select-label">Ключевые поля ClickHouse</span>
-                        <textarea
-                          className="slow-entity-select"
-                          value={item.clickhouse_keys_text || ""}
-                          onChange={(event) => handleReviewItemChange(item.target_fqn, "clickhouse_keys_text", event.target.value)}
-                          placeholder="warehouse_code, dt_report"
-                          style={{ minHeight: 100, resize: "vertical" }}
-                        />
-                        </div>
+                        {item.copy_to_clickhouse ? (
+                          <div className="prototype-step-field" style={{ margin: 0 }}>
+                            <span className="slow-select-label">Ключевые поля ClickHouse</span>
+                            <textarea
+                              className="slow-entity-select"
+                              value={item.clickhouse_keys_text || ""}
+                              onChange={(event) => handleReviewItemChange(item.target_fqn, "clickhouse_keys_text", event.target.value)}
+                              placeholder="warehouse_code, dt_report"
+                              style={{ minHeight: 100, resize: "vertical" }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                       <div className="prototype-object-side">
                         <div className="prototype-control-card">

@@ -1408,6 +1408,8 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         meta_branch = None
         meta_files = []
         meta_error = None
+        meta_mr = None
+        meta_mr_error = None
         raw_issue_id = str((issue_result.get("raw") or {}).get("id") or "").strip()
         if raw_issue_id:
             branch_name = f"feature/{str(issue_result.get('issue_id') or '').strip().upper()}"
@@ -1446,6 +1448,41 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                 except Exception as exc:
                     meta_error = str(exc)
                     break
+            if not meta_error and meta_branch:
+                try:
+                    meta_mr = create_meta_workspace_mr(
+                        engine=engine,
+                        base_dir=BASE_DIR,
+                        entity_dev_root_value=DEV_ENTITY_META_DIR,
+                        click_dev_root_value=DEV_CLICK_META_DIR,
+                        git_repo_value=ENTITY_META_GIT_REPO,
+                        entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                        click_git_root_value=CLICK_META_GIT_ROOT,
+                        gitlab_token=GITLAB_TOKEN,
+                        gitlab_project=GITLAB_PROJECT,
+                        gitlab_api_url=GITLAB_API_URL,
+                        gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+                        task_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                        release_branch="main",
+                        branch_name=meta_branch,
+                        mr_title=f"{str(issue_result.get('issue_id') or '').strip().upper()}: Engineer MR to main",
+                        author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                    )
+                    if meta_mr.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
+                        add_ytrack_issue_comment(
+                            base_url=YOUTRACK_URL,
+                            token=YOUTRACK_TOKEN,
+                            issue_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                            ssl_verify=YOUTRACK_SSL_VERIFY,
+                            text=(
+                                "MR создан из Prototype Review для инженера.\n"
+                                f"Ссылка: {meta_mr.get('mr_url')}\n"
+                                f"Ветка: {meta_mr.get('feature_branch') or '—'} -> {meta_mr.get('release_branch') or 'main'}"
+                            ),
+                        )
+                        meta_mr["task_link_attached"] = True
+                except Exception as exc:
+                    meta_mr_error = str(exc)
         if issue_result.get("issue_id"):
             issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
         return {
@@ -1455,6 +1492,8 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             "meta_branch": meta_branch,
             "meta_files": meta_files,
             "meta_error": meta_error,
+            "meta_mr": meta_mr,
+            "meta_mr_error": meta_mr_error,
         }
     except HTTPException:
         raise

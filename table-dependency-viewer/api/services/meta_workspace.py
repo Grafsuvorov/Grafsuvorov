@@ -1408,6 +1408,7 @@ def create_meta_workspace_mr(
     task_id: str,
     release_branch: str,
     branch_name: str | None = None,
+    mr_title: str | None = None,
     author: str,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
@@ -1501,6 +1502,7 @@ def create_meta_workspace_mr(
         if existing:
             mr_data = existing[0]
         else:
+            title_value = str(mr_title or "").strip() or f"{task_id_norm}: Meta workspace changes"
             mr_data = _gitlab_json_request(
                 api_url=gitlab_api_url,
                 project=project_ref,
@@ -1511,7 +1513,7 @@ def create_meta_workspace_mr(
                 payload={
                     "source_branch": source_branch,
                     "target_branch": release_branch_norm,
-                    "title": f"{task_id_norm}: Meta workspace changes",
+                    "title": title_value,
                     "description": "\n".join(description_lines),
                     "remove_source_branch": False,
                 },

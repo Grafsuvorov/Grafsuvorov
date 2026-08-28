@@ -335,6 +335,8 @@ export default function AdminPrototypeReviewPage() {
               meta_branch: payload?.meta_branch || null,
               meta_files: payload?.meta_files || [],
               meta_error: payload?.meta_error || null,
+              meta_mr: payload?.meta_mr || null,
+              meta_mr_error: payload?.meta_mr_error || null,
             }
           : prev
       ));
@@ -703,9 +705,21 @@ export default function AdminPrototypeReviewPage() {
                 {result.meta_files.map((item) => item.file_path).join(", ")}
               </div>
             ) : null}
+            {result?.meta_mr?.mr_url ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Инженерный MR в main:
+                {" "}
+                <a href={result.meta_mr.mr_url} target="_blank" rel="noreferrer">{result.meta_mr.mr_url}</a>
+              </div>
+            ) : null}
             {result?.meta_error ? (
               <div className="page-error" style={{ marginTop: 12 }}>
                 YAML в инженерный репозиторий не записан: {result.meta_error}
+              </div>
+            ) : null}
+            {result?.meta_mr_error ? (
+              <div className="page-error" style={{ marginTop: 12 }}>
+                MR в main не создан: {result.meta_mr_error}
               </div>
             ) : null}
           </section>

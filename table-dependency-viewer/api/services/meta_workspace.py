@@ -1413,9 +1413,7 @@ def create_meta_workspace_mr(
     task_id_norm = str(task_id or "").strip().upper()
     if not task_id_norm or not task_id_norm.startswith("DWH-"):
         raise ValueError("Номер задачи должен быть в формате DWH-12345")
-    release_branch_norm = str(release_branch or "").strip()
-    if not release_branch_norm:
-        raise ValueError("Укажите release-ветку")
+    release_branch_norm = str(release_branch or "").strip() or "main"
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     if not gitlab_token:

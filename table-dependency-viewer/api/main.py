@@ -163,6 +163,7 @@ from .services.meta_workspace import (
 from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
 from .services.prototype_review import (
+    add_ytrack_issue_comment,
     create_ytrack_issue,
     execute_sql_review_items_in_dev,
     extract_sql_dependencies,
@@ -356,7 +357,7 @@ class EntityMetaMovePayload(BaseModel):
 
 class EntityMetaMrPayload(BaseModel):
     task_id: str
-    release_branch: str
+    release_branch: str = "main"
 
 
 class EntityMetaRunSqlPayload(BaseModel):
@@ -369,7 +370,7 @@ class EntityMetaRunSqlPayload(BaseModel):
 
 class MetaWorkspaceMrPayload(BaseModel):
     task_id: str
-    release_branch: str
+    release_branch: str = "main"
     branch_name: Optional[str] = None
 
 
@@ -3521,6 +3522,23 @@ def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Req
             branch_name=payload.branch_name,
             author=user.email,
         )
+        if result.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
+            try:
+                add_ytrack_issue_comment(
+                    base_url=YOUTRACK_URL,
+                    token=YOUTRACK_TOKEN,
+                    issue_id=payload.task_id,
+                    ssl_verify=YOUTRACK_SSL_VERIFY,
+                    text=(
+                        "MR создан для инженерных изменений.\n"
+                        f"Ссылка: {result.get('mr_url')}\n"
+                        f"Ветка: {result.get('feature_branch') or '—'} -> {result.get('release_branch') or 'main'}"
+                    ),
+                )
+                result["task_link_attached"] = True
+            except Exception as exc:
+                result["task_link_attached"] = False
+                result["task_link_error"] = str(exc)
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
@@ -4196,6 +4214,23 @@ def create_admin_entity_meta_mr(payload: EntityMetaMrPayload, request: Request):
             release_branch=payload.release_branch,
             author=user.email,
         )
+        if result.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
+            try:
+                add_ytrack_issue_comment(
+                    base_url=YOUTRACK_URL,
+                    token=YOUTRACK_TOKEN,
+                    issue_id=payload.task_id,
+                    ssl_verify=YOUTRACK_SSL_VERIFY,
+                    text=(
+                        "MR создан для инженерных изменений.\n"
+                        f"Ссылка: {result.get('mr_url')}\n"
+                        f"Ветка: {result.get('feature_branch') or '—'} -> {result.get('release_branch') or 'main'}"
+                    ),
+                )
+                result["task_link_attached"] = True
+            except Exception as exc:
+                result["task_link_attached"] = False
+                result["task_link_error"] = str(exc)
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:

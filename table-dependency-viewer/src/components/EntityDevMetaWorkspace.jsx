@@ -182,7 +182,7 @@ export default function EntityDevMetaWorkspace({
   const [schemaMode, setSchemaMode] = useState("dm");
   const [moveSchemaMode, setMoveSchemaMode] = useState("dm");
   const [taskIdState, setTaskIdState] = useState("");
-  const [releaseBranchState, setReleaseBranchState] = useState("");
+  const [releaseBranchState, setReleaseBranchState] = useState("main");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [replicaEntitiesText, setReplicaEntitiesText] = useState("");
   const [replicaPickerValues, setReplicaPickerValues] = useState([]);
@@ -607,12 +607,6 @@ export default function EntityDevMetaWorkspace({
       setError(null);
       return;
     }
-    if (!String(releaseBranch || "").trim()) {
-      setMessageType("warning");
-      setMessage("Укажите release-ветку для MR.");
-      setError(null);
-      return;
-    }
     setCreatingPr(true);
     setError(null);
     setMessage(null);
@@ -620,12 +614,12 @@ export default function EntityDevMetaWorkspace({
       const data = branchSaveActive
         ? await metaWorkspaceApi.createMr({
           task_id: taskId,
-          release_branch: releaseBranch.trim(),
+          release_branch: String(releaseBranch || "").trim() || "main",
           branch_name: branchSaveContext.branch_name,
         })
         : await entityMetaApi.createMr({
           task_id: taskId,
-          release_branch: releaseBranch.trim(),
+          release_branch: String(releaseBranch || "").trim() || "main",
         });
       setMessageType("success");
       setMessage(data?.mr_url ? `MR создан/обновлен: ${data.mr_url}` : "MR создан/обновлен.");
@@ -807,11 +801,11 @@ export default function EntityDevMetaWorkspace({
                   />
                 </label>
                 <label className="admin-field">
-                  <span>Release ветка</span>
+                  <span>Целевая ветка MR</span>
                   <input
                     value={releaseBranch}
                     onChange={(e) => setReleaseBranch(e.target.value)}
-                    placeholder="release/2026-05-18"
+                    placeholder="main"
                   />
                 </label>
               </>
@@ -849,7 +843,7 @@ export default function EntityDevMetaWorkspace({
               {loading ? "Открываем..." : "Открыть / создать DEV-черновик"}
             </button>
             {!hideCreateMr ? (
-              <button className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingPr || !taskIdValid || !String(releaseBranch || "").trim()}>
+              <button className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingPr || !taskIdValid}>
                 {creatingPr ? "Создаем MR..." : "Создать MR"}
               </button>
             ) : null}

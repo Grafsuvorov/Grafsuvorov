@@ -42,7 +42,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const progressListRef = useRef(null);
   const [mode, setMode] = useState("gp");
   const [taskId, setTaskId] = useState("");
-  const [releaseBranch, setReleaseBranch] = useState("");
+  const [releaseBranch, setReleaseBranch] = useState("main");
   const [branchName, setBranchName] = useState("");
   const [baseBranch, setBaseBranch] = useState("main");
   const [branchOptions, setBranchOptions] = useState([]);
@@ -229,18 +229,13 @@ export default function MetaWorkspacePage({ userProfile }) {
       setMessage("Укажите номер задачи в формате DWH-12345.");
       return;
     }
-    if (!String(releaseBranch || "").trim()) {
-      setError(null);
-      setMessage("Укажите release-ветку.");
-      return;
-    }
     setCreatingMr(true);
     setMessage(null);
     setError(null);
     try {
       const data = await metaWorkspaceApi.createMr({
         task_id: taskId.trim().toUpperCase(),
-        release_branch: releaseBranch.trim(),
+        release_branch: String(releaseBranch || "").trim() || "main",
         branch_name: branchScopedActive ? String(branchName || "").trim() : undefined,
       });
       setMessage(data?.mr_url ? `MR создан/обновлен: ${data.mr_url}` : "MR создан/обновлен.");
@@ -572,15 +567,15 @@ export default function MetaWorkspacePage({ userProfile }) {
               <input value={taskId} onChange={(e) => setTaskId(e.target.value.toUpperCase())} placeholder="DWH-12345" />
             </label>
             <label className="admin-field">
-              <span>Release ветка</span>
-              <input value={releaseBranch} onChange={(e) => setReleaseBranch(e.target.value)} placeholder="release/2026-05-19" />
+              <span>Целевая ветка MR</span>
+              <input value={releaseBranch} onChange={(e) => setReleaseBranch(e.target.value)} placeholder="main" />
             </label>
           </div>
           <div className="dev-meta-generator-actions">
-            <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid || !String(releaseBranch || "").trim()}>
+            <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid}>
               {creatingMr ? "Создаем MR..." : "Создать MR"}
             </button>
-            <span className="muted">В один MR попадут GP объекты и Click файлы этой задачи.</span>
+            <span className="muted">MR создается как инженерный в `main`, ссылка автоматически прикладывается в задачу.</span>
           </div>
         </div>
 
@@ -926,7 +921,7 @@ export default function MetaWorkspacePage({ userProfile }) {
                   >
                     {syncingBranch ? "Сохраняем в ветку..." : "Сохранить в ветку"}
                   </button>
-                  <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid || !String(releaseBranch || "").trim()}>
+                  <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid}>
                     {creatingMr ? "Создаем MR..." : "Создать MR"}
                   </button>
                 </div>

@@ -510,7 +510,12 @@ def _build_generated_yaml(
         if resolved_entity_id is not None:
             payload["entity_id"] = resolved_entity_id
 
-    payload["depends_on"] = {}
+    known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
+    insert_sql_path = _resolve_object_dir(dev_root, entity_name, schema_name, table_name) / SQL_FILE_NAMES["insert_sql"]
+    if not insert_sql_path.exists():
+        insert_sql_path = _resolve_object_dir(prod_root, entity_name, schema_name, table_name) / SQL_FILE_NAMES["insert_sql"]
+    insert_sql = insert_sql_path.read_text(encoding="utf-8") if insert_sql_path.exists() else ""
+    payload["depends_on"] = _build_depends_on(insert_sql, schema_norm, table_norm, known_schemas) if insert_sql.strip() else {}
 
     object_type = str(payload.get("object_type") or "").strip()
     if not object_type:
@@ -1811,9 +1816,7 @@ def create_entity_meta_mr(
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
         raise ValueError("Номер задачи должен быть в формате DWH-12345")
-    release_branch_norm = str(release_branch or "").strip()
-    if not release_branch_norm:
-        raise ValueError("Укажите release-ветку")
+    release_branch_norm = str(release_branch or "").strip() or "main"
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     if not gitlab_token:

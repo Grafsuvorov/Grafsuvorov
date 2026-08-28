@@ -963,6 +963,44 @@ def create_ytrack_issue(
     }
 
 
+def add_ytrack_issue_comment(
+    *,
+    base_url: str,
+    token: str,
+    issue_id: str,
+    ssl_verify: str,
+    text: str,
+) -> dict[str, Any]:
+    issue_value = str(issue_id or "").strip()
+    comment_text = str(text or "").strip()
+    if not issue_value:
+        raise ValueError("Не передан issue_id для комментария YTrack")
+    if not comment_text:
+        raise ValueError("Пустой текст комментария YTrack")
+    req = urlrequest.Request(
+        (
+            f"{base_url.rstrip('/')}/api/issues/"
+            f"{urlparse.quote(issue_value, safe='')}/comments?fields=id,text,created"
+        ),
+        data=json.dumps({"text": comment_text}).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"YTrack comments вернул {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось добавить комментарий в YTrack: {exc}") from exc
+
+
 def _sanitize_attachment_name(value: str) -> str:
     name = str(value or "").strip().lower()
     if not name:

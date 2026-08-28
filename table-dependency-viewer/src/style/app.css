@@ -16496,6 +16496,182 @@ html[data-theme="light"] .architecture-badge.accent {
   margin-top: 14px;
 }
 
+.prototype-review-page .prototype-object-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.prototype-review-page .prototype-object-title {
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.prototype-review-page .prototype-object-subtitle {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.prototype-review-page .prototype-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.38);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.prototype-review-page .prototype-badge.warning {
+  border-color: rgba(214, 86, 46, 0.3);
+  background: rgba(214, 86, 46, 0.12);
+  color: #ffb38f;
+}
+
+.prototype-review-page .prototype-object-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.prototype-review-page .prototype-stat-card {
+  padding: 14px 15px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    rgba(15, 23, 42, 0.26);
+  min-height: 86px;
+}
+
+.prototype-review-page .prototype-stat-label {
+  color: var(--text-secondary);
+  font-size: 0.79rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.prototype-review-page .prototype-stat-value {
+  color: var(--text-primary);
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.prototype-review-page .prototype-object-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);
+  gap: 16px;
+}
+
+.prototype-review-page .prototype-object-main,
+.prototype-review-page .prototype-object-side {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.prototype-review-page .prototype-control-card,
+.prototype-review-page .prototype-warning-card,
+.prototype-review-page .prototype-detail-card,
+.prototype-review-page .prototype-yaml-card {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)),
+    rgba(15, 23, 42, 0.22);
+}
+
+.prototype-review-page .prototype-control-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: 0.01em;
+}
+
+.prototype-review-page .prototype-control-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.prototype-review-page .prototype-toggle-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.28);
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.prototype-review-page .prototype-toggle-card.wide {
+  grid-column: 1 / -1;
+}
+
+.prototype-review-page .prototype-warning-card {
+  padding: 14px 15px;
+  border-color: rgba(214, 86, 46, 0.22);
+  background:
+    linear-gradient(180deg, rgba(214, 86, 46, 0.06), rgba(214, 86, 46, 0.01)),
+    rgba(15, 23, 42, 0.22);
+}
+
+.prototype-review-page .prototype-warning-item {
+  position: relative;
+  padding-left: 16px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.prototype-review-page .prototype-warning-item + .prototype-warning-item {
+  margin-top: 8px;
+}
+
+.prototype-review-page .prototype-warning-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #d6562e;
+}
+
+.prototype-review-page .prototype-detail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.prototype-review-page .prototype-detail-item,
+.prototype-review-page .prototype-impact-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  overflow-wrap: anywhere;
+}
+
+.prototype-review-page .prototype-impact-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
 .prototype-review-page .prototype-table-list {
   display: grid;
   gap: 10px;
@@ -16526,8 +16702,15 @@ html[data-theme="light"] .architecture-badge.accent {
     grid-template-columns: 1fr;
   }
 
+  .prototype-review-page .prototype-object-stats,
+  .prototype-review-page .prototype-object-layout,
+  .prototype-review-page .prototype-control-list {
+    grid-template-columns: 1fr;
+  }
+
   .prototype-review-page .prototype-step-head,
-  .prototype-review-page .prototype-import-actions {
+  .prototype-review-page .prototype-import-actions,
+  .prototype-review-page .prototype-object-header {
     flex-direction: column;
     align-items: flex-start;
   }

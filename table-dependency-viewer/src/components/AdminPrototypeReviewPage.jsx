@@ -4,9 +4,7 @@ import { accountApi } from "../api/account.js";
 
 const DEFAULT_FORM = {
   summary: "",
-  subject_area: "",
   git_reference: "",
-  load_mode: "",
   script_runtime: "",
 };
 
@@ -60,6 +58,11 @@ function formatYamlSource(bundle) {
   return bundle.source || "—";
 }
 
+function compactList(value, fallback = "—") {
+  const items = splitItems(value);
+  return items.length ? items.join(", ") : fallback;
+}
+
 function buildTaskText(form, linkedIssues) {
   const lines = [];
   const pushLine = (label, value) => {
@@ -70,9 +73,7 @@ function buildTaskText(form, linkedIssues) {
   if (String(form.summary || "").trim()) {
     lines.push(String(form.summary).trim(), "");
   }
-  pushLine("Предметная область", form.subject_area);
   pushLine("Ссылка на гит", form.git_reference);
-  pushLine("Способ обновления", form.load_mode);
   pushLine("Время работы скрипта", form.script_runtime);
   if (splitItems(linkedIssues).length) {
     lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
@@ -205,7 +206,6 @@ export default function AdminPrototypeReviewPage() {
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
-        load_mode: form.load_mode.trim(),
         linked_issues: splitItems(linkedIssues),
         create_issue: false,
       });
@@ -226,23 +226,17 @@ export default function AdminPrototypeReviewPage() {
       const payload = statusPayload?.result || null;
       setResult(payload);
       const firstTarget = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.target_fqn : "";
-      const firstEntity = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.entity_name : "";
-      const firstLoadMode = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.load_mode : "";
       const totalSec = Array.isArray(payload?.execution)
         ? payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0)
         : 0;
       setForm((prev) => ({
         ...prev,
-        summary: prev.summary || (firstTarget ? `(ДМЛ) Настроить обновление витрины ${firstTarget}` : ""),
         git_reference: prev.git_reference || trimmedMr,
-        subject_area: prev.subject_area || String(payload?.task_context?.subject_area || ""),
-        load_mode: prev.load_mode || firstLoadMode || String(payload?.task_context?.load_mode || ""),
         script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
       }));
       if (!String(linkedIssues || "").trim() && Array.isArray(payload?.task_context?.linked_issues)) {
         setLinkedIssues(payload.task_context.linked_issues.join(", "));
       }
-      if (!String(firstEntity || "").trim()) return;
     } catch (err) {
       setError(err?.message || "Не удалось выполнить prototype review");
     } finally {
@@ -265,6 +259,7 @@ export default function AdminPrototypeReviewPage() {
     try {
       const payload = await adminApi.prototypeReviewCheckTable({
         target_fqn: current.target_fqn,
+        entity_name: String(current.entity_name || "").trim(),
         key_attributes: keyAttributes,
       });
       setReviewItemsDraft((prev) => prev.map((item) => (
@@ -272,7 +267,16 @@ export default function AdminPrototypeReviewPage() {
           ? item
           : {
               ...item,
-              checks: payload?.checks || item.checks,
+              ...buildDraftItem(payload?.item || item),
+              path: item.path,
+              object_type: item.object_type,
+              preparation: item.preparation,
+              dependencies: Array.isArray(payload?.item?.dependencies) && payload.item.dependencies.length
+                ? payload.item.dependencies
+                : item.dependencies,
+              stand_dev: item.stand_dev,
+              stand_prod: item.stand_prod,
+              copy_to_clickhouse: item.copy_to_clickhouse,
               rechecking: false,
             }
       )));
@@ -294,7 +298,6 @@ export default function AdminPrototypeReviewPage() {
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
-        load_mode: form.load_mode.trim(),
         linked_issues: splitItems(linkedIssues),
         review_items: reviewItemsDraft.map((item) => ({
           path: item.path,
@@ -399,7 +402,7 @@ export default function AdminPrototypeReviewPage() {
                   className="slow-entity-select"
                   value={form.summary}
                   onChange={(event) => handleFieldChange("summary", event.target.value)}
-                  placeholder="(ДМЛ) Настроить обновление витрины ..."
+                  placeholder="Настроить обновление витрины ..."
                 />
               </div>
               <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -409,24 +412,6 @@ export default function AdminPrototypeReviewPage() {
                   value={linkedIssues}
                   onChange={(event) => setLinkedIssues(event.target.value)}
                   placeholder="DWH-15089, DWH-15539"
-                />
-              </div>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Предметная область</span>
-                <input
-                  className="slow-entity-select"
-                  value={form.subject_area}
-                  onChange={(event) => handleFieldChange("subject_area", event.target.value)}
-                  placeholder="SD"
-                />
-              </div>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Режим обновления</span>
-                <input
-                  className="slow-entity-select"
-                  value={form.load_mode}
-                  onChange={(event) => handleFieldChange("load_mode", event.target.value)}
-                  placeholder="Полный / Псевдоинкрементальный"
                 />
               </div>
             </div>
@@ -477,43 +462,52 @@ export default function AdminPrototypeReviewPage() {
                       boxShadow: needsAttention ? "0 0 0 1px rgba(214, 86, 46, 0.08) inset" : undefined,
                     }}
                   >
-                    <div className="prototype-chip-row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <div className="prototype-object-header">
                       <div>
-                        <div className="mono" style={{ fontSize: "1rem", fontWeight: 700 }}>{item.target_fqn || "—"}</div>
-                        <div className="muted">{item.path || "—"}</div>
+                        <div className="prototype-object-title mono">{item.target_fqn || "—"}</div>
+                        <div className="prototype-object-subtitle">{item.path || "—"}</div>
                       </div>
                       <div className="prototype-chip-row">
-                        <span className="card" style={{ padding: "6px 10px", margin: 0 }}>{item.object_type || "TABLE"}</span>
-                        {item.is_new ? <span className="card" style={{ padding: "6px 10px", margin: 0 }}>Новая таблица</span> : null}
-                        {needsAttention ? <span className="card" style={{ padding: "6px 10px", margin: 0, color: "#b54708" }}>Нужно заполнить</span> : null}
+                        <span className="prototype-badge">{item.object_type || "TABLE"}</span>
+                        {item.is_new ? <span className="prototype-badge">Новая таблица</span> : null}
+                        {needsAttention ? <span className="prototype-badge warning">Нужно заполнить</span> : null}
                       </div>
                     </div>
 
-                    <div className="table-wrapper" style={{ marginBottom: 14 }}>
-                      <table className="incidents-table slow-table">
-                        <thead>
-                          <tr>
-                            <th>Сущность</th>
-                            <th>Ключевые поля</th>
-                            <th>Количество строк</th>
-                            <th>Кол-во дублей</th>
-                            <th>Время выполнения SQL</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td>{item.entity_name || "—"}</td>
-                            <td>{splitItems(item.key_attributes_text).join(", ") || "—"}</td>
-                            <td>{item.checks?.row_count !== undefined && item.checks?.row_count !== null ? formatCount(item.checks.row_count) : "—"}</td>
-                            <td>{item.checks?.duplicate_groups !== undefined && item.checks?.duplicate_groups !== null ? formatCount(item.checks.duplicate_groups) : "—"}</td>
-                            <td>{item.duration_sec ? formatDuration(item.duration_sec) : "—"}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                    <div className="prototype-object-stats">
+                      <div className="prototype-stat-card">
+                        <div className="prototype-stat-label">Сущность</div>
+                        <div className="prototype-stat-value">{item.entity_name || "—"}</div>
+                      </div>
+                      <div className="prototype-stat-card">
+                        <div className="prototype-stat-label">Ключевые поля</div>
+                        <div className="prototype-stat-value">{compactList(item.key_attributes_text)}</div>
+                      </div>
+                      <div className="prototype-stat-card">
+                        <div className="prototype-stat-label">Количество строк</div>
+                        <div className="prototype-stat-value">
+                          {item.checks?.row_count !== undefined && item.checks?.row_count !== null ? formatCount(item.checks.row_count) : "—"}
+                        </div>
+                      </div>
+                      <div className="prototype-stat-card">
+                        <div className="prototype-stat-label">Кол-во дублей</div>
+                        <div className="prototype-stat-value">
+                          {item.checks?.duplicate_groups !== undefined && item.checks?.duplicate_groups !== null ? formatCount(item.checks.duplicate_groups) : "—"}
+                        </div>
+                      </div>
+                      <div className="prototype-stat-card">
+                        <div className="prototype-stat-label">Время SQL</div>
+                        <div className="prototype-stat-value">{item.duration_sec ? formatDuration(item.duration_sec) : "—"}</div>
+                      </div>
+                      <div className="prototype-stat-card">
+                        <div className="prototype-stat-label">YAML</div>
+                        <div className="prototype-stat-value">{formatYamlSource(item.yaml_bundle)}</div>
+                      </div>
                     </div>
 
-                    <div className="prototype-step-grid">
-                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                    <div className="prototype-object-layout">
+                      <div className="prototype-object-main">
+                        <div className="prototype-step-field" style={{ margin: 0 }}>
                         <span className="slow-select-label">Сущность загрузки</span>
                         <input
                           className="slow-entity-select"
@@ -521,8 +515,8 @@ export default function AdminPrototypeReviewPage() {
                           onChange={(event) => handleReviewItemChange(item.target_fqn, "entity_name", event.target.value)}
                           placeholder="BI_SB_WUC"
                         />
-                      </div>
-                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        </div>
+                        <div className="prototype-step-field" style={{ margin: 0 }}>
                         <span className="slow-select-label">Ключевые поля</span>
                         <textarea
                           className="slow-entity-select"
@@ -531,8 +525,8 @@ export default function AdminPrototypeReviewPage() {
                           placeholder="warehouse_code, dt_report"
                           style={{ minHeight: 100, resize: "vertical" }}
                         />
-                      </div>
-                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        </div>
+                        <div className="prototype-step-field" style={{ margin: 0 }}>
                         <span className="slow-select-label">Ключевые поля ClickHouse</span>
                         <textarea
                           className="slow-entity-select"
@@ -541,11 +535,13 @@ export default function AdminPrototypeReviewPage() {
                           placeholder="warehouse_code, dt_report"
                           style={{ minHeight: 100, resize: "vertical" }}
                         />
+                        </div>
                       </div>
-                      <div className="prototype-step-field" style={{ margin: 0 }}>
-                        <span className="slow-select-label">Параметры объекта</span>
-                        <div className="prototype-chip-row" style={{ marginTop: 6 }}>
-                          <label className="prototype-skip-toggle">
+                      <div className="prototype-object-side">
+                        <div className="prototype-control-card">
+                          <div className="prototype-control-title">Параметры объекта</div>
+                          <div className="prototype-control-list">
+                            <label className="prototype-toggle-card">
                             <input
                               type="checkbox"
                               checked={Boolean(item.stand_dev)}
@@ -553,7 +549,7 @@ export default function AdminPrototypeReviewPage() {
                             />
                             <span>DEV</span>
                           </label>
-                          <label className="prototype-skip-toggle">
+                            <label className="prototype-toggle-card">
                             <input
                               type="checkbox"
                               checked={Boolean(item.stand_prod)}
@@ -561,7 +557,7 @@ export default function AdminPrototypeReviewPage() {
                             />
                             <span>PROD</span>
                           </label>
-                          <label className="prototype-skip-toggle">
+                            <label className="prototype-toggle-card wide">
                             <input
                               type="checkbox"
                               checked={Boolean(item.copy_to_clickhouse)}
@@ -569,43 +565,45 @@ export default function AdminPrototypeReviewPage() {
                             />
                             <span>Требуется ClickHouse</span>
                           </label>
+                          </div>
+                          {item.is_new ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => handleRecheckNewTable(item.target_fqn)}
+                              disabled={item.rechecking}
+                              style={{ marginTop: 12 }}
+                            >
+                              {item.rechecking ? "Проверяем дубли..." : "Перепроверить новую таблицу"}
+                            </button>
+                          ) : null}
                         </div>
-                        {item.is_new ? (
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            onClick={() => handleRecheckNewTable(item.target_fqn)}
-                            disabled={item.rechecking}
-                            style={{ marginTop: 12 }}
-                          >
-                            {item.rechecking ? "Проверяем дубли..." : "Перепроверить новую таблицу"}
-                          </button>
+
+                        {(item.warnings || []).length ? (
+                          <div className="prototype-warning-card">
+                            <div className="prototype-control-title">Что требует внимания</div>
+                            {(item.warnings || []).map((warning) => <div key={warning} className="prototype-warning-item">{warning}</div>)}
+                          </div>
                         ) : null}
                       </div>
                     </div>
 
-                    {(item.warnings || []).length ? (
-                      <div className="card muted" style={{ marginTop: 14 }}>
-                        {(item.warnings || []).map((warning) => <div key={warning}>• {warning}</div>)}
-                      </div>
-                    ) : null}
-
                     <div className="prototype-step-grid" style={{ marginTop: 14 }}>
-                      <div className="cc-surface" style={{ margin: 0 }}>
+                      <div className="cc-surface prototype-detail-card" style={{ margin: 0 }}>
                         <div className="section-title">Зависимости SQL</div>
                         {Array.isArray(item.dependencies) && item.dependencies.length > 0 ? (
-                          <div style={{ display: "grid", gap: 8 }}>
-                            {item.dependencies.map((dependency) => <div key={dependency} className="mono">{dependency}</div>)}
+                          <div className="prototype-detail-list">
+                            {item.dependencies.map((dependency) => <div key={dependency} className="mono prototype-detail-item">{dependency}</div>)}
                           </div>
                         ) : <div className="muted">Зависимости не найдены.</div>}
                       </div>
-                      <div className="cc-surface" style={{ margin: 0 }}>
+                      <div className="cc-surface prototype-detail-card" style={{ margin: 0 }}>
                         <div className="section-title">Downstream-влияние</div>
                         {Array.isArray(item.impact?.tables) && item.impact.tables.length > 0 ? (
-                          <div style={{ display: "grid", gap: 8 }}>
+                          <div className="prototype-detail-list">
                             {item.impact.tables.map((row) => (
-                              <div key={row.fqn}>
-                                <div style={{ fontWeight: 700 }}>{row.fqn || "—"}</div>
+                              <div key={row.fqn} className="prototype-impact-item">
+                                <div className="prototype-impact-title">{row.fqn || "—"}</div>
                                 <div className="muted">{row.entity_name || "—"}</div>
                               </div>
                             ))}
@@ -614,12 +612,10 @@ export default function AdminPrototypeReviewPage() {
                       </div>
                     </div>
 
-                    <div className="cc-surface" style={{ margin: "14px 0 0" }}>
+                    <div className="cc-surface prototype-yaml-card" style={{ margin: "14px 0 0" }}>
                       <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
                         <div className="muted">
-                          Источник YAML:
-                          {" "}
-                          <strong>{formatYamlSource(item.yaml_bundle)}</strong>
+                          YAML draft
                         </div>
                         <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(item.yaml_bundle?.yaml_content)}>
                           {yamlCopied ? "Скопировано" : "Скопировать YAML"}

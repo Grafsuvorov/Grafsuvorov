@@ -462,6 +462,7 @@ class PrototypeReviewRunPayload(BaseModel):
 
 class PrototypeReviewTableCheckPayload(BaseModel):
     target_fqn: str
+    entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
 
 
@@ -967,11 +968,6 @@ def _prototype_multi_issue_description(
         f"**MR:** {mr.get('web_url') or '—'}",
         f"**Ветка:** {mr.get('source_branch') or '—'} -> {mr.get('target_branch') or '—'}",
         f"**Автор MR:** {mr.get('author') or '—'}",
-        "",
-        "## Общие параметры",
-        f"**Предметная область:** {task_context.get('subject_area') or '—'}",
-        f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
-        f"**Git ref:** {task_context.get('git_reference') or '—'}",
     ]
     for index, item in enumerate(review_items, start=1):
         needs_attention, missing = _prototype_item_needs_attention(item)
@@ -1040,6 +1036,116 @@ def _prototype_review_attachment_name(review_item: dict[str, Any]) -> str:
     return "prototype_review_generated_yaml.sql"
 
 
+def _prototype_review_resolve_item(
+    *,
+    target_fqn: str,
+    path_value: str = "",
+    execution_row: Optional[dict[str, Any]] = None,
+    known_schemas: Optional[set[str]] = None,
+    file_item: Optional[dict[str, Any]] = None,
+    fallback_entity_name: str = "",
+    key_attributes_override: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    meta = _prototype_find_meta_by_fqn(target_fqn)
+    schema_name, table_name = target_fqn.split(".", 1)
+    yaml_bundle = None
+    yaml_key_attributes: list[str] = []
+    yaml_entity_name = None
+    entity_name_seed = (
+        str((meta or {}).get("entity_name") or "").strip()
+        or str(fallback_entity_name or "").strip()
+    )
+    try:
+        yaml_bundle = init_entity_dev_meta_bundle(
+            engine=engine,
+            base_dir=BASE_DIR,
+            prod_root_value=ENTITY_META_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            entity_name=entity_name_seed,
+            schema_name=schema_name,
+            table_name=table_name,
+            key_attributes=list(key_attributes_override or []) or None,
+        )
+    except Exception:
+        yaml_bundle = None
+    if yaml_bundle:
+        yaml_key_attributes = list(yaml_bundle.get("key_attributes") or [])
+        yaml_entity_name = str(yaml_bundle.get("entity_name") or "").strip() or None
+    detected_keys = list(key_attributes_override or []) or yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
+    entity_name = (
+        str(fallback_entity_name or "").strip()
+        or yaml_entity_name
+        or str((meta or {}).get("entity_name") or "").strip()
+        or None
+    )
+    click_idx = get_click_meta_index()
+    click_meta = (click_idx.get("meta") or {}).get((schema_name.lower(), table_name.lower())) or (click_idx.get("meta") or {}).get((schema_name.lower(), _clean_table_name(table_name.lower())))
+    clickhouse_keys = list(((click_meta or {}).get("order_by") or []))
+    if not clickhouse_keys and detected_keys:
+        clickhouse_keys = list(detected_keys)
+    yaml_payload = None
+    if yaml_bundle and yaml_bundle.get("yaml_content"):
+        try:
+            yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content")) or {}
+        except Exception:
+            yaml_payload = {}
+    table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or "").strip()
+    dependencies: list[str] = []
+    if file_item and path_value:
+        dependencies = extract_sql_dependencies(
+            [file_item],
+            known_schemas=known_schemas,
+            exclude_fqns={target_fqn},
+        )
+    impact = _prototype_impact_summary(target_fqn)
+    is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
+    checks = {"row_count": None, "duplicate_groups": None}
+    current_execution = execution_row or {"status": "skipped", "duration_sec": 0.0}
+    if str(current_execution.get("status") or "") == "ok" and str((meta or {}).get("table_type") or "TABLE").upper() == "TABLE":
+        try:
+            checks = query_dev_table_checks(
+                dev_database_url=DEV_DATABASE_URL,
+                target_fqn=target_fqn,
+                key_attributes=detected_keys,
+            )
+        except Exception:
+            checks = {"row_count": None, "duplicate_groups": None}
+    item_warnings: list[str] = []
+    if not detected_keys:
+        item_warnings.append("Ключевые поля не найдены автоматически")
+    if current_execution.get("status") == "error":
+        item_warnings.append(f"Ошибка в файле `{path_value}`: {current_execution.get('error_message') or 'SQL не выполнился'}")
+    if checks.get("duplicate_groups") not in (None, 0):
+        item_warnings.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
+    requires_item_input, missing_fields = _prototype_item_needs_attention({
+        "is_new": is_new,
+        "entity_name": entity_name,
+        "key_attributes": detected_keys,
+    })
+    return {
+        "path": path_value,
+        "target_fqn": target_fqn,
+        "entity_name": entity_name,
+        "load_mode": table_load_mode,
+        "key_attributes": detected_keys,
+        "auto_detected_key_attributes": detected_keys,
+        "clickhouse_keys": clickhouse_keys,
+        "dependencies": dependencies,
+        "execution": current_execution,
+        "duration_sec": float(current_execution.get("duration_sec") or 0.0),
+        "checks": checks,
+        "impact": impact,
+        "yaml_bundle": yaml_bundle,
+        "is_new": is_new,
+        "stand_dev": True,
+        "stand_prod": True,
+        "copy_to_clickhouse": bool(clickhouse_keys),
+        "requires_user_input": requires_item_input,
+        "missing_fields": missing_fields,
+        "warnings": item_warnings,
+    }
+
+
 def _prototype_review_build_result(
     payload: PrototypeReviewRunPayload,
     user,
@@ -1085,7 +1191,6 @@ def _prototype_review_build_result(
             progress_callback=progress_callback,
         )
 
-    click_idx = get_click_meta_index()
     exec_by_path = {str(item.get("path") or ""): item for item in execution_rows}
     prep_by_target = {str(item.get("target_fqn") or ""): item for item in preparation_rows}
     review_items: list[dict[str, Any]] = []
@@ -1097,49 +1202,11 @@ def _prototype_review_build_result(
         if not target_fqn:
             validation_warnings.append(f"Для файла `{target_item.get('path')}` не удалось определить целевой объект")
             continue
-        meta = _prototype_find_meta_by_fqn(target_fqn)
         execution_row = exec_by_path.get(str(target_item.get("path") or "")) or {"status": "skipped", "duration_sec": 0.0}
-        schema_name, table_name = target_fqn.split(".", 1)
-        yaml_bundle = None
-        yaml_key_attributes: list[str] = []
-        yaml_entity_name = None
-        if "." in target_fqn:
-            try:
-                yaml_bundle = init_entity_dev_meta_bundle(
-                    engine=engine,
-                    base_dir=BASE_DIR,
-                    prod_root_value=ENTITY_META_DIR,
-                    dev_root_value=DEV_ENTITY_META_DIR,
-                    entity_name=str((meta or {}).get("entity_name") or (payload.entity_name or "").strip() or str(parsed_task.get("entity_name") or "").strip() or ""),
-                    schema_name=schema_name,
-                    table_name=table_name,
-                    key_attributes=None,
-                )
-            except Exception:
-                yaml_bundle = None
-        if yaml_bundle:
-            yaml_key_attributes = list(yaml_bundle.get("key_attributes") or [])
-            yaml_entity_name = str(yaml_bundle.get("entity_name") or "").strip() or None
-        detected_keys = yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
-        key_attributes = detected_keys
-        entity_name = (
-            yaml_entity_name
-            or str((meta or {}).get("entity_name") or "").strip()
-            or str(parsed_task.get("entity_name") or "").strip()
-            or None
-        )
-        click_meta = (click_idx.get("meta") or {}).get((schema_name.lower(), table_name.lower())) or (click_idx.get("meta") or {}).get((schema_name.lower(), _clean_table_name(table_name.lower())))
-        clickhouse_keys = list(((click_meta or {}).get("order_by") or []))
-        load_mode = str((yaml_bundle or {}).get("yaml_content") or "")
-        yaml_payload = None
-        if yaml_bundle and yaml_bundle.get("yaml_content"):
-            try:
-                yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content")) or {}
-            except Exception:
-                yaml_payload = {}
-        table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or payload.load_mode or parsed_task.get("load_mode") or "").strip()
+        path_value = str(target_item.get("path") or "")
+        file_item = next((row for row in files if str(row.get("path") or "") == path_value), {})
         dependencies = extract_sql_dependencies(
-            [next((file_item for file_item in files if str(file_item.get("path") or "") == str(target_item.get("path") or "")), {})],
+            [file_item],
             known_schemas=known_schemas,
             exclude_fqns={target_fqn},
         )
@@ -1147,54 +1214,19 @@ def _prototype_review_build_result(
             if dep not in dependency_seen:
                 dependency_seen.add(dep)
                 all_dependencies.append(dep)
-        checks = {"row_count": None, "duplicate_groups": None}
-        if str(target_item.get("object_type") or "TABLE").upper() == "TABLE" and execution_row.get("status") == "ok":
-            checks = query_dev_table_checks(
-                dev_database_url=DEV_DATABASE_URL,
-                target_fqn=target_fqn,
-                key_attributes=key_attributes,
-            )
-        impact = _prototype_impact_summary(target_fqn)
-        is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
-        item_warnings: list[str] = []
-        if not key_attributes:
-            item_warnings.append("Ключевые поля не найдены автоматически")
-        if execution_row.get("status") == "error":
-            item_warnings.append(f"Ошибка в файле `{target_item.get('path')}`: {execution_row.get('error_message') or 'SQL не выполнился'}")
-        if checks.get("duplicate_groups") not in (None, 0):
-            item_warnings.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
-        requires_item_input, missing_fields = _prototype_item_needs_attention({
-            "is_new": is_new,
-            "entity_name": entity_name,
-            "key_attributes": key_attributes,
-        })
-        requires_user_input = requires_user_input or requires_item_input
-        review_items.append(
-            {
-                "path": target_item.get("path"),
-                "target_fqn": target_fqn,
-                "object_type": str(target_item.get("object_type") or "TABLE").upper(),
-                "entity_name": entity_name,
-                "load_mode": table_load_mode,
-                "key_attributes": key_attributes,
-                "auto_detected_key_attributes": detected_keys,
-                "clickhouse_keys": clickhouse_keys,
-                "dependencies": dependencies,
-                "preparation": prep_by_target.get(target_fqn) or {"status": "skipped"},
-                "execution": execution_row,
-                "duration_sec": float(execution_row.get("duration_sec") or 0.0),
-                "checks": checks,
-                "impact": impact,
-                "yaml_bundle": yaml_bundle,
-                "is_new": is_new,
-                "stand_dev": True,
-                "stand_prod": True,
-                "copy_to_clickhouse": bool(clickhouse_keys),
-                "requires_user_input": requires_item_input,
-                "missing_fields": missing_fields,
-                "warnings": item_warnings,
-            }
+        item_result = _prototype_review_resolve_item(
+            target_fqn=target_fqn,
+            path_value=path_value,
+            execution_row=execution_row,
+            known_schemas=known_schemas,
+            file_item=file_item,
+            fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
         )
+        item_result["object_type"] = str(target_item.get("object_type") or "TABLE").upper()
+        item_result["preparation"] = prep_by_target.get(target_fqn) or {"status": "skipped"}
+        item_result["dependencies"] = dependencies
+        requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
+        review_items.append(item_result)
     execution_errors = [item for item in execution_rows if item.get("status") == "error"]
     if execution_errors:
         for item in execution_errors:
@@ -1296,12 +1328,13 @@ def get_admin_prototype_review_status(job_id: str, request: Request):
 def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload, request: Request):
     _require_authenticated(request)
     try:
-        checks = query_dev_table_checks(
-            dev_database_url=DEV_DATABASE_URL,
+        item_result = _prototype_review_resolve_item(
             target_fqn=payload.target_fqn,
-            key_attributes=list(payload.key_attributes or []),
+            fallback_entity_name=str(payload.entity_name or "").strip(),
+            key_attributes_override=[str(value).strip() for value in (payload.key_attributes or []) if str(value).strip()],
+            execution_row={"status": "ok", "duration_sec": 0.0},
         )
-        return {"status": "ok", "checks": checks}
+        return {"status": "ok", "item": item_result}
     except Exception as exc:
         print("❌ /api/admin/prototype-review/check-table error:", exc)
         print(traceback.format_exc())
@@ -1332,7 +1365,6 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         task_context = {
             **parsed_task,
             "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
-            "load_mode": (payload.load_mode or "").strip() or parsed_task.get("load_mode"),
             "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
         }
         summary = (payload.issue_summary or "").strip() or parsed_task.get("summary") or f"[Prototype Review] {bundle.get('mr', {}).get('source_branch') or 'prototype'}"

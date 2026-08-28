@@ -170,18 +170,48 @@ def _ensure_default_verification(payload: dict[str, Any], key_attributes: Option
     verification = payload.get("verification")
     if not isinstance(verification, list):
         verification = []
-    verification = [item for item in verification if str(item or "").strip()]
-    if key_attributes and not verification:
-        payload["verification"] = ["duplicate_check"]
-        return
-    if not key_attributes:
-        if not verification or verification == ["duplicate_check"]:
-            payload.pop("verification", None)
-            return
+    verification = [
+        item
+        for item in verification
+        if str(item or "").strip() and _normalize_name(str(item or "")) != "duplicate_check"
+    ]
     if verification:
         payload["verification"] = verification
         return
     payload.pop("verification", None)
+
+
+def _normalize_yaml_payload_fields(
+    *,
+    payload: dict[str, Any],
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+    insert_sql: str,
+    key_attributes: Optional[list[str]],
+    prod_root: Path,
+    dev_root: Path,
+) -> tuple[dict[str, Any], list[str]]:
+    normalized_payload = dict(payload) if isinstance(payload, dict) else {}
+    normalized_keys = _normalize_key_attributes(key_attributes)
+    effective_keys = normalized_keys
+    if effective_keys is None:
+        raw_keys = normalized_payload.get("key_attributes")
+        effective_keys = _normalize_key_attributes(raw_keys if isinstance(raw_keys, list) else [])
+
+    if effective_keys:
+        normalized_payload["key_attributes"] = effective_keys
+    else:
+        normalized_payload.pop("key_attributes", None)
+
+    known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
+    normalized_payload["depends_on"] = (
+        _build_depends_on(insert_sql, _normalize_name(schema_name), _normalize_name(table_name), known_schemas)
+        if str(insert_sql or "").strip()
+        else {}
+    )
+    _ensure_default_verification(normalized_payload, effective_keys)
+    return normalized_payload, effective_keys or []
 
 
 def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> dict[str, Any]:
@@ -1051,15 +1081,17 @@ def read_entity_dev_meta_bundle(
     yaml_path = object_dir / SQL_FILE_NAMES["yaml"]
     if not yaml_path.exists():
         raise FileNotFoundError(str(yaml_path))
+    yaml_content = _read_text_if_exists(yaml_path)
+    insert_sql = _read_text_if_exists(object_dir / SQL_FILE_NAMES["insert_sql"])
     return {
         "entity_name": entity_name,
         "schema_name": schema_name,
         "table_name": table_name,
         "object_key": _build_object_key(entity_name, schema_name, table_name),
-        "yaml_content": _read_text_if_exists(yaml_path),
-        "key_attributes": (_load_yaml_file(yaml_path).get("key_attributes") if isinstance(_load_yaml_file(yaml_path).get("key_attributes"), list) else []),
+        "yaml_content": yaml_content,
+        "key_attributes": (_load_yaml_text(yaml_content).get("key_attributes") if isinstance(_load_yaml_text(yaml_content).get("key_attributes"), list) else []),
         "recreate_sql": _read_text_if_exists(object_dir / SQL_FILE_NAMES["recreate_sql"]),
-        "insert_sql": _read_text_if_exists(object_dir / SQL_FILE_NAMES["insert_sql"]),
+        "insert_sql": insert_sql,
         "truncate_sql": _read_text_if_exists(object_dir / SQL_FILE_NAMES["truncate_sql"]),
         "path": str(object_dir),
     }
@@ -1086,6 +1118,18 @@ def init_entity_dev_meta_bundle(
             schema_name=schema_name,
             table_name=table_name,
         )
+        normalized_payload, normalized_keys = _normalize_yaml_payload_fields(
+            payload=_load_yaml_text(bundle.get("yaml_content", "")),
+            entity_name=entity_name,
+            schema_name=schema_name,
+            table_name=table_name,
+            insert_sql=bundle.get("insert_sql", ""),
+            key_attributes=key_attributes,
+            prod_root=prod_root,
+            dev_root=dev_root,
+        )
+        bundle["yaml_content"] = _dump_yaml(normalized_payload)
+        bundle["key_attributes"] = normalized_keys
         bundle["source"] = "dev"
         bundle["exists"] = True
         return bundle
@@ -1100,6 +1144,18 @@ def init_entity_dev_meta_bundle(
             schema_name=schema_name,
             table_name=table_name,
         )
+        normalized_payload, normalized_keys = _normalize_yaml_payload_fields(
+            payload=_load_yaml_text(bundle.get("yaml_content", "")),
+            entity_name=entity_name,
+            schema_name=schema_name,
+            table_name=table_name,
+            insert_sql=bundle.get("insert_sql", ""),
+            key_attributes=key_attributes,
+            prod_root=prod_root,
+            dev_root=dev_root,
+        )
+        bundle["yaml_content"] = _dump_yaml(normalized_payload)
+        bundle["key_attributes"] = normalized_keys
         bundle["source"] = "prod"
         bundle["exists"] = True
         return bundle
@@ -1177,7 +1233,16 @@ def validate_entity_dev_meta_bundle(
             payload["key_attributes"] = normalized_keys
         else:
             payload.pop("key_attributes", None)
-    _ensure_default_verification(payload, normalized_keys)
+    payload, normalized_keys_effective = _normalize_yaml_payload_fields(
+        payload=payload,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+        insert_sql=insert_sql,
+        key_attributes=normalized_keys,
+        prod_root=prod_root,
+        dev_root=dev_root,
+    )
 
     for field in REQUIRED_YAML_FIELDS:
         if not payload.get(field):
@@ -1352,16 +1417,16 @@ def validate_entity_dev_meta_bundle(
                 + ", ".join(f"{schema_part}.{table_part}" for schema_part, table_part in extra)
             )
 
-    normalized_payload = dict(payload)
-    if insert_sql.strip():
-        normalized_payload["depends_on"] = _build_depends_on(insert_sql, normalized_schema, normalized_table, known_schemas)
-
-    if normalized_keys is not None:
-        if normalized_keys:
-            normalized_payload["key_attributes"] = normalized_keys
-        else:
-            normalized_payload.pop("key_attributes", None)
-    _ensure_default_verification(normalized_payload, normalized_keys)
+    normalized_payload, normalized_keys_effective = _normalize_yaml_payload_fields(
+        payload=payload,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+        insert_sql=insert_sql,
+        key_attributes=normalized_keys,
+        prod_root=prod_root,
+        dev_root=dev_root,
+    )
 
     dev_check_table_name = str(payload.get("table_name") or effective_table_name or "").strip()
     dev_exists, dev_error = _dev_object_exists(dev_database_url, str(payload.get("table_schema") or schema_name or "").strip(), dev_check_table_name)
@@ -1391,7 +1456,7 @@ def validate_entity_dev_meta_bundle(
         "checks": checks,
         "normalized": {
             "yaml_content": _dump_yaml(normalized_payload),
-            "key_attributes": normalized_keys if normalized_keys is not None else normalized_payload.get("key_attributes", []),
+            "key_attributes": normalized_keys_effective,
             "recreate_sql": recreate_sql,
             "insert_sql": insert_sql,
             "truncate_sql": truncate_sql,

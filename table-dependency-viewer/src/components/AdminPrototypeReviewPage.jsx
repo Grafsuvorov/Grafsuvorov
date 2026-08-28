@@ -145,7 +145,8 @@ export default function AdminPrototypeReviewPage() {
 
   const unresolvedItemsCount = useMemo(
     () => reviewItemsDraft.filter((item) => (
-      !String(item.entity_name || "").trim() || !splitItems(item.key_attributes_text).length
+      !String(item.entity_name || "").trim()
+      || (String(item.object_type || "TABLE").toUpperCase() === "TABLE" && !splitItems(item.key_attributes_text).length)
     )).length,
     [reviewItemsDraft],
   );
@@ -280,6 +281,7 @@ export default function AdminPrototypeReviewPage() {
               dependencies: Array.isArray(payload?.item?.dependencies) && payload.item.dependencies.length
                 ? payload.item.dependencies
                 : item.dependencies,
+              duration_sec: item.duration_sec,
               stand_dev: item.stand_dev,
               stand_prod: item.stand_prod,
               copy_to_clickhouse: item.copy_to_clickhouse,
@@ -325,7 +327,17 @@ export default function AdminPrototypeReviewPage() {
           copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
         })),
       });
-      setResult((prev) => (prev ? { ...prev, issue: payload?.issue || null } : prev));
+      setResult((prev) => (
+        prev
+          ? {
+              ...prev,
+              issue: payload?.issue || null,
+              meta_branch: payload?.meta_branch || null,
+              meta_files: payload?.meta_files || [],
+              meta_error: payload?.meta_error || null,
+            }
+          : prev
+      ));
     } catch (err) {
       setError(err?.message || "Не удалось создать задачу");
     } finally {
@@ -456,7 +468,7 @@ export default function AdminPrototypeReviewPage() {
             <div style={{ display: "grid", gap: 16 }}>
               {reviewItemsDraft.map((item) => {
                 const needsEntity = !String(item.entity_name || "").trim();
-                const needsKeys = !splitItems(item.key_attributes_text).length;
+                const needsKeys = String(item.object_type || "TABLE").toUpperCase() === "TABLE" && !splitItems(item.key_attributes_text).length;
                 const needsAttention = Boolean(needsEntity || needsKeys);
                 return (
                   <div
@@ -656,7 +668,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь MR, а по каждому объекту в описание попадет отдельный блок со строками, дублями, стендами и YAML-вложением.
+                Одна задача будет создана на весь MR, а YAML по GP-объектам будет записан в инженерный репозиторий в ветку задачи.
               </div>
               <button
                 type="button"
@@ -677,6 +689,25 @@ export default function AdminPrototypeReviewPage() {
               {" "}
               <strong>{totalExecutionSec > 0 ? formatDuration(totalExecutionSec) : "—"}</strong>
             </div>
+            {result?.meta_branch ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Ветка инженеров:
+                {" "}
+                <span className="mono">{result.meta_branch}</span>
+              </div>
+            ) : null}
+            {Array.isArray(result?.meta_files) && result.meta_files.length > 0 ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                YAML обновлены:
+                {" "}
+                {result.meta_files.map((item) => item.file_path).join(", ")}
+              </div>
+            ) : null}
+            {result?.meta_error ? (
+              <div className="page-error" style={{ marginTop: 12 }}>
+                YAML в инженерный репозиторий не записан: {result.meta_error}
+              </div>
+            ) : null}
           </section>
         </>
       ) : null}

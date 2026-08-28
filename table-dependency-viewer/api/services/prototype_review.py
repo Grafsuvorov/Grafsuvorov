@@ -255,6 +255,20 @@ def _split_sql_statements(sql_text: str) -> list[str]:
     return statements
 
 
+def _is_clickhouse_sql_path(path_value: str) -> bool:
+    normalized = str(path_value or "").replace("\\", "/").lower()
+    return "/clickhouse/" in normalized or normalized.startswith("clickhouse/")
+
+
+def _sql_execution_priority(path_value: str) -> tuple[int, str]:
+    name = str(path_value or "").replace("\\", "/").split("/")[-1].lower()
+    if name.endswith("_recreate.sql") or "recreate" in name:
+        return (0, name)
+    if name.endswith("_insert_init.sql") or "insert_init" in name:
+        return (1, name)
+    return (2, name)
+
+
 def parse_prototype_gitlab_ref(value: str, default_project: str) -> PrototypeGitLabRef:
     raw_value = str(value or "").strip()
     if not raw_value:
@@ -385,7 +399,8 @@ def infer_final_target(files: list[dict[str, Any]]) -> Optional[str]:
 
 
 def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
+    grouped: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
     for item in files:
         path_value = str(item.get("path") or "").strip()
         sql_text = str(item.get("sql") or "")
@@ -442,13 +457,56 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
         if object_type is None and target_fqn:
             object_type = "VIEW" if target_fqn.split(".", 1)[0].endswith("_view") else "TABLE"
+        group_key = target_fqn or f"__path__:{path_value}"
+        if group_key not in grouped:
+            grouped[group_key] = {
+                "path": path_value,
+                "paths": [],
+                "target_fqn": target_fqn,
+                "all_targets": [],
+                "object_type": object_type or "TABLE",
+                "has_create": False,
+                "has_drop": False,
+                "has_self_mutation": False,
+                "execution_paths": [],
+                "skip_dev_execution": True,
+            }
+            order.append(group_key)
+        group = grouped[group_key]
+        group["paths"].append(path_value)
+        group["all_targets"] = list(dict.fromkeys([*(group.get("all_targets") or []), *deduped_targets]))
+        group["has_create"] = bool(group.get("has_create") or has_create)
+        group["has_drop"] = bool(group.get("has_drop") or has_drop)
+        group["has_self_mutation"] = bool(group.get("has_self_mutation") or has_self_mutation)
+        if str(object_type or "").upper() == "VIEW":
+            group["object_type"] = "VIEW"
+        if not _is_clickhouse_sql_path(path_value):
+            group["execution_paths"].append(path_value)
+            group["skip_dev_execution"] = False
+    result: list[dict[str, Any]] = []
+    for group_key in order:
+        group = grouped[group_key]
+        target_fqn = str(group.get("target_fqn") or "").strip() or None
+        execution_paths = sorted(list(dict.fromkeys(group.get("execution_paths") or [])), key=_sql_execution_priority)
+        object_type = str(group.get("object_type") or "TABLE").upper()
+        requires_pretruncate = bool(
+            target_fqn
+            and execution_paths
+            and not group.get("has_create")
+            and not group.get("has_drop")
+            and not group.get("has_self_mutation")
+            and object_type == "TABLE"
+        )
         result.append(
             {
-                "path": path_value,
+                "path": "\n".join(group.get("paths") or []),
+                "paths": list(group.get("paths") or []),
                 "target_fqn": target_fqn,
-                "all_targets": deduped_targets,
-                "object_type": object_type or "TABLE",
-                "requires_pretruncate": bool(target_fqn and not (has_create or has_drop or has_self_mutation) and (object_type or "TABLE") == "TABLE"),
+                "all_targets": list(group.get("all_targets") or []),
+                "object_type": object_type,
+                "requires_pretruncate": requires_pretruncate,
+                "execution_paths": execution_paths,
+                "skip_dev_execution": bool(group.get("skip_dev_execution")),
             }
         )
     return result
@@ -551,7 +609,7 @@ def execute_sql_review_items_in_dev(
         total = len(review_targets)
         for index, review_item in enumerate(review_targets, start=1):
             path_value = str(review_item.get("path") or "").strip()
-            file_item = file_map.get(path_value) or {}
+            execution_paths = [str(item).strip() for item in (review_item.get("execution_paths") or []) if str(item).strip()]
             target_fqn = str(review_item.get("target_fqn") or "").strip()
             if callable(progress_callback):
                 progress_callback(
@@ -563,6 +621,26 @@ def execute_sql_review_items_in_dev(
                         "target_fqn": target_fqn or None,
                     }
                 )
+            if review_item.get("skip_dev_execution"):
+                preparation_rows.append(
+                    {
+                        "status": "skipped",
+                        "action": "truncate",
+                        "target_fqn": target_fqn or None,
+                        "message": "DEV выполнение не требуется для ClickHouse-объекта",
+                        "duration_sec": 0.0,
+                    }
+                )
+                execution_rows.append(
+                    {
+                        "path": path_value,
+                        "target_fqn": target_fqn or None,
+                        "status": "skipped",
+                        "duration_sec": 0.0,
+                        "message": "ClickHouse SQL не выполняется в DEV prototype review",
+                    }
+                )
+                continue
             if review_item.get("requires_pretruncate") and target_fqn:
                 try:
                     preparation_rows.append(
@@ -591,20 +669,26 @@ def execute_sql_review_items_in_dev(
                         "duration_sec": 0.0,
                     }
                 )
-            sql_text = str(file_item.get("sql") or "").strip()
-            if not sql_text:
+            if not execution_paths:
                 execution_rows.append({"path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
                 continue
-            started = time.perf_counter()
+            total_duration = 0.0
             try:
-                cursor.execute(sql_text)
-                connection.commit()
+                for exec_path in execution_paths:
+                    file_item = file_map.get(exec_path) or {}
+                    sql_text = str(file_item.get("sql") or "").strip()
+                    if not sql_text:
+                        continue
+                    started = time.perf_counter()
+                    cursor.execute(sql_text)
+                    connection.commit()
+                    total_duration += time.perf_counter() - started
                 execution_rows.append(
                     {
                         "path": path_value,
                         "target_fqn": target_fqn or None,
                         "status": "ok",
-                        "duration_sec": round(time.perf_counter() - started, 3),
+                        "duration_sec": round(total_duration, 3),
                     }
                 )
                 if callable(progress_callback):

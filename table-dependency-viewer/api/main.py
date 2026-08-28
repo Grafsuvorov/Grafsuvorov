@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 from io import BytesIO
 import threading
 from uuid import uuid4
+from posixpath import join as posix_join
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -162,7 +163,6 @@ from .services.meta_workspace import (
 from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
 from .services.prototype_review import (
-    attach_ytrack_issue_files,
     create_ytrack_issue,
     execute_sql_review_items_in_dev,
     extract_sql_dependencies,
@@ -934,7 +934,8 @@ def _prototype_item_needs_attention(item: dict[str, Any]) -> tuple[bool, list[st
     missing: list[str] = []
     if item.get("is_new") and not str(item.get("entity_name") or "").strip():
         missing.append("сущность")
-    if not [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]:
+    object_type = str(item.get("object_type") or "TABLE").upper()
+    if object_type == "TABLE" and not [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]:
         missing.append("ключевые поля")
     return bool(missing), missing
 
@@ -1146,6 +1147,16 @@ def _prototype_review_resolve_item(
     }
 
 
+def _prototype_review_yaml_repo_path(entity_name: str, schema_name: str, table_name: str) -> str:
+    return posix_join(
+        Path(ENTITY_META_GIT_META_ROOT).as_posix().strip("/"),
+        str(entity_name or "").strip(),
+        str(schema_name or "").strip(),
+        str(table_name or "").strip(),
+        "meta_data_file.yaml",
+    )
+
+
 def _prototype_review_build_result(
     payload: PrototypeReviewRunPayload,
     user,
@@ -1191,7 +1202,7 @@ def _prototype_review_build_result(
             progress_callback=progress_callback,
         )
 
-    exec_by_path = {str(item.get("path") or ""): item for item in execution_rows}
+    exec_by_target = {str(item.get("target_fqn") or ""): item for item in execution_rows}
     prep_by_target = {str(item.get("target_fqn") or ""): item for item in preparation_rows}
     review_items: list[dict[str, Any]] = []
     all_dependencies: list[str] = []
@@ -1202,11 +1213,13 @@ def _prototype_review_build_result(
         if not target_fqn:
             validation_warnings.append(f"Для файла `{target_item.get('path')}` не удалось определить целевой объект")
             continue
-        execution_row = exec_by_path.get(str(target_item.get("path") or "")) or {"status": "skipped", "duration_sec": 0.0}
+        execution_row = exec_by_target.get(target_fqn) or {"status": "skipped", "duration_sec": 0.0}
         path_value = str(target_item.get("path") or "")
-        file_item = next((row for row in files if str(row.get("path") or "") == path_value), {})
+        related_paths = [str(value).strip() for value in (target_item.get("paths") or []) if str(value).strip()]
+        related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
+        file_item = related_files[0] if related_files else {}
         dependencies = extract_sql_dependencies(
-            [file_item],
+            related_files or [file_item],
             known_schemas=known_schemas,
             exclude_fqns={target_fqn},
         )
@@ -1304,7 +1317,7 @@ def start_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Re
                 job_id,
                 status="completed",
                 current=len(result.get("execution") or []),
-                total=len(result.get("files") or []),
+                total=len(result.get("review_items") or []),
                 result=result,
             )
         except Exception as exc:
@@ -1391,32 +1404,57 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
             assignee_query=YOUTRACK_ASSIGNEE_QUERY,
         )
-        attachments = []
+        meta_branch = None
+        meta_files = []
+        meta_error = None
         raw_issue_id = str((issue_result.get("raw") or {}).get("id") or "").strip()
         if raw_issue_id:
-            attachment_files = []
+            branch_name = f"feature/{str(issue_result.get('issue_id') or '').strip().upper()}"
             for item in review_items:
                 yaml_content = str(item.get("yaml_content") or "").strip()
                 if not yaml_content:
                     continue
-                attachment_files.append(
-                    {
-                        "filename": _prototype_review_attachment_name(item),
-                        "content": yaml_content,
-                        "mime_type": "text/plain; charset=utf-8",
-                    }
-                )
-            if attachment_files:
-                attachments = attach_ytrack_issue_files(
-                    base_url=YOUTRACK_URL,
-                    token=YOUTRACK_TOKEN,
-                    issue_id=raw_issue_id,
-                    ssl_verify=YOUTRACK_SSL_VERIFY,
-                    files=attachment_files,
-                )
+                target_fqn = str(item.get("target_fqn") or "").strip().lower()
+                entity_name = str(item.get("entity_name") or "").strip()
+                if "." not in target_fqn or not entity_name:
+                    continue
+                schema_name, table_name = target_fqn.split(".", 1)
+                try:
+                    save_result = save_meta_workspace_branch_file(
+                        git_repo_value=ENTITY_META_GIT_REPO,
+                        workspace_root_value=META_WORKSPACE_ROOT,
+                        workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                        branch_name=branch_name,
+                        base_branch="main",
+                        file_path=_prototype_review_yaml_repo_path(entity_name, schema_name, table_name),
+                        content=yaml_content,
+                        task_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                        author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                        expected_revision=None,
+                    )
+                    meta_files.append(
+                        {
+                            "target_fqn": target_fqn,
+                            "entity_name": entity_name,
+                            "file_path": save_result.get("file_path"),
+                            "branch_name": save_result.get("branch_name"),
+                            "committed": bool(save_result.get("committed")),
+                        }
+                    )
+                    meta_branch = save_result.get("branch_name") or meta_branch
+                except Exception as exc:
+                    meta_error = str(exc)
+                    break
         if issue_result.get("issue_id"):
             issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
-        return {"status": "ok", "issue": issue_result, "description": description, "attachments": attachments}
+        return {
+            "status": "ok",
+            "issue": issue_result,
+            "description": description,
+            "meta_branch": meta_branch,
+            "meta_files": meta_files,
+            "meta_error": meta_error,
+        }
     except HTTPException:
         raise
     except Exception as exc:

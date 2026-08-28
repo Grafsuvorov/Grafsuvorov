@@ -444,6 +444,15 @@ def _resolve_origin_branch_ref(repo_root: Path, branch_name: str) -> str:
         raise ValueError(f"Ветка `{branch_norm}` не найдена в origin") from exc
 
 
+def _push_branch_ref(branch_name: str) -> str:
+    branch_norm = str(branch_name or "").strip()
+    if not branch_norm:
+        raise ValueError("Укажите имя ветки")
+    if branch_norm.startswith("refs/"):
+        return branch_norm
+    return f"refs/heads/{branch_norm}"
+
+
 def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
@@ -970,7 +979,7 @@ def save_meta_workspace_branch_file(
             _run_workspace_git(git_repo_root, ["commit", "-m", f"{commit_prefix}: update {Path(file_path_norm).name}"], cwd=worktree_dir)
             committed = True
 
-        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(branch_ref)}"], cwd=worktree_dir)
 
     _with_workspace_lock(worktree_dir, _save_file)
     return {
@@ -1057,7 +1066,7 @@ def save_meta_workspace_branch_gp_bundle(
             )
             committed = True
 
-        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(branch_ref)}"], cwd=worktree_dir)
 
     _with_workspace_lock(worktree_dir, _save_bundle)
     return {
@@ -1347,7 +1356,7 @@ def _sync_meta_workspace_branch(
             _run_git(git_repo_root, ["commit", "-m", f"{task_id_norm}: sync meta workspace changes"], cwd=worktree_dir)
             committed = True
 
-        _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_name_norm}"], cwd=worktree_dir)
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(branch_name_norm)}"], cwd=worktree_dir)
 
         _audit_dev_meta(
             engine,
@@ -1469,7 +1478,7 @@ def create_meta_workspace_mr(
             _run_git(git_repo_root, ["add", "."], cwd=worktree_dir)
             _run_git(git_repo_root, ["commit", "-m", f"{task_id_norm}: update meta workspace objects"], cwd=worktree_dir)
 
-        _run_git(git_repo_root, ["push", "origin", f"HEAD:{source_branch}"], cwd=worktree_dir)
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(source_branch)}"], cwd=worktree_dir)
 
         description_lines = [
             f"Task: {task_id_norm}",

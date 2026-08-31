@@ -1040,6 +1040,52 @@ def _prototype_review_attachment_name(review_item: dict[str, Any]) -> str:
     return "prototype_review_generated_yaml.sql"
 
 
+def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, Any]]) -> dict[str, str]:
+    target_norm = str(target_fqn or "").strip().lower()
+    recreate_parts: list[str] = []
+    insert_parts: list[str] = []
+    truncate_parts: list[str] = []
+    target_tail = target_norm.split(".", 1)[1] if "." in target_norm else target_norm
+
+    for file_item in files or []:
+        path_value = str(file_item.get("path") or "").strip().lower()
+        sql_text = str(file_item.get("sql") or "").strip()
+        if not sql_text:
+            continue
+        if "recreate" in path_value:
+            recreate_parts.append(sql_text)
+            continue
+        if "insert" in path_value:
+            insert_parts.append(sql_text)
+            continue
+        if "truncate" in path_value:
+            truncate_parts.append(sql_text)
+            continue
+        lowered_sql = _strip_sql_comments(sql_text).lower()
+        if (
+            f"create table {target_norm}" in lowered_sql
+            or f"create table if not exists {target_norm}" in lowered_sql
+            or f"create or replace view {target_norm}" in lowered_sql
+            or f"drop table if exists {target_norm}" in lowered_sql
+            or f"drop view if exists {target_norm}" in lowered_sql
+            or (target_tail and f"create table {target_tail}" in lowered_sql)
+        ):
+            recreate_parts.append(sql_text)
+        if f"insert into {target_norm}" in lowered_sql or f"insert into\n {target_norm}" in lowered_sql:
+            insert_parts.append(sql_text)
+        if (
+            f"truncate table {target_norm}" in lowered_sql
+            or f"delete from {target_norm}" in lowered_sql
+        ):
+            truncate_parts.append(sql_text)
+
+    return {
+        "recreate_sql": "\n\n".join(part for part in recreate_parts if part.strip()),
+        "insert_sql": "\n\n".join(part for part in insert_parts if part.strip()),
+        "truncate_sql": "\n\n".join(part for part in truncate_parts if part.strip()),
+    }
+
+
 def _prototype_review_resolve_item(
     *,
     target_fqn: str,
@@ -1047,6 +1093,7 @@ def _prototype_review_resolve_item(
     execution_row: Optional[dict[str, Any]] = None,
     known_schemas: Optional[set[str]] = None,
     file_item: Optional[dict[str, Any]] = None,
+    related_files: Optional[list[dict[str, Any]]] = None,
     fallback_entity_name: str = "",
     key_attributes_override: Optional[list[str]] = None,
 ) -> dict[str, Any]:
@@ -1091,11 +1138,43 @@ def _prototype_review_resolve_item(
             yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content")) or {}
         except Exception:
             yaml_payload = {}
+    current_files = [item for item in (related_files or []) if isinstance(item, dict)]
+    if not current_files and file_item:
+        current_files = [file_item]
+    if yaml_bundle and entity_name_seed and current_files:
+        sql_bundle = _prototype_review_collect_target_sql(target_fqn, current_files)
+        normalized = validate_entity_dev_meta_bundle(
+            engine=engine,
+            base_dir=BASE_DIR,
+            prod_root_value=ENTITY_META_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            entity_name=entity_name_seed,
+            schema_name=schema_name,
+            table_name=table_name,
+            key_attributes=detected_keys,
+            source_object_key=None,
+            yaml_content=str(yaml_bundle.get("yaml_content") or ""),
+            recreate_sql=sql_bundle.get("recreate_sql", ""),
+            insert_sql=sql_bundle.get("insert_sql", ""),
+            truncate_sql=sql_bundle.get("truncate_sql", ""),
+            dev_database_url=DEV_DATABASE_URL,
+        )
+        normalized_bundle = normalized.get("normalized") or {}
+        if normalized_bundle.get("yaml_content"):
+            yaml_bundle["yaml_content"] = normalized_bundle.get("yaml_content")
+        if isinstance(normalized_bundle.get("key_attributes"), list):
+            yaml_bundle["key_attributes"] = normalized_bundle.get("key_attributes")
+            yaml_key_attributes = list(normalized_bundle.get("key_attributes") or [])
+        try:
+            yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content") or "") or {}
+        except Exception:
+            yaml_payload = {}
+        detected_keys = list(key_attributes_override or []) or yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
     table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or "").strip()
     dependencies: list[str] = []
-    if file_item and path_value:
+    if current_files and path_value:
         dependencies = extract_sql_dependencies(
-            [file_item],
+            current_files,
             known_schemas=known_schemas,
             exclude_fqns={target_fqn},
         )
@@ -1234,6 +1313,7 @@ def _prototype_review_build_result(
             execution_row=execution_row,
             known_schemas=known_schemas,
             file_item=file_item,
+            related_files=related_files,
             fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
         )
         item_result["object_type"] = str(target_item.get("object_type") or "TABLE").upper()

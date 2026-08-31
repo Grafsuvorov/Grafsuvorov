@@ -93,16 +93,19 @@ function formatReleaseDate(value) {
 }
 
 function buildDraftItem(item) {
+  const keyAttributesText = joinItems(item.key_attributes || []);
   return {
     ...item,
     entity_name: item.entity_name || "",
-    key_attributes_text: joinItems(item.key_attributes || []),
+    key_attributes_text: keyAttributesText,
     clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
     stand_dev: item.stand_dev !== false,
     stand_prod: item.stand_prod !== false,
     copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
     checks: item.checks || { row_count: null, duplicate_groups: null },
     rechecking: false,
+    last_checked_key_attributes_text: keyAttributesText,
+    checks_stale: false,
     dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
   };
 }
@@ -182,16 +185,24 @@ export default function AdminPrototypeReviewPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleReviewItemChange = (targetFqn, field, value) => {
+  const handleReviewItemChange = (itemId, field, value) => {
     setReviewItemsDraft((prev) => prev.map((item) => {
-      if (item.target_fqn !== targetFqn) return item;
+      if (item.item_id !== itemId) return item;
+      if (field === "key_attributes_text") {
+        const nextValue = String(value || "");
+        return {
+          ...item,
+          [field]: nextValue,
+          checks_stale: joinItems(splitItems(nextValue)) !== joinItems(splitItems(item.last_checked_key_attributes_text || "")),
+        };
+      }
       return { ...item, [field]: value };
     }));
   };
 
-  const handleReviewItemToggle = (targetFqn, field, checked) => {
+  const handleReviewItemToggle = (itemId, field, checked) => {
     setReviewItemsDraft((prev) => prev.map((item) => (
-      item.target_fqn !== targetFqn
+      item.item_id !== itemId
         ? item
         : {
             ...item,
@@ -263,8 +274,8 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleRecheckNewTable = async (targetFqn) => {
-    const current = reviewItemsDraft.find((item) => item.target_fqn === targetFqn);
+  const handleRecheckTable = async (itemId) => {
+    const current = reviewItemsDraft.find((item) => item.item_id === itemId);
     if (!current || current.rechecking) return;
     const keyAttributes = splitItems(current.key_attributes_text);
     if (!keyAttributes.length) {
@@ -273,17 +284,18 @@ export default function AdminPrototypeReviewPage() {
     }
     setError(null);
     setReviewItemsDraft((prev) => prev.map((item) => (
-      item.target_fqn !== targetFqn ? item : { ...item, rechecking: true }
+      item.item_id !== itemId ? item : { ...item, rechecking: true }
     )));
     try {
       const payload = await adminApi.prototypeReviewCheckTable({
         mr_input: String(mrInput || "").trim(),
+        item_id: current.item_id,
         target_fqn: current.target_fqn,
         entity_name: String(current.entity_name || "").trim(),
         key_attributes: keyAttributes,
       });
       setReviewItemsDraft((prev) => prev.map((item) => (
-        item.target_fqn !== targetFqn
+        item.item_id !== itemId
           ? item
           : {
               ...item,
@@ -302,9 +314,9 @@ export default function AdminPrototypeReviewPage() {
             }
       )));
     } catch (err) {
-      setError(err?.message || "Не удалось перепроверить новую таблицу");
+      setError(err?.message || "Не удалось перепроверить таблицу");
       setReviewItemsDraft((prev) => prev.map((item) => (
-        item.target_fqn !== targetFqn ? item : { ...item, rechecking: false }
+        item.item_id !== itemId ? item : { ...item, rechecking: false }
       )));
     }
   };
@@ -321,6 +333,7 @@ export default function AdminPrototypeReviewPage() {
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
         review_items: reviewItemsDraft.map((item) => ({
+          item_id: item.item_id,
           path: item.path,
           target_fqn: item.target_fqn,
           entity_name: String(item.entity_name || "").trim(),
@@ -487,7 +500,7 @@ export default function AdminPrototypeReviewPage() {
                 const needsAttention = Boolean(needsEntity || needsKeys);
                 return (
                   <div
-                    key={item.target_fqn}
+                    key={item.item_id || `${item.target_fqn}:${item.object_type || "TABLE"}`}
                     className="cc-surface"
                     style={{
                       margin: 0,
@@ -502,7 +515,7 @@ export default function AdminPrototypeReviewPage() {
                       </div>
                       <div className="prototype-chip-row">
                         <span className="prototype-badge">{item.object_type || "TABLE"}</span>
-                        {item.is_new ? <span className="prototype-badge">Новая таблица</span> : null}
+                        {item.is_new ? <span className="prototype-badge">Новый объект</span> : null}
                         {needsAttention ? <span className="prototype-badge warning">Нужно заполнить</span> : null}
                       </div>
                     </div>
@@ -545,7 +558,7 @@ export default function AdminPrototypeReviewPage() {
                         <input
                           className="slow-entity-select"
                           value={item.entity_name || ""}
-                          onChange={(event) => handleReviewItemChange(item.target_fqn, "entity_name", event.target.value)}
+                          onChange={(event) => handleReviewItemChange(item.item_id, "entity_name", event.target.value)}
                           placeholder="BI_SB_WUC"
                         />
                         </div>
@@ -554,7 +567,7 @@ export default function AdminPrototypeReviewPage() {
                         <textarea
                           className="slow-entity-select"
                           value={item.key_attributes_text || ""}
-                          onChange={(event) => handleReviewItemChange(item.target_fqn, "key_attributes_text", event.target.value)}
+                          onChange={(event) => handleReviewItemChange(item.item_id, "key_attributes_text", event.target.value)}
                           placeholder="warehouse_code, dt_report"
                           style={{ minHeight: 100, resize: "vertical" }}
                         />
@@ -565,7 +578,7 @@ export default function AdminPrototypeReviewPage() {
                             <textarea
                               className="slow-entity-select"
                               value={item.clickhouse_keys_text || ""}
-                              onChange={(event) => handleReviewItemChange(item.target_fqn, "clickhouse_keys_text", event.target.value)}
+                              onChange={(event) => handleReviewItemChange(item.item_id, "clickhouse_keys_text", event.target.value)}
                               placeholder="warehouse_code, dt_report"
                               style={{ minHeight: 100, resize: "vertical" }}
                             />
@@ -580,7 +593,7 @@ export default function AdminPrototypeReviewPage() {
                             <input
                               type="checkbox"
                               checked={Boolean(item.stand_dev)}
-                              onChange={(event) => handleReviewItemToggle(item.target_fqn, "stand_dev", event.target.checked)}
+                              onChange={(event) => handleReviewItemToggle(item.item_id, "stand_dev", event.target.checked)}
                             />
                             <span>DEV</span>
                           </label>
@@ -588,7 +601,7 @@ export default function AdminPrototypeReviewPage() {
                             <input
                               type="checkbox"
                               checked={Boolean(item.stand_prod)}
-                              onChange={(event) => handleReviewItemToggle(item.target_fqn, "stand_prod", event.target.checked)}
+                              onChange={(event) => handleReviewItemToggle(item.item_id, "stand_prod", event.target.checked)}
                             />
                             <span>PROD</span>
                           </label>
@@ -596,20 +609,20 @@ export default function AdminPrototypeReviewPage() {
                             <input
                               type="checkbox"
                               checked={Boolean(item.copy_to_clickhouse)}
-                              onChange={(event) => handleReviewItemToggle(item.target_fqn, "copy_to_clickhouse", event.target.checked)}
+                              onChange={(event) => handleReviewItemToggle(item.item_id, "copy_to_clickhouse", event.target.checked)}
                             />
                             <span>Требуется ClickHouse</span>
                           </label>
                           </div>
-                          {item.is_new ? (
+                          {String(item.object_type || "TABLE").toUpperCase() === "TABLE" ? (
                             <button
                               type="button"
                               className="btn btn-ghost"
-                              onClick={() => handleRecheckNewTable(item.target_fqn)}
-                              disabled={item.rechecking}
+                              onClick={() => handleRecheckTable(item.item_id)}
+                              disabled={item.rechecking || !splitItems(item.key_attributes_text).length}
                               style={{ marginTop: 12 }}
                             >
-                              {item.rechecking ? "Проверяем дубли..." : "Перепроверить новую таблицу"}
+                              {item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
                             </button>
                           ) : null}
                         </div>

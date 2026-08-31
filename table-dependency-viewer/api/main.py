@@ -468,12 +468,14 @@ class PrototypeReviewRunPayload(BaseModel):
 
 class PrototypeReviewTableCheckPayload(BaseModel):
     mr_input: str
+    item_id: Optional[str] = None
     target_fqn: str
     entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
 
 
 class PrototypeReviewItemPayload(BaseModel):
+    item_id: Optional[str] = None
     path: Optional[str] = None
     target_fqn: str
     entity_name: Optional[str] = None
@@ -1001,10 +1003,11 @@ def _prototype_multi_issue_description(
         lines.extend(
             [
                 "",
-                f"## Таблица {index}",
+                f"## Объект {index}",
                 f"**Витрина:** {item.get('target_fqn') or 'не определена'}",
+                f"**Тип объекта:** {str(item.get('object_type') or 'TABLE').upper()}",
                 f"**Сущность:** {item.get('entity_name') or '—'}",
-                f"**Статус объекта:** {'новая таблица' if item.get('is_new') else 'существующий объект'}",
+                f"**Статус объекта:** {'новый объект' if item.get('is_new') else 'существующий объект'}",
                 f"**Ключевые поля:** {', '.join(item.get('key_attributes') or []) or '—'}",
                 f"**Количество строк:** {_format_count(item_row_count)}",
                 f"**Кол-во дублей:** {_format_count(item_duplicate_groups)}",
@@ -1057,7 +1060,7 @@ def _prototype_review_attachment_name(review_item: dict[str, Any]) -> str:
 
 
 def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, Any]]) -> dict[str, str]:
-    target_norm = str(target_fqn or "").strip().lower()
+    target_norm = _normalize_fqn(target_fqn)
     recreate_parts: list[str] = []
     insert_parts: list[str] = []
     truncate_parts: list[str] = []
@@ -1287,10 +1290,12 @@ def _prototype_review_resolve_item(
         "is_new": is_new,
         "entity_name": entity_name,
         "key_attributes": detected_keys,
+        "object_type": item_object_type,
     })
     return {
         "path": path_value,
         "target_fqn": target_fqn,
+        "object_type": item_object_type,
         "entity_name": entity_name,
         "load_mode": table_load_mode,
         "key_attributes": detected_keys,
@@ -1367,18 +1372,19 @@ def _prototype_review_build_result(
             progress_callback=progress_callback,
         )
 
-    exec_by_target = {str(item.get("target_fqn") or ""): item for item in execution_rows}
-    prep_by_target = {str(item.get("target_fqn") or ""): item for item in preparation_rows}
+    exec_by_item_id = {str(item.get("item_id") or ""): item for item in execution_rows}
+    prep_by_item_id = {str(item.get("item_id") or ""): item for item in preparation_rows}
     review_items: list[dict[str, Any]] = []
     all_dependencies: list[str] = []
     dependency_seen: set[str] = set()
     requires_user_input = False
     for target_item in review_targets:
+        item_id = str(target_item.get("item_id") or "").strip()
         target_fqn = str(target_item.get("target_fqn") or "").strip()
         if not target_fqn:
             validation_warnings.append(f"Для файла `{target_item.get('path')}` не удалось определить целевой объект")
             continue
-        execution_row = exec_by_target.get(target_fqn) or {"status": "skipped", "duration_sec": 0.0}
+        execution_row = exec_by_item_id.get(item_id) or {"status": "skipped", "duration_sec": 0.0}
         path_value = str(target_item.get("path") or "")
         related_paths = [str(value).strip() for value in (target_item.get("paths") or []) if str(value).strip()]
         related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
@@ -1402,8 +1408,9 @@ def _prototype_review_build_result(
             fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
             object_type_hint=str(target_item.get("object_type") or ""),
         )
-        item_result["object_type"] = str(target_item.get("object_type") or "TABLE").upper()
-        item_result["preparation"] = prep_by_target.get(target_fqn) or {"status": "skipped"}
+        item_result["item_id"] = item_id
+        item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()
+        item_result["preparation"] = prep_by_item_id.get(item_id) or {"status": "skipped"}
         item_result["dependencies"] = dependencies
         requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
         review_items.append(item_result)
@@ -1527,7 +1534,13 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
         current_target = next(
             (
                 item for item in related_targets
-                if str(item.get("target_fqn") or "").strip().lower() == str(payload.target_fqn or "").strip().lower()
+                if (
+                    str(payload.item_id or "").strip()
+                    and str(item.get("item_id") or "").strip() == str(payload.item_id or "").strip()
+                ) or (
+                    not str(payload.item_id or "").strip()
+                    and str(item.get("target_fqn") or "").strip().lower() == str(payload.target_fqn or "").strip().lower()
+                )
             ),
             None,
         )
@@ -1542,7 +1555,9 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
             known_schemas=known_schemas,
             file_item=related_files[0] if related_files else None,
             related_files=related_files,
+            object_type_hint=str((current_target or {}).get("object_type") or ""),
         )
+        item_result["item_id"] = str((current_target or {}).get("item_id") or payload.item_id or "")
         return {"status": "ok", "item": item_result}
     except Exception as exc:
         print("❌ /api/admin/prototype-review/check-table error:", exc)

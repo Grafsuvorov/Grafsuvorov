@@ -59,16 +59,47 @@ def _clean_identifier(value: str) -> str:
     return text_value.replace("`", "").replace('"', "")
 
 
+def _split_fqn_parts(value: str) -> list[str]:
+    text_value = str(value or "").strip().strip(";")
+    if not text_value or text_value.startswith("("):
+        return []
+    parts: list[str] = []
+    current: list[str] = []
+    in_double_quotes = False
+    for char in text_value:
+        if char == '"':
+            in_double_quotes = not in_double_quotes
+        if char == "." and not in_double_quotes:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+            continue
+        current.append(char)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _normalize_identifier_part(value: str) -> str:
+    text_value = str(value or "").strip().strip(";")
+    if not text_value:
+        return ""
+    if text_value.startswith('"') and text_value.endswith('"') and len(text_value) >= 2:
+        return text_value[1:-1]
+    return text_value.replace("`", "").replace('"', "").lower()
+
+
 def _normalize_fqn(value: str) -> Optional[str]:
-    clean = _clean_identifier(value)
-    if not clean or "." not in clean:
+    parts = _split_fqn_parts(value)
+    if len(parts) != 2:
         return None
-    schema_name, table_name = clean.split(".", 1)
-    schema_name = schema_name.strip()
-    table_name = table_name.strip()
+    schema_name = _normalize_identifier_part(parts[0])
+    table_name = _normalize_identifier_part(parts[1])
     if not schema_name or not table_name:
         return None
-    return f"{schema_name.lower()}.{table_name.lower()}"
+    return f"{schema_name}.{table_name}"
 
 
 def _split_lines_block(value: str) -> list[str]:
@@ -466,14 +497,16 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
         if object_type is None and target_fqn:
             object_type = "VIEW" if target_fqn.split(".", 1)[0].endswith("_view") else "TABLE"
-        group_key = target_fqn or f"__path__:{path_value}"
+        normalized_object_type = str(object_type or "TABLE").upper()
+        group_key = f"{target_fqn}::{normalized_object_type}" if target_fqn else f"__path__:{path_value}"
         if group_key not in grouped:
             grouped[group_key] = {
+                "item_id": group_key,
                 "path": path_value,
                 "paths": [],
                 "target_fqn": target_fqn,
                 "all_targets": [],
-                "object_type": object_type or "TABLE",
+                "object_type": normalized_object_type,
                 "has_create": False,
                 "has_drop": False,
                 "has_self_mutation": False,
@@ -508,6 +541,7 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         result.append(
             {
+                "item_id": str(group.get("item_id") or group_key),
                 "path": "\n".join(group.get("paths") or []),
                 "paths": list(group.get("paths") or []),
                 "target_fqn": target_fqn,
@@ -529,7 +563,11 @@ def extract_sql_dependencies(
 ) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
-    excluded = {str(item).strip().lower() for item in (exclude_fqns or set()) if str(item).strip()}
+    excluded = {
+        normalized
+        for normalized in (_normalize_fqn(item) for item in (exclude_fqns or set()))
+        if normalized
+    }
     for item in files:
         for statement in item.get("statements") or []:
             for pattern in DEPENDENCY_PATTERNS:
@@ -617,6 +655,7 @@ def execute_sql_review_items_in_dev(
         cursor = connection.cursor()
         total = len(review_targets)
         for index, review_item in enumerate(review_targets, start=1):
+            item_id = str(review_item.get("item_id") or "").strip()
             path_value = str(review_item.get("path") or "").strip()
             execution_paths = [str(item).strip() for item in (review_item.get("execution_paths") or []) if str(item).strip()]
             target_fqn = str(review_item.get("target_fqn") or "").strip()
@@ -626,6 +665,7 @@ def execute_sql_review_items_in_dev(
                         "stage": "running_file",
                         "current": index,
                         "total": total,
+                        "item_id": item_id or None,
                         "path": path_value,
                         "target_fqn": target_fqn or None,
                     }
@@ -635,6 +675,7 @@ def execute_sql_review_items_in_dev(
                     {
                         "status": "skipped",
                         "action": "truncate",
+                        "item_id": item_id or None,
                         "target_fqn": target_fqn or None,
                         "message": "DEV выполнение не требуется для ClickHouse-объекта",
                         "duration_sec": 0.0,
@@ -642,6 +683,7 @@ def execute_sql_review_items_in_dev(
                 )
                 execution_rows.append(
                     {
+                        "item_id": item_id or None,
                         "path": path_value,
                         "target_fqn": target_fqn or None,
                         "status": "skipped",
@@ -663,6 +705,7 @@ def execute_sql_review_items_in_dev(
                         {
                             "status": "error",
                             "action": "truncate",
+                            "item_id": item_id or None,
                             "target_fqn": target_fqn or None,
                             "message": f"Не удалось выполнить предварительную очистку: {exc}",
                             "duration_sec": 0.0,
@@ -673,13 +716,14 @@ def execute_sql_review_items_in_dev(
                     {
                         "status": "skipped",
                         "action": "truncate",
+                        "item_id": item_id or None,
                         "target_fqn": target_fqn or None,
                         "message": "Предварительная очистка не требуется",
                         "duration_sec": 0.0,
                     }
                 )
             if not execution_paths:
-                execution_rows.append({"path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
+                execution_rows.append({"item_id": item_id or None, "path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
                 continue
             total_duration = 0.0
             try:
@@ -694,6 +738,7 @@ def execute_sql_review_items_in_dev(
                     total_duration += time.perf_counter() - started
                 execution_rows.append(
                     {
+                        "item_id": item_id or None,
                         "path": path_value,
                         "target_fqn": target_fqn or None,
                         "status": "ok",
@@ -706,6 +751,7 @@ def execute_sql_review_items_in_dev(
                             "stage": "file_done",
                             "current": index,
                             "total": total,
+                            "item_id": item_id or None,
                             "path": path_value,
                             "target_fqn": target_fqn or None,
                             "status": "ok",
@@ -719,6 +765,7 @@ def execute_sql_review_items_in_dev(
                         pass
                 execution_rows.append(
                     {
+                        "item_id": item_id or None,
                         "path": path_value,
                         "target_fqn": target_fqn or None,
                         "status": "error",
@@ -732,6 +779,7 @@ def execute_sql_review_items_in_dev(
                             "stage": "file_done",
                             "current": index,
                             "total": total,
+                            "item_id": item_id or None,
                             "path": path_value,
                             "target_fqn": target_fqn or None,
                             "status": "error",

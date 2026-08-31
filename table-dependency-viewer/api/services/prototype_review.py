@@ -341,6 +341,12 @@ def load_merge_request_sql_bundle(
     )
     changes = changes_payload.get("changes") if isinstance(changes_payload, dict) else []
     source_branch = str((mr or {}).get("source_branch") or "").strip()
+    source_sha = str(
+        (mr or {}).get("sha")
+        or ((mr or {}).get("diff_refs") or {}).get("head_sha")
+        or source_branch
+        or ""
+    ).strip()
     files = []
     for item in changes or []:
         path_value = str(item.get("new_path") or item.get("old_path") or "").strip()
@@ -350,7 +356,7 @@ def load_merge_request_sql_bundle(
         raw_url = (
             f"{gitlab_api_url.rstrip('/')}/projects/"
             f"{urlparse.quote(mr_ref.project, safe='')}/repository/files/{encoded_path}/raw"
-            f"?ref={urlparse.quote(source_branch, safe='')}"
+            f"?ref={urlparse.quote(source_sha, safe='')}"
         )
         req = urlrequest.Request(
             raw_url,
@@ -378,6 +384,7 @@ def load_merge_request_sql_bundle(
             "title": (mr or {}).get("title"),
             "web_url": (mr or {}).get("web_url"),
             "source_branch": source_branch,
+            "source_sha": source_sha,
             "target_branch": (mr or {}).get("target_branch"),
             "author": ((mr or {}).get("author") or {}).get("name"),
         },

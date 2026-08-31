@@ -133,6 +133,7 @@ from .services.dev_meta import (
     validate_dev_meta_content,
 )
 from .services.entity_dev_meta import (
+    _dump_yaml,
     create_entity_meta_mr,
     delete_entity_dev_meta_bundle,
     execute_entity_dev_meta_sql,
@@ -920,6 +921,7 @@ def _prototype_issue_description(
                 f"**Предметная область:** {task_context.get('subject_area') or '—'}",
                 f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
+                f"**Дата релиза:** {task_context.get('release_date') or '—'}",
                 f"**Время выполнения SQL:** {_format_duration(total_execution_sec)}",
             ]
         )
@@ -976,6 +978,15 @@ def _prototype_multi_issue_description(
         f"**Ветка:** {mr.get('source_branch') or '—'} -> {mr.get('target_branch') or '—'}",
         f"**Автор MR:** {mr.get('author') or '—'}",
     ]
+    if task_context:
+        lines.extend(
+            [
+                "",
+                "## Общие параметры",
+                f"**Git ref:** {task_context.get('git_reference') or '—'}",
+                f"**Дата релиза:** {task_context.get('release_date') or '—'}",
+            ]
+        )
     for index, item in enumerate(review_items, start=1):
         needs_attention, missing = _prototype_item_needs_attention(item)
         item_row_count = item.get("row_count")
@@ -1142,13 +1153,7 @@ def _prototype_review_apply_yaml_dependencies(yaml_content: str, dependencies: l
     if not isinstance(payload, dict):
         payload = {}
     payload["depends_on"] = _prototype_review_group_dependencies(dependencies)
-    return yaml.dump(
-        payload,
-        default_flow_style=False,
-        sort_keys=False,
-        allow_unicode=True,
-        width=float("inf"),
-    )
+    return _dump_yaml(payload)
 
 
 def _prototype_review_resolve_item(

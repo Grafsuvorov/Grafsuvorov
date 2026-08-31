@@ -122,6 +122,7 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
         "clickhouse_keys": [],
         "business_key": [],
         "script_runtime": None,
+        "release_date": None,
         "release_article_url": None,
         "pseudo_increment_steps": None,
         "linked_issues": [],
@@ -145,6 +146,7 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
         "dependent_views": r"(?:Зависимые представления|Зависимые представление):\s*(.+)",
         "dashboard_name": r"Дашборд КХД/Направление\s*(.+)",
         "script_runtime": r"Время работы скрипта:\s*(.+)",
+        "release_date": r"Дата релиза:\s*(.+)",
         "release_article_url": r"Ссылка на статью релиза:\s*(.+)",
     }
     for field_name, pattern in field_patterns.items():

@@ -6,6 +6,7 @@ const DEFAULT_FORM = {
   summary: "",
   git_reference: "",
   script_runtime: "",
+  release_date: "",
 };
 
 function sleep(ms) {
@@ -75,10 +76,20 @@ function buildTaskText(form, linkedIssues) {
   }
   pushLine("Ссылка на гит", form.git_reference);
   pushLine("Время работы скрипта", form.script_runtime);
+  pushLine("Дата релиза", form.release_date);
   if (splitItems(linkedIssues).length) {
     lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
   }
   return lines.join("\n");
+}
+
+function formatReleaseDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return "—";
+  const date = new Date(`${text}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return text;
+  const month = new Intl.DateTimeFormat("ru-RU", { month: "short" }).format(date).replace(".", "");
+  return `${date.getDate()}. ${month}. ${date.getFullYear()}`;
 }
 
 function buildDraftItem(item) {
@@ -240,6 +251,7 @@ export default function AdminPrototypeReviewPage() {
         ...prev,
         git_reference: prev.git_reference || trimmedMr,
         script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
+        release_date: prev.release_date || String(payload?.task_context?.release_date || "").trim(),
       }));
       if (!String(linkedIssues || "").trim() && Array.isArray(payload?.task_context?.linked_issues)) {
         setLinkedIssues(payload.task_context.linked_issues.join(", "));
@@ -360,12 +372,12 @@ export default function AdminPrototypeReviewPage() {
       <section className="cc-surface">
         <div className="prototype-top-grid">
           <div className="prototype-step-field" style={{ margin: 0 }}>
-            <span className="slow-select-label">MR URL или IID</span>
+            <span className="slow-select-label">MR / DIFF URL или IID</span>
             <input
               className="slow-entity-select"
               value={mrInput}
               onChange={(event) => setMrInput(event.target.value)}
-              placeholder="https://gitlab.../-/merge_requests/123"
+              placeholder="https://gitlab.../-/merge_requests/123 или .../diffs"
             />
           </div>
           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -377,7 +389,7 @@ export default function AdminPrototypeReviewPage() {
         </div>
 
         <div className="prototype-import-actions">
-          <div className="muted">После запуска появятся все целевые объекты MR и их статусы.</div>
+          <div className="muted">После запуска появятся все целевые объекты MR или его diff и их статусы.</div>
           <button className="btn btn-primary" onClick={handleRun} disabled={loading || !mrInput.trim()}>
             {loading ? "Идет review..." : "Запустить review"}
           </button>
@@ -669,6 +681,20 @@ export default function AdminPrototypeReviewPage() {
 
           <section className="cc-surface">
             <div className="section-title">Создание задачи</div>
+            <div className="prototype-top-grid" style={{ marginBottom: 16 }}>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Дата релиза</span>
+                <input
+                  className="slow-entity-select"
+                  type="date"
+                  value={form.release_date || ""}
+                  onChange={(event) => handleFieldChange("release_date", event.target.value)}
+                />
+                <div className="muted" style={{ marginTop: 8 }}>
+                  {formatReleaseDate(form.release_date)}
+                </div>
+              </div>
+            </div>
             <div className="prototype-import-actions">
               <div className="muted">
                 Одна задача будет создана на весь MR, а YAML по GP-объектам будет записан в инженерный репозиторий в ветку задачи.

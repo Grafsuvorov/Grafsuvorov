@@ -163,6 +163,9 @@ from .services.meta_workspace import (
 from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
 from .services.prototype_review import (
+    CREATE_OBJECT_PATTERNS,
+    DROP_TARGET_PATTERNS,
+    TARGET_PATTERNS,
     add_ytrack_issue_comment,
     create_ytrack_issue,
     execute_sql_review_items_in_dev,

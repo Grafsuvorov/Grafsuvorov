@@ -19,21 +19,21 @@ from .entity_dev_meta import _gitlab_json_request, _parse_gitlab_project, _urlop
 SQL_FILE_RE = re.compile(r"\.sql$", re.IGNORECASE)
 IGNORED_DEPENDENCY_SCHEMAS = {"information_schema", "pg_catalog", "pg_temp"}
 TARGET_PATTERNS = [
-    re.compile(r"\binsert\s+into\s+([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
-    re.compile(r"\binsert\s+overwrite(?:\s+table)?\s+([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
-    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?table\s+(?:if\s+not\s+exists\s+)?([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
+    re.compile(r"\binsert\s+into\s+([^\s;(]+)", re.IGNORECASE),
+    re.compile(r"\binsert\s+overwrite(?:\s+table)?\s+([^\s;(]+)", re.IGNORECASE),
+    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?table\s+(?:if\s+not\s+exists\s+)?([^\s;(]+)", re.IGNORECASE),
 ]
 DEPENDENCY_PATTERNS = [
-    re.compile(r"\bfrom\s+([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
-    re.compile(r"\bjoin\s+([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
-    re.compile(r"\bupdate\s+([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
+    re.compile(r"\bfrom\s+([^\s;(]+)", re.IGNORECASE),
+    re.compile(r"\bjoin\s+([^\s;(]+)", re.IGNORECASE),
+    re.compile(r"\bupdate\s+([^\s;(]+)", re.IGNORECASE),
 ]
 DROP_TARGET_PATTERNS = [
-    re.compile(r"\bdrop\s+(?:table|view)\s+(?:if\s+exists\s+)?([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
+    re.compile(r"\bdrop\s+(?:table|view)\s+(?:if\s+exists\s+)?([^\s;(]+)", re.IGNORECASE),
 ]
 CREATE_OBJECT_PATTERNS = [
-    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?table\s+(?:if\s+not\s+exists\s+)?([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
-    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+(?:if\s+not\s+exists\s+)?([a-zA-Z0-9_`\"/\.-]+)", re.IGNORECASE),
+    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?table\s+(?:if\s+not\s+exists\s+)?([^\s;(]+)", re.IGNORECASE),
+    re.compile(r"\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+(?:if\s+not\s+exists\s+)?([^\s;(]+)", re.IGNORECASE),
 ]
 
 

@@ -166,6 +166,7 @@ from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     DROP_TARGET_PATTERNS,
     TARGET_PATTERNS,
+    _normalize_fqn,
     add_ytrack_issue_comment,
     create_ytrack_issue,
     execute_sql_review_items_in_dev,

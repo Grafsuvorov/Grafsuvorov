@@ -125,6 +125,10 @@ function buildDraftItem(item) {
   };
 }
 
+function normalizeDirection(value) {
+  return String(value || "").trim();
+}
+
 export default function AdminPrototypeReviewPage() {
   const [mrInput, setMrInput] = useState("");
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -198,6 +202,13 @@ export default function AdminPrototypeReviewPage() {
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleDirectionToggle = (option) => {
+    setForm((prev) => ({
+      ...prev,
+      direction: normalizeDirection(prev.direction) === option ? "" : option,
+    }));
   };
 
   const handleReviewItemChange = (itemId, field, value) => {
@@ -521,7 +532,8 @@ export default function AdminPrototypeReviewPage() {
             <div style={{ display: "grid", gap: 16 }}>
               {reviewItemsDraft.map((item) => {
                 const needsEntity = !String(item.entity_name || "").trim();
-                const needsKeys = String(item.object_type || "TABLE").toUpperCase() === "TABLE" && !splitItems(item.key_attributes_text).length;
+                const isTableObject = String(item.object_type || "TABLE").toUpperCase() === "TABLE";
+                const needsKeys = isTableObject && !splitItems(item.key_attributes_text).length;
                 const needsAttention = Boolean(needsEntity || needsKeys);
                 return (
                   <div
@@ -596,6 +608,18 @@ export default function AdminPrototypeReviewPage() {
                           placeholder="warehouse_code, dt_report"
                           style={{ minHeight: 100, resize: "vertical" }}
                         />
+                        {isTableObject ? (
+                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => handleRecheckTable(item.item_id)}
+                              disabled={item.rechecking || !splitItems(item.key_attributes_text).length}
+                            >
+                              {item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
+                            </button>
+                          </div>
+                        ) : null}
                         </div>
                         {item.copy_to_clickhouse ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -639,17 +663,6 @@ export default function AdminPrototypeReviewPage() {
                             <span>Требуется ClickHouse</span>
                           </label>
                           </div>
-                          {String(item.object_type || "TABLE").toUpperCase() === "TABLE" ? (
-                            <button
-                              type="button"
-                              className="btn btn-ghost"
-                              onClick={() => handleRecheckTable(item.item_id)}
-                              disabled={item.rechecking || !splitItems(item.key_attributes_text).length}
-                              style={{ marginTop: 12 }}
-                            >
-                              {item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
-                            </button>
-                          ) : null}
                         </div>
 
                         {(item.warnings || []).length ? (
@@ -734,16 +747,18 @@ export default function AdminPrototypeReviewPage() {
               </div>
               <div className="prototype-step-field" style={{ margin: 0 }}>
                 <span className="slow-select-label">Направление</span>
-                <select
-                  className="slow-entity-select"
-                  value={form.direction || ""}
-                  onChange={(event) => handleFieldChange("direction", event.target.value)}
-                >
-                  <option value="">Не выбрано</option>
+                <div className="prototype-control-list">
                   {DIRECTION_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                    <label key={option} className="prototype-toggle-card">
+                      <input
+                        type="checkbox"
+                        checked={normalizeDirection(form.direction) === option}
+                        onChange={() => handleDirectionToggle(option)}
+                      />
+                      <span>{option}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
               <label className="prototype-toggle-card wide" style={{ alignSelf: "end", minHeight: 44 }}>
                 <input

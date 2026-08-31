@@ -1166,6 +1166,7 @@ def _prototype_review_resolve_item(
     related_files: Optional[list[dict[str, Any]]] = None,
     fallback_entity_name: str = "",
     key_attributes_override: Optional[list[str]] = None,
+    object_type_hint: str = "",
 ) -> dict[str, Any]:
     meta = _prototype_find_meta_by_fqn(target_fqn)
     schema_name, table_name = target_fqn.split(".", 1)
@@ -1261,7 +1262,12 @@ def _prototype_review_resolve_item(
     is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
     checks = {"row_count": None, "duplicate_groups": None}
     current_execution = execution_row or {"status": "skipped", "duration_sec": 0.0}
-    if str(current_execution.get("status") or "") == "ok" and str((meta or {}).get("table_type") or "TABLE").upper() == "TABLE":
+    item_object_type = (
+        str((yaml_payload or {}).get("object_type") or "").strip().upper()
+        or str(object_type_hint or "").strip().upper()
+        or ("VIEW" if schema_name.lower().endswith("_view") else "TABLE")
+    )
+    if str(current_execution.get("status") or "") == "ok" and item_object_type == "TABLE":
         try:
             checks = query_dev_table_checks(
                 dev_database_url=DEV_DATABASE_URL,
@@ -1394,6 +1400,7 @@ def _prototype_review_build_result(
             file_item=file_item,
             related_files=related_files,
             fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
+            object_type_hint=str(target_item.get("object_type") or ""),
         )
         item_result["object_type"] = str(target_item.get("object_type") or "TABLE").upper()
         item_result["preparation"] = prep_by_target.get(target_fqn) or {"status": "skipped"}

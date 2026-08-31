@@ -265,6 +265,7 @@ export default function AdminPrototypeReviewPage() {
     )));
     try {
       const payload = await adminApi.prototypeReviewCheckTable({
+        mr_input: String(mrInput || "").trim(),
         target_fqn: current.target_fqn,
         entity_name: String(current.entity_name || "").trim(),
         key_attributes: keyAttributes,

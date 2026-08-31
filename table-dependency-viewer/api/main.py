@@ -1045,13 +1045,17 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
     recreate_parts: list[str] = []
     insert_parts: list[str] = []
     truncate_parts: list[str] = []
-    target_tail = target_norm.split(".", 1)[1] if "." in target_norm else target_norm
 
     for file_item in files or []:
         path_value = str(file_item.get("path") or "").strip().lower()
         sql_text = str(file_item.get("sql") or "").strip()
         if not sql_text:
             continue
+        statements = [
+            str(statement).strip()
+            for statement in (file_item.get("statements") or [])
+            if str(statement).strip()
+        ]
         if "recreate" in path_value:
             recreate_parts.append(sql_text)
             continue
@@ -1061,29 +1065,85 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
         if "truncate" in path_value:
             truncate_parts.append(sql_text)
             continue
-        lowered_sql = _strip_sql_comments(sql_text).lower()
-        if (
-            f"create table {target_norm}" in lowered_sql
-            or f"create table if not exists {target_norm}" in lowered_sql
-            or f"create or replace view {target_norm}" in lowered_sql
-            or f"drop table if exists {target_norm}" in lowered_sql
-            or f"drop view if exists {target_norm}" in lowered_sql
-            or (target_tail and f"create table {target_tail}" in lowered_sql)
-        ):
-            recreate_parts.append(sql_text)
-        if f"insert into {target_norm}" in lowered_sql or f"insert into\n {target_norm}" in lowered_sql:
-            insert_parts.append(sql_text)
-        if (
-            f"truncate table {target_norm}" in lowered_sql
-            or f"delete from {target_norm}" in lowered_sql
-        ):
-            truncate_parts.append(sql_text)
+        statement_recreate: list[str] = []
+        statement_insert: list[str] = []
+        statement_truncate: list[str] = []
+        for statement in statements or [sql_text]:
+            normalized_targets: set[str] = set()
+            for pattern in TARGET_PATTERNS:
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized:
+                        normalized_targets.add(normalized)
+            for pattern in CREATE_OBJECT_PATTERNS:
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized:
+                        normalized_targets.add(normalized)
+            for pattern in DROP_TARGET_PATTERNS:
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized == target_norm:
+                        statement_recreate.append(statement)
+            normalized_statement = _strip_sql_comments(statement).lower()
+            if target_norm in normalized_targets:
+                if re.search(r"\bcreate\s+(?:or\s+replace\s+)?(?:table|view)\b", normalized_statement):
+                    statement_recreate.append(statement)
+                if re.search(r"\binsert\s+into\b", normalized_statement):
+                    statement_insert.append(statement)
+            if (
+                target_norm in normalized_targets
+                and re.search(r"\binsert\s+overwrite(?:\s+table)?\b", normalized_statement)
+            ):
+                statement_insert.append(statement)
+            if re.search(r"\b(?:truncate\s+table|truncate|delete\s+from)\b", normalized_statement) and target_norm in normalized_targets:
+                statement_truncate.append(statement)
+
+        if statement_recreate:
+            recreate_parts.append("\n\n".join(statement_recreate))
+        if statement_insert:
+            insert_parts.append("\n\n".join(statement_insert))
+        if statement_truncate:
+            truncate_parts.append("\n\n".join(statement_truncate))
 
     return {
         "recreate_sql": "\n\n".join(part for part in recreate_parts if part.strip()),
         "insert_sql": "\n\n".join(part for part in insert_parts if part.strip()),
         "truncate_sql": "\n\n".join(part for part in truncate_parts if part.strip()),
     }
+
+
+def _prototype_review_group_dependencies(dependencies: list[str]) -> dict[str, list[str]]:
+    grouped: dict[str, set[str]] = {}
+    for item in dependencies or []:
+        value = str(item or "").strip().lower()
+        if "." not in value:
+            continue
+        schema_name, table_name = value.split(".", 1)
+        if not schema_name or not table_name:
+            continue
+        grouped.setdefault(schema_name, set()).add(table_name)
+    return {
+        schema_name: sorted(table_names)
+        for schema_name, table_names in sorted(grouped.items())
+    }
+
+
+def _prototype_review_apply_yaml_dependencies(yaml_content: str, dependencies: list[str]) -> str:
+    try:
+        payload = yaml.safe_load(yaml_content) or {}
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    payload["depends_on"] = _prototype_review_group_dependencies(dependencies)
+    return yaml.dump(
+        payload,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=float("inf"),
+    )
 
 
 def _prototype_review_resolve_item(
@@ -1178,6 +1238,15 @@ def _prototype_review_resolve_item(
             known_schemas=known_schemas,
             exclude_fqns={target_fqn},
         )
+    if yaml_bundle and yaml_bundle.get("yaml_content") is not None:
+        yaml_bundle["yaml_content"] = _prototype_review_apply_yaml_dependencies(
+            str(yaml_bundle.get("yaml_content") or ""),
+            dependencies,
+        )
+        try:
+            yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content") or "") or {}
+        except Exception:
+            yaml_payload = {}
     impact = _prototype_impact_summary(target_fqn)
     is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
     checks = {"row_count": None, "duplicate_groups": None}

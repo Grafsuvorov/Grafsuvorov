@@ -110,6 +110,9 @@ from .config import (
     YOUTRACK_CARD_TYPE_VALUE,
     YOUTRACK_ASSIGNEE_FIELD_NAME,
     YOUTRACK_ASSIGNEE_QUERY,
+    YOUTRACK_RELEASE_DATE_FIELD_NAME,
+    YOUTRACK_DIRECTION_FIELD_NAME,
+    YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
 )
 
 
@@ -464,6 +467,9 @@ class PrototypeReviewRunPayload(BaseModel):
     copy_to_clickhouse: Optional[bool] = None
     dependent_views: Optional[List[str]] = None
     linked_issues: Optional[List[str]] = None
+    release_date: Optional[str] = None
+    direction: Optional[str] = None
+    business_key_changed: Optional[bool] = None
 
 
 class PrototypeReviewTableCheckPayload(BaseModel):
@@ -504,6 +510,9 @@ class PrototypeReviewCreateIssuePayload(BaseModel):
     stand_prod: bool = True
     copy_to_clickhouse: Optional[bool] = None
     linked_issues: Optional[List[str]] = None
+    release_date: Optional[str] = None
+    direction: Optional[str] = None
+    business_key_changed: Optional[bool] = None
     review_items: List[PrototypeReviewItemPayload]
 
 
@@ -921,9 +930,11 @@ def _prototype_issue_description(
                 "",
                 "## Параметры загрузки",
                 f"**Предметная область:** {task_context.get('subject_area') or '—'}",
+                f"**Направление:** {task_context.get('direction') or '—'}",
                 f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
                 f"**Дата релиза:** {task_context.get('release_date') or '—'}",
+                f"**Меняется бизнес-ключ:** {'Да' if task_context.get('business_key_changed') else 'Нет'}",
                 f"**Время выполнения SQL:** {_format_duration(total_execution_sec)}",
             ]
         )
@@ -987,6 +998,8 @@ def _prototype_multi_issue_description(
                 "## Общие параметры",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
                 f"**Дата релиза:** {task_context.get('release_date') or '—'}",
+                f"**Направление:** {task_context.get('direction') or '—'}",
+                f"**Меняется бизнес-ключ:** {'Да' if task_context.get('business_key_changed') else 'Нет'}",
             ]
         )
     for index, item in enumerate(review_items, start=1):
@@ -1361,6 +1374,13 @@ def _prototype_review_build_result(
         "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
         "dependent_views": payload.dependent_views or parsed_task.get("dependent_views") or [],
         "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
+        "release_date": (payload.release_date or parsed_task.get("release_date") or "").strip(),
+        "direction": (payload.direction or parsed_task.get("direction") or "").strip(),
+        "business_key_changed": (
+            payload.business_key_changed
+            if payload.business_key_changed is not None
+            else parsed_task.get("business_key_changed")
+        ),
     }
     preparation_rows: list[dict[str, Any]] = []
     execution_rows: list[dict[str, Any]] = []
@@ -1372,7 +1392,7 @@ def _prototype_review_build_result(
             progress_callback=progress_callback,
         )
 
-    exec_by_item_id = {str(item.get("item_id") or ""): item for item in execution_rows}
+    exec_by_path = {str(item.get("path") or "").strip(): item for item in execution_rows if str(item.get("path") or "").strip()}
     prep_by_item_id = {str(item.get("item_id") or ""): item for item in preparation_rows}
     review_items: list[dict[str, Any]] = []
     all_dependencies: list[str] = []
@@ -1384,9 +1404,34 @@ def _prototype_review_build_result(
         if not target_fqn:
             validation_warnings.append(f"Для файла `{target_item.get('path')}` не удалось определить целевой объект")
             continue
-        execution_row = exec_by_item_id.get(item_id) or {"status": "skipped", "duration_sec": 0.0}
         path_value = str(target_item.get("path") or "")
         related_paths = [str(value).strip() for value in (target_item.get("paths") or []) if str(value).strip()]
+        related_execution_rows = [exec_by_path[path] for path in related_paths if path in exec_by_path]
+        execution_status = "skipped"
+        execution_duration = 0.0
+        execution_error_messages: list[str] = []
+        if related_execution_rows:
+            execution_duration = round(
+                sum(float(row.get("duration_sec") or 0.0) for row in related_execution_rows),
+                3,
+            )
+            if any(str(row.get("status") or "") == "error" for row in related_execution_rows):
+                execution_status = "error"
+                execution_error_messages = [
+                    str(row.get("error_message") or "").strip()
+                    for row in related_execution_rows
+                    if str(row.get("error_message") or "").strip()
+                ]
+            elif any(str(row.get("status") or "") == "ok" for row in related_execution_rows):
+                execution_status = "ok"
+            elif any(str(row.get("status") or "") == "skipped" for row in related_execution_rows):
+                execution_status = "skipped"
+        execution_row = {
+            "status": execution_status,
+            "duration_sec": execution_duration,
+        }
+        if execution_error_messages:
+            execution_row["error_message"] = "; ".join(dict.fromkeys(execution_error_messages))
         related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
         file_item = related_files[0] if related_files else {}
         dependencies = extract_sql_dependencies(
@@ -1590,6 +1635,13 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             **parsed_task,
             "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
             "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
+            "release_date": (payload.release_date or parsed_task.get("release_date") or "").strip(),
+            "direction": (payload.direction or parsed_task.get("direction") or "").strip(),
+            "business_key_changed": (
+                payload.business_key_changed
+                if payload.business_key_changed is not None
+                else parsed_task.get("business_key_changed")
+            ),
         }
         summary = (payload.issue_summary or "").strip() or parsed_task.get("summary") or f"[Prototype Review] {bundle.get('mr', {}).get('source_branch') or 'prototype'}"
         description = _prototype_multi_issue_description(
@@ -1614,6 +1666,12 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             card_type_value=YOUTRACK_CARD_TYPE_VALUE,
             assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
             assignee_query=YOUTRACK_ASSIGNEE_QUERY,
+            release_date=task_context.get("release_date"),
+            release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
+            direction=task_context.get("direction"),
+            direction_field_name=YOUTRACK_DIRECTION_FIELD_NAME,
+            business_key_changed=task_context.get("business_key_changed"),
+            business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
         )
         meta_branch = None
         meta_files = []

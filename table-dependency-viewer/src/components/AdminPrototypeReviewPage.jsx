@@ -7,7 +7,20 @@ const DEFAULT_FORM = {
   git_reference: "",
   script_runtime: "",
   release_date: "",
+  direction: "",
+  business_key_changed: false,
 };
+
+const DIRECTION_OPTIONS = [
+  "Финансы",
+  "Сбыт",
+  "Управление запасами",
+  "Транспортировка",
+  "Производство",
+  "ТОРО",
+  "НСИ",
+  "TECH",
+];
 
 function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -77,6 +90,8 @@ function buildTaskText(form, linkedIssues) {
   pushLine("Ссылка на гит", form.git_reference);
   pushLine("Время работы скрипта", form.script_runtime);
   pushLine("Дата релиза", form.release_date);
+  pushLine("Направление", form.direction);
+  pushLine("Меняется бизнес-ключ", form.business_key_changed ? "Да" : "Нет");
   if (splitItems(linkedIssues).length) {
     lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
   }
@@ -236,6 +251,9 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
+        release_date: form.release_date || "",
+        direction: form.direction || "",
+        business_key_changed: Boolean(form.business_key_changed),
         create_issue: false,
       });
       const jobId = String(startPayload?.job_id || "").trim();
@@ -263,6 +281,10 @@ export default function AdminPrototypeReviewPage() {
         git_reference: prev.git_reference || trimmedMr,
         script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
         release_date: prev.release_date || String(payload?.task_context?.release_date || "").trim(),
+        direction: prev.direction || String(payload?.task_context?.direction || "").trim(),
+        business_key_changed: typeof payload?.task_context?.business_key_changed === "boolean"
+          ? payload.task_context.business_key_changed
+          : prev.business_key_changed,
       }));
       if (!String(linkedIssues || "").trim() && Array.isArray(payload?.task_context?.linked_issues)) {
         setLinkedIssues(payload.task_context.linked_issues.join(", "));
@@ -332,6 +354,9 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
+        release_date: form.release_date || "",
+        direction: form.direction || "",
+        business_key_changed: Boolean(form.business_key_changed),
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
@@ -707,6 +732,27 @@ export default function AdminPrototypeReviewPage() {
                   {formatReleaseDate(form.release_date)}
                 </div>
               </div>
+              <div className="prototype-step-field" style={{ margin: 0 }}>
+                <span className="slow-select-label">Направление</span>
+                <select
+                  className="slow-entity-select"
+                  value={form.direction || ""}
+                  onChange={(event) => handleFieldChange("direction", event.target.value)}
+                >
+                  <option value="">Не выбрано</option>
+                  {DIRECTION_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <label className="prototype-toggle-card wide" style={{ alignSelf: "end", minHeight: 44 }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.business_key_changed)}
+                  onChange={(event) => handleFieldChange("business_key_changed", event.target.checked)}
+                />
+                <span>Меняется бизнес-ключ</span>
+              </label>
             </div>
             <div className="prototype-import-actions">
               <div className="muted">

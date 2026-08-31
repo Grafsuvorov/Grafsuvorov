@@ -144,6 +144,7 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
         "target_table_fqn": None,
         "entity_name": None,
         "subject_area": None,
+        "direction": None,
         "git_reference": None,
         "load_mode": None,
         "load_condition": None,
@@ -159,6 +160,7 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
         "linked_issues": [],
         "parent_issue": None,
         "dashboard_name": None,
+        "business_key_changed": None,
     }
 
     field_patterns = {
@@ -170,6 +172,7 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
         "target_table_fqn": r"(?:Название таблицы Greenplum|Название таблицы в таргете):\s*(.+)",
         "entity_name": r"Сущность загрузки:\s*(.+)",
         "subject_area": r"Предметная область:\s*(.+)",
+        "direction": r"Направление:\s*(.+)",
         "git_reference": r"(?:Ссылка на гит|Ссылка на описание шаблона):\s*(.+)",
         "load_mode": r"Способ обновления:\s*(.+)",
         "load_condition": r"Условие при загрузке:\s*(.+)",
@@ -225,6 +228,14 @@ def parse_prototype_task_text(task_text: str) -> dict[str, Any]:
             if key:
                 business_keys.append(key)
         result["business_key"] = business_keys
+
+    business_key_changed_match = re.search(r"Меняется бизнес-ключ:\s*(.+)", raw_text, re.IGNORECASE)
+    if business_key_changed_match:
+        value = business_key_changed_match.group(1).strip().lower()
+        if value in {"да", "yes", "true", "1"}:
+            result["business_key_changed"] = True
+        elif value in {"нет", "no", "false", "0"}:
+            result["business_key_changed"] = False
 
     pseudo_increment_match = re.search(
         r"Последовательность действий при \(псевдо\)инкрементальном обновлении таблицы:\s*(.+?)(?:\n\s*\n|\n[А-ЯA-Z][^:\n]{0,80}:|\Z)",
@@ -445,44 +456,59 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         path_value = str(item.get("path") or "").strip()
         sql_text = str(item.get("sql") or "")
         statements = item.get("statements") or []
-        targets: list[str] = []
-        object_type = None
-        has_create = False
-        has_drop = False
-        has_self_mutation = False
+        target_sequence: list[tuple[str, str]] = []
+        seen_targets: set[tuple[str, str]] = set()
+        file_target_flags: dict[str, dict[str, Any]] = {}
+        lowered_sql = _strip_sql_comments(sql_text).lower()
 
         for statement in statements:
+            statement_lower = statement.lower()
+            statement_targets: list[tuple[str, str, bool, bool]] = []
             for pattern in TARGET_PATTERNS:
                 for match in pattern.finditer(statement):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
-                        targets.append(normalized)
+                        statement_targets.append((normalized, "TABLE", False, False))
             for pattern in CREATE_OBJECT_PATTERNS:
                 for match in pattern.finditer(statement):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
-                        targets.append(normalized)
-                        has_create = True
-                        if " view " in statement.lower() or statement.lower().lstrip().startswith("create view") or "or replace view" in statement.lower():
-                            object_type = "VIEW"
-                        elif object_type is None:
-                            object_type = "TABLE"
+                        object_type = (
+                            "VIEW"
+                            if " view " in statement_lower
+                            or statement_lower.lstrip().startswith("create view")
+                            or "or replace view" in statement_lower
+                            else "TABLE"
+                        )
+                        statement_targets.append((normalized, object_type, True, False))
             for pattern in DROP_TARGET_PATTERNS:
                 for match in pattern.finditer(statement):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
-                        targets.append(normalized)
-                        has_drop = True
+                        object_type = "VIEW" if "drop view" in statement_lower else "TABLE"
+                        statement_targets.append((normalized, object_type, False, True))
 
-        deduped_targets: list[str] = []
-        seen: set[str] = set()
-        for target in targets:
-            if target not in seen:
-                seen.add(target)
-                deduped_targets.append(target)
-        target_fqn = deduped_targets[-1] if deduped_targets else None
-        if target_fqn:
-            lowered_sql = _strip_sql_comments(sql_text).lower()
+            for normalized, object_type, has_create, has_drop in statement_targets:
+                key = f"{normalized}::{object_type}"
+                flags = file_target_flags.setdefault(
+                    key,
+                    {
+                        "target_fqn": normalized,
+                        "object_type": object_type,
+                        "has_create": False,
+                        "has_drop": False,
+                        "has_self_mutation": False,
+                    },
+                )
+                flags["has_create"] = bool(flags.get("has_create") or has_create)
+                flags["has_drop"] = bool(flags.get("has_drop") or has_drop)
+                if (normalized, object_type) not in seen_targets:
+                    seen_targets.add((normalized, object_type))
+                    target_sequence.append((normalized, object_type))
+
+        for target_fqn, object_type in target_sequence:
+            key = f"{target_fqn}::{object_type}"
+            flags = file_target_flags.get(key) or {}
             has_self_mutation = any(
                 token in lowered_sql
                 for token in (
@@ -495,36 +521,31 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     f"drop view {target_fqn}",
                 )
             )
-        if object_type is None and target_fqn:
-            object_type = "VIEW" if target_fqn.split(".", 1)[0].endswith("_view") else "TABLE"
-        normalized_object_type = str(object_type or "TABLE").upper()
-        group_key = f"{target_fqn}::{normalized_object_type}" if target_fqn else f"__path__:{path_value}"
-        if group_key not in grouped:
-            grouped[group_key] = {
-                "item_id": group_key,
-                "path": path_value,
-                "paths": [],
-                "target_fqn": target_fqn,
-                "all_targets": [],
-                "object_type": normalized_object_type,
-                "has_create": False,
-                "has_drop": False,
-                "has_self_mutation": False,
-                "execution_paths": [],
-                "skip_dev_execution": True,
-            }
-            order.append(group_key)
-        group = grouped[group_key]
-        group["paths"].append(path_value)
-        group["all_targets"] = list(dict.fromkeys([*(group.get("all_targets") or []), *deduped_targets]))
-        group["has_create"] = bool(group.get("has_create") or has_create)
-        group["has_drop"] = bool(group.get("has_drop") or has_drop)
-        group["has_self_mutation"] = bool(group.get("has_self_mutation") or has_self_mutation)
-        if str(object_type or "").upper() == "VIEW":
-            group["object_type"] = "VIEW"
-        if not _is_clickhouse_sql_path(path_value):
-            group["execution_paths"].append(path_value)
-            group["skip_dev_execution"] = False
+            group_key = f"{target_fqn}::{object_type}" if target_fqn else f"__path__:{path_value}"
+            if group_key not in grouped:
+                grouped[group_key] = {
+                    "item_id": group_key,
+                    "path": path_value,
+                    "paths": [],
+                    "target_fqn": target_fqn,
+                    "all_targets": [],
+                    "object_type": object_type,
+                    "has_create": False,
+                    "has_drop": False,
+                    "has_self_mutation": False,
+                    "execution_paths": [],
+                    "skip_dev_execution": True,
+                }
+                order.append(group_key)
+            group = grouped[group_key]
+            group["paths"].append(path_value)
+            group["all_targets"] = list(dict.fromkeys([*(group.get("all_targets") or []), *[value for value, _ in target_sequence]]))
+            group["has_create"] = bool(group.get("has_create") or flags.get("has_create"))
+            group["has_drop"] = bool(group.get("has_drop") or flags.get("has_drop"))
+            group["has_self_mutation"] = bool(group.get("has_self_mutation") or has_self_mutation or flags.get("has_self_mutation"))
+            if not _is_clickhouse_sql_path(path_value):
+                group["execution_paths"].append(path_value)
+                group["skip_dev_execution"] = False
     result: list[dict[str, Any]] = []
     for group_key in order:
         group = grouped[group_key]
@@ -653,23 +674,11 @@ def execute_sql_review_items_in_dev(
     try:
         connection = exec_engine.raw_connection()
         cursor = connection.cursor()
-        total = len(review_targets)
-        for index, review_item in enumerate(review_targets, start=1):
+        execution_plan: list[dict[str, Any]] = []
+        seen_execution_paths: set[str] = set()
+        for review_item in review_targets:
             item_id = str(review_item.get("item_id") or "").strip()
-            path_value = str(review_item.get("path") or "").strip()
-            execution_paths = [str(item).strip() for item in (review_item.get("execution_paths") or []) if str(item).strip()]
             target_fqn = str(review_item.get("target_fqn") or "").strip()
-            if callable(progress_callback):
-                progress_callback(
-                    {
-                        "stage": "running_file",
-                        "current": index,
-                        "total": total,
-                        "item_id": item_id or None,
-                        "path": path_value,
-                        "target_fqn": target_fqn or None,
-                    }
-                )
             if review_item.get("skip_dev_execution"):
                 preparation_rows.append(
                     {
@@ -681,25 +690,14 @@ def execute_sql_review_items_in_dev(
                         "duration_sec": 0.0,
                     }
                 )
-                execution_rows.append(
-                    {
-                        "item_id": item_id or None,
-                        "path": path_value,
-                        "target_fqn": target_fqn or None,
-                        "status": "skipped",
-                        "duration_sec": 0.0,
-                        "message": "ClickHouse SQL не выполняется в DEV prototype review",
-                    }
-                )
-                continue
-            if review_item.get("requires_pretruncate") and target_fqn:
+            elif review_item.get("requires_pretruncate") and target_fqn:
                 try:
-                    preparation_rows.append(
-                        prepare_target_table_in_dev(
-                            dev_database_url=dev_database_url,
-                            target_fqn=target_fqn,
-                        )
+                    prep_row = prepare_target_table_in_dev(
+                        dev_database_url=dev_database_url,
+                        target_fqn=target_fqn,
                     )
+                    prep_row["item_id"] = item_id or None
+                    preparation_rows.append(prep_row)
                 except Exception as exc:
                     preparation_rows.append(
                         {
@@ -722,20 +720,49 @@ def execute_sql_review_items_in_dev(
                         "duration_sec": 0.0,
                     }
                 )
-            if not execution_paths:
-                execution_rows.append({"item_id": item_id or None, "path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
-                continue
+
+            for execution_path in [str(item).strip() for item in (review_item.get("execution_paths") or []) if str(item).strip()]:
+                if execution_path in seen_execution_paths:
+                    continue
+                seen_execution_paths.add(execution_path)
+                execution_plan.append(
+                    {
+                        "path": execution_path,
+                        "target_fqn": target_fqn or None,
+                        "item_id": item_id or None,
+                    }
+                )
+
+        total = len(execution_plan)
+        if not execution_plan:
+            return preparation_rows, execution_rows
+
+        for index, plan_item in enumerate(execution_plan, start=1):
+            path_value = str(plan_item.get("path") or "").strip()
+            target_fqn = str(plan_item.get("target_fqn") or "").strip()
+            item_id = str(plan_item.get("item_id") or "").strip()
+            if callable(progress_callback):
+                progress_callback(
+                    {
+                        "stage": "running_file",
+                        "current": index,
+                        "total": total,
+                        "item_id": item_id or None,
+                        "path": path_value,
+                        "target_fqn": target_fqn or None,
+                    }
+                )
             total_duration = 0.0
             try:
-                for exec_path in execution_paths:
-                    file_item = file_map.get(exec_path) or {}
-                    sql_text = str(file_item.get("sql") or "").strip()
-                    if not sql_text:
-                        continue
-                    started = time.perf_counter()
-                    cursor.execute(sql_text)
-                    connection.commit()
-                    total_duration += time.perf_counter() - started
+                file_item = file_map.get(path_value) or {}
+                sql_text = str(file_item.get("sql") or "").strip()
+                if not sql_text:
+                    execution_rows.append({"item_id": item_id or None, "path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
+                    continue
+                started = time.perf_counter()
+                cursor.execute(sql_text)
+                connection.commit()
+                total_duration += time.perf_counter() - started
                 execution_rows.append(
                     {
                         "item_id": item_id or None,
@@ -920,6 +947,12 @@ def create_ytrack_issue(
     card_type_value: str = "Task",
     assignee_field_name: str = "Assignee",
     assignee_query: str = "Suvorov Nikita",
+    release_date: Optional[str] = None,
+    release_date_field_name: str = "Дата релиза",
+    direction: Optional[str] = None,
+    direction_field_name: str = "Направление",
+    business_key_changed: Optional[bool] = None,
+    business_key_changed_field_name: str = "Меняется бизнес-ключ",
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -993,6 +1026,45 @@ def create_ytrack_issue(
                     user_value=user_value,
                 )
             )
+
+    release_date_field = _resolve_ytrack_custom_field(
+        items=project_custom_fields,
+        field_name=release_date_field_name,
+        fallback_contains="дата релиз",
+    )
+    if release_date_field and str(release_date or "").strip():
+        custom_fields_payload.append(
+            _build_ytrack_value_payload(
+                field_item=release_date_field,
+                raw_value=str(release_date).strip(),
+            )
+        )
+
+    direction_field = _resolve_ytrack_custom_field(
+        items=project_custom_fields,
+        field_name=direction_field_name,
+        fallback_contains="направлен",
+    )
+    if direction_field and str(direction or "").strip():
+        custom_fields_payload.append(
+            _build_ytrack_value_payload(
+                field_item=direction_field,
+                raw_value=str(direction).strip(),
+            )
+        )
+
+    business_key_changed_field = _resolve_ytrack_custom_field(
+        items=project_custom_fields,
+        field_name=business_key_changed_field_name,
+        fallback_contains="бизнес-ключ",
+    )
+    if business_key_changed_field and business_key_changed is not None:
+        custom_fields_payload.append(
+            _build_ytrack_value_payload(
+                field_item=business_key_changed_field,
+                raw_value="Да" if business_key_changed else "Нет",
+            )
+        )
 
     if custom_fields_payload:
         payload["customFields"] = custom_fields_payload
@@ -1248,6 +1320,56 @@ def _build_ytrack_named_value_payload(*, field_item: dict[str, str], raw_value: 
     if field_id:
         payload["id"] = field_id
     return payload
+
+
+def _build_ytrack_value_payload(*, field_item: dict[str, str], raw_value: Any) -> dict[str, Any]:
+    issue_custom_field_type = str(field_item.get("issue_custom_field_type") or "SimpleIssueCustomField").strip()
+    field_value_type = str(field_item.get("field_value_type") or field_item.get("field_type_id") or "").strip().lower()
+    field_name = str(field_item.get("name") or "").strip()
+    field_id = str(field_item.get("id") or "").strip()
+
+    if issue_custom_field_type in {
+        "SingleEnumIssueCustomField",
+        "SingleOwnedIssueCustomField",
+        "StateIssueCustomField",
+        "SingleVersionIssueCustomField",
+    }:
+        payload_value: Any = {"name": str(raw_value).strip()}
+    elif issue_custom_field_type == "PeriodIssueCustomField" or field_value_type == "period":
+        payload_value = {"minutes": int(raw_value)}
+    elif field_value_type in {"date", "datetime", "date and time"} or issue_custom_field_type in {"DateIssueCustomField", "DateTimeIssueCustomField"}:
+        payload_value = _parse_ytrack_date_value(raw_value)
+    elif field_value_type in {"boolean", "bool"} or issue_custom_field_type == "BooleanIssueCustomField":
+        payload_value = _normalize_bool(str(raw_value), default=False)
+    elif field_value_type in {"integer", "int"}:
+        payload_value = int(raw_value)
+    else:
+        payload_value = raw_value
+
+    payload = {
+        "name": field_name,
+        "$type": issue_custom_field_type,
+        "value": payload_value,
+    }
+    if field_id:
+        payload["id"] = field_id
+    return payload
+
+
+def _parse_ytrack_date_value(raw_value: Any) -> int:
+    text_value = str(raw_value or "").strip()
+    if not text_value:
+        raise ValueError("Пустая дата для custom field YTrack")
+    parsed = None
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            parsed = time.strptime(text_value, fmt)
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        raise ValueError(f"Не удалось распознать дату `{text_value}` для custom field YTrack")
+    return int(time.mktime(parsed)) * 1000
 
 
 def _build_ytrack_user_payload(*, field_item: dict[str, str], user_value: dict[str, str]) -> dict[str, Any]:

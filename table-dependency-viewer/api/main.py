@@ -170,6 +170,7 @@ from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     DROP_TARGET_PATTERNS,
     TARGET_PATTERNS,
+    _is_clickhouse_sql_path,
     _infer_target_from_path,
     _normalize_fqn,
     add_ytrack_issue_comment,

@@ -562,22 +562,26 @@ export default function AdminPrototypeReviewPage() {
                         <div className="prototype-stat-label">Сущность</div>
                         <div className="prototype-stat-value">{item.entity_name || "—"}</div>
                       </div>
-                      <div className="prototype-stat-card">
-                        <div className="prototype-stat-label">Ключевые поля</div>
-                        <div className="prototype-stat-value">{compactList(item.key_attributes_text)}</div>
-                      </div>
+                      {isTableObject ? (
+                        <div className="prototype-stat-card">
+                          <div className="prototype-stat-label">Ключевые поля</div>
+                          <div className="prototype-stat-value">{compactList(item.key_attributes_text)}</div>
+                        </div>
+                      ) : null}
                       <div className="prototype-stat-card">
                         <div className="prototype-stat-label">Количество строк</div>
                         <div className="prototype-stat-value">
                           {item.checks?.row_count !== undefined && item.checks?.row_count !== null ? formatCount(item.checks.row_count) : "—"}
                         </div>
                       </div>
-                      <div className="prototype-stat-card">
-                        <div className="prototype-stat-label">Кол-во дублей</div>
-                        <div className="prototype-stat-value">
-                          {item.checks?.duplicate_groups !== undefined && item.checks?.duplicate_groups !== null ? formatCount(item.checks.duplicate_groups) : "—"}
+                      {isTableObject ? (
+                        <div className="prototype-stat-card">
+                          <div className="prototype-stat-label">Кол-во дублей</div>
+                          <div className="prototype-stat-value">
+                            {item.checks?.duplicate_groups !== undefined && item.checks?.duplicate_groups !== null ? formatCount(item.checks.duplicate_groups) : "—"}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                       <div className="prototype-stat-card">
                         <div className="prototype-stat-label">Время SQL</div>
                         <div className="prototype-stat-value">{item.duration_sec ? formatDuration(item.duration_sec) : "—"}</div>
@@ -599,16 +603,16 @@ export default function AdminPrototypeReviewPage() {
                           placeholder="BI_SB_WUC"
                         />
                         </div>
-                        <div className="prototype-step-field" style={{ margin: 0 }}>
-                        <span className="slow-select-label">Ключевые поля</span>
-                        <textarea
-                          className="slow-entity-select"
-                          value={item.key_attributes_text || ""}
-                          onChange={(event) => handleReviewItemChange(item.item_id, "key_attributes_text", event.target.value)}
-                          placeholder="warehouse_code, dt_report"
-                          style={{ minHeight: 100, resize: "vertical" }}
-                        />
                         {isTableObject ? (
+                          <div className="prototype-step-field" style={{ margin: 0 }}>
+                          <span className="slow-select-label">Ключевые поля</span>
+                          <textarea
+                            className="slow-entity-select"
+                            value={item.key_attributes_text || ""}
+                            onChange={(event) => handleReviewItemChange(item.item_id, "key_attributes_text", event.target.value)}
+                            placeholder="warehouse_code, dt_report"
+                            style={{ minHeight: 100, resize: "vertical" }}
+                          />
                           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                             <button
                               type="button"
@@ -619,8 +623,8 @@ export default function AdminPrototypeReviewPage() {
                               {item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
                             </button>
                           </div>
+                          </div>
                         ) : null}
-                        </div>
                         {item.copy_to_clickhouse ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
                             <span className="slow-select-label">Ключевые поля ClickHouse</span>

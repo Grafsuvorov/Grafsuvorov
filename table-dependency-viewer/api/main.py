@@ -1278,24 +1278,26 @@ def _prototype_review_resolve_item(
             yaml_payload = {}
     impact = _prototype_impact_summary(target_fqn)
     is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
-    checks = {"row_count": None, "duplicate_groups": None}
-    current_execution = execution_row or {"status": "skipped", "duration_sec": 0.0}
     item_object_type = (
         str((yaml_payload or {}).get("object_type") or "").strip().upper()
         or str(object_type_hint or "").strip().upper()
         or ("VIEW" if schema_name.lower().endswith("_view") else "TABLE")
     )
-    if str(current_execution.get("status") or "") == "ok" and item_object_type == "TABLE":
+    if item_object_type != "TABLE":
+        detected_keys = []
+    checks = {"row_count": None, "duplicate_groups": None}
+    current_execution = execution_row or {"status": "skipped", "duration_sec": 0.0}
+    if str(current_execution.get("status") or "") == "ok" and item_object_type in {"TABLE", "VIEW"}:
         try:
             checks = query_dev_table_checks(
                 dev_database_url=DEV_DATABASE_URL,
                 target_fqn=target_fqn,
-                key_attributes=detected_keys,
+                key_attributes=detected_keys if item_object_type == "TABLE" else [],
             )
         except Exception:
             checks = {"row_count": None, "duplicate_groups": None}
     item_warnings: list[str] = []
-    if not detected_keys:
+    if item_object_type == "TABLE" and not detected_keys:
         item_warnings.append("Ключевые поля не найдены автоматически")
     if current_execution.get("status") == "error":
         item_warnings.append(f"Ошибка в файле `{path_value}`: {current_execution.get('error_message') or 'SQL не выполнился'}")
@@ -1395,6 +1397,11 @@ def _prototype_review_build_result(
         )
 
     exec_by_path = {str(item.get("path") or "").strip(): item for item in execution_rows if str(item.get("path") or "").strip()}
+    exec_by_item_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in execution_rows:
+        row_item_id = str(row.get("item_id") or "").strip()
+        if row_item_id:
+            exec_by_item_id[row_item_id].append(row)
     prep_by_item_id = {str(item.get("item_id") or ""): item for item in preparation_rows}
     review_items: list[dict[str, Any]] = []
     all_dependencies: list[str] = []
@@ -1408,7 +1415,9 @@ def _prototype_review_build_result(
             continue
         path_value = str(target_item.get("path") or "")
         related_paths = [str(value).strip() for value in (target_item.get("paths") or []) if str(value).strip()]
-        related_execution_rows = [exec_by_path[path] for path in related_paths if path in exec_by_path]
+        related_execution_rows = list(exec_by_item_id.get(item_id) or [])
+        if not related_execution_rows:
+            related_execution_rows = [exec_by_path[path] for path in related_paths if path in exec_by_path]
         execution_status = "skipped"
         execution_duration = 0.0
         execution_error_messages: list[str] = []

@@ -303,7 +303,15 @@ def get_bundle_values(bundle_id: str, bundle_type: str = "enum") -> list[dict[st
     bundle = str(bundle_id or "").strip()
     if not bundle:
         return []
-    normalized_type = str(bundle_type or "enum").strip().lower()
+    normalized_type_raw = str(bundle_type or "enum").strip()
+    normalized_type = {
+        "enum": "enum",
+        "state": "state",
+        "version": "version",
+        "ownedfield": "ownedField",
+        "ownedField": "ownedField",
+        "user": "user",
+    }.get(normalized_type_raw, normalized_type_raw)
     return api_get(
         f"/api/admin/customFieldSettings/bundles/{normalized_type}/{bundle}/values",
         {"fields": "id,name,description,isArchived,localizedName,fullName"},

@@ -65,18 +65,21 @@ Project custom fields:
 {"id": "173-679", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Due Date", "field_type_id": "date", "field_value_type": "date"}
 {"id": "173-721", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Дата начала отпуска", "field_type_id": "date", "field_value_type": "date"}
 
-Enum values for `Тип карточки` (bundle `113-29`):
-{"id": "114-143", "name": "Bug", "description": null, "isArchived": null}
-{"id": "114-146", "name": "Feature", "description": null, "isArchived": null}
-{"id": "114-147", "name": "Task", "description": "Task", "isArchived": null}
-{"id": "114-150", "name": "Epic", "description": null, "isArchived": null}
-{"id": "114-225", "name": "User Story", "description": "User Story", "isArchived": null}
-{"id": "114-417", "name": "Incident", "description": "Инцидент", "isArchived": null}
-{"id": "114-846", "name": "Техдолг", "description": null, "isArchived": null}
-{"id": "114-850", "name": "Внерелиз", "description": null, "isArchived": null}
-{"id": "114-1234", "name": "Release Slot", "description": null, "isArchived": null}
-{"id": "114-1310", "name": "Приложения КХД", "description": null, "isArchived": null}
-{"id": "114-1361", "name": "Отпуск", "description": null, "isArchived": null}
+Values for `Тип карточки` (bundle `113-29`, type `enum`):
+{"id": "114-143", "name": "Bug", "localizedName": "Bug", "fullName": null, "description": null, "isArchived": null}
+{"id": "114-146", "name": "Feature", "localizedName": "Feature", "fullName": null, "description": null, "isArchived": null}
+{"id": "114-147", "name": "Task", "localizedName": "Task", "fullName": null, "description": "Task", "isArchived": null}
+{"id": "114-150", "name": "Epic", "localizedName": "Epic", "fullName": null, "description": null, "isArchived": null}
+{"id": "114-225", "name": "User Story", "localizedName": null, "fullName": null, "description": "User Story", "isArchived": null}
+{"id": "114-417", "name": "Incident", "localizedName": null, "fullName": null, "description": "Инцидент", "isArchived": null}
+{"id": "114-846", "name": "Техдолг", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "114-850", "name": "Внерелиз", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "114-1234", "name": "Release Slot", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "114-1310", "name": "Приложения КХД", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "114-1361", "name": "Отпуск", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+
+Values for `Направление` (bundle `136-95`, type `ownedfield`):
+Failed to load bundle values: GET /api/admin/customFieldSettings/bundles/ownedfield/136-95/values -> 404: {"error":"Not Found","error_description":"No subresource for path ownedfield"}
 
 POST /api/issues payload:
 {
@@ -192,7 +195,7 @@ Full customFields payload:
 - Без поля `Дата релиза` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
 - Поле `Направление` выглядит проблемным: без него задача создаётся.
 {
-  "id": "2-88751",
+  "id": "2-88774",
   "$type": "Issue"
 }
 - Без поля `Меняется бизнес-ключ` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}

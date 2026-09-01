@@ -1,2 +1,1 @@
-dm.sales_pricing_documents
-dm/dm.sales_pricing_documents.sql dm_view/dm_view.sales_pricing_documents.sql
+YTrack вернул 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}

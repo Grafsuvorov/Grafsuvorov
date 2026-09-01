@@ -102,6 +102,19 @@ def _normalize_fqn(value: str) -> Optional[str]:
     return f"{schema_name}.{table_name}"
 
 
+def _preserve_fqn(value: str) -> Optional[str]:
+    parts = _split_fqn_parts(value)
+    if len(parts) != 2:
+        return None
+    cleaned_parts: list[str] = []
+    for part in parts:
+        text_value = str(part or "").strip().strip(";").replace("`", "")
+        if not text_value:
+            return None
+        cleaned_parts.append(text_value)
+    return ".".join(cleaned_parts)
+
+
 def _split_lines_block(value: str) -> list[str]:
     return [line.strip() for line in str(value or "").splitlines() if line.strip()]
 
@@ -649,14 +662,16 @@ def extract_sql_dependencies(
             for pattern in DEPENDENCY_PATTERNS:
                 for match in pattern.finditer(statement):
                     normalized = _normalize_fqn(match.group(1))
+                    preserved = _preserve_fqn(match.group(1))
                     if (
                         normalized
+                        and preserved
                         and normalized not in seen
                         and normalized not in excluded
                         and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
                     ):
                         seen.add(normalized)
-                        result.append(normalized)
+                        result.append(preserved)
     return result
 
 

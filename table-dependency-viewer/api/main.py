@@ -932,11 +932,8 @@ def _prototype_issue_description(
                 "",
                 "## Параметры загрузки",
                 f"**Предметная область:** {task_context.get('subject_area') or '—'}",
-                f"**Направление:** {task_context.get('direction') or '—'}",
                 f"**Режим обновления:** {task_context.get('load_mode') or '—'}",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
-                f"**Дата релиза:** {task_context.get('release_date') or '—'}",
-                f"**Меняется бизнес-ключ:** {'Да' if task_context.get('business_key_changed') else 'Нет'}",
                 f"**Время выполнения SQL:** {_format_duration(total_execution_sec)}",
             ]
         )
@@ -999,9 +996,6 @@ def _prototype_multi_issue_description(
                 "",
                 "## Общие параметры",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
-                f"**Дата релиза:** {task_context.get('release_date') or '—'}",
-                f"**Направление:** {task_context.get('direction') or '—'}",
-                f"**Меняется бизнес-ключ:** {'Да' if task_context.get('business_key_changed') else 'Нет'}",
             ]
         )
     for index, item in enumerate(review_items, start=1):

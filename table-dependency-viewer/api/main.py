@@ -170,6 +170,7 @@ from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     DROP_TARGET_PATTERNS,
     TARGET_PATTERNS,
+    _infer_target_from_path,
     _normalize_fqn,
     add_ytrack_issue_comment,
     create_ytrack_issue,
@@ -1459,6 +1460,46 @@ def _prototype_review_build_result(
         item_result["dependencies"] = dependencies
         requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
         review_items.append(item_result)
+
+    covered_paths = {
+        str(path_value).strip()
+        for item in review_items
+        for path_value in (item.get("paths") or [item.get("path")])
+        if str(path_value).strip()
+    }
+    for execution_row in execution_rows:
+        path_value = str(execution_row.get("path") or "").strip()
+        if not path_value or path_value in covered_paths or _is_clickhouse_sql_path(path_value):
+            continue
+        fallback_target = _infer_target_from_path(path_value)
+        if not fallback_target:
+            continue
+        target_fqn, object_type = fallback_target
+        related_files = [row for row in files if str(row.get("path") or "").strip() == path_value]
+        file_item = related_files[0] if related_files else {}
+        dependencies = extract_sql_dependencies(
+            related_files or [file_item],
+            known_schemas=known_schemas,
+            exclude_fqns={target_fqn},
+        )
+        item_result = _prototype_review_resolve_item(
+            target_fqn=target_fqn,
+            path_value=path_value,
+            execution_row=execution_row,
+            known_schemas=known_schemas,
+            file_item=file_item,
+            related_files=related_files,
+            fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
+            object_type_hint=object_type,
+        )
+        item_result["item_id"] = f"{target_fqn}::{object_type}"
+        item_result["object_type"] = object_type
+        item_result["paths"] = [path_value]
+        item_result["preparation"] = {"status": "skipped"}
+        item_result["dependencies"] = dependencies
+        requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
+        review_items.append(item_result)
+        covered_paths.add(path_value)
     execution_errors = [item for item in execution_rows if item.get("status") == "error"]
     if execution_errors:
         for item in execution_errors:

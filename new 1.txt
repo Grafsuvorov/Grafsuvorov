@@ -1,3 +1,4 @@
+- Без поля `Меняется бизнес-ключ` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
 PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrack_create_issue_debug.py
 YOUTRACK_URL=https://yt.rusal.ru
 project_id=0-30
@@ -79,7 +80,14 @@ Values for `Тип карточки` (bundle `113-29`, type `enum`):
 {"id": "114-1361", "name": "Отпуск", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
 
 Values for `Направление` (bundle `136-95`, type `ownedfield`):
-Failed to load bundle values: GET /api/admin/customFieldSettings/bundles/ownedfield/136-95/values -> 404: {"error":"Not Found","error_description":"No subresource for path ownedfield"}
+{"id": "142-68", "name": "Финансы", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "142-69", "name": "Сбыт", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "142-70", "name": "Управление запасами", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "142-71", "name": "Транспортировка", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "142-75", "name": "Производство", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "142-102", "name": "ТОРО", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+{"id": "142-147", "name": "НСИ", "localizedName": null, "fullName": null, "description": "НСИ", "isArchived": null}
+{"id": "142-170", "name": "TECH", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
 
 POST /api/issues payload:
 {
@@ -195,7 +203,7 @@ Full customFields payload:
 - Без поля `Дата релиза` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
 - Поле `Направление` выглядит проблемным: без него задача создаётся.
 {
-  "id": "2-88774",
+  "id": "2-88784",
   "$type": "Issue"
 }
 - Без поля `Меняется бизнес-ключ` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}

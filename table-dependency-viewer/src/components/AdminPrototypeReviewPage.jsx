@@ -6,8 +6,6 @@ const DEFAULT_FORM = {
   summary: "",
   git_reference: "",
   script_runtime: "",
-  release_date: "",
-  business_key_changed: false,
 };
 
 function sleep(ms) {
@@ -77,21 +75,10 @@ function buildTaskText(form, linkedIssues) {
   }
   pushLine("Ссылка на гит", form.git_reference);
   pushLine("Время работы скрипта", form.script_runtime);
-  pushLine("Дата релиза", form.release_date);
-  pushLine("Меняется бизнес-ключ", form.business_key_changed ? "Да" : "Нет");
   if (splitItems(linkedIssues).length) {
     lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
   }
   return lines.join("\n");
-}
-
-function formatReleaseDate(value) {
-  const text = String(value || "").trim();
-  if (!text) return "—";
-  const date = new Date(`${text}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return text;
-  const month = new Intl.DateTimeFormat("ru-RU", { month: "short" }).format(date).replace(".", "");
-  return `${date.getDate()}. ${month}. ${date.getFullYear()}`;
 }
 
 function buildDraftItem(item) {
@@ -238,8 +225,6 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
-        release_date: form.release_date || "",
-        business_key_changed: Boolean(form.business_key_changed),
         create_issue: false,
       });
       const jobId = String(startPayload?.job_id || "").trim();
@@ -266,10 +251,6 @@ export default function AdminPrototypeReviewPage() {
         ...prev,
         git_reference: prev.git_reference || trimmedMr,
         script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
-        release_date: prev.release_date || String(payload?.task_context?.release_date || "").trim(),
-        business_key_changed: typeof payload?.task_context?.business_key_changed === "boolean"
-          ? payload.task_context.business_key_changed
-          : prev.business_key_changed,
       }));
       if (!String(linkedIssues || "").trim() && Array.isArray(payload?.task_context?.linked_issues)) {
         setLinkedIssues(payload.task_context.linked_issues.join(", "));
@@ -339,8 +320,6 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
-        release_date: form.release_date || "",
-        business_key_changed: Boolean(form.business_key_changed),
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
@@ -709,28 +688,6 @@ export default function AdminPrototypeReviewPage() {
 
           <section className="cc-surface">
             <div className="section-title">Создание задачи</div>
-            <div className="prototype-top-grid" style={{ marginBottom: 16 }}>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Дата релиза</span>
-                <input
-                  className="slow-entity-select"
-                  type="date"
-                  value={form.release_date || ""}
-                  onChange={(event) => handleFieldChange("release_date", event.target.value)}
-                />
-                <div className="muted" style={{ marginTop: 8 }}>
-                  {formatReleaseDate(form.release_date)}
-                </div>
-              </div>
-              <label className="prototype-toggle-card wide" style={{ alignSelf: "end", minHeight: 44 }}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(form.business_key_changed)}
-                  onChange={(event) => handleFieldChange("business_key_changed", event.target.checked)}
-                />
-                <span>Меняется бизнес-ключ</span>
-              </label>
-            </div>
             <div className="prototype-import-actions">
               <div className="muted">
                 Одна задача будет создана на весь MR, а YAML по GP-объектам будет записан в инженерный репозиторий в ветку задачи.

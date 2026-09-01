@@ -7,20 +7,8 @@ const DEFAULT_FORM = {
   git_reference: "",
   script_runtime: "",
   release_date: "",
-  direction: "",
   business_key_changed: false,
 };
-
-const DIRECTION_OPTIONS = [
-  "Финансы",
-  "Сбыт",
-  "Управление запасами",
-  "Транспортировка",
-  "Производство",
-  "ТОРО",
-  "НСИ",
-  "TECH",
-];
 
 function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -90,7 +78,6 @@ function buildTaskText(form, linkedIssues) {
   pushLine("Ссылка на гит", form.git_reference);
   pushLine("Время работы скрипта", form.script_runtime);
   pushLine("Дата релиза", form.release_date);
-  pushLine("Направление", form.direction);
   pushLine("Меняется бизнес-ключ", form.business_key_changed ? "Да" : "Нет");
   if (splitItems(linkedIssues).length) {
     lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
@@ -123,10 +110,6 @@ function buildDraftItem(item) {
     checks_stale: false,
     dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
   };
-}
-
-function normalizeDirection(value) {
-  return String(value || "").trim();
 }
 
 export default function AdminPrototypeReviewPage() {
@@ -204,13 +187,6 @@ export default function AdminPrototypeReviewPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleDirectionToggle = (option) => {
-    setForm((prev) => ({
-      ...prev,
-      direction: normalizeDirection(prev.direction) === option ? "" : option,
-    }));
-  };
-
   const handleReviewItemChange = (itemId, field, value) => {
     setReviewItemsDraft((prev) => prev.map((item) => {
       if (item.item_id !== itemId) return item;
@@ -263,7 +239,6 @@ export default function AdminPrototypeReviewPage() {
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
         release_date: form.release_date || "",
-        direction: form.direction || "",
         business_key_changed: Boolean(form.business_key_changed),
         create_issue: false,
       });
@@ -292,7 +267,6 @@ export default function AdminPrototypeReviewPage() {
         git_reference: prev.git_reference || trimmedMr,
         script_runtime: totalSec >= 60 ? `${(totalSec / 60).toFixed(2)} мин` : totalSec > 0 ? `${totalSec.toFixed(3)} сек` : prev.script_runtime,
         release_date: prev.release_date || String(payload?.task_context?.release_date || "").trim(),
-        direction: prev.direction || String(payload?.task_context?.direction || "").trim(),
         business_key_changed: typeof payload?.task_context?.business_key_changed === "boolean"
           ? payload.task_context.business_key_changed
           : prev.business_key_changed,
@@ -366,7 +340,6 @@ export default function AdminPrototypeReviewPage() {
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
         release_date: form.release_date || "",
-        direction: form.direction || "",
         business_key_changed: Boolean(form.business_key_changed),
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
@@ -747,21 +720,6 @@ export default function AdminPrototypeReviewPage() {
                 />
                 <div className="muted" style={{ marginTop: 8 }}>
                   {formatReleaseDate(form.release_date)}
-                </div>
-              </div>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Направление</span>
-                <div className="prototype-control-list">
-                  {DIRECTION_OPTIONS.map((option) => (
-                    <label key={option} className="prototype-toggle-card">
-                      <input
-                        type="checkbox"
-                        checked={normalizeDirection(form.direction) === option}
-                        onChange={() => handleDirectionToggle(option)}
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ))}
                 </div>
               </div>
               <label className="prototype-toggle-card wide" style={{ alignSelf: "end", minHeight: 44 }}>

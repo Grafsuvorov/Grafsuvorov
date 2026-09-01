@@ -218,6 +218,11 @@ def parse_args() -> argparse.Namespace:
         default=not bool(DEBUG_CONFIG["use_sample_cards"]),
         help="Не добавлять тестовые карточки prototype review в описание.",
     )
+    parser.add_argument(
+        "--probe-field-values",
+        default="",
+        help="Имя custom field для перебора bundle-значений и форматов payload.",
+    )
     return parser.parse_args()
 
 
@@ -294,13 +299,14 @@ def get_project_custom_fields(project_id: str) -> list[dict[str, Any]]:
     ) or []
 
 
-def get_bundle_values(bundle_id: str) -> list[dict[str, Any]]:
+def get_bundle_values(bundle_id: str, bundle_type: str = "enum") -> list[dict[str, Any]]:
     bundle = str(bundle_id or "").strip()
     if not bundle:
         return []
+    normalized_type = str(bundle_type or "enum").strip().lower()
     return api_get(
-        f"/api/admin/customFieldSettings/bundles/enum/{bundle}/values",
-        {"fields": "id,name,description,isArchived"},
+        f"/api/admin/customFieldSettings/bundles/{normalized_type}/{bundle}/values",
+        {"fields": "id,name,description,isArchived,localizedName,fullName"},
     ) or []
 
 
@@ -385,6 +391,26 @@ def build_named_value_payload(field_item: dict[str, Any], raw_value: str) -> dic
         "value": {"name": raw_value},
     }
     return payload
+
+
+def build_named_id_payload(field_item: dict[str, Any], raw_id: str, raw_name: str = "") -> dict[str, Any]:
+    field = field_item.get("field") or {}
+    field_name = str(field.get("name") or "").strip()
+    field_type = field.get("fieldType") or {}
+    field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
+    issue_custom_field_type = normalize_issue_custom_field_type(
+        str(field_item.get("$type") or "").strip(),
+        field_type_id,
+    )
+    value: dict[str, Any] = {"id": str(raw_id).strip()}
+    if str(raw_name or "").strip():
+        value["name"] = str(raw_name).strip()
+    return {
+        "id": str(field_item.get("id") or "").strip(),
+        "name": field_name,
+        "$type": issue_custom_field_type,
+        "value": value,
+    }
 
 
 def resolve_user(user_query: str) -> dict[str, str] | None:
@@ -525,6 +551,135 @@ def summarize_custom_fields(custom_fields: list[dict[str, Any]]) -> list[dict[st
     return result
 
 
+def print_bundle_values(field_label: str, field_item: dict[str, Any]) -> None:
+    bundle = field_item.get("bundle") or {}
+    bundle_id = str(bundle.get("id") or "").strip()
+    if not bundle_id:
+        return
+    field = field_item.get("field") or {}
+    field_type = field.get("fieldType") or {}
+    field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
+    bundle_type = field_type_id.split("[", 1)[0] if "[" in field_type_id else field_type_id
+    if not bundle_type:
+        return
+    print()
+    print(f"Values for `{field_label}` (bundle `{bundle_id}`, type `{bundle_type}`):")
+    try:
+        values = get_bundle_values(bundle_id, bundle_type=bundle_type)
+    except Exception as exc:
+        print(f"Failed to load bundle values: {exc}", file=sys.stderr)
+        return
+    for item in values:
+        print(
+            json.dumps(
+                {
+                    "id": item.get("id"),
+                    "name": item.get("name"),
+                    "localizedName": item.get("localizedName"),
+                    "fullName": item.get("fullName"),
+                    "description": item.get("description"),
+                    "isArchived": item.get("isArchived"),
+                },
+                ensure_ascii=False,
+            )
+        )
+
+
+def probe_named_field_values(
+    *,
+    payload: dict[str, Any],
+    field_item: dict[str, Any],
+    field_name: str,
+    requested_value: str,
+) -> int:
+    bundle = field_item.get("bundle") or {}
+    bundle_id = str(bundle.get("id") or "").strip()
+    field = field_item.get("field") or {}
+    field_type = field.get("fieldType") or {}
+    field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
+    bundle_type = field_type_id.split("[", 1)[0] if "[" in field_type_id else field_type_id
+    if not bundle_id or not bundle_type:
+        print(f"Field `{field_name}` has no bundle metadata to probe.", file=sys.stderr)
+        return 2
+    try:
+        bundle_values = get_bundle_values(bundle_id, bundle_type=bundle_type)
+    except Exception as exc:
+        print(f"Failed to load bundle values for `{field_name}`: {exc}", file=sys.stderr)
+        return 2
+
+    print()
+    print(f"Probe values for `{field_name}`:")
+    print(f"Requested value: {requested_value}")
+    print(f"Bundle id: {bundle_id}")
+    print(f"Bundle type: {bundle_type}")
+    print(f"Available values: {len(bundle_values)}")
+    for item in bundle_values:
+        print(
+            json.dumps(
+                {
+                    "id": item.get("id"),
+                    "name": item.get("name"),
+                    "localizedName": item.get("localizedName"),
+                    "fullName": item.get("fullName"),
+                },
+                ensure_ascii=False,
+            )
+        )
+
+    base_payload = dict(payload)
+    custom_fields = [dict(item) for item in (payload.get("customFields") or [])]
+    filtered_custom_fields = [item for item in custom_fields if str(item.get("name") or "").strip() != field_name]
+    base_payload["customFields"] = filtered_custom_fields
+
+    print()
+    print("Control probe without this field:")
+    control = api_post_raw("/api/issues", base_payload)
+    print(f"status={control.status_code}")
+    print(control.text[:1000])
+
+    matched_values = []
+    requested_lower = str(requested_value or "").strip().lower()
+    for item in bundle_values:
+        candidates = {
+            str(item.get("name") or "").strip().lower(),
+            str(item.get("localizedName") or "").strip().lower(),
+            str(item.get("fullName") or "").strip().lower(),
+        }
+        if requested_lower and requested_lower in candidates:
+            matched_values.append(item)
+
+    if requested_lower and not matched_values:
+        print()
+        print(f"Requested value `{requested_value}` was not found in bundle values.", file=sys.stderr)
+
+    for item in bundle_values:
+        item_id = str(item.get("id") or "").strip()
+        item_name = str(item.get("name") or "").strip()
+        item_localized_name = str(item.get("localizedName") or "").strip()
+        for label, candidate_payload in (
+            ("name", build_named_value_payload(field_item, item_name)),
+            ("id", build_named_id_payload(field_item, item_id, item_name)),
+        ):
+            probe_payload = dict(base_payload)
+            probe_payload["customFields"] = [*filtered_custom_fields, candidate_payload]
+            response = api_post_raw("/api/issues", probe_payload)
+            print()
+            print(
+                json.dumps(
+                    {
+                        "probe_format": label,
+                        "bundle_value_id": item_id,
+                        "bundle_value_name": item_name,
+                        "bundle_value_localized_name": item_localized_name,
+                        "status_code": response.status_code,
+                        "response": response.text[:1000],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+    return 0
+
+
 def probe_permissions(payload: dict[str, Any]) -> int:
     response = api_post_raw("/api/issues", payload)
     if response.status_code in (200, 201):
@@ -619,28 +774,10 @@ def main() -> int:
 
     card_type_field = resolve_field(fields, args.card_type_field)
     if card_type_field:
-        bundle = card_type_field.get("bundle") or {}
-        bundle_id = str(bundle.get("id") or "").strip()
-        if bundle_id:
-            print()
-            print(f"Enum values for `{args.card_type_field}` (bundle `{bundle_id}`):")
-            try:
-                values = get_bundle_values(bundle_id)
-            except Exception as exc:
-                print(f"Failed to load enum values: {exc}", file=sys.stderr)
-                values = []
-            for item in values:
-                print(
-                    json.dumps(
-                        {
-                            "id": item.get("id"),
-                            "name": item.get("name"),
-                            "description": item.get("description"),
-                            "isArchived": item.get("isArchived"),
-                        },
-                        ensure_ascii=False,
-                    )
-                )
+        print_bundle_values(args.card_type_field, card_type_field)
+    direction_field_meta = resolve_field(fields, args.direction_field, fallback_contains="направлен")
+    if direction_field_meta:
+        print_bundle_values(args.direction_field, direction_field_meta)
 
     if args.list_fields:
         return 0
@@ -717,6 +854,26 @@ def main() -> int:
 
     if args.dry_run:
         return 0
+
+    probe_field_name = str(args.probe_field_values or "").strip()
+    if probe_field_name:
+        target_field = resolve_field(fields, probe_field_name)
+        if not target_field:
+            print(f"Не найдено поле `{probe_field_name}` в custom fields проекта.", file=sys.stderr)
+            return 2
+        requested_value = ""
+        if probe_field_name.lower() == str(args.direction_field or "").strip().lower():
+            requested_value = str(args.direction or "").strip()
+        elif probe_field_name.lower() == str(args.card_type_field or "").strip().lower():
+            requested_value = str(args.card_type_value or "").strip()
+        elif probe_field_name.lower() == str(args.business_key_changed_field or "").strip().lower():
+            requested_value = str(args.business_key_changed or "").strip()
+        return probe_named_field_values(
+            payload=payload,
+            field_item=target_field,
+            field_name=str((target_field.get("field") or {}).get("name") or probe_field_name).strip(),
+            requested_value=requested_value,
+        )
 
     print()
     if args.probe_permissions:

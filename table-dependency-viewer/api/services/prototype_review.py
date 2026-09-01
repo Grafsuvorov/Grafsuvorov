@@ -304,6 +304,28 @@ def _is_clickhouse_sql_path(path_value: str) -> bool:
     return "/clickhouse/" in normalized or normalized.startswith("clickhouse/")
 
 
+def _infer_direct_sql_file_target(path_value: str) -> tuple[str, str] | None:
+    normalized = str(path_value or "").replace("\\", "/").strip("/")
+    if not normalized:
+        return None
+    parts = [part for part in normalized.split("/") if part]
+    if len(parts) != 2:
+        return None
+    schema_name = parts[0].strip()
+    file_name = parts[1].strip()
+    if not schema_name or not file_name.lower().endswith(".sql"):
+        return None
+    file_stem = file_name[:-4]
+    expected_prefix = f"{schema_name}."
+    if not file_stem.startswith(expected_prefix):
+        return None
+    table_name = file_stem[len(expected_prefix):].strip()
+    if not table_name:
+        return None
+    object_type = "VIEW" if schema_name.lower().endswith("_view") else "TABLE"
+    return (f"{schema_name}.{table_name}", object_type)
+
+
 def _sql_execution_priority(path_value: str) -> tuple[int, str]:
     name = str(path_value or "").replace("\\", "/").split("/")[-1].lower()
     if name.endswith("_recreate.sql") or "recreate" in name:
@@ -317,6 +339,9 @@ def _infer_target_from_path(path_value: str) -> tuple[str, str] | None:
     normalized = str(path_value or "").replace("\\", "/").strip("/")
     if not normalized:
         return None
+    direct_target = _infer_direct_sql_file_target(normalized)
+    if direct_target:
+        return direct_target
     parts = [part for part in normalized.split("/") if part]
     if len(parts) >= 4 and parts[0] == "etl_loads_entity":
         schema_name = parts[-3]
@@ -482,6 +507,8 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen_targets: set[tuple[str, str]] = set()
         file_target_flags: dict[str, dict[str, Any]] = {}
         lowered_sql = _strip_sql_comments(sql_text).lower()
+        path_target = _infer_target_from_path(path_value)
+        path_target_is_authoritative = _infer_direct_sql_file_target(path_value) is not None
 
         for statement in statements:
             statement_lower = statement.lower()
@@ -511,6 +538,8 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         statement_targets.append((normalized, object_type, False, True))
 
             for normalized, object_type, has_create, has_drop in statement_targets:
+                if path_target_is_authoritative and path_target != (normalized, object_type):
+                    continue
                 key = f"{normalized}::{object_type}"
                 flags = file_target_flags.setdefault(
                     key,
@@ -528,10 +557,9 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     seen_targets.add((normalized, object_type))
                     target_sequence.append((normalized, object_type))
 
-        fallback_target = _infer_target_from_path(path_value)
-        if fallback_target and fallback_target not in seen_targets:
-            seen_targets.add(fallback_target)
-            target_sequence.append(fallback_target)
+        if path_target and path_target not in seen_targets:
+            seen_targets.add(path_target)
+            target_sequence.append(path_target)
 
         for target_fqn, object_type in target_sequence:
             key = f"{target_fqn}::{object_type}"

@@ -313,6 +313,28 @@ def _sql_execution_priority(path_value: str) -> tuple[int, str]:
     return (2, name)
 
 
+def _infer_target_from_path(path_value: str) -> tuple[str, str] | None:
+    normalized = str(path_value or "").replace("\\", "/").strip("/")
+    if not normalized:
+        return None
+    parts = [part for part in normalized.split("/") if part]
+    if len(parts) >= 4 and parts[0] == "etl_loads_entity":
+        schema_name = parts[-3]
+        table_name = parts[-2]
+        if schema_name and table_name:
+            object_type = "VIEW" if schema_name.lower().endswith("_view") else "TABLE"
+            return (f"{schema_name}.{table_name}", object_type)
+    if len(parts) >= 4 and parts[:2] == ["config_files", "meta"]:
+        schema_name = parts[-2]
+        file_name = parts[-1]
+        if file_name.lower().endswith(".sql"):
+            table_name = file_name[:-4]
+            if schema_name and table_name:
+                object_type = "VIEW" if schema_name.lower().endswith("_view") else "TABLE"
+                return (f"{schema_name}.{table_name}", object_type)
+    return None
+
+
 def parse_prototype_gitlab_ref(value: str, default_project: str) -> PrototypeGitLabRef:
     raw_value = str(value or "").strip()
     if not raw_value:
@@ -505,6 +527,11 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 if (normalized, object_type) not in seen_targets:
                     seen_targets.add((normalized, object_type))
                     target_sequence.append((normalized, object_type))
+
+        fallback_target = _infer_target_from_path(path_value)
+        if fallback_target and fallback_target not in seen_targets:
+            seen_targets.add(fallback_target)
+            target_sequence.append(fallback_target)
 
         for target_fqn, object_type in target_sequence:
             key = f"{target_fqn}::{object_type}"

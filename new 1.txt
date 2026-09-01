@@ -1,5 +1,4 @@
-- Без поля `Меняется бизнес-ключ` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrack_create_issue_debug.py
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrack_create_issue_debug.py --probe-field-values "Направление"
 YOUTRACK_URL=https://yt.rusal.ru
 project_id=0-30
 queue=DWH
@@ -147,63 +146,52 @@ POST /api/issues payload:
   ]
 }
 
-CREATE ERROR: POST /api/issues -> 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
+Probe values for `Направление`:
+Requested value: TECH
+Bundle id: 136-95
+Bundle type: ownedfield
+Available values: 8
+{"id": "142-68", "name": "Финансы", "localizedName": null, "fullName": null}
+{"id": "142-69", "name": "Сбыт", "localizedName": null, "fullName": null}
+{"id": "142-70", "name": "Управление запасами", "localizedName": null, "fullName": null}
+{"id": "142-71", "name": "Транспортировка", "localizedName": null, "fullName": null}
+{"id": "142-75", "name": "Производство", "localizedName": null, "fullName": null}
+{"id": "142-102", "name": "ТОРО", "localizedName": null, "fullName": null}
+{"id": "142-147", "name": "НСИ", "localizedName": null, "fullName": null}
+{"id": "142-170", "name": "TECH", "localizedName": null, "fullName": null}
 
-Permission probe:
-Full customFields payload:
-[
-  {
-    "name": "Оценка (чел./час.)",
-    "id": "173-140",
-    "$type": "SimpleIssueCustomField",
-    "value": 60
-  },
-  {
-    "name": "Тип карточки",
-    "id": "134-394",
-    "$type": "SingleEnumIssueCustomField",
-    "value": {
-      "name": "Task"
-    }
-  },
-  {
-    "name": "Assignee",
-    "id": "135-737",
-    "$type": "SingleUserIssueCustomField",
-    "value": {
-      "login": "SuvorovND"
-    }
-  },
-  {
-    "name": "Дата релиза",
-    "id": "173-426",
-    "$type": "SimpleIssueCustomField",
-    "value": 1788210000000
-  },
-  {
-    "name": "Направление",
-    "id": "134-1015",
-    "$type": "SingleOwnedIssueCustomField",
-    "value": {
-      "name": "TECH"
-    }
-  },
-  {
-    "name": "Меняется бизнес-ключ",
-    "id": "134-2543",
-    "$type": "SingleEnumIssueCustomField",
-    "value": {
-      "name": "Нет"
-    }
-  }
-]
-- Без поля `Оценка (чел./час.)` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
-- Без поля `Тип карточки` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
-- Без поля `Assignee` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
-- Без поля `Дата релиза` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
-- Поле `Направление` выглядит проблемным: без него задача создаётся.
-{
-  "id": "2-88784",
-  "$type": "Issue"
-}
-- Без поля `Меняется бизнес-ключ` всё ещё ошибка 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}
+Control probe without this field:
+status=200
+{"id":"2-88788","$type":"Issue"}
+
+{"probe_format": "name", "bundle_value_id": "142-68", "bundle_value_name": "Финансы", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-68", "bundle_value_name": "Финансы", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-69", "bundle_value_name": "Сбыт", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-69", "bundle_value_name": "Сбыт", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-70", "bundle_value_name": "Управление запасами", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-70", "bundle_value_name": "Управление запасами", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-71", "bundle_value_name": "Транспортировка", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-71", "bundle_value_name": "Транспортировка", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-75", "bundle_value_name": "Производство", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-75", "bundle_value_name": "Производство", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-102", "bundle_value_name": "ТОРО", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-102", "bundle_value_name": "ТОРО", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-147", "bundle_value_name": "НСИ", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-147", "bundle_value_name": "НСИ", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "name", "bundle_value_id": "142-170", "bundle_value_name": "TECH", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+
+{"probe_format": "id", "bundle_value_id": "142-170", "bundle_value_name": "TECH", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}

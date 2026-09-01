@@ -1095,19 +1095,6 @@ def create_ytrack_issue(
             )
         )
 
-    direction_field = _resolve_ytrack_custom_field(
-        items=project_custom_fields,
-        field_name=direction_field_name,
-        fallback_contains="направлен",
-    )
-    if direction_field and str(direction or "").strip():
-        custom_fields_payload.append(
-            _build_ytrack_value_payload(
-                field_item=direction_field,
-                raw_value=str(direction).strip(),
-            )
-        )
-
     business_key_changed_field = _resolve_ytrack_custom_field(
         items=project_custom_fields,
         field_name=business_key_changed_field_name,

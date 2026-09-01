@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Debug helper for creating one YouTrack issue directly via API.
 
-Re-pushed marker: enum/user field mapping verified for August 26, 2026.
+Updated for prototype-review issue creation debugging on September 1, 2026.
 """
 
 from __future__ import annotations
@@ -10,11 +10,36 @@ import argparse
 import json
 import os
 import sys
+from datetime import date
 from typing import Any
 
 import requests
 import urllib3
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional local convenience dependency
+    def load_dotenv(path: str | None = None, *args, **kwargs):
+        candidates = [path] if path else [".env"]
+        loaded = False
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                with open(candidate, "r", encoding="utf-8") as handle:
+                    for raw_line in handle:
+                        line = raw_line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        key, value = line.split("=", 1)
+                        key = key.strip()
+                        if not key or key in os.environ:
+                            continue
+                        value = value.strip().strip('"').strip("'")
+                        os.environ[key] = value
+                    loaded = True
+            except FileNotFoundError:
+                continue
+        return loaded
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -34,11 +59,14 @@ YOUTRACK_CARD_TYPE_FIELD_NAME = os.getenv("YOUTRACK_CARD_TYPE_FIELD_NAME", "Ти
 YOUTRACK_CARD_TYPE_VALUE = os.getenv("YOUTRACK_CARD_TYPE_VALUE", "Task")
 YOUTRACK_ASSIGNEE_FIELD_NAME = os.getenv("YOUTRACK_ASSIGNEE_FIELD_NAME", "Assignee")
 YOUTRACK_ASSIGNEE_QUERY = os.getenv("YOUTRACK_ASSIGNEE_QUERY", "Suvorov Nikita")
+YOUTRACK_RELEASE_DATE_FIELD_NAME = os.getenv("YOUTRACK_RELEASE_DATE_FIELD_NAME", "Дата релиза")
+YOUTRACK_DIRECTION_FIELD_NAME = os.getenv("YOUTRACK_DIRECTION_FIELD_NAME", "Направление")
+YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME = os.getenv("YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME", "Меняется бизнес-ключ")
 
 # Debug defaults. Edit these values directly and run the script without arguments.
 DEBUG_CONFIG = {
-    "summary": "Debug issue from API",
-    "description": "Created by debug script.",
+    "summary": "[DEBUG] Prototype Review issue",
+    "description": "",
     "project": YOUTRACK_PROJECT,
     "project_id": YOUTRACK_PROJECT_ID,
     "queue": YOUTRACK_QUEUE,
@@ -49,12 +77,46 @@ DEBUG_CONFIG = {
     "assignee_query": YOUTRACK_ASSIGNEE_QUERY,
     "estimate_field": YOUTRACK_ESTIMATE_FIELD_NAME,
     "estimate_minutes": YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
+    "release_date_field": YOUTRACK_RELEASE_DATE_FIELD_NAME,
+    "release_date": date.today().isoformat(),
+    "direction_field": YOUTRACK_DIRECTION_FIELD_NAME,
+    "direction": "TECH",
+    "business_key_changed_field": YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
+    "business_key_changed": False,
     "enable_card_type": True,
     "enable_assignee": True,
     "enable_estimate": True,
+    "enable_release_date": True,
+    "enable_direction": True,
+    "enable_business_key_changed": True,
     "list_fields": False,
     "dry_run": False,
+    "probe_permissions": True,
+    "use_sample_cards": True,
 }
+
+SAMPLE_REVIEW_ITEMS = [
+    {
+        "target_fqn": "dm.sales_pricing_documents",
+        "object_type": "TABLE",
+        "entity_name": "DM_SALES_PRICING_DOCUMENTS",
+        "key_attributes": ["doc_id", "line_id"],
+        "row_count": 128745,
+        "duplicate_groups": 0,
+        "duration_sec": 38.412,
+        "dependencies": ["ods.sales_documents", "dds.sales_pricing"],
+    },
+    {
+        "target_fqn": "dm_view.sales_pricing_documents",
+        "object_type": "VIEW",
+        "entity_name": "DM_VIEW_SALES_PRICING_DOCUMENTS",
+        "key_attributes": [],
+        "row_count": 128745,
+        "duplicate_groups": None,
+        "duration_sec": 1.287,
+        "dependencies": ["dm.sales_pricing_documents"],
+    },
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,6 +162,38 @@ def parse_args() -> argparse.Namespace:
         default=not bool(DEBUG_CONFIG["enable_assignee"]),
         help="Не отправлять поле исполнителя.",
     )
+    parser.add_argument("--release-date-field", default=DEBUG_CONFIG["release_date_field"], help="Имя поля даты релиза.")
+    parser.add_argument("--release-date", default=DEBUG_CONFIG["release_date"], help="Дата релиза в формате YYYY-MM-DD.")
+    parser.add_argument(
+        "--disable-release-date",
+        action="store_true",
+        default=not bool(DEBUG_CONFIG["enable_release_date"]),
+        help="Не отправлять поле даты релиза.",
+    )
+    parser.add_argument("--direction-field", default=DEBUG_CONFIG["direction_field"], help="Имя поля направления.")
+    parser.add_argument("--direction", default=DEBUG_CONFIG["direction"], help="Значение направления.")
+    parser.add_argument(
+        "--disable-direction",
+        action="store_true",
+        default=not bool(DEBUG_CONFIG["enable_direction"]),
+        help="Не отправлять поле направления.",
+    )
+    parser.add_argument(
+        "--business-key-changed-field",
+        default=DEBUG_CONFIG["business_key_changed_field"],
+        help="Имя поля флага изменения бизнес-ключа.",
+    )
+    parser.add_argument(
+        "--business-key-changed",
+        default="Да" if DEBUG_CONFIG["business_key_changed"] else "Нет",
+        help="Значение поля бизнес-ключа: Да/Нет.",
+    )
+    parser.add_argument(
+        "--disable-business-key-changed",
+        action="store_true",
+        default=not bool(DEBUG_CONFIG["enable_business_key_changed"]),
+        help="Не отправлять поле изменения бизнес-ключа.",
+    )
     parser.add_argument(
         "--list-fields",
         action="store_true",
@@ -111,6 +205,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=bool(DEBUG_CONFIG["dry_run"]),
         help="Не отправлять POST, только показать итоговый payload.",
+    )
+    parser.add_argument(
+        "--probe-permissions",
+        action="store_true",
+        default=bool(DEBUG_CONFIG["probe_permissions"]),
+        help="При 403 проверить, какое custom field ломает создание.",
+    )
+    parser.add_argument(
+        "--no-sample-cards",
+        action="store_true",
+        default=not bool(DEBUG_CONFIG["use_sample_cards"]),
+        help="Не добавлять тестовые карточки prototype review в описание.",
     )
     return parser.parse_args()
 
@@ -148,6 +254,16 @@ def api_post(path: str, payload: dict[str, Any]) -> Any:
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"POST {path} -> {resp.status_code}: {resp.text[:4000]}")
     return resp.json() if resp.text.strip() else {}
+
+
+def api_post_raw(path: str, payload: dict[str, Any]) -> requests.Response:
+    return requests.post(
+        f"{YOUTRACK_URL}{path}",
+        headers={**headers(), "Content-Type": "application/json"},
+        json=payload,
+        verify=YOUTRACK_SSL_VERIFY,
+        timeout=90,
+    )
 
 
 def resolve_project_id(project: str, project_id: str) -> str:
@@ -307,6 +423,145 @@ def build_user_payload(field_item: dict[str, Any], user_value: dict[str, str]) -
     return payload
 
 
+def normalize_bool_text(value: str, default: bool = False) -> bool:
+    text = str(value or "").strip().lower()
+    if not text:
+        return default
+    return text in {"1", "true", "yes", "y", "да"}
+
+
+def parse_date_value(raw_value: str) -> int:
+    text = str(raw_value or "").strip()
+    if not text:
+        raise ValueError("Пустая дата для custom field")
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            import time
+            parsed = time.strptime(text, fmt)
+            return int(time.mktime(parsed)) * 1000
+        except ValueError:
+            continue
+    raise ValueError(f"Не удалось распознать дату `{text}`")
+
+
+def build_value_payload(field_item: dict[str, Any], raw_value: Any) -> dict[str, Any]:
+    field = field_item.get("field") or {}
+    field_name = str(field.get("name") or "").strip()
+    field_type = field.get("fieldType") or {}
+    field_type_id = str(field_type.get("id") or field_type.get("valueType") or "").strip().lower()
+    field_value_type = str(field_type.get("valueType") or field_type.get("id") or "").strip().lower()
+    issue_custom_field_type = normalize_issue_custom_field_type(
+        str(field_item.get("$type") or "").strip(),
+        field_type_id,
+    )
+    if issue_custom_field_type in {
+        "SingleEnumIssueCustomField",
+        "SingleOwnedIssueCustomField",
+        "StateIssueCustomField",
+        "SingleVersionIssueCustomField",
+    }:
+        value = {"name": str(raw_value).strip()}
+    elif issue_custom_field_type == "PeriodIssueCustomField" or field_value_type == "period":
+        value = {"minutes": int(raw_value)}
+    elif field_value_type in {"date", "datetime", "date and time"} or issue_custom_field_type in {"DateIssueCustomField", "DateTimeIssueCustomField"}:
+        value = parse_date_value(str(raw_value))
+    elif field_value_type in {"boolean", "bool"} or issue_custom_field_type == "BooleanIssueCustomField":
+        value = normalize_bool_text(str(raw_value), default=False)
+    elif field_value_type in {"integer", "int"}:
+        value = int(raw_value)
+    else:
+        value = raw_value
+    return {
+        "id": str(field_item.get("id") or "").strip(),
+        "name": field_name,
+        "$type": issue_custom_field_type,
+        "value": value,
+    }
+
+
+def build_sample_description(use_sample_cards: bool) -> str:
+    lines = [
+        "Отладочная задача для проверки создания issue из prototype review.",
+        "",
+        "Поля и карточки заполнены тестовыми значениями.",
+    ]
+    if not use_sample_cards:
+        return "\n".join(lines)
+    lines.extend(["", "## Карточки prototype review"])
+    for item in SAMPLE_REVIEW_ITEMS:
+        object_type = str(item.get("object_type") or "TABLE").upper()
+        row_count = item.get("row_count")
+        duplicate_groups = item.get("duplicate_groups")
+        duration_sec = item.get("duration_sec")
+        dependencies = item.get("dependencies") or []
+        lines.extend(
+            [
+                "",
+                f"### {item.get('target_fqn')}",
+                f"- Тип: {object_type}",
+                f"- Сущность: {item.get('entity_name') or '—'}",
+                f"- Ключевые поля: {', '.join(item.get('key_attributes') or []) or '—'}",
+                f"- Количество строк: {row_count if row_count is not None else '—'}",
+                f"- Кол-во дублей: {duplicate_groups if duplicate_groups is not None else '—'}",
+                f"- Время SQL: {duration_sec if duration_sec is not None else '—'} сек",
+            ]
+        )
+        if dependencies:
+            lines.append(f"- Зависимости: {', '.join(dependencies)}")
+    return "\n".join(lines)
+
+
+def summarize_custom_fields(custom_fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for item in custom_fields:
+        result.append(
+            {
+                "name": item.get("name"),
+                "id": item.get("id"),
+                "$type": item.get("$type"),
+                "value": item.get("value"),
+            }
+        )
+    return result
+
+
+def probe_permissions(payload: dict[str, Any]) -> int:
+    response = api_post_raw("/api/issues", payload)
+    if response.status_code in (200, 201):
+        print("CREATE OK:")
+        print(json.dumps(response.json() if response.text.strip() else {}, ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"CREATE ERROR: POST /api/issues -> {response.status_code}: {response.text[:4000]}", file=sys.stderr)
+    if response.status_code != 403:
+        return 1
+
+    custom_fields = list(payload.get("customFields") or [])
+    if not custom_fields:
+        return 1
+
+    print("\nPermission probe:", file=sys.stderr)
+    print("Full customFields payload:", file=sys.stderr)
+    print(json.dumps(summarize_custom_fields(custom_fields), ensure_ascii=False, indent=2), file=sys.stderr)
+
+    offenders: list[str] = []
+    for field in custom_fields:
+        field_name = str(field.get("name") or field.get("id") or "unknown").strip()
+        probe_payload = dict(payload)
+        probe_payload["customFields"] = [item for item in custom_fields if item is not field]
+        probe_response = api_post_raw("/api/issues", probe_payload)
+        if probe_response.status_code in (200, 201):
+            offenders.append(field_name)
+            print(f"- Поле `{field_name}` выглядит проблемным: без него задача создаётся.", file=sys.stderr)
+            print(json.dumps(probe_response.json() if probe_response.text.strip() else {}, ensure_ascii=False, indent=2), file=sys.stderr)
+        else:
+            print(
+                f"- Без поля `{field_name}` всё ещё ошибка {probe_response.status_code}: {probe_response.text[:1000]}",
+                file=sys.stderr,
+            )
+    return 1
+
+
 def print_fields(items: list[dict[str, Any]], estimate_field_name: str) -> None:
     print("Project custom fields:")
     for item in items:
@@ -346,9 +601,19 @@ def main() -> int:
     print(f"assignee_query={args.assignee_query}")
     print(f"estimate_field={args.estimate_field}")
     print(f"estimate_minutes={args.estimate_minutes}")
+    print(f"release_date_field={args.release_date_field}")
+    print(f"release_date={args.release_date}")
+    print(f"direction_field={args.direction_field}")
+    print(f"direction={args.direction}")
+    print(f"business_key_changed_field={args.business_key_changed_field}")
+    print(f"business_key_changed={args.business_key_changed}")
     print(f"enable_card_type={not args.disable_card_type}")
     print(f"enable_assignee={not args.disable_assignee}")
     print(f"enable_estimate={not args.disable_estimate}")
+    print(f"enable_release_date={not args.disable_release_date}")
+    print(f"enable_direction={not args.disable_direction}")
+    print(f"enable_business_key_changed={not args.disable_business_key_changed}")
+    print(f"probe_permissions={bool(args.probe_permissions)}")
     print()
     print_fields(fields, args.estimate_field)
 
@@ -384,7 +649,7 @@ def main() -> int:
         "project": {"id": project_id},
         "queue": args.queue,
         "summary": args.summary,
-        "description": args.description,
+        "description": args.description or build_sample_description(not args.no_sample_cards),
         "type": args.issue_type,
     }
 
@@ -419,6 +684,30 @@ def main() -> int:
             return 2
         custom_fields.append(build_user_payload(assignee_field, user_value))
 
+    if not args.disable_release_date and str(args.release_date or "").strip():
+        release_date_field = resolve_field(fields, args.release_date_field, fallback_contains="дата релиз")
+        if not release_date_field:
+            print()
+            print("Не найдено поле даты релиза в custom fields проекта.", file=sys.stderr)
+            return 2
+        custom_fields.append(build_value_payload(release_date_field, str(args.release_date).strip()))
+
+    if not args.disable_direction and str(args.direction or "").strip():
+        direction_field = resolve_field(fields, args.direction_field, fallback_contains="направлен")
+        if not direction_field:
+            print()
+            print("Не найдено поле направления в custom fields проекта.", file=sys.stderr)
+            return 2
+        custom_fields.append(build_value_payload(direction_field, str(args.direction).strip()))
+
+    if not args.disable_business_key_changed:
+        business_key_changed_field = resolve_field(fields, args.business_key_changed_field, fallback_contains="бизнес-ключ")
+        if not business_key_changed_field:
+            print()
+            print("Не найдено поле флага бизнес-ключа в custom fields проекта.", file=sys.stderr)
+            return 2
+        custom_fields.append(build_value_payload(business_key_changed_field, str(args.business_key_changed).strip()))
+
     if custom_fields:
         payload["customFields"] = custom_fields
 
@@ -430,6 +719,9 @@ def main() -> int:
         return 0
 
     print()
+    if args.probe_permissions:
+        return probe_permissions(payload)
+
     try:
         result = api_post("/api/issues", payload)
     except Exception as exc:

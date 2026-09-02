@@ -4,12 +4,14 @@ import { metaWorkspaceApi } from "../api/metaWorkspace.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 import DagLoadingMiniGame from "./DagLoadingMiniGame.jsx";
 
+const DEV_META_CLICK_SCHEMAS = ["dm", "dm_view", "dm_calc", "dds", "ods", "stg", "dict_dds", "dict_stg"];
+
 const DEV_META_RUNBOOK = [
   {
     title: "Когда нужен новый файл",
     items: [
       "Создавайте новый YAML, если у объекта изменилась структура в DEV или объекта еще нет в списке.",
-      "Укажите GP схему, имя объекта и поля для ORDER BY. Поля сортировки должны быть заполнены и не содержать NULL.",
+      "Укажите GP схему, имя объекта, целевую ClickHouse-схему и поля для ORDER BY. Поля сортировки должны быть заполнены и не содержать NULL.",
       "В DAG tags укажите направление к которому относится объект.",
     ],
   },
@@ -50,7 +52,9 @@ export default function DevMetaAdminPage({
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
     schema_name_gp: "dm",
+    schema_name_click: "dm",
     object_name: "",
+    greenplum_table_name: "",
     order_by: "",
     dag_tags: "",
   });
@@ -416,7 +420,7 @@ export default function DevMetaAdminPage({
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
-      const targetSchema = "dm";
+      const targetSchema = String(generator.schema_name_click || "dm").trim().toLowerCase() || "dm";
       if (!dagTags.length) {
         setError("Нужно указать хотя бы один dag_tag");
         return;
@@ -425,7 +429,7 @@ export default function DevMetaAdminPage({
         schema_name_gp: generator.schema_name_gp,
         object_name: generator.object_name,
         schema_name_click: targetSchema,
-        greenplum_table_name: null,
+        greenplum_table_name: generator.greenplum_table_name.trim() || null,
         order_by: orderBy,
         dag_tags: dagTags,
       });
@@ -610,6 +614,25 @@ export default function DevMetaAdminPage({
                 value={generator.object_name}
                 onChange={(e) => setGenerator((prev) => ({ ...prev, object_name: e.target.value }))}
                 placeholder="counterparty_profile"
+              />
+            </label>
+            <label className="admin-field">
+              <span>ClickHouse схема</span>
+              <select
+                value={generator.schema_name_click}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, schema_name_click: e.target.value }))}
+              >
+                {DEV_META_CLICK_SCHEMAS.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-field dev-meta-generator-wide">
+              <span>Имя таблицы в GP, если отличается</span>
+              <input
+                value={generator.greenplum_table_name}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, greenplum_table_name: e.target.value }))}
+                placeholder="source_counterparty_profile"
               />
             </label>
             <label className="admin-field dev-meta-generator-wide">

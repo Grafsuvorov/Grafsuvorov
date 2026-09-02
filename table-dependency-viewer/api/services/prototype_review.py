@@ -87,7 +87,7 @@ def _normalize_identifier_part(value: str) -> str:
     if not text_value:
         return ""
     if text_value.startswith('"') and text_value.endswith('"') and len(text_value) >= 2:
-        return text_value[1:-1]
+        return text_value[1:-1].lower()
     return text_value.replace("`", "").replace('"', "").lower()
 
 

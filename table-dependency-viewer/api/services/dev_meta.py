@@ -68,6 +68,7 @@ REQUIRED_ATTRIBUTE_KEYS = {
     "data_type_gp",
     "is_nullable",
 }
+REQUIRED_TECH_FIELDS = {"dttm_inserted", "dttm_updated", "job_name", "deleted_flag"}
 
 ALLOWED_CLICK_SCHEMAS = {
     "dm_view",
@@ -83,6 +84,7 @@ ALLOWED_CLICK_SCHEMAS = {
 MAPPING_GP_TO_CLICK = {
     "date": "Date32",
     "timestamp": "DateTime",
+    "timestamptz": "DateTime",
     "varchar": "String",
     "text": "String",
     "bpchar": "String",
@@ -247,6 +249,15 @@ def _build_prod_schedule(entity_last_load: Any, schema_name_gp: str) -> str | No
     return None
 
 
+def _validate_required_tech_fields(column_names: list[str]) -> None:
+    normalized_columns = {str(name or "").strip().lower() for name in column_names if str(name or "").strip()}
+    missing_fields = sorted(REQUIRED_TECH_FIELDS - normalized_columns)
+    if missing_fields:
+        raise ValueError(
+            "Отсутствуют обязательные технические поля: " + ", ".join(missing_fields)
+        )
+
+
 def _extract_view_base(view_definition: str | None) -> tuple[str, str] | None:
     sql = str(view_definition or "")
     if not sql:
@@ -385,6 +396,7 @@ def generate_dev_meta_yaml(
         raise ValueError(f"Объект {schema_name_gp}.{source_object_name} не найден")
 
     column_names = [str(row["column_name"]) for row in rows]
+    _validate_required_tech_fields(column_names)
     normalized_order_by = [name for name in order_by if name != "tuple()"]
     missing_order_by = [name for name in normalized_order_by if name not in column_names]
     if missing_order_by:
@@ -1164,6 +1176,15 @@ def validate_dev_meta_content(
         gp_error = _validate_gp_object(parsed, dev_database_url)
         if gp_error:
             errors.append(gp_error)
+        attribute_columns = [
+            str(item.get("column_name_click") or "").strip()
+            for item in parsed.get("attributes", [])
+            if isinstance(item, dict)
+        ]
+        try:
+            _validate_required_tech_fields(attribute_columns)
+        except ValueError as exc:
+            errors.append(str(exc))
         nullable_order_by = [
             item.get("column_name_click")
             for item in parsed.get("attributes", [])

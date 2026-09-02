@@ -937,9 +937,6 @@ def _prototype_issue_description(
                 f"**Время выполнения SQL:** {_format_duration(total_execution_sec)}",
             ]
         )
-    if dependencies:
-        lines.extend(["", "## Зависимости SQL"])
-        lines.extend(f"- {item}" for item in dependencies[:40])
     impact_tables = impact.get("tables") or []
     if impact_tables:
         lines.extend(["", "## Потенциальное downstream-влияние"])
@@ -1032,10 +1029,6 @@ def _prototype_multi_issue_description(
             )
         if needs_attention:
             lines.append(f"**Нужно заполнить вручную:** {', '.join(missing)}")
-        if item.get("dependencies"):
-            lines.append("")
-            lines.append("**Зависимости SQL**")
-            lines.extend(f"- {value}" for value in (item.get("dependencies") or [])[:40])
         impact_tables = (item.get("impact") or {}).get("tables") or item.get("impact_tables") or []
         if impact_tables:
             lines.append("")

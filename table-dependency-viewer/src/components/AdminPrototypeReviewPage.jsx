@@ -632,14 +632,6 @@ export default function AdminPrototypeReviewPage() {
 
                     <div className="prototype-step-grid" style={{ marginTop: 14 }}>
                       <div className="cc-surface prototype-detail-card" style={{ margin: 0 }}>
-                        <div className="section-title">Зависимости SQL</div>
-                        {Array.isArray(item.dependencies) && item.dependencies.length > 0 ? (
-                          <div className="prototype-detail-list">
-                            {item.dependencies.map((dependency) => <div key={dependency} className="mono prototype-detail-item">{dependency}</div>)}
-                          </div>
-                        ) : <div className="muted">Зависимости не найдены.</div>}
-                      </div>
-                      <div className="cc-surface prototype-detail-card" style={{ margin: 0 }}>
                         <div className="section-title">Downstream-влияние</div>
                         {Array.isArray(item.impact?.tables) && item.impact.tables.length > 0 ? (
                           <div className="prototype-detail-list">
@@ -743,6 +735,23 @@ export default function AdminPrototypeReviewPage() {
               </div>
             ) : null}
           </section>
+
+          {result?.issue?.link ? (
+            <section className="cc-surface" style={{ marginTop: 16 }}>
+              <div className="section-title">Созданная задача</div>
+              <div className="muted" style={{ marginBottom: 12 }}>
+                После создания можно сразу перейти в YTrack по ссылке ниже.
+              </div>
+              <a
+                className="btn btn-primary"
+                href={result.issue.link}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Открыть {result.issue.issue_id || "задачу"}
+              </a>
+            </section>
+          ) : null}
         </>
       ) : null}
     </div>

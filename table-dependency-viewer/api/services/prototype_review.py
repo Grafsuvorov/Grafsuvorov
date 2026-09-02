@@ -109,6 +109,8 @@ def _preserve_fqn(value: str) -> Optional[str]:
     cleaned_parts: list[str] = []
     for part in parts:
         text_value = str(part or "").strip().strip(";").replace("`", "")
+        if text_value.startswith('"') and text_value.endswith('"') and len(text_value) >= 2:
+            text_value = text_value[1:-1]
         if not text_value:
             return None
         cleaned_parts.append(text_value)

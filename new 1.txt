@@ -1,197 +1,1157 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrack_create_issue_debug.py --probe-field-values "Направление"
-YOUTRACK_URL=https://yt.rusal.ru
-project_id=0-30
-queue=DWH
-issue_type=task
-card_type_field=Тип карточки
-card_type_value=Task
-assignee_field=Assignee
-assignee_query=Suvorov Nikita
-estimate_field=Оценка (чел./час.)
-estimate_minutes=60
-release_date_field=Дата релиза
-release_date=2026-09-01
-direction_field=Направление
-direction=TECH
-business_key_changed_field=Меняется бизнес-ключ
-business_key_changed=Нет
-enable_card_type=True
-enable_assignee=True
-enable_estimate=True
-enable_release_date=True
-enable_direction=True
-enable_business_key_changed=True
-probe_permissions=True
+import psycopg2
+import os
+import yaml
+import clickhouse_connect
+from psycopg2.errors import UndefinedColumn
+from plugins.help_utility.help_utility import MAPPING_GP_TO_CLICK
 
-Project custom fields:
-{"id": "134-171", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-28", "field_name": "Priority", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-174", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": true, "bundle_id": "136-17", "field_name": "Subsystem", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-288", "project_field_type": "StateProjectCustomField", "canBeEmpty": false, "bundle_id": "115-160", "field_name": "State", "field_type_id": "state[1]", "field_value_type": "state"}
-{"id": "134-394", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-29", "field_name": "Тип карточки", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-1015", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": true, "bundle_id": "136-95", "field_name": "Направление", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-1411", "project_field_type": "EnumProjectCustomField", "canBeEmpty": true, "bundle_id": "113-146", "field_name": "Дашборд SD", "field_type_id": "enum[*]", "field_value_type": "enum"}
-{"id": "134-1496", "project_field_type": "EnumProjectCustomField", "canBeEmpty": true, "bundle_id": "113-153", "field_name": "Дашборд LE", "field_type_id": "enum[*]", "field_value_type": "enum"}
-{"id": "134-1743", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-180", "field_name": "Причина инцидента", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-1864", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": false, "bundle_id": "136-140", "field_name": "Тип техдолга", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-1868", "project_field_type": "OwnedProjectCustomField", "canBeEmpty": true, "bundle_id": "136-143", "field_name": "Тип внерелиза", "field_type_id": "ownedField[1]", "field_value_type": "ownedField"}
-{"id": "134-2337", "project_field_type": "VersionProjectCustomField", "canBeEmpty": true, "bundle_id": "118-387", "field_name": "Номер релиза КХД", "field_type_id": "version[1]", "field_value_type": "version"}
-{"id": "134-2370", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-265", "field_name": "Приложение", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-2371", "project_field_type": "EnumProjectCustomField", "canBeEmpty": true, "bundle_id": "113-266", "field_name": "Тип обращения", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "134-2543", "project_field_type": "EnumProjectCustomField", "canBeEmpty": false, "bundle_id": "113-303", "field_name": "Меняется бизнес-ключ", "field_type_id": "enum[1]", "field_value_type": "enum"}
-{"id": "135-305", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-31", "field_name": "Автор инцидента", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-590", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-583", "field_name": "Согласующий", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-708", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-701", "field_name": "Дежурный аналитик КХД", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-709", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-702", "field_name": "Согласовано DE", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-710", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-703", "field_name": "Согласовано SA", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "135-737", "project_field_type": "UserProjectCustomField", "canBeEmpty": true, "bundle_id": "9-31", "field_name": "Assignee", "field_type_id": "user[1]", "field_value_type": "user"}
-{"id": "141-32", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Затраченное время", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-450", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Spent time", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-451", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Фактические трудозатраты", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-468", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Экономия за счет ИИ", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-474", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Оценка трудозатрат", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-525", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Продолжительность отпуска", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-563", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Оценка", "field_type_id": "period", "field_value_type": "period"}
-{"id": "141-564", "project_field_type": "PeriodProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Оценка трудозатрат, ч", "field_type_id": "period", "field_value_type": "period"}
-{"id": "173-140", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Оценка (чел./час.)", "field_type_id": "integer", "field_value_type": "integer"} <==
-{"id": "173-426", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Дата релиза", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-442", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Время начала сбоя", "field_type_id": "date and time", "field_value_type": "date and time"}
-{"id": "173-443", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Время обнаружения", "field_type_id": "date and time", "field_value_type": "date and time"}
-{"id": "173-444", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Время окончания работ", "field_type_id": "date and time", "field_value_type": "date and time"}
-{"id": "173-445", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Компонент", "field_type_id": "string", "field_value_type": "string"}
-{"id": "173-469", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Дата устранения", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-471", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Дата выкатки", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-627", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Дашборд КХД/Направление", "field_type_id": "string", "field_value_type": "string"}
-{"id": "173-629", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Фактическая дата релиза", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-679", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": true, "bundle_id": null, "field_name": "Due Date", "field_type_id": "date", "field_value_type": "date"}
-{"id": "173-721", "project_field_type": "SimpleProjectCustomField", "canBeEmpty": false, "bundle_id": null, "field_name": "Дата начала отпуска", "field_type_id": "date", "field_value_type": "date"}
 
-Values for `Тип карточки` (bundle `113-29`, type `enum`):
-{"id": "114-143", "name": "Bug", "localizedName": "Bug", "fullName": null, "description": null, "isArchived": null}
-{"id": "114-146", "name": "Feature", "localizedName": "Feature", "fullName": null, "description": null, "isArchived": null}
-{"id": "114-147", "name": "Task", "localizedName": "Task", "fullName": null, "description": "Task", "isArchived": null}
-{"id": "114-150", "name": "Epic", "localizedName": "Epic", "fullName": null, "description": null, "isArchived": null}
-{"id": "114-225", "name": "User Story", "localizedName": null, "fullName": null, "description": "User Story", "isArchived": null}
-{"id": "114-417", "name": "Incident", "localizedName": null, "fullName": null, "description": "Инцидент", "isArchived": null}
-{"id": "114-846", "name": "Техдолг", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "114-850", "name": "Внерелиз", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "114-1234", "name": "Release Slot", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "114-1310", "name": "Приложения КХД", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "114-1361", "name": "Отпуск", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
+class IndentDumper(yaml.Dumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super(IndentDumper, self).increase_indent(flow, False)
 
-Values for `Направление` (bundle `136-95`, type `ownedfield`):
-{"id": "142-68", "name": "Финансы", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "142-69", "name": "Сбыт", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "142-70", "name": "Управление запасами", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "142-71", "name": "Транспортировка", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "142-75", "name": "Производство", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "142-102", "name": "ТОРО", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
-{"id": "142-147", "name": "НСИ", "localizedName": null, "fullName": null, "description": "НСИ", "isArchived": null}
-{"id": "142-170", "name": "TECH", "localizedName": null, "fullName": null, "description": null, "isArchived": null}
 
-POST /api/issues payload:
-{
-  "project": {
-    "id": "0-30"
-  },
-  "queue": "DWH",
-  "summary": "[DEBUG] Prototype Review issue",
-  "description": "Отладочная задача для проверки создания issue из prototype review.\n\nПоля и карточки заполнены тестовыми значениями.\n\n## Карточки prototype review\n\n### dm.sales_pricing_documents\n- Тип: TABLE\n- Сущность:
- DM_SALES_PRICING_DOCUMENTS\n- Ключевые поля: doc_id, line_id\n- Количество строк: 128745\n- Кол-во дублей: 0\n- Время SQL: 38.412 сек\n- Зависимости: ods.sales_documents, dds.sales_pricing\n\n### dm_view.sales_pricing_documents\n- Тип: VIEW\n- Сущность: DM_VIEW_SALES_PRICING_DOCUMENTS\n- Ключевые поля: —\n- Количество строк: 128745\n- Кол-во дублей: —\n- Время SQL: 1.287 сек\n- Зависимости: dm.sales_pricing_documents",
-  "type": "task",
-  "customFields": [
-    {
-      "id": "173-140",
-      "name": "Оценка (чел./час.)",
-      "$type": "SimpleIssueCustomField",
-      "value": 60
-    },
-    {
-      "id": "134-394",
-      "name": "Тип карточки",
-      "$type": "SingleEnumIssueCustomField",
-      "value": {
-        "name": "Task"
-      }
-    },
-    {
-      "id": "135-737",
-      "name": "Assignee",
-      "$type": "SingleUserIssueCustomField",
-      "value": {
-        "login": "SuvorovND"
-      }
-    },
-    {
-      "id": "173-426",
-      "name": "Дата релиза",
-      "$type": "SimpleIssueCustomField",
-      "value": 1788210000000
-    },
-    {
-      "id": "134-1015",
-      "name": "Направление",
-      "$type": "SingleOwnedIssueCustomField",
-      "value": {
-        "name": "TECH"
-      }
-    },
-    {
-      "id": "134-2543",
-      "name": "Меняется бизнес-ключ",
-      "$type": "SingleEnumIssueCustomField",
-      "value": {
-        "name": "Нет"
-      }
-    }
-  ]
+tech_fields = ['dttm_inserted', 'dttm_updated', 'job_name', 'deleted_flag']
+
+
+def create_meta_clickhouse_from_db(greenplum_table_schema: str = '',
+                                   greenplum_table_name: str = '',
+                                   clickhouse_table_schema: str = '',
+                                   clickhouse_table_name: str = '',
+                                   create_mode: bool = False,
+                                   order_by: list = None,
+                                   entity: str = ''):
+    """
+    Функция создания yaml файлов для загрузки данных из Greenplum в Clickhouse через S3
+
+    Arguments:
+    :param greenplum_table_schema:   схема таблицы в гринпламе, по умолчанию ''. Заполняется для создания YAML для одной таблицы
+    :param greenplum_table_name:     имя таблицы в гринпламе, по умолчанию ''. Заполняется, когда имена таблицы
+                                     в гринпламе и в кликхаусе отличаются. Иначе достаточно указать имя в "clickhouse_table_name"
+    :param clickhouse_table_schema:  схема таблицы в кликхаусе, по умолчанию ''. Заполняется для создания YAML для одной таблицы
+    :param clickhouse_table_name:    имя таблицы в кликхаусе, по умолчанию ''. Заполняется для создания YAML для одной таблицы
+    :param create_mode:              режим принудительного создания мета-ямл файла по структуре гринплама, по умолчанию False.
+    :param order_by:                 lсписок колонок для указания в DDL кликхауса в части ORDER BY, по умолчанию [].
+    """
+    
+    root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    new_path = os.path.join(root_path, 'config_files', 'meta')
+    print('Target_path', new_path)
+    greenplum_table_schema = greenplum_table_schema.strip()
+    clickhouse_table_schema = 'dm' if clickhouse_table_schema == '' else clickhouse_table_schema.strip()
+    object_name = greenplum_table_name.strip() if greenplum_table_name != '' else clickhouse_table_name.strip()
+    
+    ################## Connection to Greenplum ##################
+    # host = os.environ.get('gp_prod_host')
+    # port = '5432'
+    # database = 'dwh'
+    # user_name = os.environ.get('gp_prod_login')
+    # password = os.environ.get('gp_prod_password')
+    
+    host = os.environ.get('gp_dev_host')
+    port = '5432'
+    database = 'dwh'
+    user_name = os.environ.get('gp_dev_login')
+    password = os.environ.get('gp_dev_password')
+    #############################################################
+    
+    querry = f'''
+with tables_info as(
+	select
+        case
+            when t.table_type = 'BASE TABLE' then 'table'
+            when t.table_type = 'VIEW' then 'view'
+        else t.table_type
+        end table_type,
+        nsp.nspname AS table_schema,
+        pc.relname AS table_name,
+        c.column_name,
+        ent.entity_id,
+        case
+            when ent.entity_name like 'SALES_SHIPMENT_FROM_PLANT%'
+            then 'SALES_MM'
+            when ent.entity_name like 'MANAGEMENT_REPORTING_%'
+            then 'production'
+            else ent.entity_name
+        end as entity_name,
+        c.ordinal_position,
+        concat(c.udt_name,
+        case
+            when character_maximum_length is not null
+                then concat('(', c.character_maximum_length, ')')
+            when numeric_precision is not null and c.data_type = 'numeric'
+                then concat('(', c.numeric_precision, ',', c.numeric_scale, ')')
+        end) data_type,
+        json_build_object(
+        'column_name_gp',
+        case when c.column_name = lower(c.column_name) then c.column_name else concat('"', c.column_name, '"' ) end,
+        'data_type_gp',
+        concat(c.udt_name,
+        case
+            when character_maximum_length is not null
+                then concat('(', c.character_maximum_length, ')')
+            when numeric_precision is not null and c.data_type = 'numeric'
+                then concat('(', c.numeric_precision, ',', c.numeric_scale, ')')
+        end),
+        'is_nullable',
+        case
+            when is_nullable = 'YES'
+                then true
+            else false
+        end,
+        'default',
+        column_default,
+        'description',
+        pd.description
+        ) json_data,
+        pc.reloptions,
+        pg_catalog.pg_get_table_distributedby(pc.oid) distributedby,
+        v.view_definition,
+        regexp_replace(split_part(v.view_definition, 'FROM', 2), '[[:space:];]+', '', 'g') as view_base,
+        ent.entity_last_load::time + interval '20 minutes' as entity_last_load		
+	from pg_class as pc
+	inner  join pg_namespace as nsp 
+	    on nsp.oid = pc.relnamespace
+    left join {' tech_etl.tables_meta' if greenplum_table_schema != '' and clickhouse_table_name != '' else '(select distinct table_schema, table_name, entity_id, flag_active from tech_etl.tables_meta_clickhouse_upload)'} em
+        on em.table_name = pc.relname
+        and em.table_schema = nsp.nspname	
+    left join tech_etl.entities_meta as ent       
+        on ent.entity_id = em.entity_id
+    left join information_schema.tables t        
+        on t.table_schema = nsp.nspname        
+        and t.table_name = pc.relname
+	inner  join information_schema.columns as c 
+	    on pc.relname = c.table_name        
+	    and nsp.nspname = c.table_schema    
+    left join pg_description pd         
+        on c.ordinal_position = pd.objsubid        
+        and pd.objoid = pc.oid
+    left join information_schema."views" v        
+        on v.table_schema = nsp.nspname       
+        and v.table_name = pc.relname
+    where {f"nsp.nspname = '{greenplum_table_schema}' and pc.relname = '{object_name}'" if greenplum_table_schema != '' and clickhouse_table_name != '' else "em.flag_active"}
+    and {"pc.relkind = 'v'" if greenplum_table_schema == 'dm_view' else "pc.relkind != 'v'"}
+), query as (
+select
+    k.table_type,
+    k.table_schema,
+    k.table_name,
+    k.entity_id,
+    k.entity_name,
+    k.reloptions,
+    k.distributedby distr,
+    array_agg(k.json_data order by k.ordinal_position) column_info,
+    k.view_definition,
+    split_part(
+        case
+            when view_base like '%JOIN%' then null
+            when k.view_definition like '%WITH%' then null
+            else split_part(view_base, 'WHERE', 1)
+        end, '.', 1) as view_base_schema,
+    split_part(
+        case
+            when view_base like '%JOIN%' then null
+            when k.view_definition like '%WITH%' then null
+            else split_part(view_base, 'WHERE', 1)
+        end, '.', 2) as view_base_name,
+    case when k.table_schema = 'dict_dds'
+        then '0 22 * * *'
+        else concat(extract('minutes' from k.entity_last_load), ' ',  extract('hour' from k.entity_last_load), ' * * *')
+       end as entity_last_load
+from tables_info k
+group by
+    k.table_type,
+    k.table_schema,
+    k.table_name,
+    k.entity_id,
+    k.entity_name,
+    k.reloptions,
+    k.distributedby,
+    k.view_definition,
+    k.entity_last_load,
+    view_base_schema,
+    view_base_name
+)
+select
+    qq.table_type,
+    qq.table_schema,
+    qq.table_name,
+    qq.entity_name,
+    qq.reloptions,
+    obj_description('{greenplum_table_schema}.{object_name}'::regclass) as table_comment,
+    concat(qq.distr, pg_catalog.pg_get_table_distributedby(pc.oid)) as distributedby,
+    qq.column_info,
+    qq.view_definition,
+    qq.entity_last_load
+from query qq
+left join pg_catalog.pg_statio_all_tables p
+        on qq.view_base_schema = p.schemaname
+        and qq.view_base_name = p.relname
+left join (select distinct objoid from pg_catalog.pg_description) pd
+        on p.relid = pd.objoid
+left join pg_catalog.pg_class pc
+        on pc.relname = qq.view_base_name
+        and pc.oid = p.relid
+order by
+    qq.table_schema,
+    qq.table_name
+;
+'''
+    try:
+        with (psycopg2.connect(
+                host=host,
+                port=port,
+                dbname=database,
+                user=user_name,
+                password=password
+        ) as conn):
+            with conn.cursor() as cur:
+                cur.execute("select distinct entity_name from tech_etl.entities_meta;")
+                ent_results = cur.fetchall()
+                entities_list = [entity[0] for entity in ent_results]
+                entities_list.append('production')
+                
+                print(f'!!!!\n{querry}\n!!!')
+                cur.execute(querry)
+                result = cur.fetchall()
+                count = len(result)
+                if not result:
+                    print('Error: Greenplum query returned no results. Incorrect schema or table name')
+                for object_type, table_schema, table_name, entity_name, reloptions, table_comment, distributedby, columns_info, view_def, entity_last_load in result:
+                    mapping_dict = {}
+                    cnt = 0
+                    if not create_mode:
+                        click = get_metadata_clickhouse(clickhouse_table_schema, table_name)
+                        if not click.result_rows:
+                            print(f'Error: Table {table_name} doesn\'t exist in clickhouse')
+                            count -= 1
+                            break
+                        else:
+                            for column_info in click.column_names:
+                                mapping_dict[column_info] = cnt
+                                cnt += 1
+                            cleared_distributed = None
+                            first_row = click.result_rows[0]
+                            yaml_data = {'schema_name_gp': table_schema,
+                                         'schema_name_click': first_row[mapping_dict['database_name']],
+                                         'object_name': table_name}
+                            if greenplum_table_name != '':
+                                yaml_data['greenplum_table_name'] = greenplum_table_name
+                            yaml_data['object_type'] = object_type
+                            yaml_data['clickhouse_cluster'] = '{cluster}'
+                            yaml_data['engine'] = first_row[mapping_dict['engine']]
+                            yaml_data['order_by'] = first_row[mapping_dict['order_by']].split(', ')
+                            if distributedby:
+                                if distributedby == 'DISTRIBUTED RANDOMLY':
+                                    cleared_distributed = ['RANDOMLY']
+                                elif distributedby == 'DISTRIBUTED REPLICATED':
+                                    cleared_distributed = ['REPLICATED']
+                                elif str(distributedby).startswith('DISTRIBUTED BY'):
+                                    cleared_distributed = str(distributedby).lstrip('DISTRIBUTED BY (').rstrip(
+                                        ')').replace('\"', '').split(', ')
+                                else:
+                                    print(distributedby)
+                                yaml_data['distributed'] = cleared_distributed
+                            yaml_data['partitions'] = None if not first_row[mapping_dict['partitions']] else first_row[
+                                mapping_dict['partitions']]
+                            yaml_data['table_settings'] = (first_row[mapping_dict['settings']])[1:]
+                            yaml_data['table_comment'] = None if first_row[mapping_dict['table_comment']] == '' else \
+                                first_row[mapping_dict['table_comment']]
+                            yaml_data['settings_external_table'] = {'max_threads': 20,
+                                                                    'max_insert_threads': 20,
+                                                                    'input_format_parallel_parsing': 0}
+                            yaml_data['load_type'] = 'full'
+                            yaml_data['recreate_mode'] = 'drop_create'
+                            yaml_data['truncate_mode_on'] = True if table_name != 'account_turnover' else False
+                            yaml_data['postgres_conn_id'] = 'gp_connection'
+                            yaml_data['clickhouse_conn_id'] = 'clickhouse'
+                            yaml_data['dag_schedule_interval'] = {
+                                'PROD': None if entity_last_load == '  * * *' else entity_last_load,
+                                'DEV': None,
+                            }
+                            if entity_name and entity:
+                                if entity_name != entity:
+                                    print('\n!Название сущности в БД не совпадает с указанным!!!\n')
+                            if entity:
+                                if entity in entities_list:
+                                    yaml_data['dag_tags'] = [entity]
+                                else:
+                                    raise Exception(f"Указанной сущности {entity} нет в entities_meta")
+                            elif entity_name:
+                                yaml_data['dag_tags'] = [entity_name]
+                            else:
+                                raise Exception('Не указана сущность! Добавьте параметр "entity"')
+                            yaml_data['task_pool'] = 'dm_pool'
+                            yaml_data['task_pool_slots'] = 1
+                            yaml_data['attributes'] = []
+                            
+                            all_columns = [item['column_name_gp'] for item in columns_info]
+                            if not set(tech_fields).issubset(set(all_columns)):
+                                raise Exception(
+                                    '\n Отсутствуют технические поля! Добавьте технические поля и сгенерируйте файл снова')
+                            
+                            if len(columns_info) >= len(first_row[mapping_dict['columns']]):
+                                print(f'Table_name - {table_schema}.{table_name}')
+                                for i in range(0, len(first_row[mapping_dict['columns']])):
+                                    data = {
+                                        'column_name_click': first_row[mapping_dict['columns']][i]['column_name_click'],
+                                        'column_name_gp': first_row[mapping_dict['columns']][i]['column_name_click'] if
+                                        first_row[mapping_dict['columns']][i]['column_name_click'] ==
+                                        first_row[mapping_dict['columns']][i]['column_name_click'].lower() else
+                                        f''' '"{first_row[mapping_dict['columns']][i]['column_name_click']}"' ''',
+                                        'data_type_click': first_row[mapping_dict['columns']][i]['data_type_click'],
+                                        'data_type_gp': next((item['data_type_gp'] for item in columns_info if
+                                                              item['column_name_gp'] ==
+                                                              first_row[mapping_dict['columns']][i][
+                                                                  'column_name_click']),
+                                                             None),
+                                        'is_nullable': 'NULL' if first_row[mapping_dict['columns']][i][
+                                                                     'is_nullable'].lower() == 'true' else 'NOT NULL',
+                                        'description': first_row[mapping_dict['columns']][i]['description'].replace(
+                                            '\'', '\'\'').replace('\n', '') if first_row[mapping_dict['columns']][i][
+                                            'description'] else None,
+                                    }
+                                    if object_type != 'view':
+                                        if data['data_type_gp'] == 'date' and data[
+                                            'column_name_click'] not in cleared_distributed:
+                                            data[
+                                                'column_name_gp'] = f'''tech_etl.validate_date("{data['column_name_gp']}")'''
+                                        if data['data_type_gp'] == 'timestamp' and data['column_name_gp'] not in (
+                                                'dttm_inserted', 'dttm_updated') and data[
+                                            'column_name_click'] not in cleared_distributed:
+                                            data[
+                                                'column_name_gp'] = f'''tech_etl.validate_timestamp("{data['column_name_gp']}"::text)'''
+                                    if first_row[mapping_dict['columns']][i].get('default'):
+                                        data['default'] = first_row[mapping_dict['columns']][i]['default']
+                                    yaml_data['attributes'].append(data)
+                                if not os.path.exists(os.path.join(new_path, yaml_data['schema_name_click'])):
+                                    os.makedirs(os.path.join(new_path, yaml_data['schema_name_click']))
+                                with open(os.path.join(new_path, yaml_data['schema_name_click'],
+                                                       f"{table_schema}_{table_name}_meta.yaml"),
+                                          'w', encoding='utf-8') as new_file:
+                                    yaml.dump(yaml_data,
+                                              new_file,
+                                              Dumper=IndentDumper,
+                                              default_flow_style=False,
+                                              sort_keys=False,
+                                              encoding='utf-8',
+                                              allow_unicode=True,
+                                              width=float("inf"))
+                            
+                            else:
+                                print(f'Table_name - {table_schema}.{table_name}')
+                                print('Clickhouse columns count:', len(first_row[mapping_dict['columns']]))
+                                print('Greenplum  columns count:', len(columns_info))
+                                print('Error: clickhouse table has more columns than Greenplum table')
+                                count -= 1
+                    else:
+                        if not order_by:
+                            raise Exception('Не указаны колонки в order_by!')
+                        if order_by[0] != 'tuple()':
+                            check = null_checking(order_by, table_schema, table_name)
+                            cur.execute(check)
+                            check_rest = cur.fetchall()
+                            col_name = [desc[0] for desc in cur.description]
+                            rest = []
+                            for i in range(0, len(check_rest[0])):
+                                if check_rest[0][i] != 0:
+                                    rest.append(col_name[i])
+                            if rest:
+                                raise Exception(f'Колонки - {rest} указанные в order_by не могут быть NULL!')
+                        print('Create_mode activated, creating from Greenplum table')
+                        yaml_data = {'schema_name_gp': table_schema,
+                                     'schema_name_click': clickhouse_table_schema,
+                                     'object_name': table_name}
+                        if greenplum_table_name != '':
+                            yaml_data['greenplum_table_name'] = greenplum_table_name
+                        yaml_data['object_type'] = object_type
+                        yaml_data['clickhouse_cluster'] = '{cluster}'
+                        yaml_data['engine'] = 'ReplicatedMergeTree'
+                        yaml_data['order_by'] = order_by
+                        if not order_by:
+                            count -= 1
+                            raise Exception(f'Error: Order_by is EMPTY. Add list of columns to "order_by" parameter')
+                        cleared_distributed = None
+                        if distributedby and distributedby != '':
+                            if distributedby == 'DISTRIBUTED RANDOMLY':
+                                cleared_distributed = ['RANDOMLY']
+                            elif distributedby == 'DISTRIBUTED REPLICATED':
+                                cleared_distributed = ['REPLICATED']
+                            elif str(distributedby).startswith('DISTRIBUTED BY'):
+                                cleared_distributed = str(distributedby).lstrip('DISTRIBUTED BY (').rstrip(')').replace(
+                                    '\"', '').split(', ')
+                            else:
+                                print('distributedby -', distributedby)
+                            yaml_data['distributed'] = cleared_distributed
+                        else:
+                            yaml_data['distributed'] = None
+                            print(
+                                '\nWARNING! Дистрибуция не получена. Проверьте DDL и пропишите поле дистрибуции вручную\n')
+                        yaml_data['partitions'] = None
+                        yaml_data['table_settings'] = 'index_granularity = 8192'
+                        yaml_data['table_comment'] = table_comment
+                        yaml_data['settings_external_table'] = {'max_threads': 20,
+                                                                'max_insert_threads': 20,
+                                                                'input_format_parallel_parsing': 0}
+                        yaml_data['load_type'] = 'full'
+                        yaml_data['recreate_mode'] = 'drop_create'
+                        yaml_data['truncate_mode_on'] = True if table_name != 'account_turnover' else False
+                        yaml_data['postgres_conn_id'] = 'gp_connection'
+                        yaml_data['clickhouse_conn_id'] = 'clickhouse'
+                        yaml_data['dag_schedule_interval'] = {
+                            'PROD': None if entity_last_load == '  * * *' else entity_last_load,
+                            'DEV': None,
+                        }
+                        if entity_name and entity:
+                            if entity_name != entity:
+                                print('\n!Название сущности в БД не совпадает с указанным!!!\n')
+                        if entity:
+                            if entity in entities_list:
+                                yaml_data['dag_tags'] = [entity]
+                            else:
+                                raise Exception(f"Указанной сущности {entity} нет в entities_meta")
+                        elif entity_name:
+                            yaml_data['dag_tags'] = [entity_name]
+                        else:
+                            raise Exception('Не указана сущность! Добавьте параметр "entity"')
+                        yaml_data['task_pool'] = 'dm_pool'
+                        yaml_data['task_pool_slots'] = 1
+                        yaml_data['attributes'] = []
+                        print(f'Table_name - {table_schema}.{table_name}')
+                        print('greenplum columns count:', len(columns_info))
+                        print('clickhouse new')
+                        print(columns_info)
+                        print()
+                        
+                        all_columns = [item['column_name_gp'] for item in columns_info]
+                        if not set(tech_fields).issubset(set(all_columns)):
+                            raise Exception(
+                                '\n Отсутствуют технические поля! Добавьте технические поля и сгенерируйте файл снова')
+                        
+                        for i in range(0, len(columns_info)):
+                            if '(' in columns_info[i]['data_type_gp'] and columns_info[i]['data_type_gp'].split('(')[
+                                0] == 'numeric':
+                                numeric_type = MAPPING_GP_TO_CLICK[
+                                                   columns_info[i]['data_type_gp'].split('(')[0]] + '(' + \
+                                               columns_info[i]['data_type_gp'].split('(')[1].strip()
+                            elif columns_info[i]['data_type_gp'] == 'numeric':
+                                numeric_type = MAPPING_GP_TO_CLICK[columns_info[i]['data_type_gp']] + '(32,10)'
+                            else:
+                                numeric_type = MAPPING_GP_TO_CLICK[columns_info[i]['data_type_gp'].split('(')[0]]
+                            
+                            data = {'column_name_click': columns_info[i]['column_name_gp'],
+                                    'column_name_gp': columns_info[i]['column_name_gp'],
+                                    'data_type_click': numeric_type,
+                                    'data_type_gp': columns_info[i]['data_type_gp'],
+                                    'is_nullable': 'NULL' if columns_info[i]['is_nullable'] and columns_info[i][
+                                        'column_name_gp'] not in order_by else 'NOT NULL',
+                                    'description': columns_info[i]['description'].replace('\'', '\'\'').replace('\n',
+                                                                                                                '') if
+                                    columns_info[i]['description'] else None,
+                                    }
+                            if cleared_distributed or cleared_distributed == '':
+                                if data['data_type_gp'] == 'date' and data[
+                                    'column_name_click'] not in cleared_distributed and object_type != 'view':
+                                    data['column_name_gp'] = f'''tech_etl.validate_date("{data['column_name_gp']}")'''
+                            
+                            if data['data_type_gp'] == 'timestamp' and data['column_name_gp'] not in ('dttm_inserted',
+                                                                                                      'dttm_updated'):
+                                data[
+                                    'column_name_gp'] = f'''tech_etl.validate_timestamp("{data['column_name_gp']}"::text)'''
+                            if columns_info[i].get('default'):
+                                data['default'] = columns_info[i]['default']
+                            yaml_data['attributes'].append(data)
+                        if not os.path.exists(os.path.join(new_path, yaml_data['schema_name_click'])):
+                            os.makedirs(os.path.join(new_path, yaml_data['schema_name_click']))
+                        with open(os.path.join(new_path,
+                                               yaml_data['schema_name_click'],
+                                               f"{table_schema}_{table_name}_meta.yaml"),
+                                  'w', encoding='utf-8') as new_file:
+                            yaml.dump(yaml_data,
+                                      new_file,
+                                      Dumper=IndentDumper,
+                                      sort_keys=False,
+                                      encoding='utf-8',
+                                      allow_unicode=True,
+                                      width=float("inf"))
+                print('Created meta files for', count, 'tables')
+    
+    except UndefinedColumn as e:
+        print(f"Ошибка: Колонки, указанной в order_by, нет в таблице. Проверьте правильность написания! {e}")
+        raise e
+    
+    except Exception as err:
+        print('Zalupa_tigra')
+        print(err)
+        raise err
+
+
+def get_metadata_clickhouse(schema, table):
+    click_schema = schema if schema != '' else 'dm'
+    sql_query = f"""
+SELECT
+    table_name,
+    database_name,
+    groupArray(user_json) AS columns,
+    primary_key,
+    engine,
+    partitions,
+    order_by,
+    settings,
+    table_comment
+FROM (
+    SELECT
+        t.name AS table_name,
+        t.database AS database_name,
+        map('column_name_click', c.name,
+            'data_type_click',
+            CASE WHEN c.type like 'Nullable(%'
+                then replaceOne(replace(c.type, 'Nullable(', ''), ')', '')
+                else c.type
+            END AS data_type_click,
+            'position', c.position::text,
+            'is_nullable', hasToken(c.type, 'Nullable')::bool::text,
+            'description', comment,
+            'default', default_expression
+        ) AS user_json,
+        c.comment AS comment,
+        t.primary_key,
+        t.engine,
+        t.partition_key as partitions,
+        t.sorting_key as order_by,
+        splitByString('SETTINGS', engine_full)[-1] AS settings,
+        t.comment as table_comment
+    FROM system.columns c
+    JOIN system.tables t
+        ON c.database = t.database AND c.table = t.name
+    WHERE c.database = '{click_schema}' and c.table = '{table}')
+GROUP BY table_name,
+    database_name,
+    primary_key,
+    engine,
+    partitions,
+    order_by,
+    settings,
+    table_comment;"""
+    
+    try:
+        ##################### Connection to Clickhouse ######################
+        # client = clickhouse_connect.get_client(
+        #     host=os.environ.get('click_prod_host'),
+        #     port=443,
+        #     database='dm',
+        #     user_name=os.environ.get('click_prod_login'),
+        #     password=os.environ.get('click_prod_password')
+        # )
+        client = clickhouse_connect.get_client(
+            host=os.environ.get('click_dev_host'),
+            port=8443,
+            secure=True,
+            verify=False,
+            database='dm',
+            user_name=os.environ.get('click_dev_login'),
+            password=os.environ.get('click_dev_password')
+        )
+        #####################################################################
+        result = client.query(sql_query)
+        return result
+    except Exception as err:
+        print(err)
+        return None
+
+
+def null_checking(order_by: list, schema, table):
+    template = f'''
+SELECT
+    '''
+    for item in order_by[:-1]:
+        template += f'''count({item}) - count(*) as {item},
+    '''
+    template += f'''count({order_by[-1]}) - count(*) as {order_by[-1]}
+'''
+    template += f'''FROM {schema}.{table};'''
+    return template
+
+# if __name__ == '__main__':
+#
+#     create_meta_clickhouse_from_db(
+#         greenplum_table_schema='dm',
+#         clickhouse_table_schema='dm',
+#         clickhouse_table_name='toro_employee_utilization',
+#         create_mode=True,
+#         order_by=['plant_name', 'repair_team_name', 'employee_sap_code'],
+#         entity='production'
+#     )
+
+
+
+
+from datetime import datetime, date
+from pathlib import Path
+from typing import Union, Dict
+import os
+from dateutil.relativedelta import relativedelta
+
+
+MAPPING_GP_TO_CLICK = {
+    'date': 'Date32',
+    'timestamp': 'DateTime',
+    'timestamptz': 'DateTime',
+    'varchar': 'String',
+    'text': 'String',
+    'bpchar': 'String',
+    'numeric': 'Decimal',
+    'decimal': 'Decimal',
+    'int8': 'Int32',
+    'int4': 'Int32',
+    'int2': 'Int32',
+    'int': 'Int32',
+    'bigint': 'Int64',
+    'bool': 'UInt8',
+    'json': 'String',
+    'time': 'String',
+    'float8': 'Decimal(32,10)'
 }
 
-Probe values for `Направление`:
-Requested value: TECH
-Bundle id: 136-95
-Bundle type: ownedfield
-Available values: 8
-{"id": "142-68", "name": "Финансы", "localizedName": null, "fullName": null}
-{"id": "142-69", "name": "Сбыт", "localizedName": null, "fullName": null}
-{"id": "142-70", "name": "Управление запасами", "localizedName": null, "fullName": null}
-{"id": "142-71", "name": "Транспортировка", "localizedName": null, "fullName": null}
-{"id": "142-75", "name": "Производство", "localizedName": null, "fullName": null}
-{"id": "142-102", "name": "ТОРО", "localizedName": null, "fullName": null}
-{"id": "142-147", "name": "НСИ", "localizedName": null, "fullName": null}
-{"id": "142-170", "name": "TECH", "localizedName": null, "fullName": null}
+def get_template_content(
+        template_name: str,
+        templates_path: str = None,
+        encoding: str = 'utf-8',
+        **kwargs
+)->str:
+    """
+    Функция подлежит удалению. В дальнейшем использовать будет нельзя.
+    Args:
+        template_name: наименование файла или полный путь до файла.
+        templates_path: путь к файлу.
+        encoding: Кодировка файла.
+        **kwargs:
 
-Control probe without this field:
-status=200
-{"id":"2-88788","$type":"Issue"}
+    Returns: возвращает отрендеренный шаблон.
 
-{"probe_format": "name", "bundle_value_id": "142-68", "bundle_value_name": "Финансы", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+    """
+    from jinja2 import Template
+    if templates_path and os.path.exists(os.path.join(templates_path, template_name)):
+        content = Path(os.path.join(templates_path, template_name)).read_text(encoding=encoding)
+    elif os.path.exists(template_name):
+        content = Path(template_name).read_text(encoding=encoding)
+    else:
+        content = template_name
+    template = Template(content)
+    rendered_content = template.render(**kwargs)
+    return rendered_content
 
-{"probe_format": "id", "bundle_value_id": "142-68", "bundle_value_name": "Финансы", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_template_sql(
+        template_name: str,
+        templates_path: str = None,
+        encoding: str = 'utf-8',
+        **kwargs
+)->str:
+    """
+    Функция подлежит удалению. В дальнейшем использовать будет нельзя.
+    Args:
+        template_name: наименование файла или полный путь до файла.
+        templates_path: путь к файлу.
+        encoding: Кодировка файла.
+        **kwargs:
 
-{"probe_format": "name", "bundle_value_id": "142-69", "bundle_value_name": "Сбыт", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+    Returns: возвращает отрендеренный шаблон.
 
-{"probe_format": "id", "bundle_value_id": "142-69", "bundle_value_name": "Сбыт", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+    """
+    from jinja2 import Template
+    if templates_path and os.path.exists(os.path.join(templates_path, template_name)):
+        sql = Path(os.path.join(templates_path, template_name)).read_text()
+    elif os.path.exists(template_name):
+        sql = Path(template_name).read_text(encoding=encoding)
+    else:
+        sql = template_name
+    template = Template(source=sql)
+    sql_text = template.render(**kwargs)
+    return sql_text
 
-{"probe_format": "name", "bundle_value_id": "142-70", "bundle_value_name": "Управление запасами", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_date_today(**kwargs):
+    return str(date.today())
 
-{"probe_format": "id", "bundle_value_id": "142-70", "bundle_value_name": "Управление запасами", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_date_location_api(**kwargs):
+    return str((date.today() - relativedelta(months=1)).replace(day=1))
 
-{"probe_format": "name", "bundle_value_id": "142-71", "bundle_value_name": "Транспортировка", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_format_date(in_datetime: datetime) -> str:
+    trunc_date = in_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+    return trunc_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ').replace(':', '%3A')
 
-{"probe_format": "id", "bundle_value_id": "142-71", "bundle_value_name": "Транспортировка", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_timedelta_to_str(**kwargs) -> str:
+    srt_interval = f"""{' '.join(f'{val} {key.rstrip("s")}' for key, val in kwargs.items())}"""
+    return srt_interval
 
-{"probe_format": "name", "bundle_value_id": "142-75", "bundle_value_name": "Производство", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_parquet_dir(in_datetime: str) -> int:
+    return int(datetime.strptime(in_datetime, '%Y-%m-%dT%H:%M:%S.%f%z').timestamp() * 1000)
 
-{"probe_format": "id", "bundle_value_id": "142-75", "bundle_value_name": "Производство", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_parquet_dir_with_ts() -> int:
+    from airflow.operators.python import get_current_context
+    in_datetime = get_current_context()['ts']
+    if '+' in in_datetime:
+        if len(in_datetime) != 32:
+            return int(datetime.strptime(in_datetime[:-6], '%Y-%m-%dT%H:%M:%S').timestamp() * 1000)
+        else:
+            return int(datetime.strptime(in_datetime[:-6], '%Y-%m-%dT%H:%M:%S.%f').timestamp() * 1000)
+    return int(datetime.strptime(in_datetime[:-6], '%Y-%m-%dT%H:%M:%S.%f%z').timestamp() * 1000)
 
-{"probe_format": "name", "bundle_value_id": "142-102", "bundle_value_name": "ТОРО", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def get_result(
+        ti,
+        dag_id: str,
+        task_id: Union[list, str],
+        good_task,
+        bad_task,
+        **kwargs
+    ):
+    if not isinstance(task_id, list):
+        task_id = [task_id]
+    for task in task_id:
+        if ti.xcom_pull(
+            dag_id=dag_id,
+            task_ids=task,
+        ):
+            return bad_task
+    return good_task
 
-{"probe_format": "id", "bundle_value_id": "142-102", "bundle_value_name": "ТОРО", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
 
-{"probe_format": "name", "bundle_value_id": "142-147", "bundle_value_name": "НСИ", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def set_dag_status(ti, dag_id, task_id, message_error, pulse_url, upstream_task_ids=None, **kwargs):
+    from airflow.utils.state import State
+    from plugins.help_utility.pulse_release_notification import send_release_finished_message
+    logger = kwargs['dag'].logger()
+    release_user = kwargs.get('params', {}).get('release_user')
+    
+    dag_run = kwargs.get('dag_run')
+    failed_upstream_tasks = []
+    
+    if dag_run and upstream_task_ids:
+        for upstream_task_id in upstream_task_ids:
+            upstream_ti = dag_run.get_task_instance(task_id=upstream_task_id)
+            if upstream_ti:
+                logger.info(f"Task {upstream_task_id} state: {upstream_ti.state}")
+                if upstream_ti.state in [State.FAILED, State.UPSTREAM_FAILED]:
+                    failed_upstream_tasks.append(upstream_task_id)
+    
+    if ti.xcom_pull(
+            dag_id=dag_id,
+            task_ids=task_id,
+    ):
+        raise Exception(message_error)
+    
+    try:
+        if failed_upstream_tasks:
+            logger.error(f"Failed upstream tasks: {failed_upstream_tasks}")
+            send_release_finished_message(
+                event_type='bad_finished',
+                logger=logger,
+                user_name=release_user,
+                pulse_url=pulse_url
+            )
+        else:
+            send_release_finished_message(
+                event_type='finished',
+                logger=logger,
+                user_name=release_user,
+                pulse_url=pulse_url
+            )
+    except Exception as e:
+        logger.error(f'PULSE NOTIFICATION EXCEPTION: {e}')
+        
+def send_message_pulse(
+        header: Union[str, bytes],
+        msg: Union[str, list, dict],
+        pulse_url: str='pulse',
+        return_response=True
+):
+    import requests
+    pulse_url = f'http://10.66.129.239/{pulse_url}'
+    try:
+        if isinstance(msg, str):
+            data = msg.replace('"', '\\"').replace('\n','\\n')
+        elif isinstance(msg, list):
+            data =  "\\n".join(str(msg).replace('"', '\\"'))
+        elif isinstance(msg, dict):
+            data = ''
+            for sub_header, sub_data in msg.items():
+                if sub_data:
+                    if isinstance(sub_data, str):
+                        sub_data = sub_data.replace('"', '\\"')
+                    data += f"\\n_**{sub_header}**_ :\\n{sub_data}\\n"
+        else:
+            data = 'No data'
+        message =  f"**{header}**\\n{data}"
+        if len(message)>2000:
+            message = f"{message[:1900]} \\n...\\nПолный отчёт смотри в почте"
+        response = requests.post(url=pulse_url, data=message.encode('utf-8'))
+        response.raise_for_status()
+        if return_response:
+            return response
+        return None
+    except Exception as e:
+        print('Error in send_message_pulse:', str(e))
+        print(f"Status Code: {response.status_code}")
+        print(f"Response JSON: {response.json()}")
 
-{"probe_format": "id", "bundle_value_id": "142-147", "bundle_value_name": "НСИ", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def pulse_format_text(
+        data,
+        warp_rows: str = '||',
+        rows_delimiter: str = '\\n',
+        column_delimiter: str = '|',
+) -> str:
+    return f'{rows_delimiter}'.join([f'''{warp_rows}{f"{column_delimiter}".join(row)}{warp_rows}''' for row in data])
 
-{"probe_format": "name", "bundle_value_id": "142-170", "bundle_value_name": "TECH", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+def send_mail_notif(
+        mail_from,
+        mail_to,
+        mail_subject,
+        html_body,
+        mail_cc,
+        file_attempt = None
+):
+    from airflow.utils.email import build_mime_message, send_mime_email
 
-{"probe_format": "id", "bundle_value_id": "142-170", "bundle_value_name": "TECH", "bundle_value_localized_name": "", "status_code": 403, "response": "{\"error\":\"Forbidden\",\"error_description\":\"You have no permissions to update this field\"}"}
+    msg, recipients = build_mime_message(
+        mail_from=mail_from,
+        to=mail_to,
+        subject=mail_subject,
+        html_content=html_body,
+        cc=mail_cc,
+        files=file_attempt,
+    )
+
+    send_mime_email(e_from=mail_from, e_to=recipients, mime_msg=msg, )
+
+def send_email_message(context, source='callback'):
+    from airflow.config_templates.airflow_local_settings import BASE_LOG_FOLDER
+    
+    logger = context['dag'].logger()
+    logger.info('START send_email_message')
+    try:
+        cluster = os.environ.get('CLUSTER', 'TEST')
+        err_header = context.get('exception', 'Обнаружена неопределенная ошибка')
+        email_list = context['dag'].default_args['email']
+        ti = context['task_instance']
+        if source == 'operator':
+            try_n = ti.try_number
+            max_t = ti.max_tries
+        else:
+            try_n = ti.try_number - 1
+            max_t = ti.max_tries + 1
+        map_index = ''
+        if ti.map_index >= 0:
+            map_index = f'map_index={ti.map_index}/'
+        log_file_path = f'dag_id={ti.dag_id}/run_id={ti.run_id}/task_id={ti.task_id}/{map_index}attempt={try_n}.log'
+        abs_log_path = f'{BASE_LOG_FOLDER}/{log_file_path}'
+    
+        root_dir = os.environ.get('AIRFLOW_HOME')
+        template_path = 'template_dir/template_call_dir/message_on_fail.html'
+    
+        alert_template = get_template_sql(
+            template_path,
+            root_dir,
+            try_number=try_n,
+            max_tries=max_t,
+            ti=ti,
+            exception_html=err_header
+        )
+    
+        send_mail_notif(
+            mail_from=f"{cluster}_airflow@rusal.com",
+            mail_to=email_list,
+            mail_subject=f'Уведомление об ошибке на {cluster} airflow {ti.dag_id}.{ti.task_id}',
+            html_body=alert_template,
+            mail_cc=None,
+            file_attempt=[abs_log_path]
+        )
+    except Exception as err:
+        logger.error(f'Error in send_email_message: {str(err)}')
+
+def send_pulse_message(context, source='callback'):
+    logger = context['dag'].logger()
+    logger.info('START send_pulse_message')
+    cluster = os.environ.get('CLUSTER', 'TEST')
+    cluster_emodzy = {
+        'PROD': '🔴',
+        'PREPROD': '🔵',
+        'DEV': '🔶'
+    }
+    err_header = context.get('exception', 'Обнаружена неопределенная ошибка')
+    if len(str(err_header)) > 1000:
+        err_header = str(err_header)[:1000] + "\nПолный текст ошибки в логах"
+    ti = context['task_instance']
+    if source == 'operator':
+        try_n = ti.try_number
+        max_t = ti.max_tries
+    else:
+        try_n = ti.try_number - 1
+        max_t = ti.max_tries + 1
+    root_dir = os.environ.get('AIRFLOW_HOME')
+    template_path = 'template_dir/template_call_dir/message_on_fail.pulse'
+    pulse_message = get_template_sql(
+        template_path,
+        root_dir,
+        try_number=try_n,
+        max_tries=max_t,
+        ti=ti,
+        exception_html=err_header
+    )
+    header = f'{cluster_emodzy.get(cluster, "🔶")}Уведомление об ошибке на {cluster} airflow {ti.dag_id}.{ti.task_id}'
+    print(pulse_message)
+    res = send_message_pulse(
+        header=header,
+        msg=pulse_message
+    )
+    print(res)
+
+def send_email_and_pulse_message(context):
+    send_pulse_message(context)
+    send_email_message(context)
+
+
+def s3_auth(conn_id='minio'):
+    from airflow.hooks.base import BaseHook
+    from minio import Minio
+    hook = BaseHook.get_connection(conn_id=conn_id)
+    client = Minio(
+        f'{hook.host}:{hook.port}',
+        access_key=hook.login,
+        secret_key=hook.password,
+        secure=True if os.environ.get('CLUSTER', 'TEST') == 'PROD' else False
+    )
+    return client
+
+def get_format_date_sap(delta_date=0, mask_format="%m.%d.%Y", **kwargs):
+    from datetime import timedelta
+    return datetime.strftime(date.today() - timedelta(days=delta_date), mask_format)
+
+
+def get_check_day(delta_date):
+    from datetime import date
+    if date.today().weekday() == 6:
+        return get_format_date_sap((date.today() - date(2025, 1, 1)).days)
+    return  get_format_date_sap(delta_date)
+
+def get_start_date_arrived_cargo():
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+    return (date.today() - relativedelta(months=2)).strftime('%d.%m.%Y')
+
+def get_end_date_arrived_cargo():
+    import datetime
+    return  datetime.datetime.now().strftime("%d.%m.%Y")
+
+
+def util_text_to_null_validation(column: str, source_alias: str = None):
+    col = f'{source_alias}."{column}"' if source_alias else f'"{column}"'
+    return f'''case when nullif(trim({col}), '') is not null then {col} else null end'''
+
+def util_text_to_date_validation(column: str, calendar_alias: str, source_alias: str):
+    return f'''case
+        when {calendar_alias}.date_text is not null
+            then {calendar_alias}.date_as_date
+        when {source_alias}."{column}" !~ '^\d{{8}}$'
+            then to_date('19000101'::text, 'YYYYMMDD')
+        when {source_alias}."{column}" = '00000000'
+            then null
+        when {source_alias}."{column}" < '22991231'
+            then to_date('19000101'::text, 'YYYYMMDD')
+        when {source_alias}."{column}" >= '22991231'
+            then to_date('22991231'::text, 'YYYYMMDD')
+    end::date'''
+
+def util_text_to_time_validation(column: str, source_alias: str = None):
+    col = f'{source_alias}."{column}"' if source_alias else f'"{column}"'
+    return f'''case
+        when {col} is null
+            then null
+        when {col}::text !~ '^\d{{6}}$'
+            then null
+        when substring({col}::text FROM 1 FOR 2)::int between 0 and 23
+            and substring({col}::text FROM 3 FOR 2)::int between 0 and 59
+            and substring({col}::text FROM 5 FOR 2)::int between 0 and 59
+            then {col}
+        else '00:00:00'
+    end'''
+
+def util_text_to_timestamp_validation(
+        column_date: str,
+        column_time: str,
+        calendar_alias: str,
+        source_alias: str
+    ):
+    return f'''case
+        when {util_text_to_date_validation(
+            column=column_date,
+            calendar_alias=calendar_alias,
+            source_alias=source_alias
+        )} is null
+            then to_timestamp('1900-01-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS')
+        when {util_text_to_time_validation(
+            column=column_time,
+            source_alias=source_alias,
+        )} is null
+            then to_timestamp('1900-01-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS')
+        else concat({util_text_to_date_validation(
+            column=column_date,
+            calendar_alias=calendar_alias,
+            source_alias=source_alias
+        )}, ' ', coalesce({util_text_to_time_validation(
+            column=column_time,
+            source_alias=source_alias,
+        )}, '00:00:00'))::timestamp
+    end'''
+
+def get_uuid(start_date_string):
+    import uuid
+    namespace = uuid.NAMESPACE_URL
+    return str(uuid.uuid5(namespace, start_date_string))
+
+def log_execute_dag_clickhouse_upload(context):
+    from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+    logger = context['dag'].logger()
+    logger.info('START fun: log_execute_dag_clickhouse_upload')
+    try:
+        sql = 'clickhouse_write_log/log_execute_dag_clickhouse_upload.sql'
+        write_to_gp = SQLExecuteQueryOperator(
+            task_id="log_execute_dag_clickhouse_upload",
+            conn_id='gp_connection',
+            sql=sql)
+        write_to_gp.render_template_fields(context=context, jinja_env=context['dag'].get_template_env())
+        write_to_gp.execute(context={})
+        
+    except Exception as e:
+        logger.error('Error -', str(e))
+        logger.error('error writting log_execute_dag_clickhouse_upload')
+
+def log_dag(context):
+    from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+    logger = context['dag'].logger()
+    try:
+        status = context['ti'].state.upper()
+        logger.info(f'START fun: log_{status}_dag_clickhouse_upload')
+        context['params']['error'] = str(context.get('exception', '')).replace("\'", '').replace('"', '')[0:100]
+        sql = 'clickhouse_write_log/log_dag.sql'
+        write_to_gp = SQLExecuteQueryOperator(
+            task_id="log_execute_dag_clickhouse_upload",
+            conn_id='gp_connection',
+            sql=sql)
+        write_to_gp.render_template_fields(context=context, jinja_env=context['dag'].get_template_env())
+        write_to_gp.execute(context={})
+    
+    except Exception as e:
+        logger.error('Error -', str(e))
+        logger.error('error writting table log')
+
+
+def log_execute_task(context):
+    from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+    logger = context['dag'].logger()
+    logger.info(f'START fun: task_execute_log')
+    try:
+        if context['ti'].task_id.endswith('insert_to_s3'):
+            context['params']['stage'] = 'UPLOAD_TO_S3'
+        elif context['ti'].task_id == 'insert_to_clickhouse':
+            context['params']['stage'] = 'CLICKHOUSE_LOAD'
+        else:
+            context['params']['stage'] = context['ti'].task_id
+        sql = 'clickhouse_write_log/log_execute_task.sql'
+        write_to_gp = SQLExecuteQueryOperator(
+            task_id="log_execute_dag_clickhouse_upload",
+            conn_id='gp_connection',
+            sql=sql)
+        write_to_gp.render_template_fields(context=context, jinja_env=context['dag'].get_template_env())
+        write_to_gp.execute(context={})
+    
+    except Exception as e:
+        logger.error('Error -', str(e))
+        logger.error('Error writting execute_task_S3 log')
+        
+
+def log_task(context):
+    from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+    logger = context['dag'].logger()
+
+    try:
+        status = context['ti'].state.upper()
+        logger.info(f'START fun: task_{status}_log')
+        if context['ti'].task_id.endswith('insert_to_s3'):
+            context['params']['stage'] = 'UPLOAD_TO_S3'
+        elif context['ti'].task_id == 'insert_to_clickhouse':
+            context['params']['stage'] = 'CLICKHOUSE_LOAD'
+        else:
+            context['params']['stage'] = context['ti'].task_id
+        context['params']['error'] = str(context.get('exception', '')).replace("\'", '').replace('"', '')[0:100]
+        sql = 'clickhouse_write_log/log_task.sql'
+        write_to_gp = SQLExecuteQueryOperator(
+            task_id="log_execute_dag_clickhouse_upload",
+            conn_id='gp_connection',
+            sql=sql)
+        write_to_gp.render_template_fields(context=context, jinja_env=context['dag'].get_template_env())
+        write_to_gp.execute(context={})
+    
+        if status == 'FAILED':
+            log_dag(context)
+        
+    except Exception as e:
+        logger.error('Error -', str(e))
+        logger.error('error writting log_task')
+
+def update_release_branches(gitlab_conn_id: str, **kwargs):
+    import gitlab
+    from airflow.hooks.base import BaseHook
+    from time import sleep
+    
+    logger = kwargs['dag'].logger()
+    gitlab_hook = BaseHook.get_connection(gitlab_conn_id)
+    gitlab_host, gitlab_token = gitlab_hook.host, gitlab_hook.password
+    with gitlab.Gitlab(gitlab_host, private_token = gitlab_token) as gs:
+        project = gs.projects.get(18)
+        branch_list = project.branches.list(get_all=True)
+        logger.info(f'Getting branches list for project {project.name}')
+
+        for branch in branch_list:
+            if 'release' in branch.name or 'hotfix' in branch.name:
+                logger.info(f'Updating branch {branch.name}')
+                try:
+                    mr = project.mergerequests.create(
+                        {
+                            'source_branch': 'main',
+                            'target_branch': branch.name,
+                            'title': f'Update {branch.name} from main',
+                        }
+                    )
+                    mrn = project.mergerequests.get(mr.iid)
+                    sleep(5)
+                    logger.info(f'Checking diffs for branch {branch.name}')
+                    diffs = mrn.diffs.list(get_all=True)
+                    if len(diffs) > 0:
+                        logger.info(f'Updating branch {branch.name} from main branch')
+                        mrn.merge(merge_when_pipeline_succeeds=True)
+                    else:
+                        logger.info('No diffs found. Deleting Merge Request')
+                        mrn.delete()
+                except Exception as e:
+                    logger.error('Error -', str(e))
+                    
+
+def update_error_airflow_db(file_last_changed: Dict[str, datetime], import_errors: Dict[str, str]):
+    from airflow.dag_processing.processor import DagFileProcessor
+
+    DagFileProcessor.update_import_errors(
+        file_last_changed=file_last_changed,
+        import_errors=import_errors,
+    )
+    
+def get_sensor_run(date_cron, is_prev: bool = True):
+    import pytz
+    from croniter import croniter
+    from datetime import timedelta
+    from pendulum import DateTime
+    base = datetime.now() - timedelta(days=1)
+    base = base.astimezone(tz=pytz.timezone('Europe/Moscow'))
+    iter_cron = croniter(date_cron, base)
+    if is_prev:
+        run = iter_cron.get_prev(DateTime)
+    else:
+        run = iter_cron.get_next(DateTime)
+    return run

@@ -47,7 +47,7 @@ def extract_schema_table_refs(sql: str, known_schemas: Optional[Set[str]] = None
             continue
         if known_schemas is not None and schema_key not in known_schemas:
             continue
-        refs.add((schema_key, table))
+        refs.add((schema, table))
     return refs
 
 

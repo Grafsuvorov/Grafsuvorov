@@ -1142,18 +1142,26 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
 
 
 def _prototype_review_group_dependencies(dependencies: list[str]) -> dict[str, list[str]]:
-    grouped: dict[str, set[str]] = {}
+    grouped: dict[str, dict[str, Any]] = {}
     for item in dependencies or []:
-        value = str(item or "").strip().lower()
-        if "." not in value:
+        value = str(item or "").strip()
+        normalized = _normalize_fqn(value)
+        if not normalized or "." not in value:
             continue
         schema_name, table_name = value.split(".", 1)
+        schema_key, table_key = normalized.split(".", 1)
         if not schema_name or not table_name:
             continue
-        grouped.setdefault(schema_name, set()).add(table_name)
+        bucket = grouped.setdefault(schema_key, {"schema_name": schema_name, "tables": {}})
+        tables = bucket["tables"]
+        if isinstance(tables, dict):
+            tables.setdefault(table_key, table_name)
     return {
-        schema_name: sorted(table_names)
-        for schema_name, table_names in sorted(grouped.items())
+        str(item["schema_name"]): sorted(
+            list((item.get("tables") or {}).values()),
+            key=lambda table_name: str(table_name).lower(),
+        )
+        for _, item in sorted(grouped.items(), key=lambda pair: pair[0])
     }
 
 

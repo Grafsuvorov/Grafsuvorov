@@ -6,6 +6,7 @@ const DEFAULT_FORM = {
   summary: "",
   git_reference: "",
   script_runtime: "",
+  release_date: "",
 };
 
 function sleep(ms) {
@@ -74,6 +75,7 @@ function buildTaskText(form, linkedIssues) {
     lines.push(String(form.summary).trim(), "");
   }
   pushLine("Ссылка на гит", form.git_reference);
+  pushLine("Дата релиза", form.release_date);
   pushLine("Время работы скрипта", form.script_runtime);
   if (splitItems(linkedIssues).length) {
     lines.push(`Связанные тикеты: ${splitItems(linkedIssues).join(", ")}`);
@@ -135,6 +137,12 @@ export default function AdminPrototypeReviewPage() {
     const items = Array.isArray(result?.review_items) ? result.review_items : [];
     setReviewItemsDraft(items.map(buildDraftItem));
   }, [result?.review_items]);
+
+  useEffect(() => {
+    const releaseDate = String(result?.task_context?.release_date || "").trim();
+    if (!releaseDate) return;
+    setForm((prev) => (String(prev.release_date || "").trim() ? prev : { ...prev, release_date: releaseDate }));
+  }, [result?.task_context?.release_date]);
 
   const normalizedTaskText = useMemo(
     () => buildTaskText(form, linkedIssues),
@@ -225,6 +233,7 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
+        release_date: String(form.release_date || "").trim() || null,
         create_issue: false,
       });
       const jobId = String(startPayload?.job_id || "").trim();
@@ -320,6 +329,7 @@ export default function AdminPrototypeReviewPage() {
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
+        release_date: String(form.release_date || "").trim() || null,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
@@ -439,16 +449,25 @@ export default function AdminPrototypeReviewPage() {
                   placeholder="Настроить обновление витрины ..."
                 />
               </div>
-              <div className="prototype-step-field" style={{ margin: 0 }}>
-                <span className="slow-select-label">Связанные тикеты</span>
-                <input
-                  className="slow-entity-select"
-                  value={linkedIssues}
-                  onChange={(event) => setLinkedIssues(event.target.value)}
-                  placeholder="DWH-15089, DWH-15539"
-                />
-              </div>
+            <div className="prototype-step-field" style={{ margin: 0 }}>
+              <span className="slow-select-label">Связанные тикеты</span>
+              <input
+                className="slow-entity-select"
+                value={linkedIssues}
+                onChange={(event) => setLinkedIssues(event.target.value)}
+                placeholder="DWH-15089, DWH-15539"
+              />
             </div>
+            <div className="prototype-step-field" style={{ margin: 0 }}>
+              <span className="slow-select-label">Дата релиза</span>
+              <input
+                className="slow-entity-select"
+                type="date"
+                value={form.release_date}
+                onChange={(event) => handleFieldChange("release_date", event.target.value)}
+              />
+            </div>
+          </div>
           </section>
 
           <section className="cc-surface">
@@ -736,7 +755,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
           </section>
 
-          {result?.issue?.link ? (
+          {(result?.issue?.link || result?.issue?.url) ? (
             <section className="cc-surface" style={{ marginTop: 16 }}>
               <div className="section-title">Созданная задача</div>
               <div className="muted" style={{ marginBottom: 12 }}>
@@ -744,7 +763,7 @@ export default function AdminPrototypeReviewPage() {
               </div>
               <a
                 className="btn btn-primary"
-                href={result.issue.link}
+                href={result.issue.link || result.issue.url}
                 target="_blank"
                 rel="noreferrer"
               >

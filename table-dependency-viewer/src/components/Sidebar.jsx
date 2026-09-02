@@ -44,7 +44,7 @@ export default function Sidebar({
           },
         }]
       : []),
-    ...(authEnabled && userProfile?.role === "admin"
+    ...(authEnabled && userProfile
       ? [{ path: "/admin/prototype-review", label: "Prototype Review", action: () => onChangeView("/admin/prototype-review") }]
       : []),
     ...(authEnabled && userProfile

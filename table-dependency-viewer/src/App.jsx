@@ -603,10 +603,8 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
-              <AdminPrototypeReviewPage />
             ) : (
-              <Navigate to="/" replace />
+              <AdminPrototypeReviewPage />
             )
           }
         />

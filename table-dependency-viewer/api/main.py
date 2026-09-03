@@ -1025,7 +1025,7 @@ def _prototype_multi_issue_description(
         if item.get("copy_to_clickhouse"):
             lines.append("**ClickHouse:** требуется")
             lines.append(
-                f"**Ключевые поля для загрузки в ClickHouse:** {', '.join(item.get('clickhouse_keys') or []) or '—'}"
+                f"**Поля сортировки для загрузки в ClickHouse:** {', '.join(item.get('clickhouse_keys') or []) or '—'}"
             )
         if needs_attention:
             lines.append(f"**Нужно заполнить вручную:** {', '.join(missing)}")

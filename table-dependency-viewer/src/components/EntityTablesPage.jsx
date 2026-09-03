@@ -26,7 +26,7 @@ export default function EntityTablesPage() {
   // Filters
   const [schemaQuery, setSchemaQuery] = useState("");
   const [tableQuery, setTableQuery] = useState("");
-  const [staleOnly, setStaleOnly] = useState(false);
+  const [errorsOnly, setErrorsOnly] = useState(false);
   const [showSug, setShowSug] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1); // keyboard navigation
   const boxRef = useRef(null);
@@ -109,6 +109,19 @@ export default function EntityTablesPage() {
       const lastDate = parseLocalDateTime(lastRaw);
       const ageHours = lastDate ? Math.round((now - lastDate.getTime()) / 36e5) : null;
       const stale = ageHours !== null && ageHours > staleHours;
+      const loadingState = String(r.last_loading_state ?? "").trim();
+      const loadingStateLower = loadingState.toLowerCase();
+      const stateFailed = Boolean(
+        loadingStateLower
+        && (
+          loadingStateLower.includes("fail")
+          || loadingStateLower.includes("error")
+          || loadingStateLower.includes("aborted")
+        )
+      );
+      const noData = !lastRaw || loadingStateLower === "no data" || loadingStateLower === "нет данных";
+      const hasIssue = Boolean(stale || stateFailed || noData);
+      const issueReason = stateFailed ? "Ошибка загрузки" : noData ? "Нет данных" : stale ? "Просрочена" : "";
       return {
         ...r,
         schema,
@@ -118,7 +131,9 @@ export default function EntityTablesPage() {
         lastDate,
         ageHours,
         stale,
-        lastLoadingState: r.last_loading_state ?? null,
+        hasIssue,
+        issueReason,
+        lastLoadingState: loadingState || null,
         currentDurationMinutes: r.current_duration_minutes ?? null,
         previousDurationMinutes: r.previous_duration_minutes ?? null,
         currentDurationLabel: formatDurationMmSs(r.current_duration_minutes),
@@ -131,7 +146,7 @@ export default function EntityTablesPage() {
   const grouped = useMemo(() => {
     const map = {};
     normalizedRows.forEach((r) => {
-      if (staleOnly && !r.stale) return;
+      if (errorsOnly && !r.hasIssue) return;
       map[r.schema] ??= [];
       map[r.schema].push(r);
     });
@@ -141,14 +156,15 @@ export default function EntityTablesPage() {
         schema,
         rows: list.sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0)),
       }));
-  }, [normalizedRows, staleOnly]);
+  }, [normalizedRows, errorsOnly]);
 
   const summary = useMemo(() => {
     const total = normalizedRows.length;
     const schemas = new Set(normalizedRows.map((r) => r.schema)).size;
     const staleCount = normalizedRows.filter((r) => r.stale).length;
-    const freshCount = total - staleCount;
-    return { total, schemas, staleCount, freshCount };
+    const issueCount = normalizedRows.filter((r) => r.hasIssue).length;
+    const freshCount = total - issueCount;
+    return { total, schemas, staleCount, issueCount, freshCount };
   }, [normalizedRows]);
 
   // Close suggestions on outside click
@@ -234,6 +250,10 @@ export default function EntityTablesPage() {
             <div className="entity-kpi-value">{summary.staleCount}</div>
           </div>
           <div className="entity-kpi-card">
+            <div className="entity-kpi-label">С ошибками</div>
+            <div className="entity-kpi-value">{summary.issueCount}</div>
+          </div>
+          <div className="entity-kpi-card">
             <div className="entity-kpi-label">Схемы</div>
             <div className="entity-kpi-value">{summary.schemas}</div>
           </div>
@@ -290,10 +310,10 @@ export default function EntityTablesPage() {
           </div>
           <div className="entity-filter-toggle">
             <button
-              className={`pill ${staleOnly ? "pill-active" : ""}`}
-              onClick={() => setStaleOnly((prev) => !prev)}
+              className={`pill ${errorsOnly ? "pill-active" : ""}`}
+              onClick={() => setErrorsOnly((prev) => !prev)}
             >
-              Только просроченные
+              Только с ошибками
             </button>
           </div>
         </div>
@@ -311,9 +331,9 @@ export default function EntityTablesPage() {
               <div className="entity-schema-title">{group.schema}</div>
               <div className="entity-schema-count">{group.rows.length} таблиц</div>
             </div>
-            <div className="entity-table-list">
+              <div className="entity-table-list">
               {group.rows.map((r) => (
-                <div key={r.fqn} className={`entity-table-row ${r.stale ? "entity-table-row-stale" : ""}`}>
+                <div key={r.fqn} className={`entity-table-row ${r.hasIssue ? "entity-table-row-stale" : ""}`}>
                   <div className="entity-table-info">
                     <div className="entity-table-name mono">{r.fqn}</div>
                     <div className="muted">Загрузка: {r.lastRaw || "—"}</div>
@@ -324,8 +344,8 @@ export default function EntityTablesPage() {
                     </div>
                   </div>
                   <div className="entity-table-meta">
-                    {r.stale ? (
-                      <span className="stale-pill">Просрочена</span>
+                    {r.hasIssue ? (
+                      <span className="stale-pill">{r.issueReason || "Ошибка"}</span>
                     ) : (
                       <span className="ok-pill">OK</span>
                     )}

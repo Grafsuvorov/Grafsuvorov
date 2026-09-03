@@ -127,6 +127,10 @@ def _strip_sql_comments(sql: str) -> str:
     return cleaned
 
 
+def _normalize_sql_text(sql: str) -> str:
+    return str(sql or "").lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _is_valid_dependency_fqn(value: Optional[str], known_schemas: Optional[set[str]] = None) -> bool:
     if not value or "." not in value:
         return False
@@ -283,7 +287,7 @@ def validate_prototype_sql(files: list[dict[str, Any]]) -> dict[str, list[str]]:
     warnings: list[str] = []
     for item in files:
         path_value = str(item.get("path") or "")
-        sql_text = str(item.get("sql") or "")
+        sql_text = _normalize_sql_text(item.get("sql") or "")
         normalized_sql = _strip_sql_comments(sql_text).lower()
         if re.search(r"\buserdata\b", normalized_sql):
             errors.append(f"В `{path_value}` найдена ссылка на `userdata`; такие объекты запрещены для prototype review")
@@ -291,7 +295,7 @@ def validate_prototype_sql(files: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 
 def _split_sql_statements(sql_text: str) -> list[str]:
-    text_value = str(sql_text or "")
+    text_value = _normalize_sql_text(sql_text)
     statements: list[str] = []
     current: list[str] = []
     in_single = False
@@ -473,7 +477,7 @@ def load_merge_request_sql_bundle(
             method="GET",
         )
         with _urlopen_without_proxy(req, timeout=30, ssl_verify=ssl_verify) as resp:
-            sql_text = resp.read().decode("utf-8", errors="ignore")
+            sql_text = _normalize_sql_text(resp.read().decode("utf-8", errors="ignore"))
         files.append(
             {
                 "path": path_value,
@@ -692,7 +696,7 @@ def execute_sql_files_in_dev(
         connection = exec_engine.raw_connection()
         cursor = connection.cursor()
         for item in files:
-            sql_text = str(item.get("sql") or "").strip()
+            sql_text = _normalize_sql_text(item.get("sql") or "").strip()
             if not sql_text:
                 results.append({"path": item.get("path"), "status": "skipped", "duration_sec": 0.0})
                 continue
@@ -827,7 +831,7 @@ def execute_sql_review_items_in_dev(
             total_duration = 0.0
             try:
                 file_item = file_map.get(path_value) or {}
-                sql_text = str(file_item.get("sql") or "").strip()
+                sql_text = _normalize_sql_text(file_item.get("sql") or "").strip()
                 if not sql_text:
                     execution_rows.append({"item_id": item_id or None, "path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
                     continue

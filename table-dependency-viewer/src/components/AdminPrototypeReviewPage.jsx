@@ -51,6 +51,11 @@ function formatIssueStatus(issue) {
   return issue?.status || "skipped";
 }
 
+function getIssueLink(issue) {
+  if (!issue || issue.status !== "created") return "";
+  return String(issue.link || issue.url || "").trim();
+}
+
 function formatYamlSource(bundle) {
   if (!bundle) return "—";
   if (bundle.source === "new") return "Новая таблица";
@@ -434,6 +439,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="slow-summary-card">
               <div className="label">YTrack</div>
               <div className="value">{formatIssueStatus(result.issue)}</div>
+              {result?.issue?.issue_id ? <div className="hint">Номер задачи: {result.issue.issue_id}</div> : null}
             </div>
           </section>
 
@@ -598,7 +604,7 @@ export default function AdminPrototypeReviewPage() {
                         ) : null}
                         {item.copy_to_clickhouse ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
-                            <span className="slow-select-label">Ключевые поля ClickHouse</span>
+                            <span className="slow-select-label">Поля сортировки ClickHouse</span>
                             <textarea
                               className="slow-entity-select"
                               value={item.clickhouse_keys_text || ""}
@@ -717,6 +723,19 @@ export default function AdminPrototypeReviewPage() {
                 Сначала заполните обязательные поля у {unresolvedItemsCount} объектов.
               </div>
             ) : null}
+            {result?.issue?.issue_id ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Задача создана:
+                {" "}
+                {getIssueLink(result.issue) ? (
+                  <a href={getIssueLink(result.issue)} target="_blank" rel="noreferrer">
+                    {result.issue.issue_id}
+                  </a>
+                ) : (
+                  <strong>{result.issue.issue_id}</strong>
+                )}
+              </div>
+            ) : null}
             <div className="muted" style={{ marginTop: 12 }}>
               Общее время выполнения SQL:
               {" "}
@@ -755,20 +774,27 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
           </section>
 
-          {(result?.issue?.link || result?.issue?.url) ? (
+          {(result?.issue?.issue_id || getIssueLink(result.issue)) ? (
             <section className="cc-surface" style={{ marginTop: 16 }}>
               <div className="section-title">Созданная задача</div>
               <div className="muted" style={{ marginBottom: 12 }}>
-                После создания можно сразу перейти в YTrack по ссылке ниже.
+                Пользователь видит и номер, и ссылку на задачу после создания.
               </div>
-              <a
-                className="btn btn-primary"
-                href={result.issue.link || result.issue.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Открыть {result.issue.issue_id || "задачу"}
-              </a>
+              <div className="muted" style={{ marginBottom: 12 }}>
+                GP номер задачи:
+                {" "}
+                <strong>{result.issue.issue_id || "—"}</strong>
+              </div>
+              {getIssueLink(result.issue) ? (
+                <a
+                  className="btn btn-primary"
+                  href={getIssueLink(result.issue)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Открыть {result.issue.issue_id || "задачу"}
+                </a>
+              ) : null}
             </section>
           ) : null}
         </>

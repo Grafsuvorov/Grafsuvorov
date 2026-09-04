@@ -90,9 +90,12 @@ function buildTaskText(form, linkedIssues) {
 
 function buildDraftItem(item) {
   const keyAttributesText = joinItems(item.key_attributes || []);
+  const entityNames = Array.isArray(item.entity_names) ? item.entity_names : [];
   return {
     ...item,
     entity_name: item.entity_name || "",
+    entity_names: entityNames,
+    entity_names_label: entityNames.length ? entityNames.join(", ") : (item.entity_name || ""),
     key_attributes_text: keyAttributesText,
     clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
     stand_dev: item.stand_dev !== false,
@@ -537,7 +540,7 @@ export default function AdminPrototypeReviewPage() {
                     <div className="prototype-object-stats">
                       <div className="prototype-stat-card">
                         <div className="prototype-stat-label">Сущность</div>
-                        <div className="prototype-stat-value">{item.entity_name || "—"}</div>
+                        <div className="prototype-stat-value">{item.entity_names_label || item.entity_name || "—"}</div>
                       </div>
                       {isTableObject ? (
                         <div className="prototype-stat-card">

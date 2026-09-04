@@ -829,6 +829,19 @@ def _prototype_find_meta_by_fqn(target_fqn: Optional[str]) -> Optional[dict[str,
     return None
 
 
+def _prototype_find_meta_variants_by_fqn(target_fqn: Optional[str]) -> list[dict[str, Any]]:
+    normalized = norm(target_fqn)
+    if not normalized or "." not in normalized:
+        return []
+    schema_name, table_name = normalized.split(".", 1)
+    all_meta, _ = get_cached_meta_and_index()
+    result = []
+    for item in all_meta:
+        if item.get("table_schema") == schema_name and item.get("table_name") == table_name:
+            result.append(item)
+    return result
+
+
 def _prototype_impact_summary(target_fqn: Optional[str]) -> dict[str, Any]:
     normalized = norm(target_fqn)
     if not normalized:
@@ -1182,6 +1195,7 @@ def _prototype_review_resolve_item(
     object_type_hint: str = "",
 ) -> dict[str, Any]:
     meta = _prototype_find_meta_by_fqn(target_fqn)
+    meta_variants = _prototype_find_meta_variants_by_fqn(target_fqn)
     schema_name, table_name = target_fqn.split(".", 1)
     yaml_bundle = None
     yaml_key_attributes: list[str] = []
@@ -1207,6 +1221,17 @@ def _prototype_review_resolve_item(
         yaml_key_attributes = list(yaml_bundle.get("key_attributes") or [])
         yaml_entity_name = str(yaml_bundle.get("entity_name") or "").strip() or None
     detected_keys = list(key_attributes_override or []) or yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
+    entity_names = []
+    entity_names_seen = set()
+    for variant in meta_variants:
+        value = str((variant or {}).get("entity_name") or "").strip()
+        if not value:
+            continue
+        key = value.lower()
+        if key in entity_names_seen:
+            continue
+        entity_names_seen.add(key)
+        entity_names.append(value)
     entity_name = (
         str(fallback_entity_name or "").strip()
         or yaml_entity_name
@@ -1313,6 +1338,7 @@ def _prototype_review_resolve_item(
         "target_fqn": target_fqn,
         "object_type": item_object_type,
         "entity_name": entity_name,
+        "entity_names": entity_names,
         "load_mode": table_load_mode,
         "key_attributes": detected_keys,
         "auto_detected_key_attributes": detected_keys,

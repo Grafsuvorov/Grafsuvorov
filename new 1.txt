@@ -1,22 +1,287 @@
-Ошибка в файле `dds/dds.production_aluminum_wip_stock_balance_insert_init.sql`: syntax error at or near "﻿DELETE" LINE 1: ﻿DELETE FROM dds.production_aluminum_wip_stock_balance ^
+drop table if exists dict_dds.posting_period cascade;
 
-DELETE FROM dds.production_aluminum_wip_stock_balance
-	WHERE 
-		dt_report >= DATE_TRUNC('YEAR', now()) - '1 MONTH'::interval;
-
-INSERT INTO dds.production_aluminum_wip_stock_balance (
-    dt_report,
-    plant_code,
-    warehouse_code,
-    product_type_mes_code,
-    net_weight
+create table if not exists dict_dds.posting_period (
+	unit_balance_code varchar,
+	dt_posting_period_yyyymm varchar,
+	is_currently_opened_for_material_posting_code bool,
+	dt_account_debt_data_update_stop date,
+	dt_account_debt_manual_deadline_data_update date,
+	dt_account_debt_general_deadline_data_update date,
+	dt_sap_data_uploaded_to_hfm date,
+	dt_data_loaded_to_hfm date,
+	dttm_inserted timestamp default now(),
+	dttm_updated timestamp default now(),
+	job_name varchar(60) not null default 'airflow'::character varying,
+	deleted_flag bool default false
 )
-SELECT
-    dt_report        			AS dt_report,           -- Отчётная дата
-    plant_code      			AS plant_code,          -- Завод производитель (код)
-    place_code     				AS warehouse_code,      -- Склад хранения (код) -> place_code
-    producttype_code::numeric 	AS product_type_mes_code, -- Тип продукции (код) -> producttype_code
-    metal_net_weight 			AS net_weight           -- Тоннаж -> metal_net_weight
-FROM ods.easu_lp_aluminum_wip_balance
-WHERE 
-		dt_report >= DATE_TRUNC('YEAR', now()) - '1 MONTH'::interval;
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+distributed replicated;
+
+comment on table dict_dds.posting_period is 'Периоды проводок';
+comment on column dict_dds.posting_period.unit_balance_code is 'Балансовая единица';
+comment on column dict_dds.posting_period.dt_posting_period_yyyymm is 'Период в формате ГГГГММ';
+comment on column dict_dds.posting_period.is_currently_opened_for_material_posting_code is 'Индикатор: период открыт для проводок по материальному учёту';
+comment on column dict_dds.posting_period.dt_account_debt_data_update_stop is 'Дата остановки обновления данных в витринах Финансы.Оборотный капитал';
+comment on column dict_dds.posting_period.dt_account_debt_manual_deadline_data_update is 'Дата (крайний срок) обновления данных по БЕ из таблицы ZFI1783M_BUKCLOS';
+comment on column dict_dds.posting_period.dt_account_debt_general_deadline_data_update is 'Дата (срок) обновления данных по всем БЕ из настройки SAP STOPUPD';
+comment on column dict_dds.posting_period.dt_sap_data_uploaded_to_hfm is 'Дата выгрузки данных для БЕ из SAP в HFM';
+comment on column dict_dds.posting_period.dt_data_loaded_to_hfm is 'Дата загрузки данных по БЕ в HFM';
+
+insert into dict_dds.posting_period (
+	unit_balance_code,
+	dt_posting_period_yyyymm,
+	is_currently_opened_for_material_posting_code,
+	dt_account_debt_data_update_stop,
+	dt_account_debt_manual_deadline_data_update,
+	dt_account_debt_general_deadline_data_update,
+	dt_sap_data_uploaded_to_hfm,
+	dt_data_loaded_to_hfm
+)
+select
+	unit_balance_code,
+	dt_posting_period_yyyymm,
+	is_currently_opened_for_material_posting_code,
+	dt_account_debt_data_update_stop,
+	dt_account_debt_manual_deadline_data_update,
+	dt_account_debt_general_deadline_data_update,
+	dt_sap_data_uploaded_to_hfm,
+	dt_data_loaded_to_hfm
+from
+	dict_dds.posting_period_change_history
+where
+	dttm_inserted in (select max(dttm_inserted) from dict_dds.posting_period_change_history);
+
+/*
+--проверка на дубли
+select
+	unit_balance_code,
+	dt_posting_period_yyyymm
+from dict_dds.posting_period
+group by
+	unit_balance_code,
+	dt_posting_period_yyyymm
+having sum(1) > 1
+*/
+
+
+drop table if exists dict_dds.posting_period_change_history cascade;
+
+create table if not exists dict_dds.posting_period_change_history (
+	unit_balance_code varchar,
+	dt_posting_period_yyyymm varchar,
+	is_currently_opened_for_material_posting_code bool,
+	dt_account_debt_data_update_stop date,
+	dt_account_debt_manual_deadline_data_update date,
+	dt_account_debt_general_deadline_data_update date,
+	dt_sap_data_uploaded_to_hfm date,
+	dt_data_loaded_to_hfm date,
+	dttm_inserted timestamp default now(),
+	dttm_updated timestamp default now(),
+	job_name varchar(60) not null default 'airflow'::character varying,
+	deleted_flag bool default false
+)
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+distributed by (unit_balance_code, dt_posting_period_yyyymm);
+
+comment on table dict_dds.posting_period_change_history is 'Периоды проводок';
+comment on column dict_dds.posting_period_change_history.unit_balance_code is 'Балансовая единица';
+comment on column dict_dds.posting_period_change_history.dt_posting_period_yyyymm is 'Период в формате ГГГГММ';
+comment on column dict_dds.posting_period_change_history.is_currently_opened_for_material_posting_code is 'Индикатор: период открыт для проводок по материальному учёту';
+comment on column dict_dds.posting_period_change_history.dt_account_debt_data_update_stop is 'Дата остановки обновления данных в витринах Финансы.Оборотный капитал';
+comment on column dict_dds.posting_period_change_history.dt_account_debt_manual_deadline_data_update is 'Дата (крайний срок) обновления данных по БЕ из таблицы ZFI1783M_BUKCLOS';
+comment on column dict_dds.posting_period_change_history.dt_account_debt_general_deadline_data_update is 'Дата (срок) обновления данных по всем БЕ из настройки SAP STOPUPD';
+comment on column dict_dds.posting_period_change_history.dt_sap_data_uploaded_to_hfm is 'Дата выгрузки данных для БЕ из SAP в HFM';
+comment on column dict_dds.posting_period_change_history.dt_data_loaded_to_hfm is 'Дата загрузки данных по БЕ в HFM';
+
+delete from
+	dict_dds.posting_period_change_history
+where
+	dttm_inserted < now()::timestamp - interval '1 year';
+
+insert into dict_dds.posting_period_change_history (
+	unit_balance_code,
+	dt_posting_period_yyyymm,
+	is_currently_opened_for_material_posting_code,
+	dt_account_debt_data_update_stop,
+	dt_account_debt_manual_deadline_data_update,
+	dt_account_debt_general_deadline_data_update,
+	dt_sap_data_uploaded_to_hfm,
+	dt_data_loaded_to_hfm
+)
+with base as (
+select
+	u.unit_balance_code,
+	to_char(gen_period, 'YYYYMM') as dt_posting_period_yyyymm
+from
+	dict_dds.unit_balance as u
+cross join generate_series('2022-01-01'::date, date_trunc('month', current_date)::date, interval '1 month') as gen_period
+),
+marv_base as (
+select
+    "BUKRS" as bukrs,
+    ("LFGJA" || "LFMON" || '01')::date as cper,
+    ("VMGJA" || "VMMON" || '01')::date as pper,
+    to_char(
+        generate_series('2022-01-01', ("LFGJA" || "LFMON" || '01')::date, interval '1 month'),
+        'YYYYMM'
+        ) as gen_period,
+    "XRUEM"
+from
+    dict_stg."MARV"
+where
+    "MANDT" = '400'
+    and "LFGJA" >= '2022'
+),
+marv_data as (
+select
+    bukrs      as unit_balance_code,
+    gen_period as dt_posting_period_yyyymm,
+    not coalesce(
+        to_char(cper, 'YYYYMM') != gen_period
+        and (
+            to_char(pper, 'YYYYMM') != gen_period
+            or to_char(pper, 'YYYYMM') = gen_period
+            and "XRUEM" = ' '
+        ), false
+    ) as is_currently_opened_for_material_posting_code
+from marv_base
+),
+--2. периоды из настройки, которые открываются\закрываются полностью для всех БЕ
+closed_periods as (
+select
+	split_part(range_low_value, '_', 1) as period_to_check,	--период, который закрывается
+	to_date(split_part(range_low_value, '_', 2), 'YYYYMMDD') as last_update_date --дата, когда последний раз обновились данные для отправки в HFM
+from
+	dict_dds.settings_and_parameters_sap
+where
+	abap_program_code = '/RUSAL/FI_KHD'
+	and parameter_code = 'STOPUPD'
+	and range_low_value <> 'XXXXXX_00010101'
+),
+--последний закрытый период из таблиц ZREG_FORMS, ZREG_REGS
+zreg as (
+select
+	sq.formid,
+	sq.bukrs,
+	sq.period_to_check,
+	sq.udate
+from (
+	select
+		zf."FORMID" as formid,
+		zr."BUKRS" as bukrs,
+		(zr."GJAHR" || right(zr."POPER",2)) as period_to_check,
+		zf."UDATE"::date as udate,
+		row_number() over (partition by zf."FORMID", zr."BUKRS" order by zr."GJAHR" desc, zr."POPER" desc) as rn
+	from
+		dict_stg."ZREG_FORMS" as zf
+	join dict_stg."ZREG_REGS" as zr on
+		zf."REGID" = zr."REGID"
+		and zr."CURTP" = '30'
+	) as sq
+where sq.rn = 1
+),
+--3. Если в пункте 2 нет настройки, разрешающей обновление периода в целом, то этот пункт не учитываем, считаем что период закрыт для всех БЕ
+--для определения, что период закрыт, для данных, полученных из SAP
+closed_periods_sap as (
+select 
+	sq.bukrs,
+	sq.period_to_check,
+	sq.udate 
+from (
+	select
+		z.bukrs,
+		z.period_to_check,
+		z.udate,
+		row_number() over (partition by bukrs, period_to_check order by udate desc) as rn --берём максимальную UDATE
+	from
+		dict_dds.settings_and_parameters_sap as s
+	join dict_stg."/RUSAL/OFA_REP" as o on
+		s.range_low_value = o."PROGRAMM"
+	join zreg as z on
+		o."REPCOD" = z.formid
+	where
+		s.abap_program_code = '/RUSAL/FI_KHD'
+		and s.parameter_code = 'STPUPDRP'
+		and s.range_low_value is not null
+		and z.period_to_check between (o."BEG_YEAR" || right(o."BEG_PERIO",2)) and (o."END_YEAR" || right(o."END_PERIO",2))
+	) as sq
+where sq.rn = 1
+),
+--4. Если в пункте 2 нет настройки, разрешающей обновление периода в целом, то этот пункт не учитываем, считаем что период закрыт для всех БЕ
+--для определения, что период закрыт, для данных, полученных из 1C+SAP(если для SAP дата не определилась в 3-м пункте)
+closed_periods_1c as (
+select
+	u.unit_balance_code,
+	h."YEAR_ID" || to_char(to_date(h."PERIOD_ID", 'MON'),'MM') as period_to_check,
+	h."LOAD_DATE" as load_date
+from
+	dict_dds.unit_balance as u
+left join dict_stg."HYPDB_V_HFM_LOAD_ACT_HISTORY" as h on
+	u.unit_balance_hfm_code = substring(h."LOCATION" from 3)
+	and u.unit_balance_hfm_code is not null
+where h."LOAD_DATE" is not null
+)
+select
+	b.unit_balance_code,
+	b.dt_posting_period_yyyymm,
+	coalesce(m.is_currently_opened_for_material_posting_code, false) as is_currently_opened_for_material_posting_code,
+	coalesce(
+		l."CLOSE_DATE"::date,
+		case
+			when s.udate <= current_date
+				and s.udate < p.last_update_date
+				and s.udate > (to_date(b.dt_posting_period_yyyymm, 'YYYYMM') + interval '1 month' - interval '1 day')::date
+			then s.udate
+		end,
+		case
+			when c.load_date <= current_date
+				and c.load_date < p.last_update_date
+				and c.load_date > (to_date(b.dt_posting_period_yyyymm, 'YYYYMM') + interval '1 month' - interval '1 day')::date
+			then c.load_date
+		end,
+		p.last_update_date)
+	as dt_account_debt_data_update_stop,
+	l."CLOSE_DATE"::date as dt_account_debt_manual_deadline_data_update,
+	p.last_update_date as dt_account_debt_general_deadline_data_update,
+	s.udate as dt_sap_data_uploaded_to_hfm,
+	c.load_date as dt_data_loaded_to_hfm
+from
+	base as b
+left join marv_data as m on
+	b.unit_balance_code = m.unit_balance_code
+	and b.dt_posting_period_yyyymm = m.dt_posting_period_yyyymm
+left join dict_stg."ZFI1783M_BUKCLOS" as l on
+	b.unit_balance_code = l."BUKRS"
+	and b.dt_posting_period_yyyymm = l."PERIOD"
+left join closed_periods as p on
+	b.dt_posting_period_yyyymm = p.period_to_check
+left join closed_periods_sap as s on
+	b.dt_posting_period_yyyymm = s.period_to_check
+	and b.unit_balance_code = s.bukrs
+left join closed_periods_1c as c on
+	b.dt_posting_period_yyyymm = c.period_to_check
+	and b.unit_balance_code = c.unit_balance_code;
+
+/*
+--проверка на дубли
+select
+	unit_balance_code,
+	dt_posting_period_yyyymm,
+	dttm_inserted
+from dict_dds.posting_period_change_history
+group by
+	unit_balance_code,
+	dt_posting_period_yyyymm,
+	dttm_inserted
+having sum(1) > 1
+*/

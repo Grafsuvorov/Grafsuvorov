@@ -1281,6 +1281,7 @@ def _prototype_review_resolve_item(
     if item_object_type != "TABLE":
         detected_keys = []
     checks = {"row_count": None, "duplicate_groups": None}
+    checks_error = None
     current_execution = execution_row or {"status": "skipped", "duration_sec": 0.0}
     if str(current_execution.get("status") or "") == "ok" and item_object_type in {"TABLE", "VIEW"}:
         try:
@@ -1289,8 +1290,9 @@ def _prototype_review_resolve_item(
                 target_fqn=target_fqn,
                 key_attributes=detected_keys if item_object_type == "TABLE" else [],
             )
-        except Exception:
+        except Exception as exc:
             checks = {"row_count": None, "duplicate_groups": None}
+            checks_error = str(exc)
     item_warnings: list[str] = []
     if item_object_type == "TABLE" and not detected_keys:
         item_warnings.append("Ключевые поля не найдены автоматически")
@@ -1298,6 +1300,8 @@ def _prototype_review_resolve_item(
         item_warnings.append(f"Ошибка в файле `{path_value}`: {current_execution.get('error_message') or 'SQL не выполнился'}")
     if checks.get("duplicate_groups") not in (None, 0):
         item_warnings.append(f"Обнаружены дубли по ключу: {checks.get('duplicate_groups')}")
+    if checks_error:
+        item_warnings.append(f"Не удалось посчитать строки/дубли в DEV: {checks_error}")
     requires_item_input, missing_fields = _prototype_item_needs_attention({
         "is_new": is_new,
         "entity_name": entity_name,

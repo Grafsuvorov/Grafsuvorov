@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
@@ -504,6 +504,21 @@ export default function TableCard({
     : schema && tableName
     ? `${schema}.${tableName}`
     : "";
+  const entityNamesLabel = useMemo(() => {
+    const items = [];
+    const seen = new Set();
+    const push = (value) => {
+      const name = String(value || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      items.push(name);
+    };
+    push(meta?.entity_name);
+    (variants || []).forEach((row) => push(row?.entity_name));
+    return items.length ? items.join(", ") : "—";
+  }, [meta?.entity_name, variants]);
   const formatDateTime = (value) => {
     if (!value) return "—";
     return formatLocalDateTime(value, { withSeconds: false });
@@ -929,7 +944,7 @@ export default function TableCard({
           <div className="table-head-label">Таблица</div>
           <div className="table-title">{tableFqn}</div>
           <div className="table-head-meta">
-            <span>{meta.entity_name || "—"}</span>
+            <span>{entityNamesLabel}</span>
             <span>ID {meta.table_id ?? "—"}</span>
             <span>Источник {source === "current" ? "current" : source}</span>
           </div>

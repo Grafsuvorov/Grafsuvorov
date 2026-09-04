@@ -131,6 +131,16 @@ def _normalize_sql_text(sql: str) -> str:
     return str(sql or "").lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
 
 
+def _clean_table_name(table_norm: Optional[str]) -> Optional[str]:
+    value = str(table_norm or "").strip().lower()
+    if not value:
+        return None
+    cleaned = re.sub(r"^/+", "", value)
+    cleaned = cleaned.replace("/", "_")
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    return cleaned or value
+
+
 def _is_valid_dependency_fqn(value: Optional[str], known_schemas: Optional[set[str]] = None) -> bool:
     if not value or "." not in value:
         return False
@@ -974,13 +984,43 @@ def query_dev_table_checks(
     if not normalized:
         raise ValueError("Не удалось определить финальную таблицу")
     schema_name, table_name = normalized.split(".", 1)
+    table_clean = _clean_table_name(table_name)
     exec_engine = create_engine(dev_database_url)
     row_count = None
     duplicate_count = None
     try:
         with exec_engine.connect() as conn:
+            resolved_row = conn.execute(
+                text(
+                    """
+                    SELECT n.nspname AS schema_name, c.relname AS table_name
+                    FROM pg_catalog.pg_class c
+                    INNER JOIN pg_catalog.pg_namespace n
+                        ON n.oid = c.relnamespace
+                    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+                      AND lower(n.nspname) = :schema_name
+                      AND (
+                          lower(c.relname) = :table_name
+                          OR (:table_clean IS NOT NULL AND lower(c.relname) = :table_clean)
+                      )
+                    ORDER BY
+                      CASE WHEN lower(c.relname) = :table_name THEN 0 ELSE 1 END,
+                      c.relname
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "schema_name": schema_name,
+                    "table_name": table_name,
+                    "table_clean": table_clean,
+                },
+            ).mappings().first()
+            if not resolved_row:
+                raise ValueError(f"Объект `{target_fqn}` не найден в DEV после выполнения SQL")
+            actual_schema_name = str(resolved_row.get("schema_name") or schema_name)
+            actual_table_name = str(resolved_row.get("table_name") or table_name)
             row_count = conn.execute(
-                text(f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}"')
+                text(f'SELECT COUNT(*) FROM "{actual_schema_name}"."{actual_table_name}"')
             ).scalar()
             normalized_keys = [str(item).strip() for item in (key_attributes or []) if str(item).strip()]
             if normalized_keys:
@@ -991,7 +1031,7 @@ def query_dev_table_checks(
                         SELECT COUNT(*)
                         FROM (
                             SELECT {group_by}
-                            FROM "{schema_name}"."{table_name}"
+                            FROM "{actual_schema_name}"."{actual_table_name}"
                             GROUP BY {group_by}
                             HAVING COUNT(*) > 1
                         ) dup

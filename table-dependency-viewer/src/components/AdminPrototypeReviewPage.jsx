@@ -7,6 +7,7 @@ const DEFAULT_FORM = {
   git_reference: "",
   script_runtime: "",
   release_date: "",
+  direction: "",
 };
 
 function sleep(ms) {
@@ -162,6 +163,8 @@ export default function AdminPrototypeReviewPage() {
     [result],
   );
 
+  const hasDashboardDirection = Boolean(String(form.direction || "").trim());
+
   const unresolvedItemsCount = useMemo(
     () => reviewItemsDraft.filter((item) => (
       !String(item.entity_name || "").trim()
@@ -242,6 +245,7 @@ export default function AdminPrototypeReviewPage() {
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
         release_date: String(form.release_date || "").trim() || null,
+        direction: String(form.direction || "").trim(),
         create_issue: false,
       });
       const jobId = String(startPayload?.job_id || "").trim();
@@ -329,6 +333,10 @@ export default function AdminPrototypeReviewPage() {
   const handleCreateIssue = async () => {
     const trimmedMr = String(mrInput || "").trim();
     if (!trimmedMr || creatingIssue) return;
+    if (!hasDashboardDirection) {
+      setError("Заполните обязательное поле «Дашборд КХД/Направление»");
+      return;
+    }
     setCreatingIssue(true);
     setError(null);
     try {
@@ -338,6 +346,7 @@ export default function AdminPrototypeReviewPage() {
         issue_summary: form.summary.trim(),
         linked_issues: splitItems(linkedIssues),
         release_date: String(form.release_date || "").trim() || null,
+        direction: String(form.direction || "").trim(),
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
@@ -474,6 +483,16 @@ export default function AdminPrototypeReviewPage() {
                 type="date"
                 value={form.release_date}
                 onChange={(event) => handleFieldChange("release_date", event.target.value)}
+              />
+            </div>
+            <div className="prototype-step-field" style={{ margin: 0 }}>
+              <span className="slow-select-label">Дашборд КХД/Направление <span aria-hidden="true">*</span></span>
+              <input
+                className="slow-entity-select"
+                value={form.direction}
+                onChange={(event) => handleFieldChange("direction", event.target.value)}
+                placeholder="Например, Финансы / Оборотный капитал"
+                required
               />
             </div>
           </div>
@@ -716,7 +735,7 @@ export default function AdminPrototypeReviewPage() {
                 type="button"
                 className="btn btn-primary"
                 onClick={handleCreateIssue}
-                disabled={creatingIssue || unresolvedItemsCount > 0 || !reviewItemsDraft.length}
+                disabled={creatingIssue || unresolvedItemsCount > 0 || !reviewItemsDraft.length || !hasDashboardDirection}
               >
                 {creatingIssue ? "Создаем задачу..." : "Создать задачу"}
               </button>
@@ -724,6 +743,11 @@ export default function AdminPrototypeReviewPage() {
             {unresolvedItemsCount > 0 ? (
               <div className="muted" style={{ marginTop: 12 }}>
                 Сначала заполните обязательные поля у {unresolvedItemsCount} объектов.
+              </div>
+            ) : null}
+            {!hasDashboardDirection ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Для создания задачи заполните поле «Дашборд КХД/Направление».
               </div>
             ) : null}
             {result?.issue?.issue_id ? (

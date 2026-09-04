@@ -37,6 +37,17 @@ CREATE_OBJECT_PATTERNS = [
 ]
 
 
+DELETE_TARGET_PATTERNS = [
+    re.compile(r"\bdelete\s+from\s+([^\s;(]+)", re.IGNORECASE),
+]
+TRUNCATE_TARGET_PATTERNS = [
+    re.compile(r"\btruncate(?:\s+table)?\s+([^\s;(]+)", re.IGNORECASE),
+]
+COMMENT_TARGET_PATTERNS = [
+    re.compile(r"\bcomment\s+on\s+(?:table|column)\s+([^\s]+)", re.IGNORECASE),
+]
+
+
 @dataclass
 class PrototypeGitLabRef:
     project: str
@@ -660,6 +671,153 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
+def _normalize_relation_ref(value: str) -> Optional[str]:
+    parts = _split_fqn_parts(value)
+    if len(parts) < 2:
+        return None
+    schema_name = _normalize_identifier_part(parts[0])
+    table_name = _normalize_identifier_part(parts[1])
+    if not schema_name or not table_name:
+        return None
+    return f"{schema_name}.{table_name}"
+
+
+def _extract_statement_target_fqns(statement: str) -> list[str]:
+    targets: list[str] = []
+    seen: set[str] = set()
+
+    def _append(value: Optional[str]) -> None:
+        normalized = str(value or "").strip().lower()
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        targets.append(normalized)
+
+    for patterns in (TARGET_PATTERNS, CREATE_OBJECT_PATTERNS, DROP_TARGET_PATTERNS, DELETE_TARGET_PATTERNS, TRUNCATE_TARGET_PATTERNS):
+        for pattern in patterns:
+            for match in pattern.finditer(statement):
+                _append(_normalize_fqn(match.group(1)))
+    for pattern in COMMENT_TARGET_PATTERNS:
+        for match in pattern.finditer(statement):
+            _append(_normalize_relation_ref(match.group(1)))
+    return targets
+
+
+def _extract_statement_dependencies_normalized(
+    statement: str,
+    *,
+    known_schemas: Optional[set[str]] = None,
+    exclude_fqns: Optional[set[str]] = None,
+) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    excluded = {
+        normalized
+        for normalized in (_normalize_fqn(item) for item in (exclude_fqns or set()))
+        if normalized
+    }
+    for pattern in DEPENDENCY_PATTERNS:
+        for match in pattern.finditer(statement):
+            normalized = _normalize_fqn(match.group(1))
+            if (
+                normalized
+                and normalized not in seen
+                and normalized not in excluded
+                and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
+            ):
+                seen.add(normalized)
+                result.append(normalized)
+    return result
+
+
+def build_review_execution_plan(
+    *,
+    files: list[dict[str, Any]],
+    review_targets: list[dict[str, Any]],
+    known_schemas: Optional[set[str]] = None,
+) -> list[dict[str, Any]]:
+    file_map = {str(item.get("path") or "").strip(): item for item in files}
+    review_target_fqns = {
+        str(item.get("target_fqn") or "").strip().lower()
+        for item in review_targets
+        if str(item.get("target_fqn") or "").strip() and not item.get("skip_dev_execution")
+    }
+    plan_items: list[dict[str, Any]] = []
+    for order_index, review_item in enumerate(review_targets):
+        if review_item.get("skip_dev_execution"):
+            continue
+        item_id = str(review_item.get("item_id") or "").strip()
+        target_fqn = str(review_item.get("target_fqn") or "").strip()
+        if not target_fqn:
+            continue
+        execution_paths = [
+            str(item).strip()
+            for item in (review_item.get("execution_paths") or [])
+            if str(item).strip()
+        ]
+        sql_parts: list[str] = []
+        dependencies: list[str] = []
+        seen_dependencies: set[str] = set()
+        for execution_path in sorted(dict.fromkeys(execution_paths), key=_sql_execution_priority):
+            file_item = file_map.get(execution_path) or {}
+            for statement in file_item.get("statements") or []:
+                statement_text = str(statement or "").strip()
+                if not statement_text:
+                    continue
+                statement_targets = _extract_statement_target_fqns(statement_text)
+                if target_fqn.lower() not in statement_targets:
+                    continue
+                sql_parts.append(statement_text)
+                for dep in _extract_statement_dependencies_normalized(
+                    statement_text,
+                    known_schemas=known_schemas,
+                    exclude_fqns={target_fqn},
+                ):
+                    dep_norm = dep.lower()
+                    if dep_norm in review_target_fqns and dep_norm not in seen_dependencies:
+                        seen_dependencies.add(dep_norm)
+                        dependencies.append(dep_norm)
+        sql_text = "\n\n".join(f"{part.rstrip(';')};" for part in sql_parts if part.strip())
+        if sql_text:
+            sql_text = sql_text + ";"
+        plan_items.append(
+            {
+                "item_id": item_id or None,
+                "target_fqn": target_fqn,
+                "path": "\n".join(execution_paths),
+                "primary_path": execution_paths[0] if execution_paths else None,
+                "order_index": order_index,
+                "dependencies": dependencies,
+                "sql_text": sql_text,
+            }
+        )
+
+    by_target = {str(item.get("target_fqn") or "").strip().lower(): item for item in plan_items}
+    remaining = {key: set(item.get("dependencies") or []) for key, item in by_target.items()}
+    ordered: list[dict[str, Any]] = []
+    processed: set[str] = set()
+    while len(processed) < len(plan_items):
+        ready = [
+            item
+            for item in sorted(plan_items, key=lambda row: int(row.get("order_index") or 0))
+            if str(item.get("target_fqn") or "").strip().lower() not in processed
+            and not remaining.get(str(item.get("target_fqn") or "").strip().lower(), set())
+        ]
+        if not ready:
+            for item in sorted(plan_items, key=lambda row: int(row.get("order_index") or 0)):
+                key = str(item.get("target_fqn") or "").strip().lower()
+                if key not in processed:
+                    ready = [item]
+                    break
+        current = ready[0]
+        current_key = str(current.get("target_fqn") or "").strip().lower()
+        processed.add(current_key)
+        ordered.append(current)
+        for deps in remaining.values():
+            deps.discard(current_key)
+    return ordered
+
+
 def extract_sql_dependencies(
     files: list[dict[str, Any]],
     *,
@@ -751,17 +909,24 @@ def execute_sql_review_items_in_dev(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not dev_database_url:
         raise ValueError("Не настроен DEV_DATABASE_URL")
-    file_map = {str(item.get("path") or "").strip(): item for item in files}
-    preparation_rows: list[dict[str, Any]] = []
     execution_rows: list[dict[str, Any]] = []
+    preparation_rows: list[dict[str, Any]] = []
     exec_engine = create_engine(dev_database_url)
     connection = None
     cursor = None
     try:
         connection = exec_engine.raw_connection()
         cursor = connection.cursor()
-        execution_plan: list[dict[str, Any]] = []
-        seen_execution_paths: set[str] = set()
+        known_schemas = {
+            schema_name
+            for item in review_targets
+            for schema_name in ([str(item.get("target_fqn") or "").split(".", 1)[0].lower()] if str(item.get("target_fqn") or "").strip() and "." in str(item.get("target_fqn") or "") else [])
+        }
+        execution_plan = build_review_execution_plan(
+            files=files,
+            review_targets=review_targets,
+            known_schemas=known_schemas or None,
+        )
         for review_item in review_targets:
             item_id = str(review_item.get("item_id") or "").strip()
             target_fqn = str(review_item.get("target_fqn") or "").strip()
@@ -807,18 +972,6 @@ def execute_sql_review_items_in_dev(
                     }
                 )
 
-            for execution_path in [str(item).strip() for item in (review_item.get("execution_paths") or []) if str(item).strip()]:
-                if execution_path in seen_execution_paths:
-                    continue
-                seen_execution_paths.add(execution_path)
-                execution_plan.append(
-                    {
-                        "path": execution_path,
-                        "target_fqn": target_fqn or None,
-                        "item_id": item_id or None,
-                    }
-                )
-
         total = len(execution_plan)
         if not execution_plan:
             return preparation_rows, execution_rows
@@ -827,6 +980,7 @@ def execute_sql_review_items_in_dev(
             path_value = str(plan_item.get("path") or "").strip()
             target_fqn = str(plan_item.get("target_fqn") or "").strip()
             item_id = str(plan_item.get("item_id") or "").strip()
+            sql_text = _normalize_sql_text(plan_item.get("sql_text") or "").strip()
             if callable(progress_callback):
                 progress_callback(
                     {
@@ -834,28 +988,24 @@ def execute_sql_review_items_in_dev(
                         "current": index,
                         "total": total,
                         "item_id": item_id or None,
-                        "path": path_value,
+                        "path": path_value or plan_item.get("primary_path"),
                         "target_fqn": target_fqn or None,
                     }
                 )
-            total_duration = 0.0
+            if not sql_text:
+                execution_rows.append({"item_id": item_id or None, "path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
+                continue
+            started = time.perf_counter()
             try:
-                file_item = file_map.get(path_value) or {}
-                sql_text = _normalize_sql_text(file_item.get("sql") or "").strip()
-                if not sql_text:
-                    execution_rows.append({"item_id": item_id or None, "path": path_value, "target_fqn": target_fqn or None, "status": "skipped", "duration_sec": 0.0})
-                    continue
-                started = time.perf_counter()
                 cursor.execute(sql_text)
                 connection.commit()
-                total_duration += time.perf_counter() - started
                 execution_rows.append(
                     {
                         "item_id": item_id or None,
                         "path": path_value,
                         "target_fqn": target_fqn or None,
                         "status": "ok",
-                        "duration_sec": round(total_duration, 3),
+                        "duration_sec": round(time.perf_counter() - started, 3),
                     }
                 )
                 if callable(progress_callback):
@@ -865,7 +1015,7 @@ def execute_sql_review_items_in_dev(
                             "current": index,
                             "total": total,
                             "item_id": item_id or None,
-                            "path": path_value,
+                            "path": path_value or plan_item.get("primary_path"),
                             "target_fqn": target_fqn or None,
                             "status": "ok",
                         }
@@ -893,15 +1043,12 @@ def execute_sql_review_items_in_dev(
                             "current": index,
                             "total": total,
                             "item_id": item_id or None,
-                            "path": path_value,
+                            "path": path_value or plan_item.get("primary_path"),
                             "target_fqn": target_fqn or None,
                             "status": "error",
                             "error_message": str(exc),
                         }
                     )
-                continue
-    except Exception as exc:
-        raise ValueError(f"Не удалось выполнить SQL в DEV: {exc}") from exc
     finally:
         if cursor is not None:
             try:

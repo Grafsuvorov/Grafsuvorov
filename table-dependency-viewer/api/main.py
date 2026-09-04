@@ -1690,6 +1690,9 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
     try:
+        dashboard_direction = str(payload.direction or "").strip()
+        if not dashboard_direction:
+            raise HTTPException(status_code=400, detail="Заполните обязательное поле «Дашборд КХД/Направление»")
         bundle = load_merge_request_sql_bundle(
             gitlab_api_url=GITLAB_API_URL,
             gitlab_project=GITLAB_PROJECT,
@@ -1712,7 +1715,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
             "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
             "release_date": (payload.release_date or parsed_task.get("release_date") or "").strip(),
-            "direction": (payload.direction or parsed_task.get("direction") or "").strip(),
+            "direction": dashboard_direction,
             "business_key_changed": (
                 payload.business_key_changed
                 if payload.business_key_changed is not None

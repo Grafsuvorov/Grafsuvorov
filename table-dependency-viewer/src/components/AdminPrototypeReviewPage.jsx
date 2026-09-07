@@ -306,21 +306,24 @@ export default function AdminPrototypeReviewPage() {
       setReviewItemsDraft((prev) => prev.map((item) => (
         item.item_id !== itemId
           ? item
-          : {
-              ...item,
-              ...buildDraftItem(payload?.item || item),
-              path: item.path,
-              object_type: item.object_type,
-              preparation: item.preparation,
-              dependencies: Array.isArray(payload?.item?.dependencies) && payload.item.dependencies.length
-                ? payload.item.dependencies
-                : item.dependencies,
-              duration_sec: item.duration_sec,
-              stand_dev: item.stand_dev,
-              stand_prod: item.stand_prod,
-              copy_to_clickhouse: item.copy_to_clickhouse,
-              rechecking: false,
-            }
+          : (() => {
+              const checks = payload?.checks || item.checks || { row_count: null, duplicate_groups: null };
+              const warnings = (item.warnings || []).filter((warning) => (
+                !String(warning).startsWith("Обнаружены дубли по ключу:")
+                && !String(warning).startsWith("Не удалось посчитать строки/дубли в DEV:")
+              ));
+              if (Number(checks.duplicate_groups || 0) > 0) {
+                warnings.push(`Обнаружены дубли по ключу: ${checks.duplicate_groups}`);
+              }
+              return {
+                ...item,
+                checks,
+                warnings,
+                checks_stale: false,
+                last_checked_key_attributes_text: joinItems(keyAttributes),
+                rechecking: false,
+              };
+            })()
       )));
     } catch (err) {
       setError(err?.message || "Не удалось перепроверить таблицу");

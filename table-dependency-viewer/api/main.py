@@ -1636,50 +1636,22 @@ def get_admin_prototype_review_status(job_id: str, request: Request):
 def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload, request: Request):
     _require_authenticated(request)
     try:
-        bundle = load_merge_request_sql_bundle(
-            gitlab_api_url=GITLAB_API_URL,
-            gitlab_project=GITLAB_PROJECT,
-            gitlab_token=GITLAB_TOKEN,
-            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
-            mr_input=payload.mr_input,
-            default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
-        )
-        files = bundle.get("files") or []
-        all_meta, _ = get_cached_meta_and_index()
-        known_schemas = {
-            str(meta.get("table_schema") or "").strip().lower()
-            for meta in all_meta
-            if str(meta.get("table_schema") or "").strip()
-        }
-        related_targets = infer_review_targets(files)
-        current_target = next(
-            (
-                item for item in related_targets
-                if (
-                    str(payload.item_id or "").strip()
-                    and str(item.get("item_id") or "").strip() == str(payload.item_id or "").strip()
-                ) or (
-                    not str(payload.item_id or "").strip()
-                    and str(item.get("target_fqn") or "").strip().lower() == str(payload.target_fqn or "").strip().lower()
-                )
-            ),
-            None,
-        )
-        related_paths = [str(value).strip() for value in (current_target or {}).get("paths", []) if str(value).strip()]
-        related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
-        item_result = _prototype_review_resolve_item(
+        key_attributes = [str(value).strip() for value in (payload.key_attributes or []) if str(value).strip()]
+        if not key_attributes:
+            raise HTTPException(status_code=400, detail="Сначала укажите ключевые поля для проверки дублей")
+        checks = query_dev_table_checks(
+            dev_database_url=DEV_DATABASE_URL,
             target_fqn=payload.target_fqn,
-            path_value=str((current_target or {}).get("path") or ""),
-            fallback_entity_name=str(payload.entity_name or "").strip(),
-            key_attributes_override=[str(value).strip() for value in (payload.key_attributes or []) if str(value).strip()],
-            execution_row={"status": "ok", "duration_sec": 0.0},
-            known_schemas=known_schemas,
-            file_item=related_files[0] if related_files else None,
-            related_files=related_files,
-            object_type_hint=str((current_target or {}).get("object_type") or ""),
+            key_attributes=key_attributes,
         )
-        item_result["item_id"] = str((current_target or {}).get("item_id") or payload.item_id or "")
-        return {"status": "ok", "item": item_result}
+        return {
+            "status": "ok",
+            "item_id": str(payload.item_id or ""),
+            "target_fqn": payload.target_fqn,
+            "checks": checks,
+        }
+    except HTTPException:
+        raise
     except Exception as exc:
         print("❌ /api/admin/prototype-review/check-table error:", exc)
         print(traceback.format_exc())

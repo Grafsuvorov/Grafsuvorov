@@ -60,16 +60,16 @@ YOUTRACK_CARD_TYPE_VALUE = os.getenv("YOUTRACK_CARD_TYPE_VALUE", "Task")
 YOUTRACK_ASSIGNEE_FIELD_NAME = os.getenv("YOUTRACK_ASSIGNEE_FIELD_NAME", "Assignee")
 YOUTRACK_ASSIGNEE_QUERY = os.getenv("YOUTRACK_ASSIGNEE_QUERY", "Suvorov Nikita")
 YOUTRACK_RELEASE_DATE_FIELD_NAME = os.getenv("YOUTRACK_RELEASE_DATE_FIELD_NAME", "Дата релиза")
-YOUTRACK_DIRECTION_FIELD_NAME = os.getenv("YOUTRACK_DIRECTION_FIELD_NAME", "Направление")
+YOUTRACK_DIRECTION_FIELD_NAME = os.getenv("YOUTRACK_DIRECTION_FIELD_NAME", "Дашборд КХД/Направление")
 YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME = os.getenv("YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME", "Меняется бизнес-ключ")
 
 # Debug defaults. Edit these values directly and run the script without arguments.
 DEBUG_CONFIG = {
-    "summary": "[DEBUG] Prototype Review issue",
+    "summary": f"[DEBUG] Prototype Review issue {date.today().isoformat()}",
     "description": "",
     "project": YOUTRACK_PROJECT,
     "project_id": YOUTRACK_PROJECT_ID,
-    "queue": YOUTRACK_QUEUE,
+    "queue": YOUTRACK_QUEUE or YOUTRACK_PROJECT,
     "issue_type": YOUTRACK_ISSUE_TYPE,
     "card_type_field": YOUTRACK_CARD_TYPE_FIELD_NAME,
     "card_type_value": YOUTRACK_CARD_TYPE_VALUE,
@@ -80,7 +80,7 @@ DEBUG_CONFIG = {
     "release_date_field": YOUTRACK_RELEASE_DATE_FIELD_NAME,
     "release_date": date.today().isoformat(),
     "direction_field": YOUTRACK_DIRECTION_FIELD_NAME,
-    "direction": "TECH",
+    "direction": os.getenv("YOUTRACK_DEBUG_DASHBOARD_DIRECTION", "TECH"),
     "business_key_changed_field": YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
     "business_key_changed": False,
     "enable_card_type": True,
@@ -91,7 +91,7 @@ DEBUG_CONFIG = {
     "enable_business_key_changed": True,
     "list_fields": False,
     "dry_run": False,
-    "probe_permissions": True,
+    "probe_permissions": False,
     "use_sample_cards": True,
 }
 
@@ -783,7 +783,7 @@ def main() -> int:
     card_type_field = resolve_field(fields, args.card_type_field)
     if card_type_field:
         print_bundle_values(args.card_type_field, card_type_field)
-    direction_field_meta = resolve_field(fields, args.direction_field, fallback_contains="направлен")
+    direction_field_meta = resolve_field(fields, args.direction_field, fallback_contains="дашборд кхд")
     if direction_field_meta:
         print_bundle_values(args.direction_field, direction_field_meta)
 
@@ -838,10 +838,10 @@ def main() -> int:
         custom_fields.append(build_value_payload(release_date_field, str(args.release_date).strip()))
 
     if not args.disable_direction and str(args.direction or "").strip():
-        direction_field = resolve_field(fields, args.direction_field, fallback_contains="направлен")
+        direction_field = resolve_field(fields, args.direction_field, fallback_contains="дашборд кхд")
         if not direction_field:
             print()
-            print("Не найдено поле направления в custom fields проекта.", file=sys.stderr)
+            print("Не найдено поле «Дашборд КХД/Направление» в custom fields проекта.", file=sys.stderr)
             return 2
         custom_fields.append(build_value_payload(direction_field, str(args.direction).strip()))
 

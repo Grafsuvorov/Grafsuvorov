@@ -1,1 +1,1 @@
-YTrack вернул 400: {"error":"Field required","error_description":"Поле Дашборд КХД/Направление обязательно","error_field":"Дашборд КХД/Направление","error_rule_name":"@jetbrains/required-custom-fields-feature","error_issue_id":"2-89955","error_issue_is_draft":false,"error_transitions":[],"error_original_command":"Дата релиза 2026-09-09","error_project_custom_field_id":"173-627","error_type":"workflow","error_workflow_type":"require"}
+YTrack вернул 403: {"error":"Forbidden","error_description":"You have no permissions to update this field"}

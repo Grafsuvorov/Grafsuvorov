@@ -60,7 +60,10 @@ YOUTRACK_CARD_TYPE_VALUE = os.getenv("YOUTRACK_CARD_TYPE_VALUE", "Task")
 YOUTRACK_ASSIGNEE_FIELD_NAME = os.getenv("YOUTRACK_ASSIGNEE_FIELD_NAME", "Assignee")
 YOUTRACK_ASSIGNEE_QUERY = os.getenv("YOUTRACK_ASSIGNEE_QUERY", "Suvorov Nikita")
 YOUTRACK_RELEASE_DATE_FIELD_NAME = os.getenv("YOUTRACK_RELEASE_DATE_FIELD_NAME", "Дата релиза")
-YOUTRACK_DIRECTION_FIELD_NAME = os.getenv("YOUTRACK_DIRECTION_FIELD_NAME", "Дашборд КХД/Направление")
+YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME = os.getenv(
+    "YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME",
+    "Дашборд КХД/Направление",
+)
 YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME = os.getenv("YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME", "Меняется бизнес-ключ")
 
 # Debug defaults. Edit these values directly and run the script without arguments.
@@ -79,7 +82,7 @@ DEBUG_CONFIG = {
     "estimate_minutes": YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
     "release_date_field": YOUTRACK_RELEASE_DATE_FIELD_NAME,
     "release_date": date.today().isoformat(),
-    "direction_field": YOUTRACK_DIRECTION_FIELD_NAME,
+    "direction_field": YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
     "direction": os.getenv("YOUTRACK_DEBUG_DASHBOARD_DIRECTION", "TECH"),
     "business_key_changed_field": YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
     "business_key_changed": False,

@@ -111,7 +111,7 @@ from .config import (
     YOUTRACK_ASSIGNEE_FIELD_NAME,
     YOUTRACK_ASSIGNEE_QUERY,
     YOUTRACK_RELEASE_DATE_FIELD_NAME,
-    YOUTRACK_DIRECTION_FIELD_NAME,
+    YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
     YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
 )
 
@@ -1748,7 +1748,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             release_date=task_context.get("release_date"),
             release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
             direction=task_context.get("direction"),
-            direction_field_name=YOUTRACK_DIRECTION_FIELD_NAME,
+            direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
             business_key_changed=task_context.get("business_key_changed"),
             business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
         )

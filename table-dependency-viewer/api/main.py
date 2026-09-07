@@ -4729,6 +4729,12 @@ def _build_table_sizes_cache() -> dict[str, Any]:
         WHERE c.relkind IN ('r', 'p', 'm')
           AND n.nspname NOT IN ('pg_catalog', 'information_schema')
           AND n.nspname NOT LIKE 'pg_toast%%'
+          -- Leaf partitions are physical relations; show only the parent table.
+          AND NOT EXISTS (
+              SELECT 1
+              FROM pg_catalog.pg_inherits parent_relation
+              WHERE parent_relation.inhrelid = c.oid
+          )
         ORDER BY size_bytes DESC NULLS LAST, n.nspname, c.relname
     """
 

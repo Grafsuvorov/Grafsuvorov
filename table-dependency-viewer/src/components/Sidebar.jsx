@@ -47,9 +47,6 @@ export default function Sidebar({
     ...(authEnabled && userProfile
       ? [{ path: "/admin/prototype-review", label: "Prototype Review", action: () => onChangeView("/admin/prototype-review") }]
       : []),
-    ...(authEnabled && userProfile
-      ? [{ path: "/admin/feedback", label: "Фидбек", action: () => onChangeView("/admin/feedback") }]
-      : []),
     { path: "/onboarding", label: "Гид", action: () => onChangeView("onboarding") },
   ];
   const roleLabel = userProfile?.role === "admin"
@@ -131,6 +128,13 @@ export default function Sidebar({
           ) : null}
           {authEnabled && userProfile && (
             <>
+            <button
+              type="button"
+              className="auth-logout auth-feedback"
+              onClick={() => onChangeView("/admin/feedback")}
+            >
+              Обратная связь
+            </button>
             <div className="auth-pill">
               <div className="auth-user">
                 {userProfile?.username || userProfile?.email || "Пользователь"}

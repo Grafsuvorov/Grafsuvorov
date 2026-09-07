@@ -75,7 +75,7 @@ export default function TableSizesPage({ onSelectTable }) {
       <section className="cc-header-zone">
         <h1>Топ таблиц по размеру</h1>
         <div className="cc-subtitle">
-          Показывает самые тяжелые таблицы с указанием схемы, владельца и даты создания из `pg_stat_operations`.
+          Показывает самые тяжелые таблицы с указанием схемы, владельца и даты создания из `pg_stat_operations`. Партиции отдельно не учитываются.
         </div>
       </section>
 

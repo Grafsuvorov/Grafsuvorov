@@ -4,6 +4,8 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+import json
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -22,7 +24,8 @@ dotenv_stub = types.ModuleType("dotenv")
 dotenv_stub.load_dotenv = lambda *args, **kwargs: None
 sys.modules.setdefault("dotenv", dotenv_stub)
 
-from api.services.prototype_review import build_review_execution_plan, extract_sql_dependencies, infer_review_targets
+import api.services.prototype_review as prototype_review
+from api.services.prototype_review import build_review_execution_plan, create_ytrack_issue, extract_sql_dependencies, infer_review_targets
 
 
 class ExtractSqlDependenciesTests(unittest.TestCase):
@@ -86,6 +89,62 @@ class PrototypeReviewExecutionPlanTests(unittest.TestCase):
         )
         self.assertIn('insert into dict_dds.posting_period_change_history select 1 as id', plan[0].get("sql_text") or "")
         self.assertNotIn('posting_period_change_history select 1 as id', plan[1].get("sql_text") or "")
+
+
+class CreateYTrackIssueTests(unittest.TestCase):
+    def test_sends_dashboard_direction_as_custom_field(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return b'{"id": "2-89955", "idReadable": "KHD-1"}'
+
+        captured = {}
+
+        def fake_urlopen(request, **_kwargs):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        dashboard_field = {
+            "id": "173-627",
+            "$type": "EnumProjectCustomField",
+            "field": {
+                "name": "Дашборд КХД/Направление",
+                "fieldType": {"id": "enum", "valueType": "enum"},
+            },
+        }
+        with (
+            patch.object(prototype_review, "_resolve_ytrack_project_id", return_value="0-1"),
+            patch.object(prototype_review, "_get_ytrack_project_custom_fields", return_value=[dashboard_field]),
+            patch.object(prototype_review, "_urlopen_without_proxy", side_effect=fake_urlopen),
+        ):
+            create_ytrack_issue(
+                base_url="https://youtrack.example",
+                project_id="0-1",
+                project="KHD",
+                token="token",
+                queue="KHD",
+                issue_type="task",
+                ssl_verify="false",
+                summary="Проверка",
+                description="",
+                direction="Финансы / Оборотный капитал",
+                direction_field_name="Дашборд КХД/Направление",
+            )
+
+        self.assertEqual(
+            captured["payload"]["customFields"],
+            [{
+                "id": "173-627",
+                "name": "Дашборд КХД/Направление",
+                "$type": "SingleEnumIssueCustomField",
+                "value": {"name": "Финансы / Оборотный капитал"},
+            }],
+        )
 
 
 if __name__ == "__main__":

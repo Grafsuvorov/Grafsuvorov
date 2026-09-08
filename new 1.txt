@@ -1,458 +1,439 @@
-BI_FI/dds/payment_request
-OK · modified
+В `depends_on` не хватает зависимостей из insert SQL: cpt2.cal_day
 
-table_name: payment_request
-table_schema: dds
-table_id: 6586
-source_id: 15
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 36
-entity_name: BI_FI
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/payment_request/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/payment_request/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/payment_request/sql_query_truncate.sql
-depends_on:
-  dds:
-    - accounting_documents
-  dict_dds:
-    - plant_and_subsidiary
-  ods:
-    - accounting_documents
-key_attributes:
-  - unit_balance_code
-  - fiscal_year
-  - payment_request_code
-  - payment_request_position_code
+--Генерация всех возможных сочетаний дат (на к.день за период) и кодов заводов
+drop table if exists pg_temp.calendar_plant_table;
 
+create temporary table pg_temp.calendar_plant_table (
+    cal_day date,
+    plant_code varchar(12)
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
 
-do
-$$
-declare
-    v_row_cnt int8;
-    v_row_cnt_agg int8 = 0;
-    v_calc_time interval;
-    v_start_dttm timestamp(0);
-    v_is_init bool = false;
-begin
-    v_start_dttm := clock_timestamp();
-    raise notice '% START ', to_char(clock_timestamp(), 'hh24:mi:ss');
-
-    if not exists(select 1 from dds.payment_request limit 1) then
-        v_is_init := true;
-    else
-        v_is_init := false;
-    end if;
-
-    raise notice '% pg_temad.clean_delta v_is_init = %', to_char(clock_timestamp(), 'hh24:mi:ss'), v_is_init;
-
-	if not v_is_init then
-
-        delete from dds.payment_request as t
-        using ods.accounting_documents as s
-        where t.unit_balance_code = s.unit_balance_code
-          and t.fiscal_year = s.fiscal_year
-          and t.payment_request_code = s.accounting_document_code
-          and t.payment_request_position_code = s.position_line_item;
-
-        get diagnostics v_row_cnt = row_count;
-        raise notice '% Delete target (%)', to_char(clock_timestamp(), 'hh24:mi:ss'), v_row_cnt;
-        v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
-
-	drop table if exists pg_temp.saps;
-	create temp table pg_temp.saps
-	with (
-		appendonly = true,
-		orientation = column,
-		compresstype = zstd,
-		compresslevel = 1
-	) as (
-	select
-		case_code ,
-		range_low_value,
-		max(case when saps.parameter_code = 'BL_AUGNO' or saps.parameter_code = 'SO_BLAFR' then 'X' else null end) as is_payment_document_optional_code
-	from
-		dict_dds.settings_and_parameters_sap as saps
-	where
-		saps.abap_program_code = '/RUSAL/FI1349M'
-		and (saps.parameter_code = 'BL_AUGNO' or saps.parameter_code = 'SO_BLTAP' or saps.parameter_code = 'SO_BLAFR')
-		and saps.range_sign_code is not null
-	group by
-		case_code ,
-		range_low_value
-	)
-	distributed replicated;
-
-
-
-
- drop table if exists pg_temp.payments;
-	create temp table pg_temp.payments
-	with (
-		appendonly = true,
-		orientation = column,
-		compresstype = zstd,
-		compresslevel = 1
-	) as (
-    with pd as (
-		select
-			counterparty_code,
-			payment_order_code,
-			statement_code,
-			statement_position_line_item_code,
-			row_number() over ( partition by counterparty_code,
-			payment_order_code
-		order by
-			statement_code,
-			statement_position_line_item_code desc ) as row_num
-		from
-			dds.bank_statement_position_clearing_record)
+insert into pg_temp.calendar_plant_table (cal_day, plant_code)
 select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	case when ad.unit_balance_code <> bsd.unit_balance_code then true else false end as is_agent_payment_code
-from
-	ods.accounting_documents as ad
-join dds.payment_documents as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.accounting_document_fiscal_year::numeric = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.accounting_document_position_line_item_code::numeric = ad.position_line_item
-	and pd.is_trial_execution is null
-	and coalesce (pd.supplier_code,	'') = coalesce(ad.supplier_code , '')
-	and pd.dt_program_execution <= ad.dt_baseline_due_date_calculation
-	and pd.dt_program_execution >= ad.dt_baseline_due_date_calculation - interval '7 days'
-join pd as cr on
-	coalesce (cr.counterparty_code,	'') = coalesce (pd.supplier_code,'')
-	and cr.payment_order_code = pd.payment_order_code
-	and row_num = 1
-join dds.bank_statement_documents as bsd on
-	bsd.statement_code = cr.statement_code
-	and bsd.statement_position_line_item_code = cr.statement_position_line_item_code
-where
-	ad.is_active = true
-	and ad.clearing_document_code is null
-	and ad.is_blocked_by_payment_program is not null
-	and ad.deleted_flag = false
-group by
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	bsd.unit_balance_code
-	)
-	distributed by (accounting_document_code);
+    t1.cal_day,
+    t2.plant_code::varchar(12)
+from (
+    select generate_series(
+        date_trunc('month', (now() - interval '12 month'))::date,
+        (now() + interval '10 day')::date,
+        '1 day'
+    )::date as cal_day
+)     as t1,
+    (
+        select plant_code from (
+            values ('5101'), ('5201'), ('5203'), ('5301'), ('5401'), ('5601'), ('5701'), ('6300'), ('6800')
+        ) as q (plant_code)
+    ) as t2;
 
 
+--Исходный баланс, остатки на 1 число
+drop table if exists pg_temp.balance_opening;
 
- insert into dds.payment_request(
-	unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code,
-    payment_request_type,
-    dt_posting,
-    dt_payment_request,
+create temporary table pg_temp.balance_opening (
+    month_day date,
+    plant_code varchar,
+    balance_opening_amt numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.balance_opening (month_day, plant_code, balance_opening_amt)
+select
+    dt_rest        as month_day,
     plant_code,
-    general_ledger_account_code,
-    reverse_document_code,
-    reference_document_number,
-    clearing_document_code,
-    funds_center_code,
-    document_currency_code,
-    document_currency_amount,
-    local_currency_code,
-    local_currency_amount,
-    second_local_currency_code,
-    second_local_currency_amount,
-    payment_request_position_text,
-    counterparty_code,
-    dt_created,
-    created_by,
-    dt_payment_posted,
-    dt_payment_created,
-    invoice_code,
-    invoice_position_code,
-    fiscal_year_of_invoice,
-    earmarked_document_code,
-    earmarked_document_position_code,
-    tax_code,
-	fund_code,
-	assignment_number,
-	debit_or_credit_code,
-    is_payment_document_optional_code,
-    is_agent_payment_code )
-
- select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code as payment_request_code,
-	ad.position_line_item as payment_request_position_code,
-	ad.accounting_document_type as payment_request_type,
-	ad.dt_posting,
-	ad.dt_accounting_document as dt_payment_request,
-	coalesce(ad.plant_code, wr3.plant_code, wr1.plant_code) as plant_code,
-	ad.general_ledger_account_code,
-	ad.reverse_document_code,
-	ad.reference_document_number,
-	ad.clearing_document_code,
-	ad.funds_center_code,
-	ad.document_currency_code,
-	ad.document_currency_amount,
-	ad.local_currency_code,
-	ad.local_currency_amount,
-	ad.second_local_currency_code,
-	ad.second_local_currency_amount,
-	ad.position_line_item_text as payment_request_position_text,
-	case
-		when ad.account_type = 'D' then coalesce(ad.customer_code, ad.supplier_code)
-		when ad.account_type = 'K' then coalesce(ad.supplier_code, ad.customer_code)
-	end as counterparty_code,
-	ad.dttm_accounting_document_created as dt_created,
-	ad.accounting_document_created_by as created_by,
-	ad.dt_clearing as dt_payment_posted,
-	date(ad.dttm_accounting_document_created) as dt_payment_created,
-	ad.invoice_document_code as invoice_code,
-	ad.position_number_of_relevant_invoice as invoice_position_code,
-	ad.fiscal_year_of_relevant_invoice as fiscal_year_of_invoice,
-	ad.earmarked_document_code,
-	ad.earmarked_document_position_line_item_code as earmarked_document_position_code,
-	ad.tax_code,
-	ad.fund_code,
-	ad.assignment_number,
-	ad.debit_or_credit,
-	saps.is_payment_document_optional_code,
-	case when pd.is_agent_payment_code then true else false end as is_agent_payment_code
-from
-	ods.accounting_documents as ad
-left join dict_dds.plant_and_subsidiary as wr3 on
-	wr3.unit_balance_code = ad.unit_balance_code
-	and wr3.plant_code = ad.reference_key_for_line_item_3
-left join dict_dds.plant_and_subsidiary as wr1 on
-	wr1.unit_balance_code = ad.unit_balance_code
-	and wr1.plant_code = ad.reference_key_internal_for_document_header_1
-left join pg_temp.saps 	on
-	saps.case_code = ad.unit_balance_code
-	and saps.range_low_value = ad.accounting_document_type
-left join pg_temp.payments as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.fiscal_year = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.position_line_item = ad.position_line_item
+    sum(rest_in)   as balance_opening_amt
+from dm.plant_rest as zmk
 where
-	1 = 1
-	and ad.deleted_flag = false
-	and ad.is_active = true
-	and ad.accounting_document_status_code = 'S';
+    1 = 1 --and period_status = '1'
+    and store_id <> '9999'
+    and store_id is not null
+    and assessment_kind in ('ДАВАЛЬЧЕСК', 'ПОКУПНОЙ', 'ТОЛЛИНГ')
+group by dt_rest, plant_code;
 
-    else
 
- drop table if exists pg_temp.payments;
-	create temp table pg_temp.payments
-	with (
-		appendonly = true,
-		orientation = column,
-		compresstype = zstd,
-		compresslevel = 1
-	) as (
-    with pd as (
-		select
-			counterparty_code,
-			payment_order_code,
-			statement_code,
-			statement_position_line_item_code,
-			row_number() over ( partition by counterparty_code,
-			payment_order_code
-		order by
-			statement_code,
-			statement_position_line_item_code desc ) as row_num
-		from
-			dds.bank_statement_position_clearing_record)
+--Расходы, месячный план, раскиданный по дням
+drop table if exists pg_temp.cost_plan;
+
+create temporary table pg_temp.cost_plan (
+    cal_day date,
+    month_day date,
+    plant_code varchar,
+    cost_plan_day numeric,
+    cum_sum_cost_plan numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.cost_plan (cal_day, month_day, plant_code, cost_plan_day, cum_sum_cost_plan)
 select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	case when ad.unit_balance_code <> bsd.unit_balance_code then true else false end as is_agent_payment_code
-from
-	dds.accounting_documents as ad
-join dds.payment_documents as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.accounting_document_fiscal_year::numeric = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.accounting_document_position_line_item_code::numeric = ad.position_line_item
-	and pd.is_trial_execution is null
-	and coalesce (pd.supplier_code,	'') = coalesce(ad.supplier_code , '')
-	and pd.dt_program_execution <= ad.dt_baseline_due_date_calculation
-	and pd.dt_program_execution >= ad.dt_baseline_due_date_calculation - interval '7 days'
-join pd as cr on
-	coalesce (cr.counterparty_code,	'') = coalesce (pd.supplier_code,'')
-	and cr.payment_order_code = pd.payment_order_code
-	and row_num = 1
-join dds.bank_statement_documents as bsd on
-	bsd.statement_code = cr.statement_code
-	and bsd.statement_position_line_item_code = cr.statement_position_line_item_code
-where
-	ad.is_active = true
-	and ad.clearing_document_code is null
-	and ad.is_blocked_by_payment_program is not null
-	and ad.deleted_flag = false
-group by
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	bsd.unit_balance_code
-	)
-	distributed by (accounting_document_code);
+    ct.cal_day,
+    cp.month_day,
+    ct.plant_code,
+    cp.cost_plan_day,
+    case
+        when sum(cost_plan_day) over (partition by ct.plant_code, cp.month_day order by ct.cal_day asc) = cp.cost_plan_day
+            then 0 -- Для первого числа месяца не учитываем расходы, они уже учтены в начальном балансе balance_opening
+        else sum(cost_plan_day) over (
+            partition by ct.plant_code, cp.month_day
+            order by ct.cal_day asc
+            rows between unbounded preceding and 1 preceding
+        )
+    end                                 as cum_sum_cost_plan
+from (
+    select
+        make_date(year::int, month::int, 1) as month_day,
+        plant_code,
+        round(
+            sum(pcp.cost_plan)
+            / extract(days from make_date(year::int, month::int, 1) + interval '1 month - 1 day')::numeric(15, 3), 3
+        ) as cost_plan_day
+    from dm.production_cost_plan as pcp
+    group by make_date(year::int, month::int, 1), plant_code
+)                                       as cp
+inner join pg_temp.calendar_plant_table as ct
+    on
+        date_trunc('month', cal_day) = cp.month_day
+        and cp.plant_code = ct.plant_code;
+
+drop table if exists pg_temp.arrival;
+
+create temporary table pg_temp.arrival (
+    cal_day date,
+    plant_code varchar,
+    fact_bal_inc_arrival_day numeric,
+    cum_sum_fact_bal_inc_arrival_closed numeric,
+    cum_sum_fact_bal_inc_arrival_open numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.arrival (cal_day, plant_code, fact_bal_inc_arrival_day, cum_sum_fact_bal_inc_arrival_closed, cum_sum_fact_bal_inc_arrival_open)
+select
+    cp.cal_day,
+    cp.plant_code,
+    coalesce(ar.fact_bal_inc_arrival_day, 0) as fact_bal_inc_arrival_day,
+    case
+        when
+            sum(coalesce(ar.fact_bal_inc_arrival_day, 0))
+                over (partition by cp.plant_code, date_trunc('month', cp.cal_day) order by cp.cal_day asc)
+            = coalesce(ar.fact_bal_inc_arrival_day, 0)
+            then 0 --  Для первого числа месяца не учитываем поступления, они уже учтены в начальном балансе balance_opening
+        else sum(coalesce(ar.fact_bal_inc_arrival_day, 0))
+            over (partition by cp.plant_code, date_trunc('month', cp.cal_day) order by cp.cal_day asc)
+    end                                      as cum_sum_fact_bal_inc_arrival_closed,
+    case
+        when date_trunc('month', cp.cal_day) = cp.cal_day
+            then 0 --  Для первого числа месяца не учитываем поступления, они уже учтены в начальном балансе balance_opening
+        else sum(coalesce(ar.fact_bal_inc_arrival_day, 0))
+            over (
+                partition by cp.plant_code, date_trunc('month', cp.cal_day)
+                order by cp.cal_day asc
+                rows between unbounded preceding and 1 preceding
+            )
+    end                                      as cum_sum_fact_bal_inc_arrival_open
+from pg_temp.calendar_plant_table            as cp
+left join (
+    select
+        dt_arrived,
+        date_trunc('month', dt_arrived) as month_arrived,
+        plant,
+        sum(volum_value) as fact_bal_inc_arrival_day
+    from dm.asugdc_arrived_cargo
+    group by dt_arrived, plant
+)                                            as ar
+    on
+        cp.cal_day = ar.dt_arrived
+        and cp.plant_code = ar.plant;
 
 
+--Прогнозные поступления
+drop table if exists pg_temp.arrival_forecast;
 
- insert into dds.payment_request(
-	unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code,
-    payment_request_type,
-    dt_posting,
-    dt_payment_request,
+create temporary table pg_temp.arrival_forecast (
+    cal_day date,
+    plant_code varchar,
+    fact_bal_inc_arrival_day numeric,
+    cum_sum_fact_bal_inc_arrival numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.arrival_forecast (cal_day, plant_code, fact_bal_inc_arrival_day, cum_sum_fact_bal_inc_arrival)
+select
+    cp.cal_day,
+    cp.plant_code,
+    coalesce(ar.fact_bal_inc_arrival_day, 0) as fact_bal_inc_arrival_day,
+    coalesce(
+        sum(coalesce(ar.fact_bal_inc_arrival_day, 0)) over (
+            partition by cp.plant_code, date_trunc('month', cp.cal_day) order by cp.cal_day asc
+            rows between unbounded preceding and 1 preceding
+        ), 0
+    )                                        as cum_sum_fact_bal_inc_arrival
+from pg_temp.calendar_plant_table            as cp
+left join (
+    select
+        dt_forecast as dt_arrived,
+        date_trunc('month', dt_forecast) as month_arrived,
+        plant_code,
+        sum(volum_value) as fact_bal_inc_arrival_day
+    from dm.asugdc_dislocation_cargo
+    group by dt_forecast, plant_code
+)                                            as ar
+    on
+        cp.cal_day = ar.dt_arrived
+        and cp.plant_code = ar.plant_code
+where cp.cal_day > now()::date;
+
+
+--Выбираем вес всех вагонов-накладных, прибывших в прошлом месяце на завод, но ещё не оформленных на склад
+drop table if exists pg_temp.car_unfactured_table;
+
+create temporary table pg_temp.car_unfactured_table (
+    cal_day date,
+    month_arrived date,
+    plant_code varchar,
+    car_unfactured_day_amt numeric,
+    cum_sum_car_unfactured numeric,
+    last_month numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.car_unfactured_table (cal_day, month_arrived, plant_code, car_unfactured_day_amt, cum_sum_car_unfactured, last_month)
+select
+    cal_day,
+    month_arrived,
     plant_code,
-    general_ledger_account_code,
-    reverse_document_code,
-    reference_document_number,
-    clearing_document_code,
-    funds_center_code,
-    document_currency_code,
-    document_currency_amount,
-    local_currency_code,
-    local_currency_amount,
-    second_local_currency_code,
-    second_local_currency_amount,
-    payment_request_position_text,
-    counterparty_code,
-    dt_created,
-    created_by,
-    dt_payment_posted,
-    dt_payment_created,
-    invoice_code,
-    invoice_position_code,
-    fiscal_year_of_invoice,
-    earmarked_document_code,
-    earmarked_document_position_code,
-    tax_code,
-	fund_code,
-	assignment_number,
-	debit_or_credit_code,
-    is_payment_document_optional_code,
-    is_agent_payment_code )
+    car_unfactured_day_amt,
+    cum_sum_car_unfactured,
+    lag(cum_sum_car_unfactured) over (partition by plant_code order by cal_day) as last_month
+from (
+    select
+        cp.cal_day,
+        date_trunc('month', cp.cal_day) as month_arrived,
+        cp.plant_code,
+        coalesce(car.car_unfactured_amt, 0) as car_unfactured_day_amt,
+        sum(coalesce(car.car_unfactured_amt, 0)) over (
+            partition by cp.plant_code, date_trunc('month', cp.cal_day) order by cp.cal_day asc
+        ) as cum_sum_car_unfactured
+    from pg_temp.calendar_plant_table as cp
+    left join (
+        select
+            dt_arrived,
+            date_trunc('month', dt_arrived) as month_arrived,
+            plant as plant_code,
+            sum(volum_value) as car_unfactured_amt
+        from ods.naklvag
+        group by dt_arrived, date_trunc('month', dt_arrived), plant
+    ) as car
+        on
+            cp.cal_day = car.dt_arrived
+            and cp.plant_code = car.plant_code
+)                                                                               as t;
 
- select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code as payment_request_code,
-	ad.position_line_item as payment_request_position_code,
-	ad.accounting_document_type as payment_request_type,
-	ad.dt_posting,
-	ad.dt_accounting_document as dt_payment_request,
-	coalesce(ad.plant_code, wr3.plant_code, wr1.plant_code) as plant_code,
-	ad.general_ledger_account_code,
-	ad.reverse_document_code,
-	ad.reference_document_number,
-	ad.clearing_document_code,
-	ad.funds_center_code,
-	ad.document_currency_code,
-	ad.document_currency_amount,
-	ad.local_currency_code,
-	ad.local_currency_amount,
-	ad.second_local_currency_code,
-	ad.second_local_currency_amount,
-	ad.position_line_item_text as payment_request_position_text,
-	case
-		when ad.account_type = 'D' then coalesce(ad.customer_code, ad.supplier_code)
-		when ad.account_type = 'K' then coalesce(ad.supplier_code, ad.customer_code)
-	end as counterparty_code,
-	ad.dttm_accounting_document_created as dt_created,
-	ad.accounting_document_created_by as created_by,
-	ad.dt_clearing as dt_payment_posted,
-	date(ad.dttm_accounting_document_created) as dt_payment_created,
-	ad.invoice_document_code as invoice_code,
-	ad.position_number_of_relevant_invoice as invoice_position_code,
-	ad.fiscal_year_of_relevant_invoice as fiscal_year_of_invoice,
-	ad.earmarked_document_code,
-	ad.earmarked_document_position_line_item_code as earmarked_document_position_code,
-	ad.tax_code,
-	ad.fund_code,
-	ad.assignment_number,
-	ad.debit_or_credit,
-	saps.is_payment_document_optional_code,
-	case when pd.is_agent_payment_code then true else false end as is_agent_payment_code
-from
-	dds.accounting_documents as ad
-left join dict_dds.plant_and_subsidiary as wr3 on
-	wr3.unit_balance_code = ad.unit_balance_code
-	and wr3.plant_code = ad.reference_key_for_line_item_3
-left join dict_dds.plant_and_subsidiary as wr1 on
-	wr1.unit_balance_code = ad.unit_balance_code
-	and wr1.plant_code = ad.reference_key_internal_for_document_header_1
-left join pg_temp.saps 	on
-	saps.case_code = ad.unit_balance_code
-	and saps.range_low_value = ad.accounting_document_type
-left join pg_temp.payments as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.fiscal_year = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.position_line_item = ad.position_line_item
-where
-	1 = 1
-	and ad.deleted_flag = false
-	and ad.is_active = true
-	and ad.accounting_document_status_code = 'S';
+drop table if exists pg_temp.techmin_normativ_table;
 
-/* ключ
+create temporary table pg_temp.techmin_normativ_table (
+    cal_day date,
+    plant_code varchar,
+    material_technical_minimum_weight numeric,
+    material_normative_weight numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.techmin_normativ_table (cal_day, plant_code, material_technical_minimum_weight, material_normative_weight)
 select
-    unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code,
-    count(*) as duplicate_count
-from
-    dds.payment_request
-group by
-    unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code
-having
-    count(*) > 1
-	*/
+    cpt2.cal_day,
+    cpt2.plant_code,
+    msn.technical_minimum_stock_weight      as material_technical_minimum_weight,
+    msn.plant_stock_normative_weight        as material_normative_weight
+from pg_temp.calendar_plant_table           as cpt2
+left join dict_dds.material_stock_normative as msn --dm.plant_data
+    on
+        extract(year from cpt2.cal_day) * 100 + extract(month from cpt2.cal_day) = msn.dt_normative_yyyymm::int
+        and cpt2.plant_code = msn.plant_code
+        and material_code = '000000000001000001';
+
+drop table if exists pg_temp.alumina_plow;
+
+create temporary table pg_temp.alumina_plow (
+    dt_report date,
+    plant_code varchar,
+    alumina_at_plant_on_wheels_weight numeric
+)
+with (appendonly = true, orientation = column, compresstype = zstd, compresslevel = 3)
+on commit drop
+distributed replicated;
+
+insert into pg_temp.alumina_plow (dt_report, plant_code, alumina_at_plant_on_wheels_weight)
+select
+    dt_stock                                  as dt_report,
+    plant_code,
+    coalesce(on_wheels_plant_stock_weight, 0) as alumina_at_plant_on_wheels_weight
+from dds.material_raw_stock_balance_manually_input
+where material_code = '000000000001000001';
+
+insert into dm.material_alumina_balance (
+    dt_report,
+    plant_code,
+    plant_name,
+    material_code,
+    material_balance_opening_weight,
+    material_receipt_weight,
+    material_consumption_weight,
+    material_balance_closing_weight,
+    material_unfactured_weight,
+    material_technical_minimum_weight,
+    material_normative_weight,
+    fact_asu_rest,
+    forecast_bal_closing,
+    data_type_code,
+    alumina_at_plant_on_wheels_weight --MM.001056 Объем глинозема "на колесах"
+)
+--Итоговая сборка
+select
+    dt_report,
+    plant_code,
+    plant_name,
+    material_code,
+    material_balance_opening_weight,
+    material_receipt_weight,
+    material_consumption_weight,
+    material_balance_opening_weight + material_receipt_weight - material_consumption_weight as material_balance_closing_weight, -- Баланс на конец дня
+    material_unfactured_weight,
+    material_technical_minimum_weight,
+    material_normative_weight,
+    0                                                                                       as fact_asu_rest,                                                                            -- no
+    0                                                                                       as forecast_bal_closing,                                                                     -- no
+    data_type_code,
+    alumina_at_plant_on_wheels_weight
+from (
+    select
+        cpt.cal_day as dt_report,
+        cpt.plant_code,
+        p.plant_short_name as plant_name,
+        '000000000001000001'::varchar(54) as material_code,
+        coalesce(cp.cost_plan_day, 0) as material_consumption_weight, --Расход плановый за день
+        case
+            when cpt.cal_day <= now()::date
+                then coalesce(arr.fact_bal_inc_arrival_day, 0)
+            else coalesce(arr_f.fact_bal_inc_arrival_day, 0)
+        end as material_receipt_weight,                              -- Поступления за день
+        case
+            when coalesce(bo.balance_opening_amt, 0) = 0 then 0 -- Если исходного баланса нет, ничего не считаем
+            else
+                coalesce(bo.balance_opening_amt, 0)
+                + coalesce(arr.cum_sum_fact_bal_inc_arrival_open, 0)
+                + coalesce(arr_f.cum_sum_fact_bal_inc_arrival, 0)
+                - coalesce(cp.cum_sum_cost_plan, 0)
+        end as material_balance_opening_weight,
+        coalesce(cp.cum_sum_cost_plan, 0) as cum_sum_cost_plan,
+        coalesce(arr.cum_sum_fact_bal_inc_arrival_open, 0) as cum_sum_fact_bal_inc_arrival,
+        coalesce(car.cum_sum_car_unfactured, 0) as cum_sum_car_unfactured,
+        coalesce(car_last.last_month, 0) as last_month,
+        case
+            when date_trunc('month', cpt.cal_day) = cpt.cal_day then coalesce(car.last_month, 0)
+            else 0
+        end as material_unfactured_weight,
+        coalesce(tnt.material_technical_minimum_weight, 0) as material_technical_minimum_weight,
+        coalesce(tnt.material_normative_weight, 0) as material_normative_weight,
+        bo.balance_opening_amt,
+        case
+            when cpt.cal_day < now()::date
+                then 'Факт'
+            else 'Прогноз'
+        end as data_type_code,
+        coalesce(ap.alumina_at_plant_on_wheels_weight, 0) as alumina_at_plant_on_wheels_weight --MM.001056 Объем глинозема "на колесах"
+    from pg_temp.calendar_plant_table as cpt
+    left join dict_dds.plant_and_subsidiary as p
+        on cpt.plant_code = p.plant_code
+    left join pg_temp.techmin_normativ_table as tnt
+        on
+            cpt.cal_day = tnt.cal_day
+            and cpt.plant_code = tnt.plant_code
+    left join pg_temp.balance_opening as bo -- Исходный баланс, остатки на 1 число
+        on
+            date_trunc('month', cpt.cal_day) = bo.month_day
+            and cpt.plant_code = bo.plant_code
+    left join pg_temp.cost_plan as cp -- Расходы, месячный план раскиданный по дням
+        on
+            cpt.cal_day = cp.cal_day
+            and cpt.plant_code = cp.plant_code
+    left join pg_temp.arrival as arr -- Обьем поступлений на завод по дням
+        on
+            cpt.cal_day = arr.cal_day
+            and cpt.plant_code = arr.plant_code
+    left join pg_temp.arrival_forecast as arr_f -- Прогнозные поступления
+        on
+            cpt.cal_day = arr_f.cal_day
+            and cpt.plant_code = arr_f.plant_code
+    left join pg_temp.car_unfactured_table as car -- Запас на колесах, текущий месяц
+        on
+            cpt.cal_day = car.cal_day
+            and cpt.plant_code = car.plant_code
+    left join pg_temp.car_unfactured_table as car_last -- Запас на колесах, предудыщий месяц
+        on
+            date_trunc('month', cpt.cal_day) = car_last.cal_day
+            and cpt.plant_code = car_last.plant_code
+    left join pg_temp.alumina_plow as ap --Для поля MM.001056 Объем глинозема "на колесах"
+        on
+            ap.dt_report = cpt.cal_day
+            and ap.plant_code = cpt.plant_code
+)                                                                                           as sub_q;
 
 
-    end if;
+SALES_MARGIN/dm_view/material_alumina_balance_unpivot
+Есть ошибки · modified
+В insert SQL не найден `INSERT INTO schema.table`
+`sql_query_insert_init` отличается от стандартного пути: ожидается `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/SALES_MARGIN/dm_view/material_alumina_balance_unpivot/sql_query_insert_init.sql`
+В insert SQL найден `DROP TABLE/VIEW`; проверьте, что удаляются только временные объекты: `view dm_view.material_alumina_balance_unpivot`
 
-    get diagnostics v_row_cnt = row_count;
-    raise notice '% Insert target (%)', to_char(clock_timestamp(), 'hh24:mi:ss'), v_row_cnt;
-    v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
 
-    if v_row_cnt_agg > 0 then
-        analyze dds.payment_request;
-        raise notice '% analyze target', to_char(clock_timestamp(), 'hh24:mi:ss');
-    end if;
+drop view if exists dm_view.material_alumina_balance_unpivot;
+create or replace view dm_view.material_alumina_balance_unpivot as
+select
+    t.dt_report,
+    t.plant_code,
+    t.plant_name,
+    t.material_code,
+    t.data_type_code,
+    s.col_name                   as material_measure_type_text, --"Показатель", 
+    s.col_value                  as net_weight, --"Число",
+    t.dttm_inserted,
+    t.dttm_updated,
+    t.job_name,
+    t.deleted_flag
+from dm.material_alumina_balance as t
+cross join
+    lateral (
+        values
+        ('1. Остаток на начало', t.material_balance_opening_weight),		--соответствует MM.000599	--fact_bal_opening
+        ('2. Поступление', t.material_receipt_weight),					--соответствует MM.000600	--fact_bal_inc_arrival
+        ('3. Расход', t.material_consumption_weight),					--соответствует MM.000601	--fact_bal_dec_used_in_production
+        ('4. Остаток на конец', t.material_balance_closing_weight),		--соответствует MM.000602	--fact_bal_closing
+        ('5. Норматив', t.material_normative_weight),					--соответствует MM.000605	--normativ
+        ('6. Тех. минимум', t.material_technical_minimum_weight),		--соответствует MM.000604	--techmin
+        ('7. На колесах', t.alumina_at_plant_on_wheels_weight)			--соответствует MM.001056	--б/изм.
+    )                            as s (col_name, col_value)
+where
+    t.dt_report between (now() - interval '15 day')::date
+    and (now() + interval '5 day')::date;
 
-    v_calc_time := clock_timestamp() - v_start_dttm;
-    raise notice '% FINISH (v_start_dttm = % ; v_calc_time = %.)', to_char(clock_timestamp(), 'hh24:mi:ss'), v_start_dttm, v_calc_time;
-end;
-$$;
+comment on view dm_view.material_alumina_balance_unpivot is 'Баланс глинозема на АЗ';
+comment on column dm_view.material_alumina_balance_unpivot.dt_report is 'Дата формирования отчета | - | dm.material_alumina_balance.dt_report';
+comment on column dm_view.material_alumina_balance_unpivot.plant_code is 'Завод | - | dm.material_alumina_balance.plant_code';
+comment on column dm_view.material_alumina_balance_unpivot.plant_name is 'Завод Наименование | - | dm.material_alumina_balance.plant_name';
+comment on column dm_view.material_alumina_balance_unpivot.material_code is 'Материал | - | dm.material_alumina_balance.material_code';
+comment on column dm_view.material_alumina_balance_unpivot.data_type_code is 'Тип данных: "Факт" или "Прогноз", в зависимости от даты отчета. | - | dm.material_alumina_balance.data_type_code';
+comment on column dm_view.material_alumina_balance_unpivot.material_measure_type_text is 'Показатель | Наименование показателя | список значений';
+comment on column dm_view.material_alumina_balance_unpivot.net_weight is 'Число | Значение по показателю | расчетное поле';

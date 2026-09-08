@@ -152,6 +152,58 @@ class CreateYTrackIssueTests(unittest.TestCase):
 
 
 class EntityMetaDependenciesTests(unittest.TestCase):
+    def test_ignores_relation_alias_used_in_extract_expression(self) -> None:
+        sql = """
+        create temp table pg_temp.calendar_plant_table (cal_day date);
+        select cpt2.cal_day
+        from pg_temp.calendar_plant_table as cpt2
+        join dict_dds.material_stock_normative as msn
+          on extract(year from cpt2.cal_day) = 2026;
+        """
+
+        self.assertEqual(
+            _build_depends_on(sql, target_schema="dm", target_table="material_alumina_balance", known_schemas=set()),
+            {"dict_dds": ["material_stock_normative"]},
+        )
+
+    def test_ignores_extract_from_cte_alias(self) -> None:
+        sql = """
+        with calendar_rows as (select current_date as cal_day)
+        select extract(year from cpt2.cal_day)
+        from calendar_rows as cpt2
+        join dm.production_cost_plan as plan on true;
+        """
+
+        self.assertEqual(
+            _build_depends_on(sql, target_schema="dm", target_table="target", known_schemas=set()),
+            {"dm": ["production_cost_plan"]},
+        )
+
+    def test_view_uses_recreate_sql_for_dependencies_without_insert_checks(self) -> None:
+        yaml_payload = {
+            "table_name": "material_alumina_balance_unpivot",
+            "table_schema": "dm_view",
+            "entity_name": "SALES_MARGIN",
+            "object_type": "VIEW",
+            "table_load_mode": "TRUNCATE_INIT",
+            "depends_on": {},
+        }
+        recreate_sql = """
+        drop view if exists dm_view.material_alumina_balance_unpivot;
+        create or replace view dm_view.material_alumina_balance_unpivot as
+        select * from dm.material_alumina_balance;
+        """
+        with patch.object(entity_dev_meta.yaml, "safe_load", return_value=yaml_payload):
+            result = validate_entity_dev_meta_bundle(
+                base_dir=Path.cwd(), prod_root_value="missing-prod-root", dev_root_value="missing-dev-root",
+                entity_name="SALES_MARGIN", schema_name="dm_view", table_name="material_alumina_balance_unpivot",
+                key_attributes=[], source_object_key=None, yaml_content="placeholder", recreate_sql=recreate_sql,
+                insert_sql="", truncate_sql="",
+            )
+
+        self.assertTrue(any("dm.material_alumina_balance" in error for error in result["errors"]))
+        self.assertFalse(any("INSERT INTO" in error or "DROP TABLE/VIEW" in error for error in result["errors"]))
+
     def test_keeps_qualified_sources_when_schema_is_absent_from_local_catalog(self) -> None:
         sql = """
         create temp table pg_temp.payments as (

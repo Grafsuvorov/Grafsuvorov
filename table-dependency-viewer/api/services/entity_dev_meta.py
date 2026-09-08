@@ -191,6 +191,7 @@ def _normalize_yaml_payload_fields(
     key_attributes: Optional[list[str]],
     prod_root: Path,
     dev_root: Path,
+    dependency_sql: Optional[str] = None,
 ) -> tuple[dict[str, Any], list[str]]:
     normalized_payload = dict(payload) if isinstance(payload, dict) else {}
     normalized_keys = _normalize_key_attributes(key_attributes)
@@ -205,9 +206,10 @@ def _normalize_yaml_payload_fields(
         normalized_payload.pop("key_attributes", None)
 
     known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
+    sql_for_dependencies = insert_sql if dependency_sql is None else dependency_sql
     normalized_payload["depends_on"] = (
-        _build_depends_on(insert_sql, _normalize_name(schema_name), _normalize_name(table_name), known_schemas)
-        if str(insert_sql or "").strip()
+        _build_depends_on(sql_for_dependencies, _normalize_name(schema_name), _normalize_name(table_name), known_schemas)
+        if str(sql_for_dependencies or "").strip()
         else {}
     )
     _ensure_default_verification(normalized_payload, effective_keys)
@@ -666,6 +668,18 @@ def _extract_relation_aliases(sql: str) -> set[str]:
         alias = _normalize_name(match.group(1))
         if alias:
             aliases.add(alias)
+    # CTEs and local temporary tables can be used without a schema prefix.
+    # Keep their aliases too, otherwise EXTRACT(... FROM alias.column) looks
+    # like a fictitious schema/table reference.
+    bare_pattern = re.compile(
+        r"\b(?:from|join)\s+([A-Za-z_][\w]*)\s+(?:as\s+)?([A-Za-z_][\w]*)\b",
+        re.IGNORECASE,
+    )
+    ignored_aliases = {"on", "where", "group", "order", "limit", "left", "right", "inner", "outer", "full", "cross", "join"}
+    for match in bare_pattern.finditer(normalized):
+        alias = _normalize_name(match.group(2))
+        if alias and alias not in ignored_aliases:
+            aliases.add(alias)
     return aliases
 
 
@@ -691,16 +705,25 @@ def _extract_all_schema_refs(sql: str) -> set[str]:
 
 def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[str, str]]:
     refs: set[tuple[str, str]] = set()
+    relation_aliases = _extract_relation_aliases(sql)
     pattern = re.compile(
         r"\b(?:from|join)\s+(\"?[A-Za-z_][\w]*\"?)\s*\.\s*(\"[^\"]+\"|[A-Za-z_][\w]*)",
         re.IGNORECASE,
     )
-    for match in pattern.finditer(_strip_sql_comments(sql)):
+    clean_sql = _strip_sql_comments(sql)
+    for match in pattern.finditer(clean_sql):
+        # SQL functions have their own FROM syntax, for example
+        # EXTRACT(YEAR FROM alias.cal_day). It is an expression, not a relation.
+        prefix = clean_sql[max(0, match.start() - 160):match.start()]
+        if re.search(r"\b(?:extract|date_part)\s*\([^)]*$", prefix, re.IGNORECASE):
+            continue
         schema_name = _normalize_sql_identifier(match.group(1))
         table_name = _normalize_sql_identifier(match.group(2))
         schema_key = _normalize_name(schema_name)
         table_key = _normalize_name(table_name)
-        if not schema_name or not table_name or schema_key in IGNORE_SCHEMAS:
+        # `FROM` also appears in expressions such as EXTRACT(YEAR FROM alias.column).
+        # An alias before a dot is not a schema and must never become depends_on.
+        if not schema_name or not table_name or schema_key in IGNORE_SCHEMAS or schema_key in relation_aliases:
             continue
         # A fully-qualified relation in FROM/JOIN is a dependency even when
         # its schema has no local meta file yet. Restricting this to the local
@@ -1233,6 +1256,8 @@ def validate_entity_dev_meta_bundle(
     # depends_on from SQL for the autofill draft; comparing after that step made
     # every missing dependency look valid.
     original_depends_on = _flatten_depends_on(payload.get("depends_on"))
+    requested_object_type = _normalize_name(payload.get("object_type"))
+    dependency_sql = recreate_sql if requested_object_type == "view" else insert_sql
     normalized_keys = _normalize_key_attributes(key_attributes)
     if normalized_keys is not None:
         if normalized_keys:
@@ -1245,6 +1270,7 @@ def validate_entity_dev_meta_bundle(
         schema_name=schema_name,
         table_name=table_name,
         insert_sql=insert_sql,
+        dependency_sql=dependency_sql,
         key_attributes=normalized_keys,
         prod_root=prod_root,
         dev_root=dev_root,
@@ -1305,9 +1331,9 @@ def validate_entity_dev_meta_bundle(
         ("sql_query_truncate", SQL_FILE_NAMES["truncate_sql"]),
     ):
         value = str(payload.get(field_name) or "").strip().replace("\\", "/")
+        if object_type == "view" and field_name in {"sql_query_insert_init", "sql_query_truncate"}:
+            continue
         if not value:
-            if object_type == "view" and field_name in {"sql_query_insert_init", "sql_query_truncate"}:
-                continue
             errors.append(f"Не заполнено `{field_name}`")
             continue
         expected_value = expected_prefix + file_name
@@ -1330,7 +1356,7 @@ def validate_entity_dev_meta_bundle(
 
     if object_type != "view" and not insert_sql.strip():
         errors.append("Insert SQL не должен быть пустым для table")
-    elif insert_sql.strip():
+    elif object_type != "view" and insert_sql.strip():
         temp_table_names = _extract_temp_table_names(insert_sql)
         insert_targets = _extract_insert_targets(insert_sql)
         expected_fqn = f"{normalized_schema}.{effective_normalized_table}"
@@ -1380,7 +1406,7 @@ def validate_entity_dev_meta_bundle(
 
     if object_type != "view" and not truncate_sql.strip():
         warnings.append("Truncate SQL пустой. Если это допустимо, проверьте руками")
-    elif truncate_sql.strip():
+    elif object_type != "view" and truncate_sql.strip():
         normalized_truncate = _normalize_sql(truncate_sql)
         mutation_targets = _extract_mutation_targets(truncate_sql)
         expected_fqn = f"{normalized_schema}.{effective_normalized_table}"
@@ -1406,19 +1432,19 @@ def validate_entity_dev_meta_bundle(
                 errors.append(f"В recreate SQL отсутствует системное поле `{field_name}`")
 
     known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
-    if insert_sql.strip():
-        expected_depends_on = _build_depends_on(insert_sql, normalized_schema, effective_normalized_table, known_schemas)
+    if dependency_sql.strip():
+        expected_depends_on = _build_depends_on(dependency_sql, normalized_schema, effective_normalized_table, known_schemas)
         expected_depends_on_flat = _flatten_depends_on(expected_depends_on)
         missing = sorted(expected_depends_on_flat - original_depends_on)
         extra = sorted(original_depends_on - expected_depends_on_flat)
         if missing:
             errors.append(
-                "В `depends_on` не хватает зависимостей из insert SQL: "
+                f"В `depends_on` не хватает зависимостей из {'recreate' if object_type == 'view' else 'insert'} SQL: "
                 + ", ".join(f"{schema_part}.{table_part}" for schema_part, table_part in missing)
             )
         if extra:
             warnings.append(
-                "В `depends_on` есть лишние записи относительно insert SQL: "
+                f"В `depends_on` есть лишние записи относительно {'recreate' if object_type == 'view' else 'insert'} SQL: "
                 + ", ".join(f"{schema_part}.{table_part}" for schema_part, table_part in extra)
             )
 

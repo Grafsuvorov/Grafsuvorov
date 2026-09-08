@@ -702,8 +702,10 @@ def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[s
         table_key = _normalize_name(table_name)
         if not schema_name or not table_name or schema_key in IGNORE_SCHEMAS:
             continue
-        if known_schemas and schema_key not in known_schemas:
-            continue
+        # A fully-qualified relation in FROM/JOIN is a dependency even when
+        # its schema has no local meta file yet. Restricting this to the local
+        # catalog made branch validation silently miss valid sources such as
+        # dds.payment_documents.
         refs.add((schema_name, table_name))
     return refs
 

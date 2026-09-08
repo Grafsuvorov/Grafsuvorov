@@ -25,6 +25,7 @@ dotenv_stub.load_dotenv = lambda *args, **kwargs: None
 sys.modules.setdefault("dotenv", dotenv_stub)
 
 import api.services.prototype_review as prototype_review
+from api.services.entity_dev_meta import _build_depends_on
 from api.services.prototype_review import build_review_execution_plan, create_ytrack_issue, extract_sql_dependencies, infer_review_targets
 
 
@@ -144,6 +145,43 @@ class CreateYTrackIssueTests(unittest.TestCase):
                 "$type": "SingleEnumIssueCustomField",
                 "value": {"name": "Финансы / Оборотный капитал"},
             }],
+        )
+
+
+class EntityMetaDependenciesTests(unittest.TestCase):
+    def test_keeps_qualified_sources_when_schema_is_absent_from_local_catalog(self) -> None:
+        sql = """
+        create temp table pg_temp.payments as (
+          with payment_clearing as (
+            select * from dds.bank_statement_position_clearing_record
+          )
+          select *
+          from ods.accounting_documents as ad
+          join dds.payment_documents as pd on true
+          join payment_clearing as cr on true
+          join dds.bank_statement_documents as bsd on true
+        );
+        insert into dds.payment_request select * from dds.accounting_documents;
+        """
+
+        dependencies = _build_depends_on(
+            sql,
+            target_schema="dds",
+            target_table="payment_request",
+            known_schemas={"ods"},
+        )
+
+        self.assertEqual(
+            dependencies,
+            {
+                "dds": [
+                    "accounting_documents",
+                    "bank_statement_documents",
+                    "bank_statement_position_clearing_record",
+                    "payment_documents",
+                ],
+                "ods": ["accounting_documents"],
+            },
         )
 
 

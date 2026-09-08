@@ -48,6 +48,40 @@ def _load_yaml_if_possible(text_content: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _read_branch_gp_sql_from_yaml(
+    *,
+    worktree_dir: Path,
+    object_dir: Path,
+    yaml_payload: dict[str, Any],
+    yaml_field: str,
+    fallback_file_name: str,
+) -> tuple[str, str]:
+    """Read GP SQL from the path declared in branch YAML, then fall back locally.
+
+    Meta Workspace previously always read the sibling SQL file. Release validation
+    resolves the path stored in YAML from the selected Git ref, so the two checks
+    could inspect different files when those paths diverged.
+    """
+    worktree_root = worktree_dir.resolve()
+    configured_path = str(yaml_payload.get(yaml_field) or "").strip().replace("\\", "/")
+    candidates: list[tuple[Path, str]] = []
+    if configured_path:
+        raw_path = Path(configured_path)
+        if not raw_path.is_absolute():
+            candidates.append((worktree_root / raw_path, configured_path))
+    candidates.append((object_dir / fallback_file_name, f"fallback:{fallback_file_name}"))
+
+    seen: set[Path] = set()
+    for candidate, source in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen or not str(resolved).startswith(str(worktree_root)):
+            continue
+        seen.add(resolved)
+        if resolved.is_file():
+            return resolved.read_text(encoding="utf-8"), source
+    return "", configured_path or f"fallback:{fallback_file_name}"
+
+
 def _build_click_attribute_index(meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     attributes = meta.get("attributes")
@@ -908,6 +942,27 @@ def read_meta_workspace_branch_gp_bundle(
         raise ValueError(f"Объект `{entity_name}/{schema_name}/{table_name}` не найден в ветке `{branch_name}`")
     yaml_content = yaml_path.read_text(encoding="utf-8")
     payload = _load_yaml_text(yaml_content)
+    recreate_sql, recreate_sql_source = _read_branch_gp_sql_from_yaml(
+        worktree_dir=worktree_dir,
+        object_dir=object_dir,
+        yaml_payload=payload,
+        yaml_field="sql_query_recreate_init",
+        fallback_file_name="sql_query_recreate_init.sql",
+    )
+    insert_sql, insert_sql_source = _read_branch_gp_sql_from_yaml(
+        worktree_dir=worktree_dir,
+        object_dir=object_dir,
+        yaml_payload=payload,
+        yaml_field="sql_query_insert_init",
+        fallback_file_name="sql_query_insert_init.sql",
+    )
+    truncate_sql, truncate_sql_source = _read_branch_gp_sql_from_yaml(
+        worktree_dir=worktree_dir,
+        object_dir=object_dir,
+        yaml_payload=payload,
+        yaml_field="sql_query_truncate",
+        fallback_file_name="sql_query_truncate.sql",
+    )
     return {
         "branch_name": re.sub(r"^origin/", "", branch_ref),
         "entity_name": entity_name,
@@ -916,9 +971,14 @@ def read_meta_workspace_branch_gp_bundle(
         "object_key": f"{entity_name}/{schema_name}/{table_name}",
         "yaml_content": yaml_content,
         "key_attributes": payload.get("key_attributes") if isinstance(payload.get("key_attributes"), list) else [],
-        "recreate_sql": (object_dir / "sql_query_recreate_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_recreate_init.sql").exists() else "",
-        "insert_sql": (object_dir / "sql_query_insert_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_insert_init.sql").exists() else "",
-        "truncate_sql": (object_dir / "sql_query_truncate.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_truncate.sql").exists() else "",
+        "recreate_sql": recreate_sql,
+        "insert_sql": insert_sql,
+        "truncate_sql": truncate_sql,
+        "sql_sources": {
+            "recreate_sql": recreate_sql_source,
+            "insert_sql": insert_sql_source,
+            "truncate_sql": truncate_sql_source,
+        },
         "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
         "source": "branch",
         "exists": True,
@@ -1142,10 +1202,28 @@ def validate_meta_workspace_branch(
         object_rel = Path(entity_git_root_value) / item["entity_name"] / item["schema_name"] / item["table_name"]
         object_dir = worktree_dir / object_rel
         yaml_content = (object_dir / "meta_data_file.yaml").read_text(encoding="utf-8") if (object_dir / "meta_data_file.yaml").exists() else ""
-        recreate_sql = (object_dir / "sql_query_recreate_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_recreate_init.sql").exists() else ""
-        insert_sql = (object_dir / "sql_query_insert_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_insert_init.sql").exists() else ""
-        truncate_sql = (object_dir / "sql_query_truncate.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_truncate.sql").exists() else ""
         yaml_payload = _load_yaml_text(yaml_content)
+        recreate_sql, recreate_sql_source = _read_branch_gp_sql_from_yaml(
+            worktree_dir=worktree_dir,
+            object_dir=object_dir,
+            yaml_payload=yaml_payload,
+            yaml_field="sql_query_recreate_init",
+            fallback_file_name="sql_query_recreate_init.sql",
+        )
+        insert_sql, insert_sql_source = _read_branch_gp_sql_from_yaml(
+            worktree_dir=worktree_dir,
+            object_dir=object_dir,
+            yaml_payload=yaml_payload,
+            yaml_field="sql_query_insert_init",
+            fallback_file_name="sql_query_insert_init.sql",
+        )
+        truncate_sql, truncate_sql_source = _read_branch_gp_sql_from_yaml(
+            worktree_dir=worktree_dir,
+            object_dir=object_dir,
+            yaml_payload=yaml_payload,
+            yaml_field="sql_query_truncate",
+            fallback_file_name="sql_query_truncate.sql",
+        )
         validation = validate_entity_dev_meta_bundle(
             engine=engine,
             base_dir=base_dir,
@@ -1162,6 +1240,12 @@ def validate_meta_workspace_branch(
             truncate_sql=truncate_sql,
             dev_database_url=dev_database_url,
         )
+        validation["infos"] = [
+            *(validation.get("infos") or []),
+            f"SQL из ветки: insert `{insert_sql_source}`",
+            f"SQL из ветки: recreate `{recreate_sql_source}`",
+            f"SQL из ветки: truncate `{truncate_sql_source}`",
+        ]
         gp_results.append({**item, **validation, "skipped": False})
 
     for item in catalog.get("click_objects", []):

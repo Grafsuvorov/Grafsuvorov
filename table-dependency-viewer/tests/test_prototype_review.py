@@ -4,6 +4,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import json
 
@@ -26,6 +27,7 @@ sys.modules.setdefault("dotenv", dotenv_stub)
 
 import api.services.prototype_review as prototype_review
 from api.services.entity_dev_meta import _build_depends_on
+from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
 from api.services.prototype_review import build_review_execution_plan, create_ytrack_issue, extract_sql_dependencies, infer_review_targets
 
 
@@ -183,6 +185,30 @@ class EntityMetaDependenciesTests(unittest.TestCase):
                 "ods": ["accounting_documents"],
             },
         )
+
+
+class MetaWorkspaceSqlSourceTests(unittest.TestCase):
+    def test_prefers_sql_path_declared_in_branch_yaml(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            worktree_dir = Path(temp_dir)
+            object_dir = worktree_dir / "etl_loads_entity" / "BI_FI" / "dds" / "payment_request"
+            object_dir.mkdir(parents=True)
+            (object_dir / "sql_query_insert_init.sql").write_text("select 'sibling'", encoding="utf-8")
+            configured_path = "meta_info/custom/payment_request_insert.sql"
+            configured_file = worktree_dir / configured_path
+            configured_file.parent.mkdir(parents=True)
+            configured_file.write_text("select 'yaml path'", encoding="utf-8")
+
+            sql, source = _read_branch_gp_sql_from_yaml(
+                worktree_dir=worktree_dir,
+                object_dir=object_dir,
+                yaml_payload={"sql_query_insert_init": configured_path},
+                yaml_field="sql_query_insert_init",
+                fallback_file_name="sql_query_insert_init.sql",
+            )
+
+        self.assertEqual(sql, "select 'yaml path'")
+        self.assertEqual(source, configured_path)
 
 
 if __name__ == "__main__":

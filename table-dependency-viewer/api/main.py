@@ -159,6 +159,7 @@ from .services.meta_workspace import (
     list_meta_workspace_branches,
     read_meta_workspace_branch_gp_bundle,
     read_meta_workspace_branch_file,
+    save_meta_workspace_branch_gp_depends_batch,
     save_meta_workspace_branch_gp_bundle,
     save_meta_workspace_branch_file,
     sync_meta_workspace_branch,
@@ -440,6 +441,21 @@ class MetaWorkspaceBranchGpBundleSavePayload(BaseModel):
     insert_sql: str
     truncate_sql: str
     expected_revision: Optional[dict] = None
+
+
+class MetaWorkspaceBranchGpDependsBatchItemPayload(BaseModel):
+    entity_name: str
+    schema_name: str
+    table_name: str
+    yaml_content: str
+    expected_revision: Optional[dict] = None
+
+
+class MetaWorkspaceBranchGpDependsBatchSavePayload(BaseModel):
+    branch_name: str
+    base_branch: str
+    task_id: Optional[str] = None
+    items: List[MetaWorkspaceBranchGpDependsBatchItemPayload]
 
 
 class AssistantContextPayload(BaseModel):
@@ -4035,6 +4051,29 @@ def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBun
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Не удалось сохранить объект в ветку: {exc}")
+
+
+@router.post("/api/admin/meta-workspace/branch-gp-depends/save")
+def save_admin_meta_workspace_branch_gp_depends_batch(payload: MetaWorkspaceBranchGpDependsBatchSavePayload, request: Request):
+    user = _require_meta_workspace_role(request)
+    try:
+        return save_meta_workspace_branch_gp_depends_batch(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
+            branch_name=payload.branch_name,
+            base_branch=payload.base_branch,
+            task_id=payload.task_id or "",
+            author=user.email,
+            items=[item.model_dump() for item in payload.items],
+        )
+    except BranchRevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось сохранить зависимости в ветку: {exc}")
 
 
 @router.post("/api/admin/meta-workspace/branch-file/save")

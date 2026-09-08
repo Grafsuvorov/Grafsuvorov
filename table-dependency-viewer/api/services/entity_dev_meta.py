@@ -1229,6 +1229,10 @@ def validate_entity_dev_meta_bundle(
     if not isinstance(payload, dict):
         return {"valid": False, "errors": ["Корневой YAML должен быть объектом"], "warnings": [], "normalized": None}
 
+    # Keep the branch YAML value before normalization. Normalization calculates
+    # depends_on from SQL for the autofill draft; comparing after that step made
+    # every missing dependency look valid.
+    original_depends_on = _flatten_depends_on(payload.get("depends_on"))
     normalized_keys = _normalize_key_attributes(key_attributes)
     if normalized_keys is not None:
         if normalized_keys:
@@ -1404,10 +1408,9 @@ def validate_entity_dev_meta_bundle(
     known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
     if insert_sql.strip():
         expected_depends_on = _build_depends_on(insert_sql, normalized_schema, effective_normalized_table, known_schemas)
-        current_depends_on = _flatten_depends_on(payload.get("depends_on"))
         expected_depends_on_flat = _flatten_depends_on(expected_depends_on)
-        missing = sorted(expected_depends_on_flat - current_depends_on)
-        extra = sorted(current_depends_on - expected_depends_on_flat)
+        missing = sorted(expected_depends_on_flat - original_depends_on)
+        extra = sorted(original_depends_on - expected_depends_on_flat)
         if missing:
             errors.append(
                 "В `depends_on` не хватает зависимостей из insert SQL: "

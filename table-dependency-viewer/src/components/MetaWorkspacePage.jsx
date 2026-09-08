@@ -63,12 +63,22 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [branchTree, setBranchTree] = useState({ gp_entities: [], click_schemas: [] });
   const [treeLoading, setTreeLoading] = useState(false);
   const [branchFileLoading, setBranchFileLoading] = useState(false);
-  const [autofillDependsKey, setAutofillDependsKey] = useState("");
+  const [savingDepends, setSavingDepends] = useState(false);
   const [gpBranchBundle, setGpBranchBundle] = useState(null);
   const [clickBranchFile, setClickBranchFile] = useState(null);
   const [editorVisible, setEditorVisible] = useState(false);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
   const branchHasInvalidObjects = Number(branchValidation?.summary?.invalid || 0) > 0;
+  const pendingDependsItems = useMemo(
+    () => (branchValidation?.gp_results || []).filter(
+      (item) => item.entity_name
+        && item.schema_name
+        && item.table_name
+        && item.normalized?.yaml_content
+        && item.errors?.some((point) => String(point).includes("depends_on")),
+    ),
+    [branchValidation],
+  );
 
   const buildBranchValidationResult = (items) => {
     const gpResults = items.filter((item) => item.domain === "gp");
@@ -483,33 +493,31 @@ export default function MetaWorkspacePage({ userProfile }) {
     await loadBranchCatalog(branchName.trim(), { silent: true });
   };
 
-  const handleAutofillDepends = async (item) => {
-    if (!item?.normalized?.yaml_content) return;
-    const itemKey = String(item.object_key || "");
-    setAutofillDependsKey(itemKey);
+  const handleSaveDetectedDepends = async () => {
+    if (!pendingDependsItems.length) return;
+    if (!taskIdValid) {
+      setError("Укажите номер задачи в формате DWH-12345");
+      return;
+    }
+    setSavingDepends(true);
     setError(null);
     setMessage(null);
     try {
-      const bundle = await metaWorkspaceApi.branchGpBundle({
-        branch_name: branchName.trim(),
-        entity_name: item.entity_name,
-        schema_name: item.schema_name,
-        table_name: item.table_name,
-      });
-      await metaWorkspaceApi.saveBranchGpBundle({
+      const data = await metaWorkspaceApi.saveBranchGpDepends({
         branch_name: branchName.trim(),
         base_branch: baseBranch.trim(),
-        task_id: taskId,
-        entity_name: item.entity_name,
-        schema_name: item.schema_name,
-        table_name: item.table_name,
-        yaml_content: item.normalized.yaml_content,
-        recreate_sql: bundle?.recreate_sql || "",
-        insert_sql: bundle?.insert_sql || "",
-        truncate_sql: bundle?.truncate_sql || "",
-        expected_revision: bundle?.revision || null,
+        task_id: taskId.trim().toUpperCase(),
+        items: pendingDependsItems.map((item) => ({
+          entity_name: item.entity_name,
+          schema_name: item.schema_name,
+          table_name: item.table_name,
+          yaml_content: item.normalized.yaml_content,
+          expected_revision: item.revision || null,
+        })),
       });
-      setMessage(`Зависимости автоматически обновлены для ${item.object_key}.`);
+      setMessage(data?.committed
+        ? `depends_on сохранены для ${data.changed_paths?.length || pendingDependsItems.length} объектов.`
+        : "Актуальные depends_on уже были сохранены в ветке.");
       await loadBranchCatalog(branchName.trim(), { silent: true });
       const validationData = await metaWorkspaceApi.validateAll({
         branch_name: branchName.trim(),
@@ -517,9 +525,9 @@ export default function MetaWorkspacePage({ userProfile }) {
       });
       setBranchValidation(validationData || null);
     } catch (err) {
-      setError(err.message || "Не удалось автоматически проставить depends_on");
+      setError(err.message || "Не удалось сохранить depends_on в ветку");
     } finally {
-      setAutofillDependsKey("");
+      setSavingDepends(false);
     }
   };
 
@@ -921,6 +929,16 @@ export default function MetaWorkspacePage({ userProfile }) {
                   >
                     {syncingBranch ? "Сохраняем в ветку..." : "Сохранить в ветку"}
                   </button>
+                  {pendingDependsItems.length ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleSaveDetectedDepends}
+                      disabled={savingDepends || !taskIdValid || !String(branchName || "").trim() || !String(baseBranch || "").trim()}
+                    >
+                      {savingDepends ? "Сохраняем зависимости..." : `Сохранить depends_on (${pendingDependsItems.length})`}
+                    </button>
+                  ) : null}
                   <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid}>
                     {creatingMr ? "Создаем MR..." : "Создать MR"}
                   </button>
@@ -935,25 +953,6 @@ export default function MetaWorkspacePage({ userProfile }) {
                       <ul className="meta-workspace-validation-points bad">
                         {item.errors.map((point, idx) => <li key={`${item.object_key}-err-${idx}`}>{point}</li>)}
                       </ul>
-                    ) : null}
-                    {item.schema_name
-                      && item.table_name
-                      && item.entity_name
-                      && item.normalized?.yaml_content
-                      && (
-                        item.errors?.some((point) => String(point).includes("depends_on"))
-                        || item.warnings?.some((point) => String(point).includes("depends_on"))
-                      ) ? (
-                      <div className="meta-workspace-validation-actions-inline">
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={autofillDependsKey === item.object_key}
-                          onClick={() => handleAutofillDepends(item)}
-                        >
-                          {autofillDependsKey === item.object_key ? "Актуализируем..." : "Актуализировать depends_on"}
-                        </button>
-                      </div>
                     ) : null}
                     {item.warnings?.length ? (
                       <ul className="meta-workspace-validation-points warn">

@@ -25,8 +25,9 @@ dotenv_stub = types.ModuleType("dotenv")
 dotenv_stub.load_dotenv = lambda *args, **kwargs: None
 sys.modules.setdefault("dotenv", dotenv_stub)
 
+import api.services.entity_dev_meta as entity_dev_meta
 import api.services.prototype_review as prototype_review
-from api.services.entity_dev_meta import _build_depends_on
+from api.services.entity_dev_meta import _build_depends_on, validate_entity_dev_meta_bundle
 from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
 from api.services.prototype_review import build_review_execution_plan, create_ytrack_issue, extract_sql_dependencies, infer_review_targets
 
@@ -185,6 +186,48 @@ class EntityMetaDependenciesTests(unittest.TestCase):
                 "ods": ["accounting_documents"],
             },
         )
+
+    def test_reports_dependencies_missing_from_original_yaml(self) -> None:
+        yaml_payload = {
+            "table_name": "payment_request",
+            "table_schema": "dds",
+            "table_id": 6586,
+            "entity_name": "BI_FI",
+            "object_type": "TABLE",
+            "table_load_mode": "TRUNCATE_INIT",
+            "depends_on": {"ods": ["accounting_documents"]},
+        }
+        recreate_sql = """
+        create table dds.payment_request (
+          dttm_inserted timestamp,
+          dttm_updated timestamp,
+          deleted_flag bool
+        )
+        """
+        insert_sql = """
+        do $$ begin
+          insert into dds.payment_request
+          select * from ods.accounting_documents
+          join dds.payment_documents on true;
+        end; $$;
+        """
+        with patch.object(entity_dev_meta.yaml, "safe_load", return_value=yaml_payload):
+            result = validate_entity_dev_meta_bundle(
+                base_dir=Path.cwd(),
+                prod_root_value="missing-prod-root",
+                dev_root_value="missing-dev-root",
+                entity_name="BI_FI",
+                schema_name="dds",
+                table_name="payment_request",
+                key_attributes=[],
+                source_object_key=None,
+                yaml_content="placeholder",
+                recreate_sql=recreate_sql,
+                insert_sql=insert_sql,
+                truncate_sql="truncate table dds.payment_request",
+            )
+
+        self.assertTrue(any("dds.payment_documents" in error for error in result["errors"]))
 
 
 class MetaWorkspaceSqlSourceTests(unittest.TestCase):

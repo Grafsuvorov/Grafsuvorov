@@ -8,6 +8,7 @@ export const metaWorkspaceApi = {
   branchFile: (body) => apiClient.post("/api/admin/meta-workspace/branch-file", body),
   branchGpBundle: (body) => apiClient.post("/api/admin/meta-workspace/branch-gp-bundle", body),
   saveBranchGpBundle: (body) => apiClient.post("/api/admin/meta-workspace/branch-gp-bundle/save", body),
+  saveBranchGpDepends: (body) => apiClient.post("/api/admin/meta-workspace/branch-gp-depends/save", body),
   saveBranchFile: (body) => apiClient.post("/api/admin/meta-workspace/branch-file/save", body),
   validateAll: (body) => apiClient.post("/api/admin/meta-workspace/validate-all", body),
   syncBranch: (body) => apiClient.post("/api/admin/meta-workspace/sync-branch", body),

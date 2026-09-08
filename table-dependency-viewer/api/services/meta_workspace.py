@@ -1148,6 +1148,85 @@ def save_meta_workspace_branch_gp_bundle(
     }
 
 
+def save_meta_workspace_branch_gp_depends_batch(
+    *,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
+    branch_name: str,
+    base_branch: str,
+    items: list[dict[str, Any]],
+    task_id: str,
+    author: str,
+) -> dict[str, Any]:
+    """Save inferred ``depends_on`` YAML updates in one explicit Git action."""
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    if not items:
+        raise ValueError("Нет зависимостей для сохранения")
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите ветку")
+    base_branch_norm = str(base_branch or "").strip() or "main"
+    git_repo_root = Path(git_repo_value).resolve()
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name_norm,
+        base_branch=base_branch_norm,
+        author=author,
+    )
+    changed_paths: list[str] = []
+
+    def _save_batch():
+        seen: set[str] = set()
+        for item in items:
+            entity_name = str(item.get("entity_name") or "").strip()
+            schema_name = str(item.get("schema_name") or "").strip()
+            table_name = str(item.get("table_name") or "").strip()
+            yaml_content = str(item.get("yaml_content") or "")
+            if not entity_name or not schema_name or not table_name or not yaml_content:
+                raise ValueError("Для каждого объекта укажите сущность, схему, таблицу и YAML")
+            object_rel = Path(entity_git_root_value) / entity_name / schema_name / table_name
+            yaml_rel = object_rel / "meta_data_file.yaml"
+            yaml_rel_text = yaml_rel.as_posix()
+            if yaml_rel_text in seen:
+                raise ValueError(f"Объект `{entity_name}/{schema_name}/{table_name}` передан повторно")
+            seen.add(yaml_rel_text)
+            _assert_branch_gp_revision_matches(
+                git_repo_root, "HEAD", object_rel, item.get("expected_revision"), cwd=worktree_dir
+            )
+            target_path = (worktree_dir / yaml_rel).resolve()
+            if not str(target_path).startswith(str(worktree_dir.resolve())):
+                raise ValueError("Некорректный путь объекта")
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if not target_path.exists() or target_path.read_text(encoding="utf-8") != yaml_content:
+                target_path.write_text(yaml_content, encoding="utf-8")
+                changed_paths.append(yaml_rel_text)
+
+        if changed_paths:
+            _run_workspace_git(git_repo_root, ["add", "--", *changed_paths], cwd=worktree_dir)
+            task_id_norm = str(task_id or "").strip().upper()
+            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+            _run_workspace_git(
+                git_repo_root,
+                ["commit", "-m", f"{commit_prefix}: update depends_on for {len(changed_paths)} objects"],
+                cwd=worktree_dir,
+            )
+        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(branch_ref)}"], cwd=worktree_dir)
+
+    _with_workspace_lock(worktree_dir, _save_batch)
+    return {
+        "branch_name": branch_name_norm,
+        "base_branch": base_branch_norm,
+        "committed": bool(changed_paths),
+        "changed_paths": sorted(changed_paths),
+        "workspace_path": str(worktree_dir),
+    }
+
+
 def validate_meta_workspace_branch(
     *,
     engine,
@@ -1246,7 +1325,14 @@ def validate_meta_workspace_branch(
             f"SQL из ветки: recreate `{recreate_sql_source}`",
             f"SQL из ветки: truncate `{truncate_sql_source}`",
         ]
-        gp_results.append({**item, **validation, "skipped": False})
+        gp_results.append(
+            {
+                **item,
+                **validation,
+                "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
+                "skipped": False,
+            }
+        )
 
     for item in catalog.get("click_objects", []):
         if item.get("change_type") == "deleted":

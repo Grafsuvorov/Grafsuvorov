@@ -1,424 +1,143 @@
-SQL Error [42P01]: ERROR: relation "pg_temp.saps" does not exist
-  Где: PL/pgSQL function inline_code_block line 284 at SQL statement
+. Структура yaml-файла дага для сущности 
+entity_name: KAIZEN_LOADER
+entity_id: 65
+schedule:
+  DEV: "45 9 * * *"
+  PREPROD: "45 9 * * *"
+  PROD: "30 3 * * *"
+dbt:
+  dbt_command: 'dbt run --select tag:KAIZEN_LOADER --exclude tag:disabled'
+  additional_vars: '{"is_skip": false,"ENTITY_NAME": "KAIZEN_LOADER", "ENTITY_ID": 65, "old_meta_enabled": true}'
+  on_failure_callback: True
+clickhouse:
+  enabled:
+    DEV: True
+    PREPROD: True
+    PROD: True
+  poke_interval_watcher: 120
+  tables:
+    - dag_name: dm_kaizen_personnel_involvement_meta
+      dbt_model: dm_s_kaizen_personnel_involvement
+    - dag_name: dm_kaizen_submitted_and_implemented_meta
+      dbt_model: dm_s_kaizen_submitted_and_implemented
 
+Параметр	Описание
+entity_name	Название (код) сущности
+entity_id	Идентификатор сущности
+schedule	Расписание с разбивкой по стендам
+schedule.DEV	Расписание для стенда DEV
+schedule.PREPROD	Расписание для стенда PREPROD
+schedule.PROD	Расписание для стенда PROD
+dbt	Блок настроек работы dbt
+dbt.dbt_command	Команда запуска DBT
+dbt.additional_vars	Дополнительные переменные
+dbt.on_failure_callback	Флаг включения алертинга на уровне дага
+clickhouse	Блок настроек выгрузки данных в ClickHouse
+clickhouse.enabled	Блок настроек включателей выгрузки данных в ClickHouse с разбивкой по стендам
+clickhouse.enabled.DEV	Флаг включения выгрузки данных в ClickHouse для стенда DEV
+clickhouse.enabled.PREPROD	Флаг включения выгрузки данных в ClickHouse для стенда PREPROD
+clickhouse.enabled.PROD	Флаг включения выгрузки данных в ClickHouse для стенда PROD
+clickhouse.poke_interval_watcher	Временной интервал между проверками готовности витрин к выгрузке, сек (по умолчанию 120 сек)
+clickhouse.tables	Блок соответствия моделей и дагов выгрузки в ClickHouse (список)
+clickhouse.tables.dag_name	Название дага выгрузки модели в ClickHouse
+clickhouse.tables.dbt_model	Название модели, которую должен выгрузить соответствующий даг в ClickHouse
+2. Настройка конфигурации yaml-файла для переключения сущности для расчета на dbt 
+Откройте файл конфигурации в репозитории ETL:
 
-Позиция ошибки:
+config_files/dbt_dags/{ENTITY_NAME}.yaml
 
-do
-$$
-declare
-    v_row_cnt int8;
-    v_row_cnt_agg int8 = 0;
-    v_calc_time interval;
-    v_start_dttm timestamp(0);
-    v_is_init bool = false;
-begin
-    v_start_dttm := clock_timestamp();
-    raise notice '% START ', to_char(clock_timestamp(), 'hh24:mi:ss');
+2.1. Команды и переменные 
+Настройте следующие параметры:
 
-    if not exists(select 1 from dds.payment_request limit 1) then
-        v_is_init := true;
-    else
-        v_is_init := false;
-    end if;
+Параметр	Описание	Пример
+dbt_command	Команда запуска DBT	dbt run --select tag:KAIZEN_LOADER --exclude tag:disabled
+additional_vars	Дополнительные переменные	См. ниже
+Пример конфигурации:
 
-    raise notice '% pg_temad.clean_delta v_is_init = %', to_char(clock_timestamp(), 'hh24:mi:ss'), v_is_init;
+dbt_command: 'dbt run --select tag:KAIZEN_LOADER --exclude tag:disabled'
 
-	if not v_is_init then
+additional_vars: >
+  {
+    "is_skip": false,
+    "ENTITY_NAME": "KAIZEN_LOADER",
+    "ENTITY_ID": 65,
+    "old_meta_enabled": true
+  }
 
-        delete from dds.payment_request as t
-        using ods.accounting_documents as s
-        where t.unit_balance_code = s.unit_balance_code
-          and t.fiscal_year = s.fiscal_year
-          and t.payment_request_code = s.accounting_document_code
-          and t.payment_request_position_code = s.position_line_item;
+⚠️ Важно: Поле "is_skip": false должно оставаться таковым до завершения полной миграции.
 
-        get diagnostics v_row_cnt = row_count;
-        raise notice '% Delete target (%)', to_char(clock_timestamp(), 'hh24:mi:ss'), v_row_cnt;
-        v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+2.2. Расписание 
+В процессе переключения расписание для стендов DEV и PREPROD не меняется, для стенда PROD расписание копируется из дага расчета ETL.
 
-	drop table if exists pg_temp.saps;
-	create temp table pg_temp.saps
-	with (
-		appendonly = true,
-		orientation = column,
-		compresstype = zstd,
-		compresslevel = 1
-	) as (
-	select
-		case_code ,
-		range_low_value,
-		max(case when saps.parameter_code = 'BL_AUGNO' or saps.parameter_code = 'SO_BLAFR' then 'X' else null end) as is_payment_document_optional_code
-	from
-		dict_dds.settings_and_parameters_sap as saps
-	where
-		saps.abap_program_code = '/RUSAL/FI1349M'
-		and (saps.parameter_code = 'BL_AUGNO' or saps.parameter_code = 'SO_BLTAP' or saps.parameter_code = 'SO_BLAFR')
-		and saps.range_sign_code is not null
-	group by
-		case_code ,
-		range_low_value
-	)
-	distributed replicated;
+Среда	Параметр	Значение
+PROD	schedule	30 3 * * *
+2.3. Блок ClickHouse 
+Для стенда PROD блок clickhouse должен быть включен:
 
+clickhouse:
+  enabled:
+    PROD: true
 
+2.4. Блок callback 
+Установить параметр on_failure_callback в значение true.
 
+3. Предварительные требования 
+Перед началом переключения расчета сущности на dbt убедитесь, что выполнены следующие условия:
 
- drop table if exists pg_temp.payments;
-	create temp table pg_temp.payments
-	with (
-		appendonly = true,
-		orientation = column,
-		compresstype = zstd,
-		compresslevel = 1
-	) as (
-    with pd as (
-		select
-			counterparty_code,
-			payment_order_code,
-			statement_code,
-			statement_position_line_item_code,
-			row_number() over ( partition by counterparty_code,
-			payment_order_code
-		order by
-			statement_code,
-			statement_position_line_item_code desc ) as row_num
-		from
-			dds.bank_statement_position_clearing_record)
-select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	case when ad.unit_balance_code <> bsd.unit_balance_code then true else false end as is_agent_payment_code
-from
-	ods.accounting_documents as ad
-join dds.payment_documents as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.accounting_document_fiscal_year::numeric = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.accounting_document_position_line_item_code::numeric = ad.position_line_item
-	and pd.is_trial_execution is null
-	and coalesce (pd.supplier_code,	'') = coalesce(ad.supplier_code , '')
-	and pd.dt_program_execution <= ad.dt_baseline_due_date_calculation
-	and pd.dt_program_execution >= ad.dt_baseline_due_date_calculation - interval '7 days'
-join pd as cr on
-	coalesce (cr.counterparty_code,	'') = coalesce (pd.supplier_code,'')
-	and cr.payment_order_code = pd.payment_order_code
-	and row_num = 1
-join dds.bank_statement_documents as bsd on
-	bsd.statement_code = cr.statement_code
-	and bsd.statement_position_line_item_code = cr.statement_position_line_item_code
-where
-	ad.is_active = true
-	and ad.clearing_document_code is null
-	and ad.is_blocked_by_payment_program is not null
-	and ad.deleted_flag = false
-group by
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	bsd.unit_balance_code
-	)
-	distributed by (accounting_document_code);
+Сущность полностью протестирована на стенде PROD в части dbt.
+В задаче аналитика на сверку расхождений сущности в dbt и etl аналитик указал, что сверка завершена и можно ставить в PROD
+Согласована дата и время на переключение расчета сущности на dbt.
+На стенде DEV протестирован даг расчета сущности в dbt и выгрузки в ClickHouse (далее CH) в части airflow в режиме выгрузки в CH:
+clickhouse:
+ enabled:
+   DEV: True
 
+Должен быть подтвержденный МР репозитория dbt на инженерную задачу по переключению расчета сущности на dbt
+Пример:
+https://prod.gitlab.dwh.rusal.com/dwh/dbt/-/merge_requests/607
 
+В модели dbt_greenplum_elt/models/tech_etl/tech_etl_s_dbt_entities_meta.sql
+для переключаемой сущности установить флаг on_dbt в значение true
 
- insert into dds.payment_request(
-	unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code,
-    payment_request_type,
-    dt_posting,
-    dt_payment_request,
-    plant_code,
-    general_ledger_account_code,
-    reverse_document_code,
-    reference_document_number,
-    clearing_document_code,
-    funds_center_code,
-    document_currency_code,
-    document_currency_amount,
-    local_currency_code,
-    local_currency_amount,
-    second_local_currency_code,
-    second_local_currency_amount,
-    payment_request_position_text,
-    counterparty_code,
-    dt_created,
-    created_by,
-    dt_payment_posted,
-    dt_payment_created,
-    invoice_code,
-    invoice_position_code,
-    fiscal_year_of_invoice,
-    earmarked_document_code,
-    earmarked_document_position_code,
-    tax_code,
-	fund_code,
-	assignment_number,
-	debit_or_credit_code,
-    is_payment_document_optional_code,
-    is_agent_payment_code )
+(65,'KAIZEN_LOADER',true),
 
- select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code as payment_request_code,
-	ad.position_line_item as payment_request_position_code,
-	ad.accounting_document_type as payment_request_type,
-	ad.dt_posting,
-	ad.dt_accounting_document as dt_payment_request,
-	coalesce(ad.plant_code, wr3.plant_code, wr1.plant_code) as plant_code,
-	ad.general_ledger_account_code,
-	ad.reverse_document_code,
-	ad.reference_document_number,
-	ad.clearing_document_code,
-	ad.funds_center_code,
-	ad.document_currency_code,
-	ad.document_currency_amount,
-	ad.local_currency_code,
-	ad.local_currency_amount,
-	ad.second_local_currency_code,
-	ad.second_local_currency_amount,
-	ad.position_line_item_text as payment_request_position_text,
-	case
-		when ad.account_type = 'D' then coalesce(ad.customer_code, ad.supplier_code)
-		when ad.account_type = 'K' then coalesce(ad.supplier_code, ad.customer_code)
-	end as counterparty_code,
-	ad.dttm_accounting_document_created as dt_created,
-	ad.accounting_document_created_by as created_by,
-	ad.dt_clearing as dt_payment_posted,
-	date(ad.dttm_accounting_document_created) as dt_payment_created,
-	ad.invoice_document_code as invoice_code,
-	ad.position_number_of_relevant_invoice as invoice_position_code,
-	ad.fiscal_year_of_relevant_invoice as fiscal_year_of_invoice,
-	ad.earmarked_document_code,
-	ad.earmarked_document_position_line_item_code as earmarked_document_position_code,
-	ad.tax_code,
-	ad.fund_code,
-	ad.assignment_number,
-	ad.debit_or_credit,
-	saps.is_payment_document_optional_code,
-	case when pd.is_agent_payment_code then true else false end as is_agent_payment_code
-from
-	ods.accounting_documents as ad
-left join dict_dds.plant_and_subsidiary as wr3 on
-	wr3.unit_balance_code = ad.unit_balance_code
-	and wr3.plant_code = ad.reference_key_for_line_item_3
-left join dict_dds.plant_and_subsidiary as wr1 on
-	wr1.unit_balance_code = ad.unit_balance_code
-	and wr1.plant_code = ad.reference_key_internal_for_document_header_1
-left join pg_temp.saps 	on
-	saps.case_code = ad.unit_balance_code
-	and saps.range_low_value = ad.accounting_document_type
-left join pg_temp.payments as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.fiscal_year = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.position_line_item = ad.position_line_item
-where
-	1 = 1
-	and ad.deleted_flag = false
-	and ad.is_active = true
-	and ad.accounting_document_status_code = 'S';
+Должен быть подтвержденный МР репозитория etl на инженерную задачу по переключению расчета сущности на dbt
+Пример:
+https://prod.gitlab.dwh.rusal.com/dwh/etl/-/merge_requests/4071
 
-    else
+4. Процесс переключения 
+Выполнить следующие шаги строго в указанном порядке:
 
- drop table if exists pg_temp.payments;
-	create temp table pg_temp.payments
-	with (
-		appendonly = true,
-		orientation = column,
-		compresstype = zstd,
-		compresslevel = 1
-	) as (
-    with pd as (
-		select
-			counterparty_code,
-			payment_order_code,
-			statement_code,
-			statement_position_line_item_code,
-			row_number() over ( partition by counterparty_code,
-			payment_order_code
-		order by
-			statement_code,
-			statement_position_line_item_code desc ) as row_num
-		from
-			dds.bank_statement_position_clearing_record)
-select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	case when ad.unit_balance_code <> bsd.unit_balance_code then true else false end as is_agent_payment_code
-from
-	dds.accounting_documents as ad
-join dds.payment_documents as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.accounting_document_fiscal_year::numeric = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.accounting_document_position_line_item_code::numeric = ad.position_line_item
-	and pd.is_trial_execution is null
-	and coalesce (pd.supplier_code,	'') = coalesce(ad.supplier_code , '')
-	and pd.dt_program_execution <= ad.dt_baseline_due_date_calculation
-	and pd.dt_program_execution >= ad.dt_baseline_due_date_calculation - interval '7 days'
-join pd as cr on
-	coalesce (cr.counterparty_code,	'') = coalesce (pd.supplier_code,'')
-	and cr.payment_order_code = pd.payment_order_code
-	and row_num = 1
-join dds.bank_statement_documents as bsd on
-	bsd.statement_code = cr.statement_code
-	and bsd.statement_position_line_item_code = cr.statement_position_line_item_code
-where
-	ad.is_active = true
-	and ad.clearing_document_code is null
-	and ad.is_blocked_by_payment_program is not null
-	and ad.deleted_flag = false
-group by
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code,
-	ad.position_line_item,
-	bsd.unit_balance_code
-	)
-	distributed by (accounting_document_code);
+Чек-лист переключения 
+Оба дага (ETL и DBT) перевести в режим Disable
+Создаем релизные ветки в репозиториях ETL и DBT
+Из заранее подготовленных МР (п. 3) сливаем в соответствующие релизные ветки
+Из релизных веток сливаем в ветки main соответствующих репозиториев
+Запустить релизный даг DBT
+Запустить релизный даг ETL
+Обновить флаг on_dbt путем запуска модели tech_etl_s_dbt_entities_meta из ветки main
+dbt run --vars '{is_skip_by_entities_meta: False, is_skip: False}' --select tech_etl_s_dbt_entities_meta -t dev
 
+dbt run --vars '{is_skip_by_entities_meta: False, is_skip: False}' --select tech_etl_s_dbt_entities_meta -t prod
 
+DAG {ENTITY_NAME}_dbt перевести в режим Enable. При этом даг запустится сам.
+Проверить результат работы дага
+Даг отработал без ошибок
+В журнале dbt ошибки отсутствуют
+Успешно отработали даги выгрузки данных в ClickHouse, указанные в блоке мапинга п. 1
+5. Откат изменений в случае возникновения проблем при переключении расчета сущности на dbt 
+5.1. Отключение дага DBT и включение дага ETL 
+# 1. Отключить DAG DBT
+{ENTITY_NAME}_dbt: disabled
 
- insert into dds.payment_request(
-	unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code,
-    payment_request_type,
-    dt_posting,
-    dt_payment_request,
-    plant_code,
-    general_ledger_account_code,
-    reverse_document_code,
-    reference_document_number,
-    clearing_document_code,
-    funds_center_code,
-    document_currency_code,
-    document_currency_amount,
-    local_currency_code,
-    local_currency_amount,
-    second_local_currency_code,
-    second_local_currency_amount,
-    payment_request_position_text,
-    counterparty_code,
-    dt_created,
-    created_by,
-    dt_payment_posted,
-    dt_payment_created,
-    invoice_code,
-    invoice_position_code,
-    fiscal_year_of_invoice,
-    earmarked_document_code,
-    earmarked_document_position_code,
-    tax_code,
-	fund_code,
-	assignment_number,
-	debit_or_credit_code,
-    is_payment_document_optional_code,
-    is_agent_payment_code )
+# 2. Включить DAG ETL
+{ENTITY_NAME}: enabled
 
- select
-	ad.unit_balance_code,
-	ad.fiscal_year,
-	ad.accounting_document_code as payment_request_code,
-	ad.position_line_item as payment_request_position_code,
-	ad.accounting_document_type as payment_request_type,
-	ad.dt_posting,
-	ad.dt_accounting_document as dt_payment_request,
-	coalesce(ad.plant_code, wr3.plant_code, wr1.plant_code) as plant_code,
-	ad.general_ledger_account_code,
-	ad.reverse_document_code,
-	ad.reference_document_number,
-	ad.clearing_document_code,
-	ad.funds_center_code,
-	ad.document_currency_code,
-	ad.document_currency_amount,
-	ad.local_currency_code,
-	ad.local_currency_amount,
-	ad.second_local_currency_code,
-	ad.second_local_currency_amount,
-	ad.position_line_item_text as payment_request_position_text,
-	case
-		when ad.account_type = 'D' then coalesce(ad.customer_code, ad.supplier_code)
-		when ad.account_type = 'K' then coalesce(ad.supplier_code, ad.customer_code)
-	end as counterparty_code,
-	ad.dttm_accounting_document_created as dt_created,
-	ad.accounting_document_created_by as created_by,
-	ad.dt_clearing as dt_payment_posted,
-	date(ad.dttm_accounting_document_created) as dt_payment_created,
-	ad.invoice_document_code as invoice_code,
-	ad.position_number_of_relevant_invoice as invoice_position_code,
-	ad.fiscal_year_of_relevant_invoice as fiscal_year_of_invoice,
-	ad.earmarked_document_code,
-	ad.earmarked_document_position_line_item_code as earmarked_document_position_code,
-	ad.tax_code,
-	ad.fund_code,
-	ad.assignment_number,
-	ad.debit_or_credit,
-	saps.is_payment_document_optional_code,
-	case when pd.is_agent_payment_code then true else false end as is_agent_payment_code
-from
-	dds.accounting_documents as ad
-left join dict_dds.plant_and_subsidiary as wr3 on
-	wr3.unit_balance_code = ad.unit_balance_code
-	and wr3.plant_code = ad.reference_key_for_line_item_3
-left join dict_dds.plant_and_subsidiary as wr1 on
-	wr1.unit_balance_code = ad.unit_balance_code
-	and wr1.plant_code = ad.reference_key_internal_for_document_header_1
-left join pg_temp.saps 	on
-	saps.case_code = ad.unit_balance_code
-	and saps.range_low_value = ad.accounting_document_type
-left join pg_temp.payments as pd on
-	pd.unit_balance_code = ad.unit_balance_code
-	and pd.fiscal_year = ad.fiscal_year
-	and pd.accounting_document_code = ad.accounting_document_code
-	and pd.position_line_item = ad.position_line_item
-where
-	1 = 1
-	and ad.deleted_flag = false
-	and ad.is_active = true
-	and ad.accounting_document_status_code = 'S';
+5.2. Откат изменений в репозиториях ETL и DBT 
+Создать релизные ветки в обоих репозиториях для отката изменений
+Создать МР с изменениями обратными в ранее созданных МР (п. 3)
+Провести релиз указанных МР в обоих репозиториях
+Запустить модель dbt_greenplum_elt/models/tech_etl/tech_etl_s_dbt_entities_meta.sql на стендах DEV и PROD
+dbt run --vars '{is_skip_by_entities_meta: False, is_skip: False}' --select tech_etl_s_dbt_entities_meta -t dev
 
-/* ключ
-select
-    unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code,
-    count(*) as duplicate_count
-from
-    dds.payment_request
-group by
-    unit_balance_code,
-    fiscal_year,
-    payment_request_code,
-    payment_request_position_code
-having
-    count(*) > 1
-	*/
-
-
-    end if;
-
-    get diagnostics v_row_cnt = row_count;
-    raise notice '% Insert target (%)', to_char(clock_timestamp(), 'hh24:mi:ss'), v_row_cnt;
-    v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
-
-    if v_row_cnt_agg > 0 then
-        analyze dds.payment_request;
-        raise notice '% analyze target', to_char(clock_timestamp(), 'hh24:mi:ss');
-    end if;
-
-    v_calc_time := clock_timestamp() - v_start_dttm;
-    raise notice '% FINISH (v_start_dttm = % ; v_calc_time = %.)', to_char(clock_timestamp(), 'hh24:mi:ss'), v_start_dttm, v_calc_time;
-end;
-$$;
+dbt run --vars '{is_skip_by_entities_meta: False, is_skip: False}' --select tech_etl_s_dbt_entities_meta -t prod

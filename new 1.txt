@@ -1,117 +1,636 @@
-import os
-import yaml
-from datetime import datetime, timedelta
-from pathlib import Path
-from airflow import DAG
-from airflow.utils.task_group import TaskGroup
-from plugins.custom_operators.dbtBashOperator import dbtBashOperator
-from plugins.custom_operators.ExecutionGuidSensor import ExecutionGuidSensor
-from plugins.custom_operators.DbtModelReadySensor import DbtModelReadySensor
-from plugins.custom_operators.DbtRunWatcherSensor import DbtRunWatcherSensor
+Согласен с двумя замечаниями:
 
-AIRFLOW_HOME_DIR = Path(os.environ.get('AIRFLOW_HOME', '/home/airflow'))
-CONFIGS_DIR = AIRFLOW_HOME_DIR / 'config_files' / 'dbt_dags'
+  1. Предыдущие P0 были слишком техническими и не объясняли, что именно менять.
+  2. Разделение dbt-моделей и их runtime-конфигурации между репозиториями действительно создаёт лишнюю путаницу. Целевое решение лучше строить с одним источником
+     истины в dbt-репозитории.
 
-def create_default_args():
-    return {
-        'owner': 'airflow',
-        'depends_on_past': False,
-        'start_date': datetime(2026, 8, 1),
-        'retries': 0,
-        'retry_delay': timedelta(minutes=5),
-    }
+  Ниже формализованный вариант целиком.
 
-CLUSTER = os.environ.get("CLUSTER", "DEV")
+  # 1. Решение верхнего уровня
 
-if CONFIGS_DIR.is_dir():
-    try:
-        yaml_files = [f.name for f in CONFIGS_DIR.iterdir() if f.suffix == '.yml']
-    except FileNotFoundError:
-        yaml_files = []
+  Переход на dbt нужно разделить на четыре самостоятельных контура:
 
-    for yaml_file in yaml_files:
-        entity_name = yaml_file.replace('.yml', '')
-        config_path = CONFIGS_DIR / yaml_file
+  1. Разработка моделей.
+  2. Релиз и миграция схемы/данных.
+  3. Оркестрация расчётов и внешних зависимостей.
+  4. Эксплуатация: логи, перезапуски, ClickHouse, контроль качества и откат.
 
-        try:
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-        except Exception as e:
-            print(f"Error while parsing:{yaml_file}: {e}")
-            continue
+  Текущий концепт покрывает в основном первый пункт и частично третий. Для массовой миграции 3000+ таблиц этого недостаточно.
 
-        dag_id = f'{entity_name}_dbt'
-        default_args = create_default_args()
-        raw_schedule = config.get('schedule', None)
-        if isinstance(raw_schedule, dict):
-            schedule_val = raw_schedule.get(CLUSTER, raw_schedule.get('DEV'))
-        else:
-            schedule_val = raw_schedule
+  Рекомендуемое решение:
 
-        clickhouse_config = config.get('clickhouse', {})
-        tables_list = clickhouse_config.get('tables', [])
-        clickhouse_enabled = clickhouse_config.get('enabled', False)
-        if isinstance(clickhouse_enabled, dict):
-            clickhouse_enabled_flag = clickhouse_enabled.get(CLUSTER, clickhouse_enabled.get('DEV'))
-        else:
-            clickhouse_enabled_flag = clickhouse_enabled
+  > Всё, что относится к dbt-сущности, должно храниться и версионироваться в dbt-репозитории: модели, конфигурация сущности, соответствие ClickHouse, миграционные     
+  > инструкции, тесты и генератор dbt DAG. Основной ETL-репозиторий остаётся временно только для legacy-расчётов и общего Airflow framework.                           
 
-        watcher_poke_interval = clickhouse_config.get('poke_interval_watcher', 120)
+  # 2. Целевая структура репозитория
 
-        TEMPLATE_DIR_DBT = AIRFLOW_HOME_DIR / 'template_dir' / 'dbt_operator_templates'
-        TEMPLATE_DIR_SENSOR = AIRFLOW_HOME_DIR / 'template_dir' / 'dbt_dags_generator'
+  Предлагаемая структура dbt-репозитория:
 
-        with DAG(
-            dag_id=dag_id,
-            default_args=default_args,
-            schedule_interval=schedule_val,
-            catchup=False,
-            max_active_tasks=6,
-            max_active_runs=1,
-            tags=['dbt-clickhouse', 'dbt'],
-            on_failure_callback=None,
-            template_searchpath=[str(TEMPLATE_DIR_DBT), str(TEMPLATE_DIR_SENSOR)],
-            is_paused_upon_creation=True
-        ) as dag:
-            with TaskGroup(group_id='dbt') as dbt_group:
-                run_dbt = dbtBashOperator(
-                    task_id=f'run_dbt_{entity_name}',
-                    dbt_command=config['dbt']['dbt_command'],
-                    additional_vars=config['dbt']['additional_vars']
-                )
+  dbt-repository/
+  ├── dbt_project.yml
+  ├── models/
+  │   └── entities/
+  │       └── kaizen_loader/
+  │           ├── dm_s_kaizen_personnel_involvement.sql
+  │           ├── dm_s_kaizen_personnel_involvement.yml
+  │           ├── dm_s_kaizen_submitted_and_implemented.sql
+  │           └── dm_s_kaizen_submitted_and_implemented.yml
+  │
+  ├── orchestration/
+  │   ├── dags/
+  │   │   └── dbt_entity_dag_factory.py
+  │   ├── entities/
+  │   │   └── KAIZEN_LOADER.yml
+  │   └── models/
+  │       └── KAIZEN_LOADER/
+  │           ├── dm_s_kaizen_personnel_involvement.yml
+  │           └── dm_s_kaizen_submitted_and_implemented.yml
+  │
+  ├── migrations/
+  │   └── DWH-1234/
+  │       ├── migration.yml
+  │       ├── 001_backup.sql
+  │       ├── 002_create_shadow.sql
+  │       ├── 003_backfill.sql
+  │       ├── 004_switch.sql
+  │       └── rollback.sql
+  │
+  ├── selectors.yml
+  ├── tests/
+  └── release/
+      └── validation/
 
-            if tables_list and clickhouse_enabled_flag:
-                get_execution_guid_dbt = ExecutionGuidSensor(
-                    task_id='get_execution_guid_dbt',
-                    sql='dbt_get_exec_guid.sql',
-                    poke_interval=30,
-                    timeout=1200,
-                    mode='reschedule',
-                    soft_fail=False
-                )
-                watch_dbt_run = DbtRunWatcherSensor(
-                    task_id='watch_dbt_run',
-                    models=tables_list,
-                    sql='dbt_get_models_list.sql',
-                    poke_interval=watcher_poke_interval,
-                    timeout=7200,
-                    mode='reschedule',
-                    soft_fail=False
-                )
-                with TaskGroup(group_id='clickhouse') as ch_group:
-                    for table_info in tables_list:
-                        model_name = table_info['dbt_model']
-                        trigger_target = table_info['dag_name']
-                        unique_suffix = model_name.replace(".", "_")
-                        check_trigger_task = DbtModelReadySensor(
-                            task_id=f'check_trigger_{unique_suffix}',
-                            model_name=model_name,
-                            trigger_dag_id=trigger_target,
-                            poke_interval=watcher_poke_interval,
-                            timeout=7200,
-                            mode='reschedule',
-                            soft_fail=False
-                        )
+  Распределение ответственности:
 
-                get_execution_guid_dbt >> watch_dbt_run
-                get_execution_guid_dbt >> ch_group
+  - models — SQL, dbt tests, ref, source, materialization;
+  - orchestration/entities — расписание и зависимости всей сущности;
+  - orchestration/models — настройки конкретной модели и ClickHouse;
+  - migrations — изменение схемы и исторические пересчёты;
+  - release/validation — проверки релиза;
+  - dbt_entity_dag_factory.py — генерация Airflow DAG и задач.
+
+  Общий YAML сущности больше не должен содержать список всех ClickHouse-таблиц. Это устраняет конфликт, когда несколько инженеров меняют один файл.
+
+  ## Что остаётся в основном ETL-репозитории
+
+  Только:
+
+  - legacy ETL;
+  - legacy DAG;
+  - общие Airflow operators/sensors, если они используются всей платформой;
+  - временный реестр переключения ETL → dbt.
+
+  После окончания миграции сущности её конфигурация не должна одновременно поддерживаться в двух репозиториях.
+
+  Важно: один источник в Git не означает, что Airflow обязан читать файлы непосредственно из Git. CI dbt-репозитория может собирать единый deployment bundle и
+  доставлять его в Airflow:
+
+  dbt models
+  + entity configs
+  + model configs
+  + DAG factory
+  + manifest.json
+  + release metadata
+
+  # 3. Недостатки существующего dbt DAG
+
+  ## 3.1. Одна задача скрывает все модели
+
+  Сейчас:
+
+  run_dbt = dbtBashOperator(
+      task_id=f'run_dbt_{entity_name}',
+      dbt_command=config['dbt']['dbt_command'],
+      additional_vars=config['dbt']['additional_vars']
+  )
+
+  Airflow знает только результат общей команды. Он не знает:
+
+  - какая модель сейчас выполняется;
+  - какая модель упала;
+  - какие модели уже успешно записали данные;
+  - какую модель можно безопасно перезапустить;
+  - после какой модели запускать конкретный ClickHouse DAG.
+
+  Это особенно опасно при delete + insert, потому что сущность может остаться рассчитанной частично.
+
+  ## 3.2. Неправильная последовательность задач
+
+  В DAG отсутствует связь:
+
+  run_dbt >> get_execution_guid_dbt
+
+  Поэтому dbt и поиск execution GUID могут стартовать параллельно.
+
+  Также отсутствует:
+
+  watch_dbt_run >> clickhouse
+
+  Watcher и ClickHouse sensors запускаются параллельно после получения GUID.
+
+  Даже если custom sensors компенсируют часть поведения внутри себя, граф не выражает фактическую последовательность и допускает гонки.
+
+  ## 3.3. Нет внешних зависимостей
+
+  SAP OData DAG вообще не включён в граф сущности.
+
+  ## 3.4. Конфигурация может исчезнуть молча
+
+  Ошибка YAML приводит к:
+
+  print(...)
+  continue
+
+  В результате DAG исчезнет из Airflow без явного падения deployment pipeline.
+
+  ## 3.5. PROD наследует DEV
+
+  Если параметр PROD не задан, код берёт DEV:
+
+  raw_schedule.get(CLUSTER, raw_schedule.get('DEV'))
+
+  Такое поведение нужно запретить.
+
+  ## 3.6. Документация и код расходятся
+
+  Генератор ищет только .yml, тогда как инструкция указывает .yaml.
+
+  ## 3.7. Callback фактически не включён
+
+  В конфигурации есть on_failure_callback, но код устанавливает:
+
+  on_failure_callback=None
+
+  # 4. Где и как реализовать модельные Airflow-задачи
+
+  Это и есть уточнение прежнего этапа 2.
+
+  ## Место реализации
+
+  В dbt-репозитории:
+
+  orchestration/dags/dbt_entity_dag_factory.py
+
+  DAG factory должен читать:
+
+  1. YAML сущности.
+  2. YAML отдельных моделей.
+  3. Скомпилированный dbt manifest.json.
+
+  На основании manifest.json factory получает реальный граф ref() и создаёт Airflow-задачи.
+
+  ## Что создавать отдельной задачей
+
+  Отдельная задача нужна для модели, если она:
+
+  - материализуется в таблицу;
+  - выполняет delete + insert;
+  - имеет собственный ClickHouse DAG;
+  - долго выполняется;
+  - имеет отдельный SLA;
+  - должна отдельно перезапускаться;
+  - является критической точкой зависимости.
+
+  Маленькие служебные модели можно объединить в TaskGroup.
+
+  Пример:
+
+  dbt.KAIZEN_LOADER
+  ├── dm_s_kaizen_personnel_involvement
+  │   ├── run
+  │   ├── test
+  │   └── clickhouse
+  │
+  └── dm_s_kaizen_submitted_and_implemented
+      ├── run
+      ├── test
+      └── clickhouse
+
+  Каждая задача выполняет конкретную модель:
+
+  dbt build --select dm_s_kaizen_personnel_involvement
+
+  Зависимости между задачами берутся из dbt manifest, а не дублируются вручную в YAML.
+
+  ## Что записывать по каждой модели
+
+  В технический журнал:
+
+  airflow_dag_id
+  airflow_run_id
+  airflow_task_id
+  entity_name
+  dbt_model
+  target_relation
+  dbt_invocation_id
+  release_id
+  task_id
+  commit_sha
+  started_at
+  finished_at
+  status
+  rows_affected
+  error_message
+
+  Именно этот журнал обеспечит model-level наблюдаемость.
+
+  ## Как должен работать перезапуск
+
+  При падении одной модели инженер должен иметь возможность:
+
+  - открыть её Airflow-задачу;
+  - увидеть dbt-лог;
+  - исправить внешнюю причину;
+  - очистить и запустить только эту задачу;
+  - затем повторить её test и ClickHouse downstream.
+
+  Повторный запуск всей сущности не должен быть единственным вариантом.
+
+  # 5. Целевой граф DAG сущности
+
+  validate_config
+          |
+          v
+  register_entity_run
+          |
+          v
+  wait_sap_odata ──> check_source_readiness
+                             |
+                             v
+                   dbt models TaskGroup
+                     /              \
+                    v                v
+               model_A           model_B
+                  |                 |
+                  v                 v
+               test_A            test_B
+                  |                 |
+                  v                 v
+            clickhouse_A      clickhouse_B
+                     \              /
+                      v            v
+                      reconcile_entity
+                             |
+                             v
+                     finalize_entity_run
+                       /             \
+                      v               v
+               success_notice    failure_notice
+
+  Для сущности без SAP соответствующий sensor отсутствует.
+
+  # 6. Конкретный P0 backlog
+
+  ## P0-01. Перенести dbt-конфигурацию в dbt-репозиторий
+
+  Сделать:
+
+  - перенести config_files/dbt_dags из основного репозитория;
+  - перенести dbt DAG factory;
+  - перенести объектные ClickHouse mapping;
+  - определить dbt-репозиторий единственным источником конфигурации;
+  - настроить CI deployment bundle в Airflow.
+
+  Готово, когда:
+
+  - изменение модели и её runtime-конфигурации проходит одним MR;
+  - невозможно выкатить новую модель без совместимой конфигурации;
+  - в основном репозитории нет копии активного dbt YAML.
+
+  ## P0-02. Разделить общий и объектный YAML
+
+  Общий файл:
+
+  entity:
+    name: KAIZEN_LOADER
+    id: 65
+
+  schedule:
+    DEV: "45 9 * * *"
+    PREPROD: "45 9 * * *"
+    PROD: "30 3 * * *"
+
+  selector: tag:KAIZEN_LOADER
+
+  upstream:
+    - dag_id: sap_odata_kaizen
+      service: kaizen
+
+  Отдельный файл модели:
+
+  model: dm_s_kaizen_personnel_involvement
+  relation: dm.kaizen_personnel_involvement
+
+  execution:
+    isolated_task: true
+    timeout_minutes: 90
+    retries: 1
+
+  clickhouse:
+    dag_name: dm_kaizen_personnel_involvement_meta
+    enabled:
+      DEV: true
+      PREPROD: true
+      PROD: true
+
+  Готово, когда два инженера, работающие с разными моделями, не меняют один файл.
+
+  ## P0-03. Добавить строгую валидацию конфигурации
+
+  Сделать JSON Schema или Pydantic-модель, проверяющую:
+
+  - обязательность entity.name, entity.id, schedule;
+  - обязательное значение для текущего окружения;
+  - формат cron;
+  - существование dbt selector;
+  - существование модели;
+  - уникальность модели;
+  - уникальность ClickHouse DAG;
+  - типы bool, int, list;
+  - запрет неизвестных полей;
+  - соответствие имени файла имени сущности;
+  - поддержку только утверждённого расширения.
+
+  При ошибке:
+
+  CI = failed
+  deployment bundle не создаётся
+  предыдущая рабочая версия DAG остаётся в Airflow
+
+  Не следует намеренно ломать уже работающий DAG в scheduler. Ошибку нужно блокировать раньше, в CI.
+
+  ## P0-04. Ввести единый идентификатор запуска
+
+  ExecutionGuidSensor, который ищет появившийся запуск после старта, лучше заменить явной регистрацией.
+
+  Последовательность:
+
+  1. Airflow создаёт entity_run_id.
+  2. Передаёт его в dbt через --vars или environment.
+  3. dbt сохраняет его вместе с invocation_id.
+  4. Каждая модель журналируется с этим entity_run_id.
+  5. ClickHouse получает тот же идентификатор.
+
+  Готово, когда невозможно сопоставить модель с другим запуском той же или соседней сущности.
+
+  ## P0-05. Исправить граф зависимостей
+
+  Минимально для текущего варианта:
+
+  register_execution
+  → run_dbt
+  → watch_dbt_run
+  → check_model_ready
+  → trigger_clickhouse
+  → wait_clickhouse
+
+  В целевом варианте:
+
+  register_execution
+  → model
+  → model_test
+  → trigger_clickhouse
+  → wait_clickhouse
+
+  Готово, когда ClickHouse физически невозможно запустить до успешного расчёта и проверки нужной модели.
+
+  ## P0-06. Добавить SAP readiness
+
+  В YAML указывается внешний сервис. DAG factory создаёт sensor до зависимых моделей.
+
+  Проверяется:
+
+  - успешность SAP DAG;
+  - соответствие business date;
+  - отсутствие частичной загрузки;
+  - принадлежность результата текущему расчётному периоду.
+
+  Готово, когда пропуск SAP-загрузки приводит к ожиданию/ошибке, а не к расчёту на старых данных.
+
+  ## P0-07. Реализовать безопасный delete + insert
+
+  Для каждой модели определить:
+
+  - период удаления;
+  - транзакционность;
+  - идемпотентность;
+  - lock/concurrency policy;
+  - поведение при падении после delete;
+  - допустимый повторный запуск.
+
+  Предпочтительный шаблон для критичных таблиц:
+
+  calculate into staging/shadow
+  → validate staging
+  → transactional replace/swap
+  → commit
+
+  Готово, когда принудительное падение в середине расчёта не оставляет production-таблицу пустой или частично заполненной.
+
+  ## P0-08. Вернуть model-level retry и логи
+
+  Реализуется в dbt DAG factory через отдельные задачи материальных моделей.
+
+  Готово, когда:
+
+  - видно состояние каждой таблицы;
+  - можно повторить одну таблицу;
+  - повторный запуск не пересчитывает всю сущность;
+  - downstream продолжает работу после восстановления модели.
+
+  ## P0-09. Реализовать migration framework
+
+  Каждое изменение истории/схемы оформляется в dbt-репозитории:
+
+  migrations/DWH-1234/
+
+  Обязательные части:
+
+  - pre-check;
+  - backup;
+  - ordered SQL;
+  - backfill;
+  - validation;
+  - switch;
+  - rollback.
+
+  Готово, когда добавление исторического поля проходит автоматически и оставляет полный аудит шагов.
+
+  ## P0-10. Вернуть релизную трассировку
+
+  Поскольку целевое состояние — один dbt-репозиторий, для новых сущностей цепочка упрощается:
+
+  DWH-1234 branch
+  → MR
+  → release branch
+  → commit
+  → changed dbt models
+  → changed relations
+  → migrations
+  → Airflow deployment
+  → production run
+
+  Существующий валидатор нужно расширить правилами dbt, сохранив текущую привязку файлов к DWH-*.
+
+  Готово, когда по имени таблицы можно найти задачу и конкретную версию SQL, которая её изменила.
+
+  ## P0-11. Реализовать эксплуатационные callback
+
+  Нужно уведомлять:
+
+  - начало релиза;
+  - начало переключения сущности;
+  - успех;
+  - ошибка с моделью и этапом;
+  - начало rollback;
+  - результат rollback.
+
+  Конфигурационное поле должно реально подключаться к DAG или task callbacks.
+
+  ## P0-12. Реализовать полный rollback
+
+  Rollback включает:
+
+  - остановку нового DAG;
+  - запрет новых запусков;
+  - ожидание/остановку активного расчёта;
+  - возврат legacy DAG;
+  - восстановление схемы и данных при необходимости;
+  - повторную выгрузку ClickHouse;
+  - контрольную сверку;
+  - запись причины и результата.
+
+  # 7. Релизный процесс при одном dbt-репозитории
+
+  ## Обычный релиз модели
+
+  1. Ветка DWH-1234 в dbt-репозитории
+  2. Изменение модели, tests и объектного YAML
+  3. CI: parse, compile, tests, config validation, impact analysis
+  4. Merge в release-ветку
+  5. Release validation всей ветки
+  6. Merge в main
+  7. Сборка immutable deployment bundle
+  8. Deployment DAG/config/dbt revision
+  9. Post-deploy smoke checks
+  10. Плановый запуск сущности
+  11. Post-run tests и ClickHouse
+  12. Запись результата релиза
+
+  ## Релиз с исторической миграцией
+
+  1–6. Стандартные шаги
+  7. Отключить расписание сущности
+  8. Проверить отсутствие активного запуска
+  9. Выполнить backup
+  10. Выполнить расчёт shadow-таблицы
+  11. Сверить историю
+  12. Выполнить switch
+  13. Запустить downstream/dbt tests
+  14. Выгрузить ClickHouse
+  15. Включить расписание
+  16. Сохранить backup до конца периода стабилизации
+
+  # 8. Переходный период между репозиториями
+
+  Полностью избежать двух репозиториев во время миграции нельзя: legacy ETL физически ещё существует. Но нужно исключить постоянное дублирование dbt-конфигурации.
+
+  Переходный вариант:
+
+  - основной репозиторий владеет только старым ETL;
+  - dbt-репозиторий владеет всей новой реализацией;
+  - центральный release pipeline координирует переключение;
+  - в старом репозитории выполняется только операция отключения legacy DAG;
+  - после стабилизации legacy-код сущности удаляется.
+
+  Не должно быть ситуации, когда часть одной dbt-сущности постоянно редактируется в старом репозитории, а часть — в новом.
+
+  # 9. Этапы проекта и зависимости
+
+  ## Этап 1. Архитектура и консолидация
+
+  - утвердить один dbt-репозиторий;
+  - перенести YAML;
+  - разделить entity/model configs;
+  - определить deployment bundle;
+  - утвердить единицу задачи и перезапуска.
+
+  Без этого остальные работы будут переделываться.
+
+  ## Этап 2. Конфигурация и DAG factory
+
+  - схема YAML;
+  - CI validation;
+  - генерация DAG из manifest;
+  - отдельные задачи для материальных моделей;
+  - правильный граф и run identity.
+
+  ## Этап 3. Release framework
+
+  - YouTrack/Git mapping;
+  - анализ изменённых dbt-моделей;
+  - единый release report;
+  - immutable deployment;
+  - callbacks.
+
+  ## Этап 4. Data migration framework
+
+  - schema changes;
+  - backfill;
+  - backup/swap;
+  - rollback;
+  - журнал шагов.
+
+  ## Этап 5. Интеграции
+
+  - SAP OData readiness;
+  - ClickHouse model-level triggers;
+  - повторный запуск только ClickHouse;
+  - end-to-end run context.
+
+  ## Этап 6. Контроль качества
+
+  - dbt tests;
+  - post-run data checks;
+  - автоматическая ETL/dbt-сверка;
+  - критерии допуска.
+
+  ## Этап 7. Пилоты
+
+  - простая сущность;
+  - SAP + ClickHouse;
+  - историческая миграция;
+  - тестовое падение и rollback.
+
+  ## Этап 8. Shadow mode и волны миграции
+
+  - отдельные comparison-объекты;
+  - минимум один полный релизный цикл;
+  - формальное заключение аналитика;
+  - переключение;
+  - наблюдение;
+  - удаление legacy.
+
+  # 10. Формальное условие готовности к массовому PROD
+
+  Массовую миграцию можно начинать, когда выполнено всё следующее:
+
+  - dbt-модели и их конфигурация имеют один источник истины;
+  - DAG строится из dbt manifest;
+  - критичные таблицы видны отдельными задачами;
+  - доступен отдельный retry;
+  - SAP dependency восстановлена;
+  - ClickHouse связан с конкретной моделью;
+  - delete + insert проверен на аварийное падение;
+  - migration и rollback автоматизированы;
+  - сохранена связь YouTrack → объект → запуск;
+  - CI блокирует неверный YAML;
+  - PROD никогда не наследует DEV-настройки;
+  - проведены три разных пилота;
+  - выполнен практический rollback;
+  - аналитики подтвердили автоматизированную сверку;
+  - определён владелец production-инцидента.
+
+  До этого этапа текущий DAG можно использовать для DEV, PREPROD и shadow-пилотов, но не как универсальный production framework для всего хранилища.
+ 
+ 

@@ -34,7 +34,7 @@ export default function Sidebar({
     ...(authEnabled && userProfile?.role === "admin"
       ? [{ path: "/admin/architecture", label: "Архитектура", action: () => onChangeView("/admin/architecture") }]
       : []),
-    ...(authEnabled && userProfile?.role === "admin"
+    ...(authEnabled && userProfile
       ? [{
           path: "/admin/engineering",
           label: "Репорты",

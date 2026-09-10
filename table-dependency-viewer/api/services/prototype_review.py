@@ -479,9 +479,25 @@ def load_merge_request_sql_bundle(
         or ""
     ).strip()
     files = []
+    deleted_files = []
     for item in changes or []:
-        path_value = str(item.get("new_path") or item.get("old_path") or "").strip()
+        old_path = str(item.get("old_path") or "").strip()
+        new_path = str(item.get("new_path") or "").strip()
+        path_value = new_path or old_path
         if not path_value or not SQL_FILE_RE.search(path_value):
+            continue
+        # A rename can be reported either as one `renamed_file` change or as a
+        # deleted old path plus a newly added path.  The deleted path does not
+        # exist at the MR head SHA, so requesting its raw contents returns 404.
+        if bool(item.get("deleted_file")):
+            deleted_files.append(
+                {
+                    "path": old_path or path_value,
+                    "old_path": old_path or path_value,
+                    "new_path": new_path,
+                    "change_type": "deleted",
+                }
+            )
             continue
         encoded_path = urlparse.quote(path_value, safe="")
         raw_url = (
@@ -497,11 +513,24 @@ def load_merge_request_sql_bundle(
             },
             method="GET",
         )
-        with _urlopen_without_proxy(req, timeout=30, ssl_verify=ssl_verify) as resp:
-            sql_text = _normalize_sql_text(resp.read().decode("utf-8", errors="ignore"))
+        try:
+            with _urlopen_without_proxy(req, timeout=30, ssl_verify=ssl_verify) as resp:
+                sql_text = _normalize_sql_text(resp.read().decode("utf-8", errors="ignore"))
+        except urlerror.HTTPError as exc:
+            if exc.code == 404:
+                rename_context = f" (старый путь: `{old_path}`)" if old_path and old_path != path_value else ""
+                raise ValueError(
+                    f"GitLab не нашёл SQL-файл `{path_value}`{rename_context} "
+                    f"в head SHA `{source_sha}` для MR !{mr_ref.mr_iid}. "
+                    "Проверьте новый путь переименованного файла и доступ сервисного токена к репозиторию."
+                ) from exc
+            raise
         files.append(
             {
                 "path": path_value,
+                "old_path": old_path,
+                "new_path": new_path,
+                "change_type": "renamed" if bool(item.get("renamed_file")) else ("added" if bool(item.get("new_file")) else "modified"),
                 "sql": sql_text,
                 "statements": _split_sql_statements(sql_text),
             }
@@ -520,6 +549,7 @@ def load_merge_request_sql_bundle(
             "author": ((mr or {}).get("author") or {}).get("name"),
         },
         "files": files,
+        "deleted_files": deleted_files,
     }
 
 
@@ -742,6 +772,17 @@ def build_review_execution_plan(
         for item in review_targets
         if str(item.get("target_fqn") or "").strip() and not item.get("skip_dev_execution")
     }
+    targets_by_execution_path: dict[str, set[str]] = {}
+    for review_item in review_targets:
+        if review_item.get("skip_dev_execution"):
+            continue
+        target_fqn = str(review_item.get("target_fqn") or "").strip().lower()
+        if not target_fqn:
+            continue
+        for execution_path in review_item.get("execution_paths") or []:
+            normalized_path = str(execution_path or "").strip()
+            if normalized_path:
+                targets_by_execution_path.setdefault(normalized_path, set()).add(target_fqn)
     plan_items: list[dict[str, Any]] = []
     for order_index, review_item in enumerate(review_targets):
         if review_item.get("skip_dev_execution"):
@@ -760,12 +801,19 @@ def build_review_execution_plan(
         seen_dependencies: set[str] = set()
         for execution_path in sorted(dict.fromkeys(execution_paths), key=_sql_execution_priority):
             file_item = file_map.get(execution_path) or {}
+            path_has_single_review_target = len(targets_by_execution_path.get(execution_path) or set()) == 1
             for statement in file_item.get("statements") or []:
                 statement_text = str(statement or "").strip()
                 if not statement_text:
                     continue
                 statement_targets = _extract_statement_target_fqns(statement_text)
-                if target_fqn.lower() not in statement_targets:
+                # When a SQL file belongs to one review target, its temporary
+                # tables and other preparation statements are part of the same
+                # executable unit. Filtering only by the final target would
+                # remove CREATE/INSERT pg_temp statements and break the final
+                # INSERT that reads them. Multi-target files still use the
+                # target filter to avoid executing the whole file per object.
+                if not path_has_single_review_target and target_fqn.lower() not in statement_targets:
                     continue
                 sql_parts.append(statement_text)
                 for dep in _extract_statement_dependencies_normalized(

@@ -29,7 +29,118 @@ import api.services.entity_dev_meta as entity_dev_meta
 import api.services.prototype_review as prototype_review
 from api.services.entity_dev_meta import _build_depends_on, validate_entity_dev_meta_bundle
 from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
-from api.services.prototype_review import build_review_execution_plan, create_ytrack_issue, extract_sql_dependencies, infer_review_targets
+from api.services.prototype_review import (
+    build_review_execution_plan,
+    create_ytrack_issue,
+    extract_sql_dependencies,
+    infer_review_targets,
+    load_merge_request_sql_bundle,
+)
+
+
+class LoadMergeRequestSqlBundleTests(unittest.TestCase):
+    class FakeResponse:
+        def __init__(self, body: bytes):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return self.body
+
+    @staticmethod
+    def _mr_payload():
+        return {
+            "iid": 17,
+            "sha": "head-sha",
+            "source_branch": "DWH-17-rename",
+            "diff_refs": {"head_sha": "head-sha"},
+        }
+
+    def test_renamed_file_is_loaded_from_new_path(self) -> None:
+        changes = [{
+            "old_path": "sql/old_name.sql",
+            "new_path": "sql/new_name.sql",
+            "renamed_file": True,
+            "deleted_file": False,
+            "new_file": False,
+        }]
+        requested_urls = []
+
+        def fake_gitlab_request(**kwargs):
+            return {"changes": changes} if kwargs["path"].endswith("/changes") else self._mr_payload()
+
+        def fake_urlopen(request, **_kwargs):
+            requested_urls.append(request.full_url)
+            return self.FakeResponse(b"insert into dm.target select 1;")
+
+        with (
+            patch.object(prototype_review, "_gitlab_json_request", side_effect=fake_gitlab_request),
+            patch.object(prototype_review, "_urlopen_without_proxy", side_effect=fake_urlopen),
+        ):
+            bundle = load_merge_request_sql_bundle(
+                gitlab_api_url="https://gitlab.example/api/v4",
+                gitlab_project="group/project",
+                gitlab_token="token",
+                gitlab_ssl_verify="true",
+                mr_input="https://gitlab.example/group/project/-/merge_requests/17/diffs",
+                default_project="group/project",
+            )
+
+        self.assertEqual(bundle["files"][0]["path"], "sql/new_name.sql")
+        self.assertEqual(bundle["files"][0]["old_path"], "sql/old_name.sql")
+        self.assertEqual(bundle["files"][0]["change_type"], "renamed")
+        self.assertIn("sql%2Fnew_name.sql", requested_urls[0])
+        self.assertNotIn("old_name", requested_urls[0])
+
+    def test_delete_plus_add_rename_does_not_fetch_deleted_path(self) -> None:
+        changes = [
+            {
+                "old_path": "sql/old_name.sql",
+                "new_path": "sql/old_name.sql",
+                "renamed_file": False,
+                "deleted_file": True,
+                "new_file": False,
+            },
+            {
+                "old_path": "sql/new_name.sql",
+                "new_path": "sql/new_name.sql",
+                "renamed_file": False,
+                "deleted_file": False,
+                "new_file": True,
+            },
+        ]
+        requested_urls = []
+
+        def fake_gitlab_request(**kwargs):
+            return {"changes": changes} if kwargs["path"].endswith("/changes") else self._mr_payload()
+
+        def fake_urlopen(request, **_kwargs):
+            requested_urls.append(request.full_url)
+            return self.FakeResponse(b"insert into dm.target select 1;")
+
+        with (
+            patch.object(prototype_review, "_gitlab_json_request", side_effect=fake_gitlab_request),
+            patch.object(prototype_review, "_urlopen_without_proxy", side_effect=fake_urlopen),
+        ):
+            bundle = load_merge_request_sql_bundle(
+                gitlab_api_url="https://gitlab.example/api/v4",
+                gitlab_project="group/project",
+                gitlab_token="token",
+                gitlab_ssl_verify="true",
+                mr_input="17",
+                default_project="group/project",
+            )
+
+        self.assertEqual([item["path"] for item in bundle["files"]], ["sql/new_name.sql"])
+        self.assertEqual([item["path"] for item in bundle["deleted_files"]], ["sql/old_name.sql"])
+        self.assertEqual(len(requested_urls), 1)
+        self.assertIn("sql%2Fnew_name.sql", requested_urls[0])
+
 
 
 class ExtractSqlDependenciesTests(unittest.TestCase):
@@ -62,6 +173,34 @@ class ExtractSqlDependenciesTests(unittest.TestCase):
 
 
 class PrototypeReviewExecutionPlanTests(unittest.TestCase):
+    def test_keeps_temp_table_preparation_for_single_file_target(self) -> None:
+        statements = [
+            "drop table if exists pg_temp.shipdata1",
+            "create temp table pg_temp.shipdata1 (id int)",
+            "insert into pg_temp.shipdata1 select 1",
+            "drop table if exists dm.target cascade",
+            "create table dm.target (id int)",
+            "insert into dm.target select id from pg_temp.shipdata1",
+        ]
+        files = [{
+            "path": "dm/dm.target.sql",
+            "sql": ";\n".join(statements) + ";",
+            "statements": statements,
+        }]
+
+        review_targets = infer_review_targets(files)
+        plan = build_review_execution_plan(files=files, review_targets=review_targets, known_schemas={"dm"})
+
+        self.assertEqual(len(plan), 1)
+        sql_text = plan[0].get("sql_text") or ""
+        self.assertIn("create temp table pg_temp.shipdata1", sql_text)
+        self.assertIn("insert into pg_temp.shipdata1 select 1", sql_text)
+        self.assertIn("insert into dm.target select id from pg_temp.shipdata1", sql_text)
+        self.assertLess(
+            sql_text.index("create temp table pg_temp.shipdata1"),
+            sql_text.index("insert into dm.target select id from pg_temp.shipdata1"),
+        )
+
     def test_orders_targets_by_internal_dependencies_even_within_same_file(self) -> None:
         sql = """
         drop table if exists dict_dds.posting_period cascade;

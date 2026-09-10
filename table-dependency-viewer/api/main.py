@@ -1409,6 +1409,12 @@ def _prototype_review_build_result(
     }
     validation_errors = list(sql_validation.get("errors") or [])
     validation_warnings = list(sql_validation.get("warnings") or [])
+    for deleted_file in bundle.get("deleted_files") or []:
+        deleted_path = str(deleted_file.get("path") or "").strip()
+        if deleted_path:
+            validation_warnings.append(
+                f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; проверьте влияние удаления на объект и зависимости"
+            )
     review_targets = infer_review_targets(files)
     if not any(item.get("target_fqn") for item in review_targets):
         validation_errors.append("Не удалось определить целевые таблицы по SQL-файлам MR")
@@ -1851,9 +1857,7 @@ def get_admin_engineering_efficiency(
     request: Request,
     days: int = Query(90, ge=1, le=3650),
 ):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_authenticated(request)
     try:
         date_clause, params = _resolve_date_window(None, None, days)
         with engine.connect() as conn:
@@ -2142,9 +2146,7 @@ def get_admin_release_reports(
     days: int = Query(180, ge=30, le=3650),
     debug: bool = Query(False),
 ):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_authenticated(request)
     try:
         date_clause, params = _resolve_date_window(None, None, days)
         with engine.connect() as conn:
@@ -3323,9 +3325,7 @@ def get_admin_incident_reports(
     request: Request,
     days: int = Query(180, ge=1, le=3650),
 ):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_authenticated(request)
     try:
         detail_limit = 160
         with engine.connect() as conn:
@@ -3697,7 +3697,7 @@ def get_admin_incident_reports(
 
 @router.post("/api/admin/reports/export-pdf")
 async def export_admin_report_pdf(request: Request):
-    _require_admin(request)
+    _require_authenticated(request)
     try:
         payload = await request.json()
         if not isinstance(payload, dict):

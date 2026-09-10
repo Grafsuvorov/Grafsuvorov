@@ -406,6 +406,7 @@ export default function App() {
     [userProfile],
   );
   const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
+  const canUseReports = useMemo(() => Boolean(userProfile), [userProfile]);
   const useCustomHoverLabel = useMemo(() => shouldUseCustomHoverLabel(userProfile), [userProfile]);
   const assistantContext = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -581,7 +582,7 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
+            ) : canUseReports ? (
               <AdminEngineeringPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />

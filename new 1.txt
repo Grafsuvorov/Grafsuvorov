@@ -1,636 +1,354 @@
-Согласен с двумя замечаниями:
-
-  1. Предыдущие P0 были слишком техническими и не объясняли, что именно менять.
-  2. Разделение dbt-моделей и их runtime-конфигурации между репозиториями действительно создаёт лишнюю путаницу. Целевое решение лучше строить с одним источником
-     истины в dbt-репозитории.
-
-  Ниже формализованный вариант целиком.
-
-  # 1. Решение верхнего уровня
-
-  Переход на dbt нужно разделить на четыре самостоятельных контура:
-
-  1. Разработка моделей.
-  2. Релиз и миграция схемы/данных.
-  3. Оркестрация расчётов и внешних зависимостей.
-  4. Эксплуатация: логи, перезапуски, ClickHouse, контроль качества и откат.
-
-  Текущий концепт покрывает в основном первый пункт и частично третий. Для массовой миграции 3000+ таблиц этого недостаточно.
-
-  Рекомендуемое решение:
-
-  > Всё, что относится к dbt-сущности, должно храниться и версионироваться в dbt-репозитории: модели, конфигурация сущности, соответствие ClickHouse, миграционные     
-  > инструкции, тесты и генератор dbt DAG. Основной ETL-репозиторий остаётся временно только для legacy-расчётов и общего Airflow framework.                           
-
-  # 2. Целевая структура репозитория
-
-  Предлагаемая структура dbt-репозитория:
-
-  dbt-repository/
-  ├── dbt_project.yml
-  ├── models/
-  │   └── entities/
-  │       └── kaizen_loader/
-  │           ├── dm_s_kaizen_personnel_involvement.sql
-  │           ├── dm_s_kaizen_personnel_involvement.yml
-  │           ├── dm_s_kaizen_submitted_and_implemented.sql
-  │           └── dm_s_kaizen_submitted_and_implemented.yml
-  │
-  ├── orchestration/
-  │   ├── dags/
-  │   │   └── dbt_entity_dag_factory.py
-  │   ├── entities/
-  │   │   └── KAIZEN_LOADER.yml
-  │   └── models/
-  │       └── KAIZEN_LOADER/
-  │           ├── dm_s_kaizen_personnel_involvement.yml
-  │           └── dm_s_kaizen_submitted_and_implemented.yml
-  │
-  ├── migrations/
-  │   └── DWH-1234/
-  │       ├── migration.yml
-  │       ├── 001_backup.sql
-  │       ├── 002_create_shadow.sql
-  │       ├── 003_backfill.sql
-  │       ├── 004_switch.sql
-  │       └── rollback.sql
-  │
-  ├── selectors.yml
-  ├── tests/
-  └── release/
-      └── validation/
-
-  Распределение ответственности:
-
-  - models — SQL, dbt tests, ref, source, materialization;
-  - orchestration/entities — расписание и зависимости всей сущности;
-  - orchestration/models — настройки конкретной модели и ClickHouse;
-  - migrations — изменение схемы и исторические пересчёты;
-  - release/validation — проверки релиза;
-  - dbt_entity_dag_factory.py — генерация Airflow DAG и задач.
-
-  Общий YAML сущности больше не должен содержать список всех ClickHouse-таблиц. Это устраняет конфликт, когда несколько инженеров меняют один файл.
-
-  ## Что остаётся в основном ETL-репозитории
-
-  Только:
-
-  - legacy ETL;
-  - legacy DAG;
-  - общие Airflow operators/sensors, если они используются всей платформой;
-  - временный реестр переключения ETL → dbt.
-
-  После окончания миграции сущности её конфигурация не должна одновременно поддерживаться в двух репозиториях.
-
-  Важно: один источник в Git не означает, что Airflow обязан читать файлы непосредственно из Git. CI dbt-репозитория может собирать единый deployment bundle и
-  доставлять его в Airflow:
-
-  dbt models
-  + entity configs
-  + model configs
-  + DAG factory
-  + manifest.json
-  + release metadata
-
-  # 3. Недостатки существующего dbt DAG
-
-  ## 3.1. Одна задача скрывает все модели
-
-  Сейчас:
-
-  run_dbt = dbtBashOperator(
-      task_id=f'run_dbt_{entity_name}',
-      dbt_command=config['dbt']['dbt_command'],
-      additional_vars=config['dbt']['additional_vars']
-  )
-
-  Airflow знает только результат общей команды. Он не знает:
-
-  - какая модель сейчас выполняется;
-  - какая модель упала;
-  - какие модели уже успешно записали данные;
-  - какую модель можно безопасно перезапустить;
-  - после какой модели запускать конкретный ClickHouse DAG.
-
-  Это особенно опасно при delete + insert, потому что сущность может остаться рассчитанной частично.
-
-  ## 3.2. Неправильная последовательность задач
-
-  В DAG отсутствует связь:
-
-  run_dbt >> get_execution_guid_dbt
-
-  Поэтому dbt и поиск execution GUID могут стартовать параллельно.
-
-  Также отсутствует:
-
-  watch_dbt_run >> clickhouse
-
-  Watcher и ClickHouse sensors запускаются параллельно после получения GUID.
-
-  Даже если custom sensors компенсируют часть поведения внутри себя, граф не выражает фактическую последовательность и допускает гонки.
-
-  ## 3.3. Нет внешних зависимостей
-
-  SAP OData DAG вообще не включён в граф сущности.
-
-  ## 3.4. Конфигурация может исчезнуть молча
-
-  Ошибка YAML приводит к:
-
-  print(...)
-  continue
-
-  В результате DAG исчезнет из Airflow без явного падения deployment pipeline.
-
-  ## 3.5. PROD наследует DEV
-
-  Если параметр PROD не задан, код берёт DEV:
-
-  raw_schedule.get(CLUSTER, raw_schedule.get('DEV'))
-
-  Такое поведение нужно запретить.
-
-  ## 3.6. Документация и код расходятся
-
-  Генератор ищет только .yml, тогда как инструкция указывает .yaml.
-
-  ## 3.7. Callback фактически не включён
-
-  В конфигурации есть on_failure_callback, но код устанавливает:
-
-  on_failure_callback=None
-
-  # 4. Где и как реализовать модельные Airflow-задачи
-
-  Это и есть уточнение прежнего этапа 2.
-
-  ## Место реализации
-
-  В dbt-репозитории:
-
-  orchestration/dags/dbt_entity_dag_factory.py
-
-  DAG factory должен читать:
-
-  1. YAML сущности.
-  2. YAML отдельных моделей.
-  3. Скомпилированный dbt manifest.json.
-
-  На основании manifest.json factory получает реальный граф ref() и создаёт Airflow-задачи.
-
-  ## Что создавать отдельной задачей
-
-  Отдельная задача нужна для модели, если она:
-
-  - материализуется в таблицу;
-  - выполняет delete + insert;
-  - имеет собственный ClickHouse DAG;
-  - долго выполняется;
-  - имеет отдельный SLA;
-  - должна отдельно перезапускаться;
-  - является критической точкой зависимости.
-
-  Маленькие служебные модели можно объединить в TaskGroup.
-
-  Пример:
-
-  dbt.KAIZEN_LOADER
-  ├── dm_s_kaizen_personnel_involvement
-  │   ├── run
-  │   ├── test
-  │   └── clickhouse
-  │
-  └── dm_s_kaizen_submitted_and_implemented
-      ├── run
-      ├── test
-      └── clickhouse
-
-  Каждая задача выполняет конкретную модель:
-
-  dbt build --select dm_s_kaizen_personnel_involvement
-
-  Зависимости между задачами берутся из dbt manifest, а не дублируются вручную в YAML.
-
-  ## Что записывать по каждой модели
-
-  В технический журнал:
-
-  airflow_dag_id
-  airflow_run_id
-  airflow_task_id
-  entity_name
-  dbt_model
-  target_relation
-  dbt_invocation_id
-  release_id
-  task_id
-  commit_sha
-  started_at
-  finished_at
-  status
-  rows_affected
-  error_message
-
-  Именно этот журнал обеспечит model-level наблюдаемость.
-
-  ## Как должен работать перезапуск
-
-  При падении одной модели инженер должен иметь возможность:
-
-  - открыть её Airflow-задачу;
-  - увидеть dbt-лог;
-  - исправить внешнюю причину;
-  - очистить и запустить только эту задачу;
-  - затем повторить её test и ClickHouse downstream.
-
-  Повторный запуск всей сущности не должен быть единственным вариантом.
-
-  # 5. Целевой граф DAG сущности
-
-  validate_config
-          |
-          v
-  register_entity_run
-          |
-          v
-  wait_sap_odata ──> check_source_readiness
-                             |
-                             v
-                   dbt models TaskGroup
-                     /              \
-                    v                v
-               model_A           model_B
-                  |                 |
-                  v                 v
-               test_A            test_B
-                  |                 |
-                  v                 v
-            clickhouse_A      clickhouse_B
-                     \              /
-                      v            v
-                      reconcile_entity
-                             |
-                             v
-                     finalize_entity_run
-                       /             \
-                      v               v
-               success_notice    failure_notice
-
-  Для сущности без SAP соответствующий sensor отсутствует.
-
-  # 6. Конкретный P0 backlog
-
-  ## P0-01. Перенести dbt-конфигурацию в dbt-репозиторий
-
-  Сделать:
-
-  - перенести config_files/dbt_dags из основного репозитория;
-  - перенести dbt DAG factory;
-  - перенести объектные ClickHouse mapping;
-  - определить dbt-репозиторий единственным источником конфигурации;
-  - настроить CI deployment bundle в Airflow.
-
-  Готово, когда:
-
-  - изменение модели и её runtime-конфигурации проходит одним MR;
-  - невозможно выкатить новую модель без совместимой конфигурации;
-  - в основном репозитории нет копии активного dbt YAML.
-
-  ## P0-02. Разделить общий и объектный YAML
-
-  Общий файл:
-
-  entity:
-    name: KAIZEN_LOADER
-    id: 65
-
-  schedule:
-    DEV: "45 9 * * *"
-    PREPROD: "45 9 * * *"
-    PROD: "30 3 * * *"
-
-  selector: tag:KAIZEN_LOADER
-
-  upstream:
-    - dag_id: sap_odata_kaizen
-      service: kaizen
-
-  Отдельный файл модели:
-
-  model: dm_s_kaizen_personnel_involvement
-  relation: dm.kaizen_personnel_involvement
-
-  execution:
-    isolated_task: true
-    timeout_minutes: 90
-    retries: 1
-
-  clickhouse:
-    dag_name: dm_kaizen_personnel_involvement_meta
-    enabled:
-      DEV: true
-      PREPROD: true
-      PROD: true
-
-  Готово, когда два инженера, работающие с разными моделями, не меняют один файл.
-
-  ## P0-03. Добавить строгую валидацию конфигурации
-
-  Сделать JSON Schema или Pydantic-модель, проверяющую:
-
-  - обязательность entity.name, entity.id, schedule;
-  - обязательное значение для текущего окружения;
-  - формат cron;
-  - существование dbt selector;
-  - существование модели;
-  - уникальность модели;
-  - уникальность ClickHouse DAG;
-  - типы bool, int, list;
-  - запрет неизвестных полей;
-  - соответствие имени файла имени сущности;
-  - поддержку только утверждённого расширения.
-
-  При ошибке:
-
-  CI = failed
-  deployment bundle не создаётся
-  предыдущая рабочая версия DAG остаётся в Airflow
-
-  Не следует намеренно ломать уже работающий DAG в scheduler. Ошибку нужно блокировать раньше, в CI.
-
-  ## P0-04. Ввести единый идентификатор запуска
-
-  ExecutionGuidSensor, который ищет появившийся запуск после старта, лучше заменить явной регистрацией.
-
-  Последовательность:
-
-  1. Airflow создаёт entity_run_id.
-  2. Передаёт его в dbt через --vars или environment.
-  3. dbt сохраняет его вместе с invocation_id.
-  4. Каждая модель журналируется с этим entity_run_id.
-  5. ClickHouse получает тот же идентификатор.
-
-  Готово, когда невозможно сопоставить модель с другим запуском той же или соседней сущности.
-
-  ## P0-05. Исправить граф зависимостей
-
-  Минимально для текущего варианта:
-
-  register_execution
-  → run_dbt
-  → watch_dbt_run
-  → check_model_ready
-  → trigger_clickhouse
-  → wait_clickhouse
-
-  В целевом варианте:
-
-  register_execution
-  → model
-  → model_test
-  → trigger_clickhouse
-  → wait_clickhouse
-
-  Готово, когда ClickHouse физически невозможно запустить до успешного расчёта и проверки нужной модели.
-
-  ## P0-06. Добавить SAP readiness
-
-  В YAML указывается внешний сервис. DAG factory создаёт sensor до зависимых моделей.
-
-  Проверяется:
-
-  - успешность SAP DAG;
-  - соответствие business date;
-  - отсутствие частичной загрузки;
-  - принадлежность результата текущему расчётному периоду.
-
-  Готово, когда пропуск SAP-загрузки приводит к ожиданию/ошибке, а не к расчёту на старых данных.
-
-  ## P0-07. Реализовать безопасный delete + insert
-
-  Для каждой модели определить:
-
-  - период удаления;
-  - транзакционность;
-  - идемпотентность;
-  - lock/concurrency policy;
-  - поведение при падении после delete;
-  - допустимый повторный запуск.
-
-  Предпочтительный шаблон для критичных таблиц:
-
-  calculate into staging/shadow
-  → validate staging
-  → transactional replace/swap
-  → commit
-
-  Готово, когда принудительное падение в середине расчёта не оставляет production-таблицу пустой или частично заполненной.
-
-  ## P0-08. Вернуть model-level retry и логи
-
-  Реализуется в dbt DAG factory через отдельные задачи материальных моделей.
-
-  Готово, когда:
-
-  - видно состояние каждой таблицы;
-  - можно повторить одну таблицу;
-  - повторный запуск не пересчитывает всю сущность;
-  - downstream продолжает работу после восстановления модели.
-
-  ## P0-09. Реализовать migration framework
-
-  Каждое изменение истории/схемы оформляется в dbt-репозитории:
-
-  migrations/DWH-1234/
-
-  Обязательные части:
-
-  - pre-check;
-  - backup;
-  - ordered SQL;
-  - backfill;
-  - validation;
-  - switch;
-  - rollback.
-
-  Готово, когда добавление исторического поля проходит автоматически и оставляет полный аудит шагов.
-
-  ## P0-10. Вернуть релизную трассировку
-
-  Поскольку целевое состояние — один dbt-репозиторий, для новых сущностей цепочка упрощается:
-
-  DWH-1234 branch
-  → MR
-  → release branch
-  → commit
-  → changed dbt models
-  → changed relations
-  → migrations
-  → Airflow deployment
-  → production run
-
-  Существующий валидатор нужно расширить правилами dbt, сохранив текущую привязку файлов к DWH-*.
-
-  Готово, когда по имени таблицы можно найти задачу и конкретную версию SQL, которая её изменила.
-
-  ## P0-11. Реализовать эксплуатационные callback
-
-  Нужно уведомлять:
-
-  - начало релиза;
-  - начало переключения сущности;
-  - успех;
-  - ошибка с моделью и этапом;
-  - начало rollback;
-  - результат rollback.
-
-  Конфигурационное поле должно реально подключаться к DAG или task callbacks.
-
-  ## P0-12. Реализовать полный rollback
-
-  Rollback включает:
-
-  - остановку нового DAG;
-  - запрет новых запусков;
-  - ожидание/остановку активного расчёта;
-  - возврат legacy DAG;
-  - восстановление схемы и данных при необходимости;
-  - повторную выгрузку ClickHouse;
-  - контрольную сверку;
-  - запись причины и результата.
-
-  # 7. Релизный процесс при одном dbt-репозитории
-
-  ## Обычный релиз модели
-
-  1. Ветка DWH-1234 в dbt-репозитории
-  2. Изменение модели, tests и объектного YAML
-  3. CI: parse, compile, tests, config validation, impact analysis
-  4. Merge в release-ветку
-  5. Release validation всей ветки
-  6. Merge в main
-  7. Сборка immutable deployment bundle
-  8. Deployment DAG/config/dbt revision
-  9. Post-deploy smoke checks
-  10. Плановый запуск сущности
-  11. Post-run tests и ClickHouse
-  12. Запись результата релиза
-
-  ## Релиз с исторической миграцией
-
-  1–6. Стандартные шаги
-  7. Отключить расписание сущности
-  8. Проверить отсутствие активного запуска
-  9. Выполнить backup
-  10. Выполнить расчёт shadow-таблицы
-  11. Сверить историю
-  12. Выполнить switch
-  13. Запустить downstream/dbt tests
-  14. Выгрузить ClickHouse
-  15. Включить расписание
-  16. Сохранить backup до конца периода стабилизации
-
-  # 8. Переходный период между репозиториями
-
-  Полностью избежать двух репозиториев во время миграции нельзя: legacy ETL физически ещё существует. Но нужно исключить постоянное дублирование dbt-конфигурации.
-
-  Переходный вариант:
-
-  - основной репозиторий владеет только старым ETL;
-  - dbt-репозиторий владеет всей новой реализацией;
-  - центральный release pipeline координирует переключение;
-  - в старом репозитории выполняется только операция отключения legacy DAG;
-  - после стабилизации legacy-код сущности удаляется.
-
-  Не должно быть ситуации, когда часть одной dbt-сущности постоянно редактируется в старом репозитории, а часть — в новом.
-
-  # 9. Этапы проекта и зависимости
-
-  ## Этап 1. Архитектура и консолидация
-
-  - утвердить один dbt-репозиторий;
-  - перенести YAML;
-  - разделить entity/model configs;
-  - определить deployment bundle;
-  - утвердить единицу задачи и перезапуска.
-
-  Без этого остальные работы будут переделываться.
-
-  ## Этап 2. Конфигурация и DAG factory
-
-  - схема YAML;
-  - CI validation;
-  - генерация DAG из manifest;
-  - отдельные задачи для материальных моделей;
-  - правильный граф и run identity.
-
-  ## Этап 3. Release framework
-
-  - YouTrack/Git mapping;
-  - анализ изменённых dbt-моделей;
-  - единый release report;
-  - immutable deployment;
-  - callbacks.
-
-  ## Этап 4. Data migration framework
-
-  - schema changes;
-  - backfill;
-  - backup/swap;
-  - rollback;
-  - журнал шагов.
-
-  ## Этап 5. Интеграции
-
-  - SAP OData readiness;
-  - ClickHouse model-level triggers;
-  - повторный запуск только ClickHouse;
-  - end-to-end run context.
-
-  ## Этап 6. Контроль качества
-
-  - dbt tests;
-  - post-run data checks;
-  - автоматическая ETL/dbt-сверка;
-  - критерии допуска.
-
-  ## Этап 7. Пилоты
-
-  - простая сущность;
-  - SAP + ClickHouse;
-  - историческая миграция;
-  - тестовое падение и rollback.
-
-  ## Этап 8. Shadow mode и волны миграции
-
-  - отдельные comparison-объекты;
-  - минимум один полный релизный цикл;
-  - формальное заключение аналитика;
-  - переключение;
-  - наблюдение;
-  - удаление legacy.
-
-  # 10. Формальное условие готовности к массовому PROD
-
-  Массовую миграцию можно начинать, когда выполнено всё следующее:
-
-  - dbt-модели и их конфигурация имеют один источник истины;
-  - DAG строится из dbt manifest;
-  - критичные таблицы видны отдельными задачами;
-  - доступен отдельный retry;
-  - SAP dependency восстановлена;
-  - ClickHouse связан с конкретной моделью;
-  - delete + insert проверен на аварийное падение;
-  - migration и rollback автоматизированы;
-  - сохранена связь YouTrack → объект → запуск;
-  - CI блокирует неверный YAML;
-  - PROD никогда не наследует DEV-настройки;
-  - проведены три разных пилота;
-  - выполнен практический rollback;
-  - аналитики подтвердили автоматизированную сверку;
-  - определён владелец production-инцидента.
-
-  До этого этапа текущий DAG можно использовать для DEV, PREPROD и shadow-пилотов, но не как универсальный production framework для всего хранилища.
- 
- 
+Ошибка в файле `dm/dm.sales_forwarder_metal_acceptance_delays.sql`: relation "pg_temp.shipdata1" does not exist LINE 146: from pg_temp.shipdata1;; ^
+drop table if exists dm.sales_forwarder_metal_acceptance_delays cascade;
+create table if not exists dm.sales_forwarder_metal_acceptance_delays (
+	 delivery_number_initial varchar null 									--SD.000001 | Исходная поставка
+	,plant_producer_code varchar null 										--SD.000006 | Завод производитель (код)
+	,plant_producer_name varchar null 										--SD.000007 | Завод							--2025.11.14 добавляю
+	,port_of_loading_code varchar null										--SD.000008 | Направление (код) 			--2025.11.06 добавляю
+	,dt_arrival_by_railway date null 										--SD.000011 | Дата прибытия по ЖД
+	,dt_forwarder date null 												--SD.000012 | Дата экспедитора
+	,railcar varchar null 													--SD.000013 | Вагон
+	,transport_bill varchar null 											--SD.000014 | Накладная
+	,railway_platform varchar null 											--SD.000015 | Платформа
+	,forwarder_name varchar null 											--SD.000021 | Экспедитор
+--	,port_of_discharge_name varchar null 									--SD.000045 | Порт выгрузки					--2025.12.23 удалила (поле не нужно)
+	,route_type varchar null 												--SD.000069 | Тип маршрута
+	,route_plant_code varchar null 											--SD.000118 | Маршрут завода
+	,sales_order varchar null 												--SD.000123 | Заказ ЦК
+	,uni varchar null 														--SD.000151 | UNI
+--	,port_of_destination_code varchar null						 			--SD.000376 | Порт назначения				--2025.12.22 удалила (поле не нужно)
+	,dt_shipment_actual date null 											--SD.000976 | Дата отгрузки из Shipdata
+	,forwarder_metal_acceptance_delay_days_quantity varchar null	 		--SD.001252 | Задержка в приемке
+	
+	,forwarder_in_russian_port_accept_normative_exceed_days int null		--SD.001358 | Задержка в приемке дней		--2025.11.13 добавляю
+	,forwarder_in_russian_port_name varchar null							--SD.001359 | Экспедитор портовый			--2025.11.13 добавляю
+	,station_destination varchar null										--SD.000035 | Станция назначения
+	,port_shipment_readiness_normative_exceed_days_quantity varchar null	--SD.001819	| Задержка от норматива до готовности к вывозу со склада порта, дней
+	,port_shipment_readiness_normative_exceed_type_code varchar null		--SD.001820 | Норматив до готовности к вывозу со склада порта
+	
+	,dttm_inserted timestamp NOT NULL DEFAULT now()
+    ,dttm_updated timestamp NOT NULL DEFAULT now()
+    ,job_name varchar(60) NOT NULL DEFAULT 'airflow'::character varying
+    ,deleted_flag bool NOT NULL DEFAULT false
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED by (
+	delivery_number_initial
+)
+;
+
+
+COMMENT ON TABLE dm.sales_forwarder_metal_acceptance_delays is 'Консолидированный отчет по задержке приемки экспедиторами';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.delivery_number_initial is 'Исходная поставка | Исходная поставка | dds.sales_batch_delivery.delivery_number_initial';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.plant_producer_code is 'Завод-производитель (код) | Завод-производитель (код) | dds.sales_batch_delivery.plant_producer_code';
+/*2025.11.14*/COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.plant_producer_name is 'Завод | Завод | dict_dds.plant_and_subsidiary_texts.plant_short_name, dds.sales_batch_delivery.plant_producer_code';
+/*2025.11.06*/COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.port_of_loading_code is 'Направление (код) | Направление (код) | dds.sales_batch_delivery.tsw_location_code';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.dt_arrival_by_railway is 'Дата прибытия по ЖД | Дата прибытия по ЖД | dds.sales_batch_delivery.dt_arrival_by_railway';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.dt_forwarder is 'Дата экспедитора | Дата экспедитора | dds.sales_batch_delivery.dt_forwarder';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.railcar is 'Вагон | Вагон | dds.sales_batch_delivery.railcar_code';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.transport_bill is 'Накладная | Накладная | dds.sales_batch_delivery.transport_bill_code';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.railway_platform is 'Платформа | Платформа | dds.sales_batch_delivery.railway_platform_code';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.forwarder_name is 'Экспедитор | Экспедитор | dict_dds.counterparty_texts.counterparty_full_name';
+--COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.port_of_discharge_name is 'Порт выгрузки | Порт выгрузки | dm_calc.sd_sales_main_scm.port_of_discharge_name';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.route_type is 'Тип маршрута | Тип маршрута | dds.sales_batch_delivery.shipment_type_code';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.route_plant_code is 'Маршрут завода | Маршрут завода | dds.sales_batch_delivery.route_in_shipment_code, dds.delivery_document_header.route_code';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.sales_order is 'Заказ ЦК | Заказ ЦК | dds.sales_batch_delivery.sales_order_in_shipment';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.uni is 'UNI | UNI | dds.sales_batch_delivery.transport_bill_code, dds.sales_batch_delivery.railcar_code';
+--COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.port_of_destination_code is 'Порт назначения | Порт назначения | dm_calc.sd_sales_main_scm.port_of_destination_name'; --2025.12.22 удалила (поле не нужно)
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.dt_shipment_actual is 'Дата отгрузки из Shipdata | Дата отгрузки из Shipdata | dds.sales_batch_delivery.dt_shipment';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.forwarder_metal_acceptance_delay_days_quantity is 'Задержка в приемке | Задержка в приемке | dds.sales_batch_delivery.dt_arrival_by_railway, dds.transport_route_trip_duration.average_acceptance_duration_days_quantity';
+/*2025.11.13*/COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.forwarder_in_russian_port_accept_normative_exceed_days is 'Задержка в приемке дней | Задержка в приемке дней | dds.sales_batch_delivery.dt_arrival_by_railway, dds.transport_route_trip_duration.average_acceptance_duration_days_quantity';
+/*2025.11.13*/COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.forwarder_in_russian_port_name is 'Экспедитор портовый | Экспедитор портовый | dict_dds.tech_rusal_sd2925_ex.code_exped';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.station_destination is 'Станция назначения | Конечная точка доставки по ж\д, инфо выводится из конечного узла Маршрута завода | dict_dds.transport_hub_texts.transport_hub_name';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.port_shipment_readiness_normative_exceed_days_quantity is 'Задержка от норматива до готовности к вывозу со склада порта, дней | - | Расчет';
+COMMENT ON COLUMN dm.sales_forwarder_metal_acceptance_delays.port_shipment_readiness_normative_exceed_type_code is 'Норматив до готовности к вывозу со склада порта | - | Расчет';
+
+
+----------
+
+
+drop table if exists pg_temp.sd2925;
+create temp table pg_temp.sd2925 (
+     expedid varchar
+	,code_exped varchar
+	,werks varchar
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+distributed replicated;
+
+insert into pg_temp.sd2925 (expedid, code_exped, werks)
+--экспедитор входит в список настроечной таблицы /RUSAL/SD2925_EX-EXPEDID
+--create temporary table sd2925 as (
+	select distinct
+		 expedid
+		,code_exped
+		,werks
+	from dict_dds.tech_rusal_sd2925_ex as trse;
+
+---
+drop table if exists pg_temp.sd3068;
+create temp table pg_temp.sd3068 (
+	 average_acceptance_duration_days_quantity integer
+	,average_route_trip_duration_days_quantity integer
+	,transport_route_code varchar
+	,shipment_type_code varchar
+	,dt_normative_valid_period_yyyymm_for_join varchar
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+distributed replicated;
+
+insert into pg_temp.sd3068 (average_acceptance_duration_days_quantity, average_route_trip_duration_days_quantity, transport_route_code, shipment_type_code, dt_normative_valid_period_yyyymm_for_join)
+select
+	 average_acceptance_duration_days_quantity		--/RUSAL/SD3068M-TERM_PRIEM
+	,average_route_trip_duration_days_quantity		--/RUSAL/SD3068M-TERM_DURATION
+	,transport_route_code							--/RUSAL/SD3068M-ROUTE
+	,shipment_type_code								--/RUSAL/SD3068M-OTGR_TYPE
+	,substring(dt_normative_valid_period_yyyymm,1,4) || substring(dt_normative_valid_period_yyyymm,5,2)::int as dt_normative_valid_period_yyyymm_for_join /*для джойна с ОД*/ --/RUSAL/SD3068M-Период
+from dds.transport_route_trip_duration;
+
+
+----------
+--SHIPDATA
+
+drop table if exists pg_temp.shipdata;
+create temp table pg_temp.shipdata (
+	 delivery_number_initial varchar
+	,plant_producer_code varchar
+	,plant_producer_name varchar
+	,port_of_loading_code varchar
+	,dt_arrival_by_railway date
+	,dt_forwarder date
+	,railcar varchar
+	,transport_bill varchar
+	,railway_platform varchar
+	,forwarder_name varchar
+	,route_type varchar
+	,route_plant_code varchar
+	,sales_order varchar
+	,uni varchar
+	,dt_shipment_actual date
+	,dt_shipment_actual_yyyymm_for_join varchar
+	,forwarder_in_russian_port_name varchar	
+	,station_destination varchar
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+distributed by (
+	 delivery_number_initial
+	,plant_producer_code
+	,route_plant_code
+	,route_type
+	,dt_shipment_actual_yyyymm_for_join
+);
+
+insert into pg_temp.shipdata (
+		 delivery_number_initial
+		,plant_producer_code
+		,plant_producer_name
+		,port_of_loading_code
+		,dt_arrival_by_railway
+		,dt_forwarder
+		,railcar
+		,transport_bill
+		,railway_platform
+		,forwarder_name
+		,route_type
+		,route_plant_code
+		,sales_order
+		,uni
+		,dt_shipment_actual
+		,dt_shipment_actual_yyyymm_for_join
+		,forwarder_in_russian_port_name	
+		,station_destination)
+select
+	 sb.delivery_number_initial			 											-- SD.000001 | Исходная поставка | vbeln			--2025.12.25 добавила
+	,sb.plant_producer_code															-- SD.000006 | Завод производитель (код) | plant	--2025.12.25 добавила
+	,coalesce(ps.plant_short_name, sb.plant_producer_code) as plant_producer_name	-- SD.000007 | Завод 								--2025.12.25 добавила
+	,sb.tsw_location_code as port_of_loading_code									-- SD.000008 | Направление (код) | locid			--2025.12.25 добавила
+	,sb.dt_arrival_by_railway														-- SD.000011 | Дата прибытия по ЖД | dataprzd		--2026.01.13 добавила
+	,sb.dt_forwarder																-- SD.000012 | Дата экспедитора | dataprek			--2025.12.25 добавила
+	,sb.railcar_code as railcar														-- SD.000013 | Вагон | vagon						--2025.12.25 добавила
+	,sb.transport_bill_code as transport_bill										-- SD.000014 | Накладная | nakladn					--2026.01.13 добавила
+	,sb.railway_platform_code as railway_platform									-- SD.000015 | Платформа | platf					--2025.12.25 добавила
+	--,sb.forwarder_code	/*для расчетов*/										-- SD.000020 | Экспедитор (код) | expedid			--2026.01.13 добавила	
+	,ct.counterparty_full_name as forwarder_name  --LFA1.NAME1...LFA1.NAME4			-- SD.000021 | Экспедитор							--2026.01.16 добавила
+	,sb.shipment_type_code as route_type											-- SD.000069 | Тип маршрута | vsart					--2025.12.25 добавила
+	,coalesce(sb.route_in_shipment_code, dd.route_code) as route_plant_code			-- SD.000118 | Маршрут завода						--2025.12.30 добавила
+	,sb.sales_order_in_shipment as sales_order										-- SD.000123 | Заказ ЦК | order_					--2025.12.25 добавила
+	,concat(sb.transport_bill_code, '-', sb.railcar_code) as uni					-- SD.000151 | UNI | nakladn + '-' + vagon			--2026.01.13 добавила
+	,sb.dt_shipment as dt_shipment_actual /*не надо преобр. в for_join*/			-- SD.000976 | Дата отгрузки из Shipdata | dateot	--2025.12.25 добавила
+	,extract(year from sb.dt_shipment)::text || /*'-' ||*/ extract(month from sb.dt_shipment)::text as dt_shipment_actual_yyyymm_for_join --для джойна с sd3068
+	,sd2925.code_exped as forwarder_in_russian_port_name							-- SD.001359 | Экспедитор портовый					--2026.01.14 добавила
+	
+	,trahte.transport_hub_name as station_destination								-- SD.000035 | Станция назначения
+from dds.sales_batch_delivery as sb
+  left join dict_dds.plant_and_subsidiary_texts as ps --для поля SD.000007 | Завод
+	on ps.plant_code = sb.plant_producer_code
+	and ps.language_code = 'R'
+  left join dds.delivery_document_header as dd --для поля SD.000118 | Маршрут завода
+	on dd.delivery_code = sb.delivery_number_of_plant_producer
+	and sb.delivery_number_of_plant_producer is not null
+  left join pg_temp.sd2925 as sd2925	--Вывести значение /RUSAL/SD2925_EX-CODE_EXPED для
+	on sd2925.expedid = sb.forwarder_code		--/RUSAL/SD2925_EX-EXPEDID = SD.000020 и
+	and sd2925.werks = sb.plant_producer_code	--SD.000006 | Завод производитель (код) --/RUSAL/SD2925_EX-WERKS = SD.000006
+  left join dict_dds.counterparty_texts as ct --для поля SD.000021 | Экспедитор
+	on ct.counterparty_code = sb.forwarder_code --по LFA1-KUNNR = /RUSAL/SHIPDATA-EXPEDID (SD.000020 «Экспедитор (код)»)
+  left join dict_dds.transport_route as trarou
+  	on trarou.transport_route_code = sb.route_in_shipment_code
+  left join dict_dds.transport_hub_texts as trahte
+  	on trahte.transport_hub_code = trarou.transport_route_destination_hub_code
+  	and trahte.language_code = 'R'
+  	and trahte.transport_hub_code like 'S%'
+where 1=1
+/*!!! 2026.01.14: Данные условия (3 СТРОКИ) ограничивают строки всей витрины*/
+  /*SD.001252*/and sb.forwarder_code in (select expedid from sd2925) 	--экспедитор входит в список настроечной таблицы /RUSAL/SD2925_EX-EXPEDID = SD.000020 
+  /*SD.001252*/and sb.dt_arrival_by_railway is not null 				--заполнена дата SD.000011 (поставка уже прибыла на станцию)
+  /*SD.001252*/and sb.dt_forwarder is null 							--и не заполнена дата SD.000012 (поставка еще не принята экспедитором)
+;
+
+
+----------
+
+drop table if exists pg_temp.shipdata1;
+create temp table pg_temp.shipdata1 (
+	 delivery_number_initial varchar
+	,plant_producer_code varchar
+	,plant_producer_name varchar
+	,port_of_loading_code varchar
+	,dt_arrival_by_railway date
+	,dt_forwarder date
+	,railcar varchar
+	,transport_bill varchar
+	,railway_platform varchar
+	,forwarder_name varchar
+	,route_type varchar
+	,route_plant_code varchar
+	,sales_order varchar
+	,uni varchar
+	,dt_shipment_actual date
+	,station_destination varchar
+	,forwarder_in_russian_port_accept_normative_exceed_days integer
+	,port_shipment_readiness_normative_exceed_days_quantity integer
+	,forwarder_in_russian_port_name varchar	
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+distributed replicated;
+
+insert into pg_temp.shipdata1 (
+		 delivery_number_initial 								--SD.000001 | Исходная поставка
+		,plant_producer_code 									--SD.000006 | Завод производитель (код)
+		,plant_producer_name									--SD.000007 | Завод							--2025.11.14 добавляю
+		,port_of_loading_code									--SD.000008 | Направление (код) 			--2025.11.06 добавляю
+		,dt_arrival_by_railway 									--SD.000011 | Дата прибытия по ЖД
+		,dt_forwarder 											--SD.000012 | Дата экспедитора
+		,railcar 												--SD.000013 | Вагон
+		,transport_bill 										--SD.000014 | Накладная
+		,railway_platform 										--SD.000015 | Платформа
+		,forwarder_name 										--SD.000021 | Экспедитор
+		,route_type 											--SD.000069 | Тип маршрута
+		,route_plant_code 										--SD.000118 | Маршрут завода
+		,sales_order 											--SD.000123 | Заказ ЦК
+		,uni 													--SD.000151 | UNI
+		,dt_shipment_actual 									--SD.000976 | Дата отгрузки из Shipdata
+		,station_destination									-- SD.000035 | Станция назначения
+		,forwarder_in_russian_port_accept_normative_exceed_days --SD.001358 | Задержка в приемке дней
+		,port_shipment_readiness_normative_exceed_days_quantity --SD.001819 | Задержка от норматива до готовности к вывозу со склада порта, дней
+		,forwarder_in_russian_port_name							--SD.001359 | Экспедитор портовый
+		)
+select
+	 s.delivery_number_initial 						--SD.000001 | Исходная поставка
+	,s.plant_producer_code 							--SD.000006 | Завод производитель (код)
+	,s.plant_producer_name							--SD.000007 | Завод							--2025.11.14 добавляю
+	,s.port_of_loading_code							--SD.000008 | Направление (код) 			--2025.11.06 добавляю
+	,s.dt_arrival_by_railway 						--SD.000011 | Дата прибытия по ЖД
+	,s.dt_forwarder 								--SD.000012 | Дата экспедитора
+	,s.railcar 										--SD.000013 | Вагон
+	,s.transport_bill 								--SD.000014 | Накладная
+	,s.railway_platform 							--SD.000015 | Платформа
+	,s.forwarder_name 								--SD.000021 | Экспедитор
+	,s.route_type 									--SD.000069 | Тип маршрута
+	,s.route_plant_code 							--SD.000118 | Маршрут завода
+	,s.sales_order 									--SD.000123 | Заказ ЦК
+	,s.uni 											--SD.000151 | UNI
+	,s.dt_shipment_actual 							--SD.000976 | Дата отгрузки из Shipdata
+	,s.station_destination							-- SD.000035 | Станция назначения
+	
+	,now()::date - s.dt_arrival_by_railway - /*sd3068.average_acceptance_duration_days_quantity_with_case*/
+	   (case when sd3068.average_acceptance_duration_days_quantity is null then 7 --если /RUSAL/SD3068M-TERM_PRIEM не найдено, то принимаем значение 7
+   	   else sd3068.average_acceptance_duration_days_quantity end) as forwarder_in_russian_port_accept_normative_exceed_days --SD.001358 | Задержка в приемке дней
+   	   
+	,now()::date - s.dt_shipment_actual /*SD.001819 = текущая дата - SD.000976 - (TERM_DURATION + TERM_PRIEM)*/
+	   - sd3068.average_route_trip_duration_days_quantity
+	   - (case when sd3068.average_acceptance_duration_days_quantity is null then 7 --если /RUSAL/SD3068M-TERM_PRIEM не найдено, то принимаем значение 7
+   	   else sd3068.average_acceptance_duration_days_quantity end) as port_shipment_readiness_normative_exceed_days_quantity --SD.001819 | Задержка от норматива до готовности к вывозу со склада порта, дней
+
+--	   	/*test*/,sd3068.average_route_trip_duration_days_quantity
+--	   	/*test*/,sd3068.average_acceptance_duration_days_quantity
+   	   	  	   	   
+	,s.forwarder_in_russian_port_name				--SD.001359 | Экспедитор портовый --2025.11.14 добавляю
+from pg_temp.shipdata as s
+  left join pg_temp.sd3068 on sd3068.transport_route_code = s.route_plant_code --/RUSAL/SD3068M-ROUTE = SD.000118 и 
+	and sd3068.shipment_type_code = s.route_type --/RUSAL/SD3068M-OTGR_TYPE = SD.000069 и 
+	and sd3068.dt_normative_valid_period_yyyymm_for_join = s.dt_shipment_actual_yyyymm_for_join --/RUSAL/SD3068M-Период = мм.гггг для даты отгрузки SD.000976
+;
+
+
+---
+insert into dm.sales_forwarder_metal_acceptance_delays (
+	 delivery_number_initial	 							--SD.000001 | Исходная поставка
+	,plant_producer_code									--SD.000006 | Завод производитель (код)
+	,plant_producer_name									--SD.000007 | Завод							--2025.11.14 добавляю
+	,port_of_loading_code									--SD.000008 | Направление (код) 			--2025.11.06 добавляю
+	,dt_arrival_by_railway									--SD.000011 | Дата прибытия по ЖД
+	,dt_forwarder											--SD.000012 | Дата экспедитора
+	,railcar												--SD.000013 | Вагон
+	,transport_bill											--SD.000014 | Накладная
+	,railway_platform										--SD.000015 | Платформа
+	,forwarder_name											--SD.000021 | Экспедитор
+	,route_type												--SD.000069 | Тип маршрута
+	,route_plant_code										--SD.000118 | Маршрут завода
+	,sales_order											--SD.000123 | Заказ ЦК
+	,uni													--SD.000151 | UNI
+	,dt_shipment_actual										--SD.000976 | Дата отгрузки из Shipdata
+	,forwarder_metal_acceptance_delay_days_quantity			--SD.001252 | Задержка в приемке
+	,forwarder_in_russian_port_accept_normative_exceed_days	--SD.001358 | Задержка в приемке дней
+	,forwarder_in_russian_port_name							--SD.001359 | Экспедитор портовый
+	,station_destination									--SD.000035 | Станция назначения
+	,port_shipment_readiness_normative_exceed_days_quantity	--SD.001819 | Задержка от норматива до готовности к вывозу со склада порта, дней
+	,port_shipment_readiness_normative_exceed_type_code		--SD.001820 | Норматив до готовности к вывозу со склада порта
+)
+	select
+		 delivery_number_initial 						--SD.000001 | Исходная поставка
+		,plant_producer_code 							--SD.000006 | Завод производитель (код)
+		,plant_producer_name							--SD.000007 | Завод						--2025.11.14 добавляю
+		,port_of_loading_code							--SD.000008 | Направление (код) 		--2025.11.06 добавляю
+		,dt_arrival_by_railway 							--SD.000011 | Дата прибытия по ЖД
+		,dt_forwarder 									--SD.000012 | Дата экспедитора
+		,railcar 										--SD.000013 | Вагон
+		,transport_bill 								--SD.000014 | Накладная
+		,railway_platform 								--SD.000015 | Платформа
+		,forwarder_name 								--SD.000021 | Экспедитор
+		,route_type 									--SD.000069 | Тип маршрута
+		,route_plant_code 								--SD.000118 | Маршрут завода
+		,sales_order 									--SD.000123 | Заказ ЦК
+		,uni 											--SD.000151 | UNI
+		,dt_shipment_actual 							--SD.000976 | Дата отгрузки из Shipdata
+		,(case when forwarder_in_russian_port_accept_normative_exceed_days between 1 and 2 then 'Z1'
+		    when forwarder_in_russian_port_accept_normative_exceed_days between 3 and 5 then 'Z2'
+		 	when forwarder_in_russian_port_accept_normative_exceed_days > 5 then 'Z3'
+		 	else '1' end) as forwarder_metal_acceptance_delay_days_quantity --SD.001252 | Задержка в приемке
+		,forwarder_in_russian_port_accept_normative_exceed_days				--SD.001358 | Задержка в приемке дней	--2025.11.14 добавляю
+		,forwarder_in_russian_port_name										--SD.001359 | Экспедитор портовый		--2025.11.14 добавляю
+		,station_destination												--SD.000035 | Станция назначения
+		,port_shipment_readiness_normative_exceed_days_quantity				--SD.001819 | Задержка от норматива до готовности к вывозу со склада порта, дней
+		
+		,(case when port_shipment_readiness_normative_exceed_days_quantity between 1 and 2 then 'Z1'
+		    when port_shipment_readiness_normative_exceed_days_quantity between 3 and 5 then 'Z2'
+		 	when port_shipment_readiness_normative_exceed_days_quantity > 5 then 'Z3'
+		 	else '1' end) as port_shipment_readiness_normative_exceed_type_code --SD.001820 | Норматив до готовности к вывозу со склада порта
+	from pg_temp.shipdata1
+;

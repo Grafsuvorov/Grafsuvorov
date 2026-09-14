@@ -234,7 +234,7 @@ export default function App() {
         return;
       }
       if (target === "/admin/feedback") {
-        navigate("/admin/feedback");
+        navigate("/admin/feedback", { state: { from: location.pathname + location.search } });
         return;
       }
       if (target === "/admin/prototype-review") {
@@ -595,7 +595,7 @@ export default function App() {
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
             ) : (
-              <AdminFeedbackPage />
+              <AdminFeedbackPage userProfile={userProfile} />
             )
           }
         />

@@ -737,6 +737,8 @@ def get_feedback(request: Request, days: int = 30, topic: str = "", limit: int =
     user = get_current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     try:
         items = list_feedback(
             engine=engine,

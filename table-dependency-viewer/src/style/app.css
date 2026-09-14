@@ -4337,6 +4337,92 @@ textarea:focus {
   color: rgba(226, 232, 240, 0.72);
 }
 
+.feedback-submit-page {
+  max-width: 1120px;
+}
+
+.feedback-submit-header {
+  margin-top: 24px;
+}
+
+.feedback-submit-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.feedback-submit-eyebrow {
+  color: #67e8f9;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.feedback-submit-surface {
+  margin-top: 20px;
+  padding: 28px;
+}
+
+.feedback-submit-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.feedback-submit-private {
+  max-width: 310px;
+  padding: 10px 14px;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #a7f3d0;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.feedback-submit-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feedback-submit-form .about-feedback-textarea {
+  min-height: 220px;
+}
+
+.feedback-submit-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .feedback-submit-intro {
+    display: grid;
+  }
+
+  .feedback-submit-private {
+    max-width: none;
+    justify-self: start;
+  }
+
+  .feedback-submit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .feedback-submit-form .about-feedback-wide,
+  .feedback-submit-form .about-feedback-hint,
+  .feedback-submit-form .about-feedback-actions {
+    grid-column: 1;
+  }
+}
+
+html[data-theme="light"] .feedback-submit-private {
+  border-color: rgba(5, 150, 105, 0.28);
+  background: rgba(16, 185, 129, 0.09);
+  color: #047857;
+}
+
 .logic-audit-filters {
   display: flex;
   flex-wrap: wrap;

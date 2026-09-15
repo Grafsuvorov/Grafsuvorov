@@ -1,50 +1,5 @@
-https://prod.gitlab.dwh.rusal.com/dwh/dbt
-dbt_greenplum_elt/registry/dds
-relation:
-  # наименование схемы
-  schema_name: dds
-  # наименование таблицы
-  table_name: accounting_documents
-  # дистрибуция
-  distributed_by: 'unit_balance_code, fiscal_year, accounting_document_code, position_line_item'
-  # тип scd (scd1, scd2)
-  scd_type: scd2
-  unique_key: # список полей уникального ключа
-    - unit_balance_code
-    - fiscal_year
-    - accounting_document_code
-    - position_line_item
-  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать
-    - dttm_from
-    - dttm_to
-dq:
-  - check_type: "duplicates"
-    error_code: "dq_all0001"
-    detail_store_flag: true
-    detail_store_limit: 30
-    filters:
-      - is_active is true
+https://prod.gitlab.dwh.rusal.com/dwh/dbt/-/tree/main
 
+https://prod.gitlab.dwh.rusal.com/dwh/etl
 
-relation:
-  # наименование схемы
-  schema_name: dict_dds
-  # наименование таблицы
-  table_name: address
-  # дистрибуция
-  distributed_by: replicated
-  # тип scd (scd1, scd2)
-  scd_type: scd1
-  unique_key: # список полей уникального ключа
-    - address_code
-    - international_display_format_code
---  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать
---    - valid_from
---    - valid_to
-dq:
-  - check_type: "duplicates"
-    error_code: "dq_all0001"
-    detail_store_flag: true
-    detail_store_limit: 30
-    filters:
-      - deleted_flag is false
+YAML в dbt-проект не записан: GitLab вернул 403: {"message":"403 Forbidden - You are not allowed to push into this branch"}

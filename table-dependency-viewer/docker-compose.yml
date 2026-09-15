@@ -62,7 +62,7 @@ services:
         - ANALYST_GITLAB_PROJECT=dwh_analyst/Sql Queries Storage
         - DBT_GITLAB_PROJECT=dwh/dbt
         - DBT_GITLAB_TOKEN=${DBT_GITLAB_TOKEN}
-        - DBT_REGISTRY_ROOT=dbt_greenplum_elt/registry
+        - DBT_REGISTRY_ROOT=dbt_greenplum_elt/models_metadata
         - DBT_GITLAB_TARGET_BRANCH=main
         - PROTOTYPE_ETL_TARGET_BRANCH=develop
         - YOUTRACK_URL=${YOUTRACK_URL}

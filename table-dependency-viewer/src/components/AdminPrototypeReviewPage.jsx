@@ -21,13 +21,6 @@ function splitItems(value) {
     .filter(Boolean);
 }
 
-function splitLines(value) {
-  return String(value || "")
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function joinItems(value) {
   return Array.isArray(value) ? value.join(", ") : String(value || "");
 }
@@ -77,10 +70,6 @@ function compactList(value, fallback = "—") {
   return items.length ? items.join(", ") : fallback;
 }
 
-function yamlScalar(value) {
-  return `'${String(value || "").replaceAll("'", "''")}'`;
-}
-
 function buildDbtRegistryPreview(item) {
   const target = String(item?.target_fqn || "").trim().toLowerCase();
   if (!target.includes(".")) return "";
@@ -88,12 +77,11 @@ function buildDbtRegistryPreview(item) {
   const uniqueKey = splitItems(item?.key_attributes_text);
   const scdType = String(item?.scd_type || "scd1").toLowerCase();
   const versionKey = splitItems(item?.version_key_text);
-  const filters = splitLines(item?.filters_text);
+  const dqFilter = String(item?.filter_text || "").trim();
   const lines = [
     "relation:",
     `  schema_name: ${schemaName}`,
     `  table_name: ${tableName}`,
-    `  distributed_by: ${yamlScalar(item?.distributed_by_text)}`,
     `  scd_type: ${scdType}`,
     "  unique_key:",
     ...uniqueKey.map((key) => `    - ${key}`),
@@ -104,12 +92,11 @@ function buildDbtRegistryPreview(item) {
   lines.push(
     "dq:",
     '  - check_type: "duplicates"',
-    '    error_code: "dq_all0001"',
     "    detail_store_flag: true",
     "    detail_store_limit: 30",
   );
-  if (filters.length) {
-    lines.push("    filters:", ...filters.map((filter) => `      - ${filter}`));
+  if (dqFilter) {
+    lines.push(`    filter: ${JSON.stringify(dqFilter)}`);
   }
   return `${lines.join("\n")}\n`;
 }
@@ -142,10 +129,9 @@ function buildDraftItem(item) {
     entity_names: entityNames,
     entity_names_label: entityNames.length ? entityNames.join(", ") : (item.entity_name || ""),
     key_attributes_text: keyAttributesText,
-    distributed_by_text: item.distributed_by || item.checks?.distributed_by || "",
     scd_type: item.scd_type || "scd1",
     version_key_text: joinItems(item.version_key || []),
-    filters_text: Array.isArray(item.filters) ? item.filters.join("\n") : "",
+    filter_text: item.filter || (Array.isArray(item.filters) ? item.filters[0] : "") || "",
     clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
     stand_dev: item.stand_dev !== false,
     stand_prod: item.stand_prod !== false,
@@ -220,7 +206,6 @@ export default function AdminPrototypeReviewPage() {
         String(item.object_type || "TABLE").toUpperCase() === "TABLE"
         && (
           !splitItems(item.key_attributes_text).length
-          || !String(item.distributed_by_text || "").trim()
           || (String(item.scd_type || "scd1").toLowerCase() === "scd2" && !splitItems(item.version_key_text).length)
         )
       )
@@ -373,7 +358,6 @@ export default function AdminPrototypeReviewPage() {
               return {
                 ...item,
                 checks,
-                distributed_by_text: item.distributed_by_text || checks.distributed_by || "",
                 warnings,
                 checks_stale: false,
                 last_checked_key_attributes_text: joinItems(keyAttributes),
@@ -412,10 +396,9 @@ export default function AdminPrototypeReviewPage() {
           target_fqn: item.target_fqn,
           entity_name: String(item.entity_name || "").trim(),
           key_attributes: splitItems(item.key_attributes_text),
-          distributed_by: String(item.distributed_by_text || "").trim(),
           scd_type: String(item.scd_type || "scd1").toLowerCase(),
           version_key: splitItems(item.version_key_text),
-          filters: splitLines(item.filters_text),
+          filter: String(item.filter_text || "").trim() || null,
           clickhouse_keys: splitItems(item.clickhouse_keys_text),
           dependent_views: splitItems(item.dependent_views_text),
           is_new: item.is_new,
@@ -598,11 +581,10 @@ export default function AdminPrototypeReviewPage() {
                 const needsEntity = !String(item.entity_name || "").trim();
                 const isTableObject = String(item.object_type || "TABLE").toUpperCase() === "TABLE";
                 const needsKeys = isTableObject && !splitItems(item.key_attributes_text).length;
-                const needsDistribution = isTableObject && !String(item.distributed_by_text || "").trim();
                 const needsVersionKey = isTableObject
                   && String(item.scd_type || "scd1").toLowerCase() === "scd2"
                   && !splitItems(item.version_key_text).length;
-                const needsAttention = Boolean(needsEntity || needsKeys || needsDistribution || needsVersionKey);
+                const needsAttention = Boolean(needsEntity || needsKeys || needsVersionKey);
                 return (
                   <div
                     key={item.item_id || `${item.target_fqn}:${item.object_type || "TABLE"}`}
@@ -696,18 +678,6 @@ export default function AdminPrototypeReviewPage() {
                         {isTableObject ? (
                           <>
                             <div className="prototype-step-field" style={{ margin: 0 }}>
-                              <span className="slow-select-label">Дистрибуция</span>
-                              <input
-                                className="slow-entity-select"
-                                value={item.distributed_by_text || ""}
-                                onChange={(event) => handleReviewItemChange(item.item_id, "distributed_by_text", event.target.value)}
-                                placeholder="unit_balance_code, fiscal_year или replicated"
-                              />
-                              <div className="muted" style={{ marginTop: 6 }}>
-                                Определяется из DEV автоматически; при необходимости значение можно исправить.
-                              </div>
-                            </div>
-                            <div className="prototype-step-field" style={{ margin: 0 }}>
                               <span className="slow-select-label">Тип хранения истории</span>
                               <select
                                 className="slow-entity-select"
@@ -734,16 +704,15 @@ export default function AdminPrototypeReviewPage() {
                               </div>
                             ) : null}
                             <div className="prototype-step-field" style={{ margin: 0 }}>
-                              <span className="slow-select-label">DQ filters <span className="muted">(необязательно)</span></span>
-                              <textarea
+                              <span className="slow-select-label">DQ filter <span className="muted">(необязательно)</span></span>
+                              <input
                                 className="slow-entity-select mono"
-                                value={item.filters_text || ""}
-                                onChange={(event) => handleReviewItemChange(item.item_id, "filters_text", event.target.value)}
-                                placeholder={"is_active is true\ndeleted_flag is false"}
-                                style={{ minHeight: 96, resize: "vertical" }}
+                                value={item.filter_text || ""}
+                                onChange={(event) => handleReviewItemChange(item.item_id, "filter_text", event.target.value)}
+                                placeholder="is_active is true"
                               />
                               <div className="muted" style={{ marginTop: 6 }}>
-                                Один SQL-фильтр на строку. Если поле пустое, секция filters не попадёт в dbt YAML.
+                                Одно SQL-условие. Если поле пустое, параметр filter не попадёт в dbt YAML.
                               </div>
                             </div>
                           </>
@@ -839,7 +808,7 @@ export default function AdminPrototypeReviewPage() {
                           <div>
                             <div className="section-title">dbt registry YAML</div>
                             <div className="muted mono">
-                              dbt_greenplum_elt/registry/{String(item.target_fqn || "").replace(".", "/")}.yml
+                              dbt_greenplum_elt/models_metadata/{String(item.target_fqn || "").split(".")[0]}/{String(item.target_fqn || "").toLowerCase()}.yml
                             </div>
                           </div>
                           <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(buildDbtRegistryPreview(item))}>

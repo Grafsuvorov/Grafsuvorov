@@ -512,10 +512,9 @@ class PrototypeReviewItemPayload(BaseModel):
     target_fqn: str
     entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
-    distributed_by: Optional[str] = None
     scd_type: Optional[str] = "scd1"
     version_key: Optional[List[str]] = None
-    filters: Optional[List[str]] = None
+    filter: Optional[str] = None
     clickhouse_keys: Optional[List[str]] = None
     dependent_views: Optional[List[str]] = None
     is_new: Optional[bool] = None
@@ -997,8 +996,6 @@ def _prototype_item_needs_attention(item: dict[str, Any]) -> tuple[bool, list[st
     object_type = str(item.get("object_type") or "TABLE").upper()
     if object_type == "TABLE" and not [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]:
         missing.append("ключевые поля")
-    if object_type == "TABLE" and not str(item.get("distributed_by") or "").strip():
-        missing.append("дистрибуция")
     scd_type = str(item.get("scd_type") or "scd1").strip().lower()
     if object_type == "TABLE" and scd_type == "scd2" and not [
         str(value).strip() for value in (item.get("version_key") or []) if str(value).strip()
@@ -1065,10 +1062,9 @@ def _prototype_multi_issue_description(
                 f"**Сущность:** {item.get('entity_name') or '—'}",
                 f"**Статус объекта:** {'новый объект' if item.get('is_new') else 'существующий объект'}",
                 f"**Ключевые поля:** {', '.join(item.get('key_attributes') or []) or '—'}",
-                f"**Дистрибуция:** {item.get('distributed_by') or '—'}",
                 f"**SCD:** {str(item.get('scd_type') or 'scd1').lower()}",
                 f"**Version key:** {', '.join(item.get('version_key') or []) or '—'}",
-                f"**DQ filters:** {'; '.join(item.get('filters') or []) or '—'}",
+                f"**DQ filter:** {item.get('filter') or '—'}",
                 f"**Количество строк:** {_format_count(item_row_count)}",
                 f"**Кол-во дублей:** {_format_count(item_duplicate_groups)}",
                 f"**Время выполнения SQL:** {_format_duration(item.get('duration_sec'))}",
@@ -1383,10 +1379,9 @@ def _prototype_review_resolve_item(
         "load_mode": table_load_mode,
         "key_attributes": detected_keys,
         "auto_detected_key_attributes": detected_keys,
-        "distributed_by": checks.get("distributed_by"),
         "scd_type": "scd1",
         "version_key": [],
-        "filters": [],
+        "filter": "",
         "clickhouse_keys": clickhouse_keys,
         "dependencies": dependencies,
         "execution": current_execution,
@@ -1415,10 +1410,12 @@ def _prototype_review_yaml_repo_path(entity_name: str, schema_name: str, table_n
 
 
 def _prototype_review_dbt_registry_path(schema_name: str, table_name: str) -> str:
+    schema_name_norm = str(schema_name or "").strip().lower()
+    table_name_norm = str(table_name or "").strip().lower()
     return posix_join(
-        str(DBT_REGISTRY_ROOT or "dbt_greenplum_elt/registry").strip("/"),
-        str(schema_name or "").strip().lower(),
-        f"{str(table_name or '').strip().lower()}.yml",
+        str(DBT_REGISTRY_ROOT or "dbt_greenplum_elt/models_metadata").strip("/"),
+        schema_name_norm,
+        f"{schema_name_norm}.{table_name_norm}.yml",
     )
 
 
@@ -1430,21 +1427,21 @@ def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
     unique_key = [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]
     if not unique_key:
         raise ValueError(f"Для {target_fqn} не заполнен unique_key")
-    distributed_by = str(item.get("distributed_by") or "").strip()
-    if not distributed_by:
-        raise ValueError(f"Для {target_fqn} не заполнена дистрибуция")
     scd_type = str(item.get("scd_type") or "scd1").strip().lower()
     if scd_type not in {"scd1", "scd2"}:
         raise ValueError(f"Для {target_fqn} указан неподдерживаемый scd_type: {scd_type}")
     version_key = [str(value).strip() for value in (item.get("version_key") or []) if str(value).strip()]
     if scd_type == "scd2" and not version_key:
         raise ValueError(f"Для SCD2-объекта {target_fqn} не заполнен version_key")
-    filters = [str(value).strip() for value in (item.get("filters") or []) if str(value).strip()]
+    dq_filter = str(item.get("filter") or "").strip()
+    if not dq_filter:
+        # Backward compatibility for a review result opened before the format change.
+        legacy_filters = [str(value).strip() for value in (item.get("filters") or []) if str(value).strip()]
+        dq_filter = legacy_filters[0] if legacy_filters else ""
 
     relation: dict[str, Any] = {
         "schema_name": schema_name,
         "table_name": table_name,
-        "distributed_by": distributed_by,
         "scd_type": scd_type,
         "unique_key": unique_key,
     }
@@ -1452,12 +1449,11 @@ def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
         relation["version_key"] = version_key
     duplicate_check: dict[str, Any] = {
         "check_type": "duplicates",
-        "error_code": "dq_all0001",
         "detail_store_flag": True,
         "detail_store_limit": 30,
     }
-    if filters:
-        duplicate_check["filters"] = filters
+    if dq_filter:
+        duplicate_check["filter"] = dq_filter
     return _dump_yaml({"relation": relation, "dq": [duplicate_check]})
 
 

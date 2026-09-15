@@ -1,2 +1,2 @@
-docker compose exec api sh -lc \
-  'curl -sk --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GITLAB_API_URL/user"'
+docker compose exec api python -c 'import os, requests; r=requests.get(os.environ["GITLAB_API_URL"].rstrip("/") + "/user", headers={"PRIVATE-TOKEN":
+  os.environ["GITLAB_TOKEN"]}, verify=False); print(r.status_code); print(r.text)'

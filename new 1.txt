@@ -1,17 +1,43 @@
-docker compose exec api python -c 'import os,json,ssl,urllib.request; u=os.environ["GITLAB_API_URL"].rstrip("/")+"/user";
-  q=urllib.request.Request(u,headers={"PRIVATE-TOKEN":os.environ["GITLAB_TOKEN"]}); d=json.load(urllib.request.urlopen(q,context=ssl._create_unverified_context()));
-  print(json.dumps({k:d.get(k) for k in ("id","username","name")},ensure_ascii=False,indent=2))'
+relation:
+  # наименование схемы
+  schema_name: dict_dds
+  # наименование таблицы
+  table_name: address
+  # тип scd (scd1, scd2)
+  scd_type: scd1
+  unique_key: # список полей уникального ключа
+    - address_code
+    - international_display_format_code
+#  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать
+#    - valid_from
+#    - valid_to
+dq:
+  - check_type: "duplicates"
+    detail_store_flag: true
+    detail_store_limit: 30
+    filter: "deleted_flag is false"
 
-  Ожидаемый ответ:
 
-  {
-    "id": 123,
-    "username": "project_123_bot_abcd",
-    "name": "table-dependency-viewer"
-  }
+relation:
+  # наименование схемы
+  schema_name: dds
+  # наименование таблицы
+  table_name: accounting_documents
+  # тип scd (scd1, scd2)
+  scd_type: scd2
+  unique_key: # список полей уникального ключа
+    - unit_balance_code
+    - fiscal_year
+    - accounting_document_code
+    - position_line_item
+  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать
+    - dttm_from
+    - dttm_to
+dq:
+  - check_type: "duplicates"
+    detail_store_flag: true
+    detail_store_limit: 30
+    filter: "is_active is true"
 
-  Если получишь 404, используй вариант с полным API-путём:
 
-  docker compose exec api python -c 'import os,json,ssl,urllib.request; u=os.environ["GITLAB_API_URL"].rstrip("/")+"/api/v4/user";
-  q=urllib.request.Request(u,headers={"PRIVATE-TOKEN":os.environ["GITLAB_TOKEN"]}); d=json.load(urllib.request.urlopen(q,context=ssl._create_unverified_context()));
-  print(json.dumps({k:d.get(k) for k in ("id","username","name")},ensure_ascii=False,indent=2))'
+dbt_greenplum_elt/models_metadata/dict_dds

@@ -1183,6 +1183,7 @@ def query_dev_table_checks(
     exec_engine = create_engine(dev_database_url)
     row_count = None
     duplicate_count = None
+    distributed_by = None
     try:
         with exec_engine.connect() as conn:
             resolved_row = conn.execute(
@@ -1214,6 +1215,28 @@ def query_dev_table_checks(
                 raise ValueError(f"Объект `{target_fqn}` не найден в DEV после выполнения SQL")
             actual_schema_name = str(resolved_row.get("schema_name") or schema_name)
             actual_table_name = str(resolved_row.get("table_name") or table_name)
+            distribution_clause = conn.execute(
+                text(
+                    """
+                    SELECT pg_catalog.pg_get_table_distributedby(c.oid)
+                    FROM pg_catalog.pg_class c
+                    INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = :schema_name
+                      AND c.relname = :table_name
+                    LIMIT 1
+                    """
+                ),
+                {"schema_name": actual_schema_name, "table_name": actual_table_name},
+            ).scalar()
+            distribution_text = str(distribution_clause or "").strip()
+            if "replicated" in distribution_text.lower():
+                distributed_by = "replicated"
+            elif "randomly" in distribution_text.lower():
+                distributed_by = "randomly"
+            else:
+                distribution_match = re.search(r"\((.*)\)", distribution_text)
+                if distribution_match:
+                    distributed_by = distribution_match.group(1).replace('"', "").strip()
             row_count = conn.execute(
                 text(f'SELECT COUNT(*) FROM "{actual_schema_name}"."{actual_table_name}"')
             ).scalar()
@@ -1238,6 +1261,7 @@ def query_dev_table_checks(
     return {
         "row_count": int(row_count or 0),
         "duplicate_groups": int(duplicate_count or 0) if duplicate_count is not None else None,
+        "distributed_by": distributed_by,
     }
 
 

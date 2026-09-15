@@ -34,6 +34,7 @@ from io import BytesIO
 import threading
 from uuid import uuid4
 from posixpath import join as posix_join
+from urllib import parse as urlparse
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -89,6 +90,9 @@ from .config import (
     TABLE_APP_FEEDBACK,
     GITLAB_API_URL,
     ANALYST_GITLAB_PROJECT,
+    DBT_GITLAB_PROJECT,
+    DBT_REGISTRY_ROOT,
+    DBT_GITLAB_TARGET_BRANCH,
     GITLAB_PROJECT,
     GITLAB_SSL_VERIFY,
     GITLAB_TOKEN,
@@ -137,6 +141,8 @@ from .services.dev_meta import (
 )
 from .services.entity_dev_meta import (
     _dump_yaml,
+    _gitlab_json_request,
+    _parse_gitlab_project,
     create_entity_meta_mr,
     delete_entity_dev_meta_bundle,
     execute_entity_dev_meta_sql,
@@ -504,6 +510,10 @@ class PrototypeReviewItemPayload(BaseModel):
     target_fqn: str
     entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
+    distributed_by: Optional[str] = None
+    scd_type: Optional[str] = "scd1"
+    version_key: Optional[List[str]] = None
+    filters: Optional[List[str]] = None
     clickhouse_keys: Optional[List[str]] = None
     dependent_views: Optional[List[str]] = None
     is_new: Optional[bool] = None
@@ -985,6 +995,13 @@ def _prototype_item_needs_attention(item: dict[str, Any]) -> tuple[bool, list[st
     object_type = str(item.get("object_type") or "TABLE").upper()
     if object_type == "TABLE" and not [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]:
         missing.append("ключевые поля")
+    if object_type == "TABLE" and not str(item.get("distributed_by") or "").strip():
+        missing.append("дистрибуция")
+    scd_type = str(item.get("scd_type") or "scd1").strip().lower()
+    if object_type == "TABLE" and scd_type == "scd2" and not [
+        str(value).strip() for value in (item.get("version_key") or []) if str(value).strip()
+    ]:
+        missing.append("version key для SCD2")
     return bool(missing), missing
 
 
@@ -1046,6 +1063,10 @@ def _prototype_multi_issue_description(
                 f"**Сущность:** {item.get('entity_name') or '—'}",
                 f"**Статус объекта:** {'новый объект' if item.get('is_new') else 'существующий объект'}",
                 f"**Ключевые поля:** {', '.join(item.get('key_attributes') or []) or '—'}",
+                f"**Дистрибуция:** {item.get('distributed_by') or '—'}",
+                f"**SCD:** {str(item.get('scd_type') or 'scd1').lower()}",
+                f"**Version key:** {', '.join(item.get('version_key') or []) or '—'}",
+                f"**DQ filters:** {'; '.join(item.get('filters') or []) or '—'}",
                 f"**Количество строк:** {_format_count(item_row_count)}",
                 f"**Кол-во дублей:** {_format_count(item_duplicate_groups)}",
                 f"**Время выполнения SQL:** {_format_duration(item.get('duration_sec'))}",
@@ -1323,7 +1344,7 @@ def _prototype_review_resolve_item(
     )
     if item_object_type != "TABLE":
         detected_keys = []
-    checks = {"row_count": None, "duplicate_groups": None}
+    checks = {"row_count": None, "duplicate_groups": None, "distributed_by": None}
     checks_error = None
     current_execution = execution_row or {"status": "skipped", "duration_sec": 0.0}
     if str(current_execution.get("status") or "") == "ok" and item_object_type in {"TABLE", "VIEW"}:
@@ -1334,7 +1355,7 @@ def _prototype_review_resolve_item(
                 key_attributes=detected_keys if item_object_type == "TABLE" else [],
             )
         except Exception as exc:
-            checks = {"row_count": None, "duplicate_groups": None}
+            checks = {"row_count": None, "duplicate_groups": None, "distributed_by": None}
             checks_error = str(exc)
     item_warnings: list[str] = []
     if item_object_type == "TABLE" and not detected_keys:
@@ -1360,6 +1381,10 @@ def _prototype_review_resolve_item(
         "load_mode": table_load_mode,
         "key_attributes": detected_keys,
         "auto_detected_key_attributes": detected_keys,
+        "distributed_by": checks.get("distributed_by"),
+        "scd_type": "scd1",
+        "version_key": [],
+        "filters": [],
         "clickhouse_keys": clickhouse_keys,
         "dependencies": dependencies,
         "execution": current_execution,
@@ -1385,6 +1410,201 @@ def _prototype_review_yaml_repo_path(entity_name: str, schema_name: str, table_n
         str(table_name or "").strip(),
         "meta_data_file.yaml",
     )
+
+
+def _prototype_review_dbt_registry_path(schema_name: str, table_name: str) -> str:
+    return posix_join(
+        str(DBT_REGISTRY_ROOT or "dbt_greenplum_elt/registry").strip("/"),
+        str(schema_name or "").strip().lower(),
+        f"{str(table_name or '').strip().lower()}.yml",
+    )
+
+
+def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
+    target_fqn = str(item.get("target_fqn") or "").strip().lower()
+    if "." not in target_fqn:
+        raise ValueError(f"Не удалось определить schema/table для dbt registry: {target_fqn or '—'}")
+    schema_name, table_name = target_fqn.split(".", 1)
+    unique_key = [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]
+    if not unique_key:
+        raise ValueError(f"Для {target_fqn} не заполнен unique_key")
+    distributed_by = str(item.get("distributed_by") or "").strip()
+    if not distributed_by:
+        raise ValueError(f"Для {target_fqn} не заполнена дистрибуция")
+    scd_type = str(item.get("scd_type") or "scd1").strip().lower()
+    if scd_type not in {"scd1", "scd2"}:
+        raise ValueError(f"Для {target_fqn} указан неподдерживаемый scd_type: {scd_type}")
+    version_key = [str(value).strip() for value in (item.get("version_key") or []) if str(value).strip()]
+    if scd_type == "scd2" and not version_key:
+        raise ValueError(f"Для SCD2-объекта {target_fqn} не заполнен version_key")
+    filters = [str(value).strip() for value in (item.get("filters") or []) if str(value).strip()]
+
+    relation: dict[str, Any] = {
+        "schema_name": schema_name,
+        "table_name": table_name,
+        "distributed_by": distributed_by,
+        "scd_type": scd_type,
+        "unique_key": unique_key,
+    }
+    if scd_type == "scd2":
+        relation["version_key"] = version_key
+    duplicate_check: dict[str, Any] = {
+        "check_type": "duplicates",
+        "error_code": "dq_all0001",
+        "detail_store_flag": True,
+        "detail_store_limit": 30,
+    }
+    if filters:
+        duplicate_check["filters"] = filters
+    return _dump_yaml({"relation": relation, "dq": [duplicate_check]})
+
+
+def _prototype_gitlab_resource_exists(*, project: str, path: str, query: Optional[dict[str, Any]] = None) -> bool:
+    ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
+    try:
+        _gitlab_json_request(
+            api_url=GITLAB_API_URL,
+            project=project,
+            token=GITLAB_TOKEN,
+            ssl_verify=ssl_verify,
+            path=path,
+            method="GET",
+            query=query,
+        )
+        return True
+    except ValueError as exc:
+        if "GitLab вернул 404" in str(exc):
+            return False
+        raise
+
+
+def _prototype_review_publish_dbt_registry(
+    *,
+    task_id: str,
+    author: str,
+    review_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    task_id_norm = str(task_id or "").strip().upper()
+    if not re.fullmatch(r"DWH-\d+", task_id_norm):
+        raise ValueError("Номер задачи для dbt MR должен быть в формате DWH-12345")
+    if not GITLAB_TOKEN:
+        raise ValueError("Не настроен GITLAB_TOKEN")
+    project_ref = _parse_gitlab_project(DBT_GITLAB_PROJECT)
+    if not project_ref:
+        raise ValueError("Не настроен DBT_GITLAB_PROJECT")
+
+    registry_files: dict[str, dict[str, Any]] = {}
+    for item in review_items:
+        if str(item.get("object_type") or "TABLE").strip().upper() != "TABLE":
+            continue
+        target_fqn = str(item.get("target_fqn") or "").strip().lower()
+        if "." not in target_fqn:
+            continue
+        schema_name, table_name = target_fqn.split(".", 1)
+        file_path = _prototype_review_dbt_registry_path(schema_name, table_name)
+        registry_files[file_path] = {
+            "target_fqn": target_fqn,
+            "file_path": file_path,
+            "content": _prototype_review_build_dbt_registry_yaml(item),
+        }
+    if not registry_files:
+        return {"status": "skipped", "reason": "В review нет табличных объектов", "files": []}
+
+    branch_name = f"feature/{task_id_norm}"
+    target_branch = str(DBT_GITLAB_TARGET_BRANCH or "main").strip() or "main"
+    ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
+    branch_exists = _prototype_gitlab_resource_exists(
+        project=project_ref,
+        path=f"repository/branches/{urlparse.quote(branch_name, safe='')}",
+    )
+    content_ref = branch_name if branch_exists else target_branch
+    actions = []
+    result_files = []
+    for file_data in registry_files.values():
+        file_path = file_data["file_path"]
+        file_exists = _prototype_gitlab_resource_exists(
+            project=project_ref,
+            path=f"repository/files/{urlparse.quote(file_path, safe='')}",
+            query={"ref": content_ref},
+        )
+        actions.append(
+            {
+                "action": "update" if file_exists else "create",
+                "file_path": file_path,
+                "content": file_data["content"],
+                "encoding": "text",
+            }
+        )
+        result_files.append(
+            {
+                "target_fqn": file_data["target_fqn"],
+                "file_path": file_path,
+                "action": "update" if file_exists else "create",
+            }
+        )
+
+    commit_payload: dict[str, Any] = {
+        "branch": branch_name,
+        "commit_message": f"{task_id_norm}: update DQ registry keys",
+        "actions": actions,
+    }
+    if not branch_exists:
+        commit_payload["start_branch"] = target_branch
+    commit_data = _gitlab_json_request(
+        api_url=GITLAB_API_URL,
+        project=project_ref,
+        token=GITLAB_TOKEN,
+        ssl_verify=ssl_verify,
+        path="repository/commits",
+        method="POST",
+        payload=commit_payload,
+    )
+
+    existing_mrs = _gitlab_json_request(
+        api_url=GITLAB_API_URL,
+        project=project_ref,
+        token=GITLAB_TOKEN,
+        ssl_verify=ssl_verify,
+        path="merge_requests",
+        method="GET",
+        query={"state": "opened", "source_branch": branch_name, "target_branch": target_branch},
+    )
+    if existing_mrs:
+        mr_data = existing_mrs[0]
+    else:
+        mr_data = _gitlab_json_request(
+            api_url=GITLAB_API_URL,
+            project=project_ref,
+            token=GITLAB_TOKEN,
+            ssl_verify=ssl_verify,
+            path="merge_requests",
+            method="POST",
+            payload={
+                "source_branch": branch_name,
+                "target_branch": target_branch,
+                "title": f"{task_id_norm}: DQ registry keys",
+                "description": "\n".join(
+                    [
+                        f"Task: {task_id_norm}",
+                        f"Author: {author}",
+                        "",
+                        "Registry files:",
+                        *[f"- {item['file_path']}" for item in result_files],
+                    ]
+                ),
+                "remove_source_branch": False,
+            },
+        )
+    return {
+        "status": "ok",
+        "project": project_ref,
+        "branch_name": branch_name,
+        "target_branch": target_branch,
+        "commit_id": commit_data.get("id"),
+        "files": result_files,
+        "mr_url": mr_data.get("web_url"),
+        "mr_iid": mr_data.get("iid"),
+    }
 
 
 def _prototype_review_build_result(
@@ -1753,9 +1973,12 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         meta_error = None
         meta_mr = None
         meta_mr_error = None
+        dbt_registry = None
+        dbt_registry_error = None
         raw_issue_id = str((issue_result.get("raw") or {}).get("id") or "").strip()
         if raw_issue_id:
-            branch_name = f"feature/{str(issue_result.get('issue_id') or '').strip().upper()}"
+            issue_id = str(issue_result.get("issue_id") or "").strip().upper()
+            branch_name = f"feature/{issue_id}"
             for item in review_items:
                 yaml_content = str(item.get("yaml_content") or "").strip()
                 if not yaml_content:
@@ -1826,6 +2049,27 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                         meta_mr["task_link_attached"] = True
                 except Exception as exc:
                     meta_mr_error = str(exc)
+            try:
+                dbt_registry = _prototype_review_publish_dbt_registry(
+                    task_id=issue_id,
+                    author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                    review_items=review_items,
+                )
+                if dbt_registry.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
+                    add_ytrack_issue_comment(
+                        base_url=YOUTRACK_URL,
+                        token=YOUTRACK_TOKEN,
+                        issue_id=issue_id,
+                        ssl_verify=YOUTRACK_SSL_VERIFY,
+                        text=(
+                            "MR с ключами и DQ-настройками создан в dbt-проекте.\n"
+                            f"Ссылка: {dbt_registry.get('mr_url')}\n"
+                            f"Ветка: {dbt_registry.get('branch_name')} -> {dbt_registry.get('target_branch')}"
+                        ),
+                    )
+                    dbt_registry["task_link_attached"] = True
+            except Exception as exc:
+                dbt_registry_error = str(exc)
         if issue_result.get("issue_id"):
             issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
         return {
@@ -1837,6 +2081,8 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             "meta_error": meta_error,
             "meta_mr": meta_mr,
             "meta_mr_error": meta_mr_error,
+            "dbt_registry": dbt_registry,
+            "dbt_registry_error": dbt_registry_error,
         }
     except HTTPException:
         raise

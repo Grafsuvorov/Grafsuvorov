@@ -21,6 +21,13 @@ function splitItems(value) {
     .filter(Boolean);
 }
 
+function splitLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function joinItems(value) {
   return Array.isArray(value) ? value.join(", ") : String(value || "");
 }
@@ -70,6 +77,43 @@ function compactList(value, fallback = "—") {
   return items.length ? items.join(", ") : fallback;
 }
 
+function yamlScalar(value) {
+  return `'${String(value || "").replaceAll("'", "''")}'`;
+}
+
+function buildDbtRegistryPreview(item) {
+  const target = String(item?.target_fqn || "").trim().toLowerCase();
+  if (!target.includes(".")) return "";
+  const [schemaName, tableName] = target.split(".", 2);
+  const uniqueKey = splitItems(item?.key_attributes_text);
+  const scdType = String(item?.scd_type || "scd1").toLowerCase();
+  const versionKey = splitItems(item?.version_key_text);
+  const filters = splitLines(item?.filters_text);
+  const lines = [
+    "relation:",
+    `  schema_name: ${schemaName}`,
+    `  table_name: ${tableName}`,
+    `  distributed_by: ${yamlScalar(item?.distributed_by_text)}`,
+    `  scd_type: ${scdType}`,
+    "  unique_key:",
+    ...uniqueKey.map((key) => `    - ${key}`),
+  ];
+  if (scdType === "scd2") {
+    lines.push("  version_key:", ...versionKey.map((key) => `    - ${key}`));
+  }
+  lines.push(
+    "dq:",
+    '  - check_type: "duplicates"',
+    '    error_code: "dq_all0001"',
+    "    detail_store_flag: true",
+    "    detail_store_limit: 30",
+  );
+  if (filters.length) {
+    lines.push("    filters:", ...filters.map((filter) => `      - ${filter}`));
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function buildTaskText(form, linkedIssues) {
   const lines = [];
   const pushLine = (label, value) => {
@@ -98,6 +142,10 @@ function buildDraftItem(item) {
     entity_names: entityNames,
     entity_names_label: entityNames.length ? entityNames.join(", ") : (item.entity_name || ""),
     key_attributes_text: keyAttributesText,
+    distributed_by_text: item.distributed_by || item.checks?.distributed_by || "",
+    scd_type: item.scd_type || "scd1",
+    version_key_text: joinItems(item.version_key || []),
+    filters_text: Array.isArray(item.filters) ? item.filters.join("\n") : "",
     clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
     stand_dev: item.stand_dev !== false,
     stand_prod: item.stand_prod !== false,
@@ -168,7 +216,14 @@ export default function AdminPrototypeReviewPage() {
   const unresolvedItemsCount = useMemo(
     () => reviewItemsDraft.filter((item) => (
       !String(item.entity_name || "").trim()
-      || (String(item.object_type || "TABLE").toUpperCase() === "TABLE" && !splitItems(item.key_attributes_text).length)
+      || (
+        String(item.object_type || "TABLE").toUpperCase() === "TABLE"
+        && (
+          !splitItems(item.key_attributes_text).length
+          || !String(item.distributed_by_text || "").trim()
+          || (String(item.scd_type || "scd1").toLowerCase() === "scd2" && !splitItems(item.version_key_text).length)
+        )
+      )
     )).length,
     [reviewItemsDraft],
   );
@@ -318,6 +373,7 @@ export default function AdminPrototypeReviewPage() {
               return {
                 ...item,
                 checks,
+                distributed_by_text: item.distributed_by_text || checks.distributed_by || "",
                 warnings,
                 checks_stale: false,
                 last_checked_key_attributes_text: joinItems(keyAttributes),
@@ -356,6 +412,10 @@ export default function AdminPrototypeReviewPage() {
           target_fqn: item.target_fqn,
           entity_name: String(item.entity_name || "").trim(),
           key_attributes: splitItems(item.key_attributes_text),
+          distributed_by: String(item.distributed_by_text || "").trim(),
+          scd_type: String(item.scd_type || "scd1").toLowerCase(),
+          version_key: splitItems(item.version_key_text),
+          filters: splitLines(item.filters_text),
           clickhouse_keys: splitItems(item.clickhouse_keys_text),
           dependent_views: splitItems(item.dependent_views_text),
           is_new: item.is_new,
@@ -381,6 +441,8 @@ export default function AdminPrototypeReviewPage() {
               meta_error: payload?.meta_error || null,
               meta_mr: payload?.meta_mr || null,
               meta_mr_error: payload?.meta_mr_error || null,
+              dbt_registry: payload?.dbt_registry || null,
+              dbt_registry_error: payload?.dbt_registry_error || null,
             }
           : prev
       ));
@@ -536,7 +598,11 @@ export default function AdminPrototypeReviewPage() {
                 const needsEntity = !String(item.entity_name || "").trim();
                 const isTableObject = String(item.object_type || "TABLE").toUpperCase() === "TABLE";
                 const needsKeys = isTableObject && !splitItems(item.key_attributes_text).length;
-                const needsAttention = Boolean(needsEntity || needsKeys);
+                const needsDistribution = isTableObject && !String(item.distributed_by_text || "").trim();
+                const needsVersionKey = isTableObject
+                  && String(item.scd_type || "scd1").toLowerCase() === "scd2"
+                  && !splitItems(item.version_key_text).length;
+                const needsAttention = Boolean(needsEntity || needsKeys || needsDistribution || needsVersionKey);
                 return (
                   <div
                     key={item.item_id || `${item.target_fqn}:${item.object_type || "TABLE"}`}
@@ -607,7 +673,7 @@ export default function AdminPrototypeReviewPage() {
                         </div>
                         {isTableObject ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
-                          <span className="slow-select-label">Ключевые поля</span>
+                          <span className="slow-select-label">Ключевые поля / unique_key</span>
                           <textarea
                             className="slow-entity-select"
                             value={item.key_attributes_text || ""}
@@ -626,6 +692,61 @@ export default function AdminPrototypeReviewPage() {
                             </button>
                           </div>
                           </div>
+                        ) : null}
+                        {isTableObject ? (
+                          <>
+                            <div className="prototype-step-field" style={{ margin: 0 }}>
+                              <span className="slow-select-label">Дистрибуция</span>
+                              <input
+                                className="slow-entity-select"
+                                value={item.distributed_by_text || ""}
+                                onChange={(event) => handleReviewItemChange(item.item_id, "distributed_by_text", event.target.value)}
+                                placeholder="unit_balance_code, fiscal_year или replicated"
+                              />
+                              <div className="muted" style={{ marginTop: 6 }}>
+                                Определяется из DEV автоматически; при необходимости значение можно исправить.
+                              </div>
+                            </div>
+                            <div className="prototype-step-field" style={{ margin: 0 }}>
+                              <span className="slow-select-label">Тип хранения истории</span>
+                              <select
+                                className="slow-entity-select"
+                                value={item.scd_type || "scd1"}
+                                onChange={(event) => handleReviewItemChange(item.item_id, "scd_type", event.target.value)}
+                              >
+                                <option value="scd1">SCD1 — хранится актуальное состояние</option>
+                                <option value="scd2">SCD2 — хранится история версий</option>
+                              </select>
+                            </div>
+                            {String(item.scd_type || "scd1").toLowerCase() === "scd2" ? (
+                              <div className="prototype-step-field" style={{ margin: 0 }}>
+                                <span className="slow-select-label">Version key</span>
+                                <textarea
+                                  className="slow-entity-select"
+                                  value={item.version_key_text || ""}
+                                  onChange={(event) => handleReviewItemChange(item.item_id, "version_key_text", event.target.value)}
+                                  placeholder="dttm_from, dttm_to"
+                                  style={{ minHeight: 86, resize: "vertical" }}
+                                />
+                                <div className="muted" style={{ marginTop: 6 }}>
+                                  Обязателен только для SCD2; для SCD1 блок в YAML не создаётся.
+                                </div>
+                              </div>
+                            ) : null}
+                            <div className="prototype-step-field" style={{ margin: 0 }}>
+                              <span className="slow-select-label">DQ filters <span className="muted">(необязательно)</span></span>
+                              <textarea
+                                className="slow-entity-select mono"
+                                value={item.filters_text || ""}
+                                onChange={(event) => handleReviewItemChange(item.item_id, "filters_text", event.target.value)}
+                                placeholder={"is_active is true\ndeleted_flag is false"}
+                                style={{ minHeight: 96, resize: "vertical" }}
+                              />
+                              <div className="muted" style={{ marginTop: 6 }}>
+                                Один SQL-фильтр на строку. Если поле пустое, секция filters не попадёт в dbt YAML.
+                              </div>
+                            </div>
+                          </>
                         ) : null}
                         {item.copy_to_clickhouse ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -699,7 +820,7 @@ export default function AdminPrototypeReviewPage() {
                     <div className="cc-surface prototype-yaml-card" style={{ margin: "14px 0 0" }}>
                       <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
                         <div className="muted">
-                          YAML draft
+                          ETL YAML draft
                         </div>
                         <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(item.yaml_bundle?.yaml_content)}>
                           {yamlCopied ? "Скопировано" : "Скопировать YAML"}
@@ -712,6 +833,27 @@ export default function AdminPrototypeReviewPage() {
                         style={{ minHeight: 220, resize: "vertical" }}
                       />
                     </div>
+                    {isTableObject ? (
+                      <div className="cc-surface prototype-yaml-card" style={{ margin: "14px 0 0" }}>
+                        <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
+                          <div>
+                            <div className="section-title">dbt registry YAML</div>
+                            <div className="muted mono">
+                              dbt_greenplum_elt/registry/{String(item.target_fqn || "").replace(".", "/")}.yml
+                            </div>
+                          </div>
+                          <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(buildDbtRegistryPreview(item))}>
+                            {yamlCopied ? "Скопировано" : "Скопировать dbt YAML"}
+                          </button>
+                        </div>
+                        <textarea
+                          className="slow-entity-select mono"
+                          readOnly
+                          value={buildDbtRegistryPreview(item)}
+                          style={{ minHeight: 260, resize: "vertical" }}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -732,7 +874,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь MR, а YAML по GP-объектам будет записан в инженерный репозиторий в ветку задачи.
+                Одна задача будет создана на весь MR. ETL YAML и dbt registry YAML будут записаны в одноимённые ветки задачи в соответствующих проектах.
               </div>
               <button
                 type="button"
@@ -792,6 +934,29 @@ export default function AdminPrototypeReviewPage() {
                 <a href={result.meta_mr.mr_url} target="_blank" rel="noreferrer">{result.meta_mr.mr_url}</a>
               </div>
             ) : null}
+            {result?.dbt_registry?.branch_name ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Ветка dbt:
+                {" "}
+                <span className="mono">{result.dbt_registry.branch_name}</span>
+              </div>
+            ) : null}
+            {Array.isArray(result?.dbt_registry?.files) && result.dbt_registry.files.length > 0 ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                dbt registry YAML:
+                {" "}
+                {result.dbt_registry.files.map((item) => item.file_path).join(", ")}
+              </div>
+            ) : null}
+            {result?.dbt_registry?.mr_url ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                MR в dbt-проекте:
+                {" "}
+                <a href={result.dbt_registry.mr_url} target="_blank" rel="noreferrer">
+                  {result.dbt_registry.mr_url}
+                </a>
+              </div>
+            ) : null}
             {result?.meta_error ? (
               <div className="page-error" style={{ marginTop: 12 }}>
                 YAML в инженерный репозиторий не записан: {result.meta_error}
@@ -800,6 +965,11 @@ export default function AdminPrototypeReviewPage() {
             {result?.meta_mr_error ? (
               <div className="page-error" style={{ marginTop: 12 }}>
                 MR в main не создан: {result.meta_mr_error}
+              </div>
+            ) : null}
+            {result?.dbt_registry_error ? (
+              <div className="page-error" style={{ marginTop: 12 }}>
+                YAML в dbt-проект не записан: {result.dbt_registry_error}
               </div>
             ) : null}
           </section>

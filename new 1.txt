@@ -1,5 +1,2 @@
-https://prod.gitlab.dwh.rusal.com/dwh/dbt/-/tree/main
-
-https://prod.gitlab.dwh.rusal.com/dwh/etl
-
-YAML в dbt-проект не записан: GitLab вернул 403: {"message":"403 Forbidden - You are not allowed to push into this branch"}
+docker compose exec api sh -lc \
+  'curl -sk --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GITLAB_API_URL/user"'

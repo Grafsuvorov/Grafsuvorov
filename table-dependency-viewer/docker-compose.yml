@@ -52,7 +52,7 @@ services:
         - ENTITY_META_GIT_META_ROOT=meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
         - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4
         - GITLAB_PROJECT=dwh/etl
-        - GITLAB_TOKEN=glpat-a08MAgfsFNPj3RysL0Mly286MQp1OjM5CA.01.0y0x2wmrd
+        - GITLAB_TOKEN=${GITLAB_TOKEN}
         - GITLAB_SSL_VERIFY=false
         - CORP_AI_API_KEY=${CORP_AI_API_KEY}
         - CORP_AI_BASE_URL=${CORP_AI_BASE_URL}
@@ -61,6 +61,7 @@ services:
         - CORP_AI_TIMEOUT_SEC=${CORP_AI_TIMEOUT_SEC}
         - ANALYST_GITLAB_PROJECT=dwh_analyst/Sql Queries Storage
         - DBT_GITLAB_PROJECT=dwh/dbt
+        - DBT_GITLAB_TOKEN=${DBT_GITLAB_TOKEN}
         - DBT_REGISTRY_ROOT=dbt_greenplum_elt/registry
         - DBT_GITLAB_TARGET_BRANCH=main
         - PROTOTYPE_ETL_TARGET_BRANCH=develop

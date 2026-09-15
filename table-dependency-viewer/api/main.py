@@ -90,6 +90,7 @@ from .config import (
     TABLE_APP_FEEDBACK,
     GITLAB_API_URL,
     ANALYST_GITLAB_PROJECT,
+    DBT_GITLAB_TOKEN,
     DBT_GITLAB_PROJECT,
     DBT_REGISTRY_ROOT,
     DBT_GITLAB_TARGET_BRANCH,
@@ -1460,13 +1461,19 @@ def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
     return _dump_yaml({"relation": relation, "dq": [duplicate_check]})
 
 
-def _prototype_gitlab_resource_exists(*, project: str, path: str, query: Optional[dict[str, Any]] = None) -> bool:
+def _prototype_gitlab_resource_exists(
+    *,
+    project: str,
+    token: str,
+    path: str,
+    query: Optional[dict[str, Any]] = None,
+) -> bool:
     ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
     try:
         _gitlab_json_request(
             api_url=GITLAB_API_URL,
             project=project,
-            token=GITLAB_TOKEN,
+            token=token,
             ssl_verify=ssl_verify,
             path=path,
             method="GET",
@@ -1488,8 +1495,8 @@ def _prototype_review_publish_dbt_registry(
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
         raise ValueError("Номер задачи для dbt MR должен быть в формате DWH-12345")
-    if not GITLAB_TOKEN:
-        raise ValueError("Не настроен GITLAB_TOKEN")
+    if not DBT_GITLAB_TOKEN:
+        raise ValueError("Не настроен DBT_GITLAB_TOKEN")
     project_ref = _parse_gitlab_project(DBT_GITLAB_PROJECT)
     if not project_ref:
         raise ValueError("Не настроен DBT_GITLAB_PROJECT")
@@ -1516,6 +1523,7 @@ def _prototype_review_publish_dbt_registry(
     ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
     branch_exists = _prototype_gitlab_resource_exists(
         project=project_ref,
+        token=DBT_GITLAB_TOKEN,
         path=f"repository/branches/{urlparse.quote(branch_name, safe='')}",
     )
     content_ref = branch_name if branch_exists else target_branch
@@ -1525,6 +1533,7 @@ def _prototype_review_publish_dbt_registry(
         file_path = file_data["file_path"]
         file_exists = _prototype_gitlab_resource_exists(
             project=project_ref,
+            token=DBT_GITLAB_TOKEN,
             path=f"repository/files/{urlparse.quote(file_path, safe='')}",
             query={"ref": content_ref},
         )
@@ -1554,7 +1563,7 @@ def _prototype_review_publish_dbt_registry(
     commit_data = _gitlab_json_request(
         api_url=GITLAB_API_URL,
         project=project_ref,
-        token=GITLAB_TOKEN,
+        token=DBT_GITLAB_TOKEN,
         ssl_verify=ssl_verify,
         path="repository/commits",
         method="POST",
@@ -1564,7 +1573,7 @@ def _prototype_review_publish_dbt_registry(
     existing_mrs = _gitlab_json_request(
         api_url=GITLAB_API_URL,
         project=project_ref,
-        token=GITLAB_TOKEN,
+        token=DBT_GITLAB_TOKEN,
         ssl_verify=ssl_verify,
         path="merge_requests",
         method="GET",
@@ -1576,7 +1585,7 @@ def _prototype_review_publish_dbt_registry(
         mr_data = _gitlab_json_request(
             api_url=GITLAB_API_URL,
             project=project_ref,
-            token=GITLAB_TOKEN,
+            token=DBT_GITLAB_TOKEN,
             ssl_verify=ssl_verify,
             path="merge_requests",
             method="POST",

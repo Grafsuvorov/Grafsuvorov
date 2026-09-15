@@ -63,6 +63,7 @@ services:
         - DBT_GITLAB_PROJECT=dwh/dbt
         - DBT_REGISTRY_ROOT=dbt_greenplum_elt/registry
         - DBT_GITLAB_TARGET_BRANCH=main
+        - PROTOTYPE_ETL_TARGET_BRANCH=develop
         - YOUTRACK_URL=${YOUTRACK_URL}
         - YOUTRACK_TOKEN=${YOUTRACK_TOKEN}
         - YOUTRACK_QUEUE=${YOUTRACK_QUEUE}

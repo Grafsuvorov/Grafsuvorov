@@ -929,7 +929,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
             {result?.meta_mr?.mr_url ? (
               <div className="muted" style={{ marginTop: 12 }}>
-                Инженерный MR в main:
+                Инженерный ETL MR в develop:
                 {" "}
                 <a href={result.meta_mr.mr_url} target="_blank" rel="noreferrer">{result.meta_mr.mr_url}</a>
               </div>

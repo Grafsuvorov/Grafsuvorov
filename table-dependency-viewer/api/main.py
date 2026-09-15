@@ -93,6 +93,7 @@ from .config import (
     DBT_GITLAB_PROJECT,
     DBT_REGISTRY_ROOT,
     DBT_GITLAB_TARGET_BRANCH,
+    PROTOTYPE_ETL_TARGET_BRANCH,
     GITLAB_PROJECT,
     GITLAB_SSL_VERIFY,
     GITLAB_TOKEN,
@@ -1994,7 +1995,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                         workspace_root_value=META_WORKSPACE_ROOT,
                         workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
                         branch_name=branch_name,
-                        base_branch="main",
+                        base_branch=PROTOTYPE_ETL_TARGET_BRANCH,
                         file_path=_prototype_review_yaml_repo_path(entity_name, schema_name, table_name),
                         content=yaml_content,
                         task_id=str(issue_result.get("issue_id") or "").strip().upper(),
@@ -2029,9 +2030,12 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                         gitlab_api_url=GITLAB_API_URL,
                         gitlab_ssl_verify=GITLAB_SSL_VERIFY,
                         task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                        release_branch="main",
+                        release_branch=PROTOTYPE_ETL_TARGET_BRANCH,
                         branch_name=meta_branch,
-                        mr_title=f"{str(issue_result.get('issue_id') or '').strip().upper()}: Engineer MR to main",
+                        mr_title=(
+                            f"{str(issue_result.get('issue_id') or '').strip().upper()}: "
+                            f"Engineer MR to {PROTOTYPE_ETL_TARGET_BRANCH}"
+                        ),
                         author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
                     )
                     if meta_mr.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
@@ -2043,7 +2047,8 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                             text=(
                                 "MR создан из Prototype Review для инженера.\n"
                                 f"Ссылка: {meta_mr.get('mr_url')}\n"
-                                f"Ветка: {meta_mr.get('feature_branch') or '—'} -> {meta_mr.get('release_branch') or 'main'}"
+                                f"Ветка: {meta_mr.get('feature_branch') or '—'} -> "
+                                f"{meta_mr.get('release_branch') or PROTOTYPE_ETL_TARGET_BRANCH}"
                             ),
                         )
                         meta_mr["task_link_attached"] = True

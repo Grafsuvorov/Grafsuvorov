@@ -1,2 +1,17 @@
-docker compose exec api python -c 'import os, requests; r=requests.get(os.environ["GITLAB_API_URL"].rstrip("/") + "/user", headers={"PRIVATE-TOKEN":
-  os.environ["GITLAB_TOKEN"]}, verify=False); print(r.status_code); print(r.text)'
+docker compose exec api python -c 'import os,json,ssl,urllib.request; u=os.environ["GITLAB_API_URL"].rstrip("/")+"/user";
+  q=urllib.request.Request(u,headers={"PRIVATE-TOKEN":os.environ["GITLAB_TOKEN"]}); d=json.load(urllib.request.urlopen(q,context=ssl._create_unverified_context()));
+  print(json.dumps({k:d.get(k) for k in ("id","username","name")},ensure_ascii=False,indent=2))'
+
+  Ожидаемый ответ:
+
+  {
+    "id": 123,
+    "username": "project_123_bot_abcd",
+    "name": "table-dependency-viewer"
+  }
+
+  Если получишь 404, используй вариант с полным API-путём:
+
+  docker compose exec api python -c 'import os,json,ssl,urllib.request; u=os.environ["GITLAB_API_URL"].rstrip("/")+"/api/v4/user";
+  q=urllib.request.Request(u,headers={"PRIVATE-TOKEN":os.environ["GITLAB_TOKEN"]}); d=json.load(urllib.request.urlopen(q,context=ssl._create_unverified_context()));
+  print(json.dumps({k:d.get(k) for k in ("id","username","name")},ensure_ascii=False,indent=2))'

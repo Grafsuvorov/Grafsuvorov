@@ -57,6 +57,37 @@ def _normalize_name(value: str) -> str:
     return str(value or "").strip().strip('"').lower()
 
 
+def _automatic_source_id(schema_name: str) -> Optional[int]:
+    schema_norm = _normalize_name(schema_name)
+    if schema_norm in {"stg", "dict_stg"}:
+        return None
+    if schema_norm in {"dm", "dm_calc"}:
+        return 15
+    return 6
+
+
+def _standard_sql_query_paths(
+    *,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+) -> dict[str, str]:
+    base_path = (
+        "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/"
+    )
+    recreate_path = base_path + SQL_FILE_NAMES["recreate_sql"]
+    return {
+        "sql_query_recreate_init": recreate_path,
+        "sql_query_insert_init": (
+            recreate_path
+            if _normalize_name(schema_name) == "dm_view"
+            else base_path + SQL_FILE_NAMES["insert_sql"]
+        ),
+        "sql_query_truncate": base_path + SQL_FILE_NAMES["truncate_sql"],
+    }
+
+
 def _normalize_path_segment(value: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "", _normalize_name(value))
 
@@ -194,6 +225,16 @@ def _normalize_yaml_payload_fields(
     dependency_sql: Optional[str] = None,
 ) -> tuple[dict[str, Any], list[str]]:
     normalized_payload = dict(payload) if isinstance(payload, dict) else {}
+    automatic_source_id = _automatic_source_id(schema_name)
+    if automatic_source_id is not None:
+        normalized_payload["source_id"] = automatic_source_id
+    normalized_payload.update(
+        _standard_sql_query_paths(
+            entity_name=entity_name,
+            schema_name=schema_name,
+            table_name=table_name,
+        )
+    )
     normalized_keys = _normalize_key_attributes(key_attributes)
     effective_keys = normalized_keys
     if effective_keys is None:
@@ -222,7 +263,7 @@ def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> 
         "table_name": table_name,
         "table_schema": schema_norm,
         "table_id": None,
-        "source_id": None,
+        "source_id": _automatic_source_id(schema_norm),
         "source_type": "GREENPLUM",
         "flag_has_views": schema_norm.endswith("_view"),
         "table_load_mode": "TRUNCATE_INIT",
@@ -235,17 +276,10 @@ def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> 
         "table_load_interval": dict(DEFAULT_INTERVAL),
         "flag_waiting_dag_finished": False,
         "start_date": None,
-        "sql_query_recreate_init": (
-            f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-            f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
-        ),
-        "sql_query_insert_init": (
-            f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-            f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
-        ),
-        "sql_query_truncate": (
-            f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-            f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+        **_standard_sql_query_paths(
+            entity_name=entity_name,
+            schema_name=schema_name,
+            table_name=table_name,
         ),
         "depends_on": {},
         "verification": [],
@@ -558,8 +592,7 @@ def _build_generated_yaml(
     if "table_load_mode" not in payload or not payload.get("table_load_mode"):
         payload["table_load_mode"] = "TRUNCATE_INIT"
 
-    if schema_norm in {"stg", "dict_stg"}:
-        payload["source_id"] = None
+    payload["source_id"] = _automatic_source_id(schema_norm)
 
     interval = payload.get("table_load_interval")
     if not isinstance(interval, dict):
@@ -573,17 +606,12 @@ def _build_generated_yaml(
         payload["verification"] = []
     payload["key_attributes"] = []
 
-    payload["sql_query_recreate_init"] = (
-        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
-    )
-    payload["sql_query_insert_init"] = (
-        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
-    )
-    payload["sql_query_truncate"] = (
-        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+    payload.update(
+        _standard_sql_query_paths(
+            entity_name=entity_name,
+            schema_name=schema_name,
+            table_name=table_name,
+        )
     )
     return payload
 
@@ -794,17 +822,15 @@ def _apply_bundle_identity(
         payload["entity_id"] = entity_id
     payload["table_schema"] = _normalize_name(schema_name)
     payload["table_name"] = _normalize_name(table_name)
-    payload["sql_query_recreate_init"] = (
-        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{sql_owner_entity}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
-    )
-    payload["sql_query_insert_init"] = (
-        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{sql_owner_entity}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
-    )
-    payload["sql_query_truncate"] = (
-        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{sql_owner_entity}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+    automatic_source_id = _automatic_source_id(schema_name)
+    if automatic_source_id is not None:
+        payload["source_id"] = automatic_source_id
+    payload.update(
+        _standard_sql_query_paths(
+            entity_name=sql_owner_entity,
+            schema_name=schema_name,
+            table_name=table_name,
+        )
     )
     return _dump_yaml(payload)
 
@@ -1331,12 +1357,17 @@ def validate_entity_dev_meta_bundle(
         ("sql_query_truncate", SQL_FILE_NAMES["truncate_sql"]),
     ):
         value = str(payload.get(field_name) or "").strip().replace("\\", "/")
-        if object_type == "view" and field_name in {"sql_query_insert_init", "sql_query_truncate"}:
+        if object_type == "view" and field_name == "sql_query_truncate":
             continue
         if not value:
             errors.append(f"Не заполнено `{field_name}`")
             continue
-        expected_value = expected_prefix + file_name
+        expected_file_name = (
+            SQL_FILE_NAMES["recreate_sql"]
+            if object_type == "view" and field_name == "sql_query_insert_init"
+            else file_name
+        )
+        expected_value = expected_prefix + expected_file_name
         if value != expected_value:
             warnings.append(f"`{field_name}` отличается от стандартного пути: ожидается `{expected_value}`")
 

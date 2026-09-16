@@ -27,7 +27,12 @@ sys.modules.setdefault("dotenv", dotenv_stub)
 
 import api.services.entity_dev_meta as entity_dev_meta
 import api.services.prototype_review as prototype_review
-from api.services.entity_dev_meta import _build_depends_on, validate_entity_dev_meta_bundle
+from api.services.entity_dev_meta import (
+    _automatic_source_id,
+    _build_default_yaml,
+    _build_depends_on,
+    validate_entity_dev_meta_bundle,
+)
 from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
 from api.services.prototype_review import (
     build_review_execution_plan,
@@ -354,6 +359,31 @@ class EntityMetaDependenciesTests(unittest.TestCase):
             _build_depends_on(sql, target_schema="dm", target_table="target", known_schemas=set()),
             {"dm": ["production_cost_plan"]},
         )
+
+    def test_source_id_is_automatic_outside_staging_schemas(self) -> None:
+        self.assertIsNone(_automatic_source_id("stg"))
+        self.assertIsNone(_automatic_source_id("dict_stg"))
+        self.assertEqual(_automatic_source_id("dm"), 15)
+        self.assertEqual(_automatic_source_id("dm_calc"), 15)
+        self.assertEqual(_automatic_source_id("dds"), 6)
+        self.assertEqual(_automatic_source_id("dm_view"), 6)
+
+    def test_dm_view_insert_path_points_to_recreate_sql(self) -> None:
+        payload = _build_default_yaml("SALES_MARGIN", "dm_view", "margin_report")
+
+        self.assertEqual(payload["source_id"], 6)
+        self.assertEqual(
+            payload["sql_query_insert_init"],
+            payload["sql_query_recreate_init"],
+        )
+        self.assertTrue(payload["sql_query_recreate_init"].endswith("/sql_query_recreate_init.sql"))
+
+    def test_table_insert_path_remains_separate(self) -> None:
+        payload = _build_default_yaml("SALES_MARGIN", "dm", "margin_report")
+
+        self.assertEqual(payload["source_id"], 15)
+        self.assertTrue(payload["sql_query_recreate_init"].endswith("/sql_query_recreate_init.sql"))
+        self.assertTrue(payload["sql_query_insert_init"].endswith("/sql_query_insert_init.sql"))
 
     def test_view_uses_recreate_sql_for_dependencies_without_insert_checks(self) -> None:
         yaml_payload = {

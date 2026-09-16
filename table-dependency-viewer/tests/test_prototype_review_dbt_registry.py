@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import unittest
 from pathlib import Path
@@ -25,8 +26,8 @@ def _load_functions():
         "Any": Any,
         "DBT_REGISTRY_ROOT": "dbt_greenplum_elt/models_metadata",
         "posix_join": posix_join,
+        "json": json,
         "re": re,
-        "_dump_yaml": lambda payload: payload,
     }
     exec(compile(isolated_module, "api/main.py", "exec"), namespace)
     return namespace
@@ -39,7 +40,7 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
     def test_scd1_omits_version_key_distribution_and_empty_filter(self) -> None:
         build = self.functions["_prototype_review_build_dbt_registry_yaml"]
 
-        payload = build({
+        content = build({
             "target_fqn": "dict_dds.address",
             "key_attributes": ["address_code", "international_display_format_code"],
             "scd_type": "scd1",
@@ -47,16 +48,18 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
             "filter": "",
         })
 
-        self.assertNotIn("version_key", payload["relation"])
-        self.assertNotIn("distributed_by", payload["relation"])
-        self.assertNotIn("filter", payload["dq"][0])
-        self.assertNotIn("error_code", payload["dq"][0])
-        self.assertEqual(payload["relation"]["unique_key"], ["address_code", "international_display_format_code"])
+        self.assertNotIn("version_key:", content)
+        self.assertNotIn("distributed_by:", content)
+        self.assertNotIn("    filter:", content)
+        self.assertNotIn("error_code:", content)
+        self.assertIn("    - address_code\n    - international_display_format_code", content)
+        self.assertIn("# наименование схемы", content)
+        self.assertIn('check_type: "duplicates"', content)
 
     def test_scd2_includes_version_key_and_filter(self) -> None:
         build = self.functions["_prototype_review_build_dbt_registry_yaml"]
 
-        payload = build({
+        content = build({
             "target_fqn": "dds.accounting_documents",
             "key_attributes": ["unit_balance_code", "fiscal_year"],
             "scd_type": "scd2",
@@ -64,8 +67,9 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
             "filter": "is_active is true",
         })
 
-        self.assertEqual(payload["relation"]["version_key"], ["dttm_from", "dttm_to"])
-        self.assertEqual(payload["dq"][0]["filter"], "is_active is true")
+        self.assertIn("    - dttm_from\n    - dttm_to", content)
+        self.assertIn('filter: "is_active is true"', content)
+        self.assertIn("#Актуально только для scd_type: scd2", content)
 
     def test_scd2_requires_only_version_key_besides_unique_key(self) -> None:
         needs_attention = self.functions["_prototype_item_needs_attention"]

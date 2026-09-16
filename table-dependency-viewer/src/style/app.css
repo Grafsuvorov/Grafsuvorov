@@ -16582,6 +16582,10 @@ html[data-theme="light"] .architecture-badge.accent {
   margin-top: 14px;
 }
 
+.prototype-review-page > .slow-summary {
+  margin-top: 24px;
+}
+
 .prototype-review-page .prototype-object-header {
   display: flex;
   align-items: flex-start;

@@ -1427,6 +1427,65 @@ def create_ytrack_issue(
     }
 
 
+def link_ytrack_issues(
+    *,
+    base_url: str,
+    token: str,
+    issue_id: str,
+    linked_issue_ids: list[str],
+    ssl_verify: str,
+) -> dict[str, Any]:
+    issue_id_norm = str(issue_id or "").strip().upper()
+    if not token or not issue_id_norm:
+        return {"status": "not_configured", "linked": [], "errors": []}
+
+    targets: list[str] = []
+    invalid: list[str] = []
+    for raw_value in linked_issue_ids or []:
+        target = str(raw_value or "").strip().upper()
+        if not target or target == issue_id_norm or target in targets:
+            continue
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*-\d+", target):
+            invalid.append(target)
+            continue
+        targets.append(target)
+    if not targets and not invalid:
+        return {"status": "skipped", "linked": [], "errors": []}
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    linked: list[str] = []
+    errors = [f"Некорректный номер задачи: {value}" for value in invalid]
+    for target in targets:
+        payload = {
+            "query": f"relates to {target}",
+            "issues": [{"idReadable": issue_id_norm}],
+        }
+        req = urlrequest.Request(
+            f"{base_url.rstrip('/')}/api/commands",
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with _urlopen_without_proxy(
+                req,
+                timeout=30,
+                ssl_verify=_normalize_bool(ssl_verify, default=True),
+            ):
+                linked.append(target)
+        except urlerror.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            errors.append(f"{target}: YouTrack вернул {exc.code}: {body}")
+        except Exception as exc:
+            errors.append(f"{target}: {exc}")
+    status = "ok" if linked and not errors else "partial" if linked else "error"
+    return {"status": status, "linked": linked, "errors": errors}
+
+
 def add_ytrack_issue_comment(
     *,
     base_url: str,

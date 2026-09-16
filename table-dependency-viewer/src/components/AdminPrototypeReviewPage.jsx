@@ -80,14 +80,20 @@ function buildDbtRegistryPreview(item) {
   const dqFilter = String(item?.filter_text || "").trim();
   const lines = [
     "relation:",
+    "  # наименование схемы",
     `  schema_name: ${schemaName}`,
+    "  # наименование таблицы",
     `  table_name: ${tableName}`,
+    "  # тип scd (scd1, scd2)",
     `  scd_type: ${scdType}`,
-    "  unique_key:",
+    "  unique_key: # список полей уникального ключа",
     ...uniqueKey.map((key) => `    - ${key}`),
   ];
   if (scdType === "scd2") {
-    lines.push("  version_key:", ...versionKey.map((key) => `    - ${key}`));
+    lines.push(
+      "  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать",
+      ...versionKey.map((key) => `    - ${key}`),
+    );
   }
   lines.push(
     "dq:",
@@ -426,6 +432,7 @@ export default function AdminPrototypeReviewPage() {
               meta_mr_error: payload?.meta_mr_error || null,
               dbt_registry: payload?.dbt_registry || null,
               dbt_registry_error: payload?.dbt_registry_error || null,
+              issue_links: payload?.issue_links || null,
             }
           : prev
       ));
@@ -875,6 +882,16 @@ export default function AdminPrototypeReviewPage() {
                 ) : (
                   <strong>{result.issue.issue_id}</strong>
                 )}
+              </div>
+            ) : null}
+            {Array.isArray(result?.issue_links?.linked) && result.issue_links.linked.length > 0 ? (
+              <div className="muted" style={{ marginTop: 12 }}>
+                Связанные задачи: {result.issue_links.linked.join(", ")}
+              </div>
+            ) : null}
+            {Array.isArray(result?.issue_links?.errors) && result.issue_links.errors.length > 0 ? (
+              <div className="page-error" style={{ marginTop: 12 }}>
+                Не удалось создать часть связей YouTrack: {result.issue_links.errors.join("; ")}
               </div>
             ) : null}
             <div className="muted" style={{ marginTop: 12 }}>

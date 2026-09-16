@@ -184,6 +184,7 @@ from .services.prototype_review import (
     _normalize_fqn,
     add_ytrack_issue_comment,
     create_ytrack_issue,
+    link_ytrack_issues,
     execute_sql_review_items_in_dev,
     extract_sql_dependencies,
     infer_final_target,
@@ -1439,22 +1440,35 @@ def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
         legacy_filters = [str(value).strip() for value in (item.get("filters") or []) if str(value).strip()]
         dq_filter = legacy_filters[0] if legacy_filters else ""
 
-    relation: dict[str, Any] = {
-        "schema_name": schema_name,
-        "table_name": table_name,
-        "scd_type": scd_type,
-        "unique_key": unique_key,
-    }
+    lines = [
+        "relation:",
+        "  # наименование схемы",
+        f"  schema_name: {schema_name}",
+        "  # наименование таблицы",
+        f"  table_name: {table_name}",
+        "  # тип scd (scd1, scd2)",
+        f"  scd_type: {scd_type}",
+        "  unique_key: # список полей уникального ключа",
+        *[f"    - {value}" for value in unique_key],
+    ]
     if scd_type == "scd2":
-        relation["version_key"] = version_key
-    duplicate_check: dict[str, Any] = {
-        "check_type": "duplicates",
-        "detail_store_flag": True,
-        "detail_store_limit": 30,
-    }
+        lines.extend(
+            [
+                "  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать",
+                *[f"    - {value}" for value in version_key],
+            ]
+        )
+    lines.extend(
+        [
+            "dq:",
+            '  - check_type: "duplicates"',
+            "    detail_store_flag: true",
+            "    detail_store_limit: 30",
+        ]
+    )
     if dq_filter:
-        duplicate_check["filter"] = dq_filter
-    return _dump_yaml({"relation": relation, "dq": [duplicate_check]})
+        lines.append(f"    filter: {json.dumps(dq_filter, ensure_ascii=False)}")
+    return "\n".join(lines) + "\n"
 
 
 def _prototype_gitlab_resource_exists(
@@ -1974,6 +1988,13 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             business_key_changed=task_context.get("business_key_changed"),
             business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
         )
+        issue_links = link_ytrack_issues(
+            base_url=YOUTRACK_URL,
+            token=YOUTRACK_TOKEN,
+            issue_id=str(issue_result.get("issue_id") or ""),
+            linked_issue_ids=task_context.get("linked_issues") or [],
+            ssl_verify=YOUTRACK_SSL_VERIFY,
+        )
         meta_branch = None
         meta_files = []
         meta_error = None
@@ -2085,6 +2106,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         return {
             "status": "ok",
             "issue": issue_result,
+            "issue_links": issue_links,
             "description": description,
             "meta_branch": meta_branch,
             "meta_files": meta_files,

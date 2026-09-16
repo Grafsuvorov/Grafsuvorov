@@ -32,6 +32,7 @@ from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
 from api.services.prototype_review import (
     build_review_execution_plan,
     create_ytrack_issue,
+    link_ytrack_issues,
     extract_sql_dependencies,
     infer_review_targets,
     load_merge_request_sql_bundle,
@@ -288,6 +289,42 @@ class CreateYTrackIssueTests(unittest.TestCase):
                 "value": {"name": "Финансы / Оборотный капитал"},
             }],
         )
+
+    def test_links_created_issue_to_related_issues(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+        requests = []
+
+        def fake_urlopen(request, **_kwargs):
+            requests.append({
+                "url": request.full_url,
+                "payload": json.loads(request.data.decode("utf-8")),
+            })
+            return FakeResponse()
+
+        with patch.object(prototype_review, "_urlopen_without_proxy", side_effect=fake_urlopen):
+            result = link_ytrack_issues(
+                base_url="https://youtrack.example",
+                token="token",
+                issue_id="KHD-10",
+                linked_issue_ids=["DWH-1", "dwh-2", "DWH-1"],
+                ssl_verify="false",
+            )
+
+        self.assertEqual(result, {"status": "ok", "linked": ["DWH-1", "DWH-2"], "errors": []})
+        self.assertEqual([item["url"] for item in requests], [
+            "https://youtrack.example/api/commands",
+            "https://youtrack.example/api/commands",
+        ])
+        self.assertEqual(requests[0]["payload"], {
+            "query": "relates to DWH-1",
+            "issues": [{"idReadable": "KHD-10"}],
+        })
 
 
 class EntityMetaDependenciesTests(unittest.TestCase):

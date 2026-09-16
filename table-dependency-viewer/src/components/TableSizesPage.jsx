@@ -37,22 +37,44 @@ export default function TableSizesPage({ onSelectTable }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    performanceApi.tableSizes(
-      limit,
-      selectedSchema === "all" ? "" : selectedSchema,
-      selectedOwner === "all" ? "" : selectedOwner,
-    )
-      .then((data) => {
+    let cancelled = false;
+    let retryTimer = null;
+
+    const loadTableSizes = async ({ initial = false } = {}) => {
+      if (initial) setLoading(true);
+      setError(null);
+      try {
+        const data = await performanceApi.tableSizes(
+          limit,
+          selectedSchema === "all" ? "" : selectedSchema,
+          selectedOwner === "all" ? "" : selectedOwner,
+        );
+        if (cancelled) return;
         setRows(Array.isArray(data?.rows) ? data.rows : []);
         setSchemas(sortSchemaNames(Array.isArray(data?.schemas) ? data.schemas : []));
         setOwners(Array.isArray(data?.owners) ? data.owners.filter(Boolean).sort((a, b) => a.localeCompare(b, "ru")) : []);
         setMeta(data?.meta || null);
-      })
-      .catch(() => setError("Не удалось загрузить размеры таблиц"))
-      .finally(() => setLoading(false));
+        if (data?.meta?.loading) {
+          retryTimer = window.setTimeout(() => loadTableSizes(), 3000);
+        } else if (data?.meta?.status === "error" && data?.meta?.cache_error && !(data?.rows?.length)) {
+          setError("Не удалось обновить данные из системного каталога");
+          retryTimer = window.setTimeout(() => loadTableSizes(), 60000);
+        }
+      } catch {
+        if (!cancelled) setError("Не удалось загрузить размеры таблиц");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadTableSizes({ initial: true });
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
   }, [limit, selectedOwner, selectedSchema]);
+
+  const catalogLoading = Boolean(meta?.loading);
 
   const summary = useMemo(() => {
     const owners = new Set(rows.map((row) => row.owner_name).filter(Boolean));
@@ -147,8 +169,13 @@ export default function TableSizesPage({ onSelectTable }) {
       </section>
 
       {loading && <div className="page-loading">Загрузка размеров таблиц...</div>}
+      {!loading && catalogLoading && (
+        <div className="page-loading">
+          Приложение уже готово к работе. Размеры таблиц загружаются в фоне…
+        </div>
+      )}
       {error && <div className="page-error">{error}</div>}
-      {!loading && !error && rows.length === 0 && (
+      {!loading && !catalogLoading && !error && rows.length === 0 && (
         <div className="card muted">Нет таблиц для выбранных фильтров.</div>
       )}
 

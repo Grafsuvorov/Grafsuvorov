@@ -379,6 +379,42 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
+  const handleRefreshYaml = async (itemId) => {
+    const current = reviewItemsDraft.find((item) => item.item_id === itemId);
+    const entityName = String(current?.entity_name || "").trim();
+    if (!current || !entityName || !current.yaml_bundle?.yaml_content || current.yaml_refreshing) return;
+    setError(null);
+    setReviewItemsDraft((prev) => prev.map((item) => (
+      item.item_id === itemId ? { ...item, yaml_refreshing: true } : item
+    )));
+    try {
+      const payload = await adminApi.prototypeReviewRefreshYaml({
+        target_fqn: current.target_fqn,
+        entity_name: entityName,
+        key_attributes: splitItems(current.key_attributes_text),
+        object_type: current.object_type,
+        yaml_content: current.yaml_bundle.yaml_content,
+      });
+      setReviewItemsDraft((prev) => prev.map((item) => (
+        item.item_id !== itemId
+          ? item
+          : {
+              ...item,
+              yaml_bundle: {
+                ...(item.yaml_bundle || {}),
+                yaml_content: payload?.yaml_content || item.yaml_bundle?.yaml_content || "",
+              },
+              yaml_refreshing: false,
+            }
+      )));
+    } catch (err) {
+      setError(err?.message || "Не удалось обновить YAML после выбора сущности");
+      setReviewItemsDraft((prev) => prev.map((item) => (
+        item.item_id === itemId ? { ...item, yaml_refreshing: false } : item
+      )));
+    }
+  };
+
   const handleCreateIssue = async () => {
     const trimmedMr = String(mrInput || "").trim();
     if (!trimmedMr || creatingIssue) return;
@@ -657,8 +693,10 @@ export default function AdminPrototypeReviewPage() {
                           className="slow-entity-select"
                           value={item.entity_name || ""}
                           onChange={(event) => handleReviewItemChange(item.item_id, "entity_name", event.target.value)}
+                          onBlur={() => handleRefreshYaml(item.item_id)}
                           placeholder="BI_SB_WUC"
                         />
+                        {item.yaml_refreshing ? <span className="muted">Обновляем YAML…</span> : null}
                         </div>
                         {isTableObject ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>

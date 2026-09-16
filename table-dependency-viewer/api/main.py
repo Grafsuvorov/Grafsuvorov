@@ -507,6 +507,14 @@ class PrototypeReviewTableCheckPayload(BaseModel):
     key_attributes: Optional[List[str]] = None
 
 
+class PrototypeReviewYamlRefreshPayload(BaseModel):
+    target_fqn: str
+    entity_name: str
+    key_attributes: Optional[List[str]] = None
+    object_type: Optional[str] = None
+    yaml_content: Optional[str] = None
+
+
 class PrototypeReviewItemPayload(BaseModel):
     item_id: Optional[str] = None
     path: Optional[str] = None
@@ -677,7 +685,12 @@ def _get_schema_sync_report_rows(*, run_id: int):
 
 @app.get("/api/health")
 def healthcheck():
-    return {"status": "ok"}
+    with _cache_warmup_state_lock:
+        warmup = {
+            **_cache_warmup_state,
+            "errors": list(_cache_warmup_state.get("errors") or []),
+        }
+    return {"status": "ok", "cache_warmup": warmup}
 
 
 @router.post("/api/admin/refresh-cache")
@@ -700,15 +713,18 @@ def refresh_cache(request: Request):
     globals()["_logic_audit_cache_ts"] = 0
     globals()["_assistant_index_cache"] = None
     globals()["_assistant_index_ts"] = 0
-    globals()["_table_sizes_cache_payload"] = None
-    globals()["_table_sizes_cache_cycle"] = None
+    with _table_sizes_cache_state_lock:
+        globals()["_table_sizes_cache_payload"] = None
+        globals()["_table_sizes_cache_cycle"] = None
+        globals()["_table_sizes_cache_error"] = None
+        globals()["_table_sizes_cache_retry_after"] = 0.0
 
     try:
         get_cached_meta_and_index()
         get_cached_order_breaches()
         get_graph_snapshot()
         _build_logic_audit_cache()
-        get_cached_table_sizes()
+        _refresh_table_sizes_cache(force=True)
     except Exception as exc:
         print("❌ refresh cache error:", exc)
         print(traceback.format_exc())
@@ -1220,6 +1236,78 @@ def _prototype_review_apply_yaml_dependencies(yaml_content: str, dependencies: l
     return _dump_yaml(payload)
 
 
+def _prototype_review_refresh_yaml_identity(
+    *,
+    item: dict[str, Any],
+    reserved_table_ids: Optional[set[int]] = None,
+    preserve_submitted_table_id: bool = False,
+) -> str:
+    target_fqn = str(item.get("target_fqn") or "").strip().lower()
+    entity_name = str(item.get("entity_name") or "").strip()
+    if "." not in target_fqn or not entity_name:
+        raise ValueError(f"Не заполнены сущность или schema.table для `{target_fqn or 'объекта'}`")
+    schema_name, table_name = target_fqn.split(".", 1)
+    key_attributes = [
+        str(value).strip()
+        for value in (item.get("key_attributes") or [])
+        if str(value).strip()
+    ]
+    bundle = init_entity_dev_meta_bundle(
+        engine=engine,
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+        key_attributes=key_attributes or None,
+        reserved_table_ids=reserved_table_ids,
+    )
+    try:
+        generated_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
+        submitted_payload = yaml.safe_load(item.get("yaml_content") or "") or {}
+    except Exception as exc:
+        raise ValueError(f"Не удалось обновить YAML для `{target_fqn}`: {exc}") from exc
+    if not isinstance(generated_payload, dict) or not isinstance(submitted_payload, dict):
+        raise ValueError(f"YAML для `{target_fqn}` должен быть объектом")
+
+    result = dict(generated_payload)
+    result.update(submitted_payload)
+    authoritative_fields = (
+        "table_name",
+        "table_schema",
+        "table_id",
+        "source_id",
+        "entity_id",
+        "entity_name",
+        "sql_query_recreate_init",
+        "sql_query_insert_init",
+        "sql_query_truncate",
+    )
+    for field_name in authoritative_fields:
+        if field_name in generated_payload:
+            result[field_name] = generated_payload[field_name]
+        else:
+            result.pop(field_name, None)
+
+    if preserve_submitted_table_id:
+        try:
+            submitted_table_id = int(submitted_payload.get("table_id"))
+        except Exception:
+            submitted_table_id = None
+        if submitted_table_id and submitted_table_id > 0:
+            result["table_id"] = submitted_table_id
+
+    object_type = str(item.get("object_type") or result.get("object_type") or "TABLE").strip().upper()
+    result["object_type"] = object_type
+    result["flag_has_views"] = object_type == "VIEW"
+    if key_attributes and object_type == "TABLE":
+        result["key_attributes"] = key_attributes
+    elif object_type != "TABLE":
+        result.pop("key_attributes", None)
+    return _dump_yaml(result)
+
+
 def _prototype_review_resolve_item(
     *,
     target_fqn: str,
@@ -1231,6 +1319,7 @@ def _prototype_review_resolve_item(
     fallback_entity_name: str = "",
     key_attributes_override: Optional[list[str]] = None,
     object_type_hint: str = "",
+    reserved_table_ids: Optional[set[int]] = None,
 ) -> dict[str, Any]:
     meta = _prototype_find_meta_by_fqn(target_fqn)
     meta_variants = _prototype_find_meta_variants_by_fqn(target_fqn)
@@ -1252,6 +1341,7 @@ def _prototype_review_resolve_item(
             schema_name=schema_name,
             table_name=table_name,
             key_attributes=list(key_attributes_override or []) or None,
+            reserved_table_ids=reserved_table_ids,
         )
     except Exception:
         yaml_bundle = None
@@ -1693,6 +1783,7 @@ def _prototype_review_build_result(
             exec_by_item_id[row_item_id].append(row)
     prep_by_item_id = {str(item.get("item_id") or ""): item for item in preparation_rows}
     review_items: list[dict[str, Any]] = []
+    reserved_table_ids: set[int] = set()
     all_dependencies: list[str] = []
     dependency_seen: set[str] = set()
     requires_user_input = False
@@ -1752,6 +1843,7 @@ def _prototype_review_build_result(
             related_files=related_files,
             fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
             object_type_hint=str(target_item.get("object_type") or ""),
+            reserved_table_ids=reserved_table_ids,
         )
         item_result["item_id"] = item_id
         item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()
@@ -1790,6 +1882,7 @@ def _prototype_review_build_result(
             related_files=related_files,
             fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
             object_type_hint=object_type,
+            reserved_table_ids=reserved_table_ids,
         )
         item_result["item_id"] = f"{target_fqn}::{object_type}"
         item_result["object_type"] = object_type
@@ -1922,6 +2015,23 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.post("/api/admin/prototype-review/refresh-yaml")
+def refresh_admin_prototype_review_yaml(payload: PrototypeReviewYamlRefreshPayload, request: Request):
+    _require_authenticated(request)
+    try:
+        yaml_content = _prototype_review_refresh_yaml_identity(
+            item=payload.model_dump(),
+            preserve_submitted_table_id=True,
+        )
+        return {"status": "ok", "yaml_content": yaml_content}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        print("❌ /api/admin/prototype-review/refresh-yaml error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/api/admin/prototype-review/create-issue")
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
@@ -1939,6 +2049,17 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         )
         parsed_task = parse_prototype_task_text(payload.task_text or "")
         review_items = [item.model_dump() for item in payload.review_items]
+        reserved_table_ids: set[int] = set()
+        for item in review_items:
+            if not str(item.get("yaml_content") or "").strip():
+                continue
+            try:
+                item["yaml_content"] = _prototype_review_refresh_yaml_identity(
+                    item=item,
+                    reserved_table_ids=reserved_table_ids,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
         incomplete = []
         for item in review_items:
             needs_attention, missing = _prototype_item_needs_attention(item)
@@ -4989,6 +5110,20 @@ _logic_audit_cache_ts = 0
 _LOGIC_AUDIT_CACHE_TTL = 86400
 _table_sizes_cache_payload = None
 _table_sizes_cache_cycle = None
+_table_sizes_cache_loading = False
+_table_sizes_cache_error = None
+_table_sizes_cache_retry_after = 0.0
+_table_sizes_cache_state_lock = threading.Lock()
+_table_sizes_cache_build_lock = threading.Lock()
+_TABLE_SIZES_CACHE_RETRY_DELAY = 60
+
+_cache_warmup_state = {
+    "status": "not_started",
+    "started_at": None,
+    "finished_at": None,
+    "errors": [],
+}
+_cache_warmup_state_lock = threading.Lock()
 
 SQL_STOPWORDS = {
     "select", "from", "where", "join", "left", "right", "inner", "outer", "full", "on",
@@ -5057,7 +5192,11 @@ def _build_table_sizes_cache() -> dict[str, Any]:
         ORDER BY size_bytes DESC NULLS LAST, n.nspname, c.relname
     """
 
-    with engine.connect() as conn:
+    with engine.begin() as conn:
+        # Запрос системного каталога не должен бесконечно ждать чужую блокировку
+        # или удерживать фоновый прогрев при недоступной БД.
+        conn.execute(text("SET LOCAL lock_timeout TO '5s'"))
+        conn.execute(text("SET LOCAL statement_timeout TO '120s'"))
         rows = conn.execute(text(query)).mappings().all()
 
     normalized_rows = [
@@ -5079,17 +5218,109 @@ def _build_table_sizes_cache() -> dict[str, Any]:
     }
 
 
-def get_cached_table_sizes() -> dict[str, Any]:
+def _table_sizes_cache_response() -> dict[str, Any]:
+    with _table_sizes_cache_state_lock:
+        payload = dict(_table_sizes_cache_payload or {})
+        is_current = (
+            _table_sizes_cache_payload is not None
+            and _table_sizes_cache_cycle == _current_table_sizes_cache_cycle()
+        )
+        payload.setdefault("generated_at", None)
+        payload.setdefault("schemas", [])
+        payload.setdefault("rows", [])
+        payload["loading"] = _table_sizes_cache_loading
+        payload["status"] = "ready" if is_current else ("loading" if _table_sizes_cache_loading else "error")
+        payload["error"] = _table_sizes_cache_error
+        return payload
+
+
+def _refresh_table_sizes_cache(*, force: bool = False) -> dict[str, Any]:
     global _table_sizes_cache_payload, _table_sizes_cache_cycle
+    global _table_sizes_cache_loading, _table_sizes_cache_error, _table_sizes_cache_retry_after
+
+    with _table_sizes_cache_build_lock:
+        cycle = _current_table_sizes_cache_cycle()
+        with _table_sizes_cache_state_lock:
+            if not force and _table_sizes_cache_payload is not None and _table_sizes_cache_cycle == cycle:
+                _table_sizes_cache_loading = False
+                return _table_sizes_cache_response_unlocked()
+            _table_sizes_cache_loading = True
+            _table_sizes_cache_error = None
+
+        print("⚠️ rebuilding table sizes cache")
+        try:
+            payload = _build_table_sizes_cache()
+        except Exception as exc:
+            with _table_sizes_cache_state_lock:
+                _table_sizes_cache_loading = False
+                _table_sizes_cache_error = str(exc)
+                _table_sizes_cache_retry_after = time.monotonic() + _TABLE_SIZES_CACHE_RETRY_DELAY
+            print("❌ table sizes cache refresh error:", exc)
+            print(traceback.format_exc())
+            raise
+
+        with _table_sizes_cache_state_lock:
+            _table_sizes_cache_payload = payload
+            _table_sizes_cache_cycle = cycle
+            _table_sizes_cache_loading = False
+            _table_sizes_cache_error = None
+            _table_sizes_cache_retry_after = 0.0
+            return _table_sizes_cache_response_unlocked()
+
+
+def _table_sizes_cache_response_unlocked() -> dict[str, Any]:
+    """Return cache state. Caller must hold _table_sizes_cache_state_lock."""
+    payload = dict(_table_sizes_cache_payload or {})
+    is_current = (
+        _table_sizes_cache_payload is not None
+        and _table_sizes_cache_cycle == _current_table_sizes_cache_cycle()
+    )
+    payload.setdefault("generated_at", None)
+    payload.setdefault("schemas", [])
+    payload.setdefault("rows", [])
+    payload["loading"] = _table_sizes_cache_loading
+    payload["status"] = "ready" if is_current else ("loading" if _table_sizes_cache_loading else "error")
+    payload["error"] = _table_sizes_cache_error
+    return payload
+
+
+def _schedule_table_sizes_cache_refresh() -> None:
+    global _table_sizes_cache_loading
 
     cycle = _current_table_sizes_cache_cycle()
-    if _table_sizes_cache_payload is not None and _table_sizes_cache_cycle == cycle:
-        return _table_sizes_cache_payload
+    with _table_sizes_cache_state_lock:
+        if _table_sizes_cache_payload is not None and _table_sizes_cache_cycle == cycle:
+            return
+        if _table_sizes_cache_loading or time.monotonic() < _table_sizes_cache_retry_after:
+            return
+        _table_sizes_cache_loading = True
 
-    print("⚠️ rebuilding table sizes cache")
-    _table_sizes_cache_payload = _build_table_sizes_cache()
-    _table_sizes_cache_cycle = cycle
-    return _table_sizes_cache_payload
+    def refresh_in_background():
+        try:
+            _refresh_table_sizes_cache()
+        except Exception:
+            # Ошибка уже записана в состояние кеша и в лог; приложение продолжает работать.
+            pass
+
+    threading.Thread(
+        target=refresh_in_background,
+        name="table-sizes-cache-refresh",
+        daemon=True,
+    ).start()
+
+
+def get_cached_table_sizes(*, non_blocking: bool = False) -> dict[str, Any]:
+    cycle = _current_table_sizes_cache_cycle()
+    with _table_sizes_cache_state_lock:
+        is_current = _table_sizes_cache_payload is not None and _table_sizes_cache_cycle == cycle
+        if is_current:
+            return _table_sizes_cache_response_unlocked()
+
+    if non_blocking:
+        _schedule_table_sizes_cache_refresh()
+        return _table_sizes_cache_response()
+
+    return _refresh_table_sizes_cache()
 
 
 def _strip_sql_comments(sql_text: str) -> str:
@@ -7149,13 +7380,45 @@ def _resolve_table_key(
 
 @app.on_event("startup")
 def warm_up_cache():
-    try:
-        get_cached_meta_and_index()
-        get_cached_order_breaches()  # 🔥 прогрев orderbreaches
-        get_graph_snapshot()
-        get_cached_table_sizes()
-    except Exception as e:
-        print("Ошибка при старте приложения:", e)
+    def warm_up_in_background():
+        with _cache_warmup_state_lock:
+            _cache_warmup_state.update(
+                {
+                    "status": "running",
+                    "started_at": datetime.now(DEV_COPY_TZ).isoformat(),
+                    "finished_at": None,
+                    "errors": [],
+                }
+            )
+
+        warmers = (
+            ("metadata", get_cached_meta_and_index),
+            ("order_breaches", get_cached_order_breaches),
+            ("graph", get_graph_snapshot),
+            ("table_sizes", get_cached_table_sizes),
+        )
+        errors = []
+        for cache_name, loader in warmers:
+            try:
+                loader()
+            except Exception as exc:
+                errors.append({"cache": cache_name, "error": str(exc)})
+                print(f"❌ cache warm-up error ({cache_name}):", exc)
+
+        with _cache_warmup_state_lock:
+            _cache_warmup_state.update(
+                {
+                    "status": "partial" if errors else "ready",
+                    "finished_at": datetime.now(DEV_COPY_TZ).isoformat(),
+                    "errors": errors,
+                }
+            )
+
+    threading.Thread(
+        target=warm_up_in_background,
+        name="application-cache-warmup",
+        daemon=True,
+    ).start()
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10669,7 +10932,9 @@ def get_table_sizes(
     try:
         schema_value = str(schema or "").strip()
         owner_value = str(owner or "").strip()
-        cached = get_cached_table_sizes()
+        # Первый запрос не ждёт тяжёлое чтение системного каталога: при пустом
+        # кеше запускаем единственный фоновый refresh и сразу возвращаем статус.
+        cached = get_cached_table_sizes(non_blocking=True)
         all_rows = cached.get("rows") or []
         filtered_rows = all_rows
         if schema_value:
@@ -10687,6 +10952,9 @@ def get_table_sizes(
                 "returned_rows": len(rows),
                 "available_rows": len(filtered_rows),
                 "total_size_bytes": total_size_bytes,
+                "status": cached.get("status"),
+                "loading": bool(cached.get("loading")),
+                "cache_error": cached.get("error"),
             },
             "schemas": cached.get("schemas") or [],
             "owners": sorted({row.get("owner_name") for row in all_rows if row.get("owner_name")}),

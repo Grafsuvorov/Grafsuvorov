@@ -513,8 +513,9 @@ def _lookup_object_branch_contexts(engine, object_keys: Iterable[str]) -> dict[s
     return result
 
 
-def _next_table_id(*roots: Path) -> int:
+def _next_table_id(*roots: Path, reserved_table_ids: Optional[set[int]] = None) -> int:
     used_ids = _collect_used_table_ids(*roots)
+    used_ids.update(reserved_table_ids or set())
     normal_ids = [value for value in used_ids if 0 < value <= TABLE_ID_MAX_NORMAL]
     if normal_ids:
         return max(normal_ids) + 1
@@ -548,6 +549,7 @@ def _build_generated_yaml(
     entity_name: str,
     schema_name: str,
     table_name: str,
+    reserved_table_ids: Optional[set[int]] = None,
 ) -> dict[str, Any]:
     schema_norm = _normalize_name(schema_name)
     table_norm = _normalize_name(table_name)
@@ -568,7 +570,13 @@ def _build_generated_yaml(
     payload["table_name"] = table_norm
     payload["table_schema"] = schema_norm
     payload["entity_name"] = entity_name
-    payload["table_id"] = _next_table_id(prod_root, dev_root)
+    payload["table_id"] = _next_table_id(
+        prod_root,
+        dev_root,
+        reserved_table_ids=reserved_table_ids,
+    )
+    if reserved_table_ids is not None:
+        reserved_table_ids.add(payload["table_id"])
 
     entity_id = payload.get("entity_id")
     if entity_id in (None, "", 0, "0"):
@@ -1158,6 +1166,7 @@ def init_entity_dev_meta_bundle(
     schema_name: str,
     table_name: str,
     key_attributes: Optional[list[str]] = None,
+    reserved_table_ids: Optional[set[int]] = None,
 ) -> dict[str, Any]:
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
@@ -1220,6 +1229,7 @@ def init_entity_dev_meta_bundle(
         entity_name=entity_name,
         schema_name=schema_name,
         table_name=table_name,
+        reserved_table_ids=reserved_table_ids,
     )
     normalized_keys = _normalize_key_attributes(key_attributes)
     if normalized_keys:

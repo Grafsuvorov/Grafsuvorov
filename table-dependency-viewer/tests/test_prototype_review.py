@@ -31,6 +31,8 @@ from api.services.entity_dev_meta import (
     _automatic_source_id,
     _build_default_yaml,
     _build_depends_on,
+    _build_generated_yaml,
+    _next_table_id,
     validate_entity_dev_meta_bundle,
 )
 from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
@@ -384,6 +386,45 @@ class EntityMetaDependenciesTests(unittest.TestCase):
         self.assertEqual(payload["source_id"], 15)
         self.assertTrue(payload["sql_query_recreate_init"].endswith("/sql_query_recreate_init.sql"))
         self.assertTrue(payload["sql_query_insert_init"].endswith("/sql_query_insert_init.sql"))
+
+    def test_next_table_id_respects_ids_reserved_in_current_review(self) -> None:
+        with patch.object(entity_dev_meta, "_collect_used_table_ids", return_value={100, 101}):
+            self.assertEqual(_next_table_id(Path("prod"), Path("dev")), 102)
+            self.assertEqual(
+                _next_table_id(Path("prod"), Path("dev"), reserved_table_ids={102, 103}),
+                104,
+            )
+
+    def test_generated_tables_receive_unique_ids_within_one_review(self) -> None:
+        reserved_ids = set()
+        with (
+            TemporaryDirectory() as prod_dir,
+            TemporaryDirectory() as dev_dir,
+            patch.object(entity_dev_meta, "_lookup_entity_id", return_value=65),
+            patch.object(entity_dev_meta, "_collect_used_table_ids", return_value={200}),
+        ):
+            first = _build_generated_yaml(
+                engine=None,
+                prod_root=Path(prod_dir),
+                dev_root=Path(dev_dir),
+                entity_name="ENTITY",
+                schema_name="dm",
+                table_name="first_table",
+                reserved_table_ids=reserved_ids,
+            )
+            second = _build_generated_yaml(
+                engine=None,
+                prod_root=Path(prod_dir),
+                dev_root=Path(dev_dir),
+                entity_name="ENTITY",
+                schema_name="dm",
+                table_name="second_table",
+                reserved_table_ids=reserved_ids,
+            )
+
+        self.assertEqual(first["table_id"], 201)
+        self.assertEqual(second["table_id"], 202)
+        self.assertEqual(reserved_ids, {201, 202})
 
     def test_view_uses_recreate_sql_for_dependencies_without_insert_checks(self) -> None:
         yaml_payload = {

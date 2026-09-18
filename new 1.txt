@@ -1,241 +1,261 @@
- WITH ai_field AS (
-      SELECT DISTINCT ON (issue_id)
-          issue_id,
-          field_value AS ai_saving_text,
-          dttm_loaded
-      FROM tech_etl.yt_issue_custom_field
-      WHERE lower(trim(field_name)) = lower('Экономия за счет ИИ')
-        AND nullif(trim(field_value), '') IS NOT NULL
-      ORDER BY issue_id, dttm_loaded DESC
-  ),
+-- DROP FUNCTION userdata.get_objects_from_script(text);
 
-  ai_parts AS (
-      SELECT
-          issue_id,
-          ai_saving_text,
+CREATE OR REPLACE FUNCTION userdata.get_objects_from_script(p_script text)
+	RETURNS TABLE (schema text, name text, type text)
+	LANGUAGE plpgsql
+	VOLATILE
+AS $$
+	
+begin
+    create temp table dataset_without_depend_objects on commit drop as
+        with
+            source_script as (select annotate_query(p_script) ast_query),
+            stmt as (
+                select
+                    regexp_split_to_table(
+                        regexp_replace(
+                            ast_query,
+                            '({VIEWSTMT|{RENAMESTMT|{INDEXSTMT|{CREATEEXTERNALSTMT|{RULESTMT|' ||
+                            '{ALTERTABLESTMT|{GRANTSTMT|{COMMENTSTMT|{ALTEROWNERSTMT|{CREATEFUNCSTMT|' ||
+                            '{CREATESTMT|{DROPSTMT|{UPDATE|{DELETE|{INSERT|{TRUNCATESTMT|' ||
+                            '{ALTEROBJECTSCHEMASTMT|{ALTERFUNCTIONSTMT|{SELECT|{CREATESEQSTMT|{ALTERSEQSTMT|' ||
+                            '{COMPTYPESTMT|{CREATEENUMSTMT|{ALTERTYPESTMT)',
+                            '!AnAnAsEgG!\1',
+                            'g'
+                        ),
+                        '!AnAnAsEgG!'
+                    ) subqry
+                from source_script
+            ),
+            script_parts as (select trim(unnest(regexp_matches(subqry, '[A-Z]+\s'))) query_type,
+                                    subqry                                           query_part
+                             from stmt),
+            stmt_template as (
+                select unnest(array [
+                        'COMMENTSTMT',
+                        'DROPSTMT',
+                        'RENAMESTMT',
+                        'RENAMESTMT',
+                        'RENAMESTMT',
+                        'ALTEROBJECTSCHEMASTMT',
+                        'CREATEFUNCSTMT',
+                        'ALTEROWNERSTMT',
+                        'GRANTSTMT',
+                        'GRANTSTMT',
+                        'ALTERTABLESTMT',
+                        'ALTERFUNCTIONSTMT',
+                        'CREATESEQSTMT',
+                        'ALTERSEQSTMT',
+                        'CREATEENUMSTMT',
+                        'ALTERTYPESTMT'
+                        ]) query_type,
+                       unnest(array [
+                        ':objname\s\((.*?)\)\s:objargs',
+                        ':objects\s\(\((.*?)\)\)\s',
+                        ':object\s\((.*?)\)\s:objarg|:schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s',
+                        ':schemaname\s(.*?)\s:relname(?:.*):newname\s(.*?)\s:behavior|:object\s\("(.*?)"\s"(?:.*):newname\s(.*?)\s:behavior',
+                        ':object\s\((.*?)\)\s:objarg|:schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s',
+                        ':object\s\((.*?)\)\s:objarg|:schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s',
+                        ':funcname\s\((.*?)\)\s:parameters',
+                        ':object\s\((.*?)\)\s:objarg',
+                        ':schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s',
+                        ':funcname\s\((.*?)\)\s:funcargs',
+                        ':schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s',
+                        ':funcname\s\((.*?)\)\s:funcargs',
+                        ':schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s|:defname\sowned_by\s:arg\s\((.*?)\)\s',
+                        ':schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s|:defname\sowned_by\s:arg\s\((.*?)\)\s',
+                        ':typeName\s\((.*?)\)\s',
+                        ':typeName\s\((.*?)\)\s'
+                        ]) query_template,
+                       unnest(array [
+                        ':objtype\s([\d]+)\s',
+                        ':removeType\s([\d]+)\s',
+                        ':renameType\s([\d]+)\s',
+                        ':renameType\s([\d]+)\s',
+                        ':relationType\s([\d]+)\s',
+                        ':objectType\s([\d]+)}',
+                        null,
+                        ':objectType\s([\d]+)\s',
+                        null,
+                        null,
+                        ':relkind\s([\d]+)}',
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                        ]) obj_type_template
+            ),
+            raw_objects as (
+                select sp.*,
+                       case
+                           when a.query_part is null
+                               then array_remove(
+                                        regexp_matches(
+                                            sp.query_part,
+                                            ':schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s',
+                                            'g'
+                                        ),
+                                        null
+                                    )
+                           else a.raw_obj
+                       end raw_obj,
+                       case
+                           when a.obj_type in (4, 23, 26, 27) or
+                                sp.query_type in ('RULESTMT', 'CREATEEXTERNALSTMT', 'CREATESTMT', 'INSERT')
+                               then 'table'
+                           when a.obj_type = 14 or
+                                (position(' :funcname ' in sp.query_part) > 0 and sp.query_type != 'SELECT')
+                               then 'function'
+                           when a.obj_type = 36 or sp.query_type = 'VIEWSTMT' then 'view'
+                           when a.obj_type = 25 or sp.query_type in ('CREATESEQSTMT', 'ALTERSEQSTMT')
+                               then 'sequence'
+                           when a.obj_type = 35 or
+                                sp.query_type in ('COMPTYPESTMT', 'CREATEENUMSTMT', 'ALTERTYPESTMT')
+                               then 'type'
+                       end type,
+                       obj_type
+                from script_parts sp
+                left join (
+                    select sp.query_part,
+                           st.query_template,
+                           st.obj_type_template,
+                           case
+                               when obj_type_template is not null
+                                   then array_to_string(
+                                            array_remove(regexp_matches(query_part, obj_type_template), null),
+                                            ''
+                                        )::int2
+                           end obj_type,
+                           array_remove(
+                               regexp_matches(
+                                   query_part,
+                                   coalesce(query_template, ':schemaname\s(.*?)\s:relname\s(.*?)\s:inhOpt\s'),
+                                   'g'
+                               ),
+                               null
+                           ) raw_obj
+                    from script_parts sp
+                    left join stmt_template st on sp.query_type = st.query_type
+                ) a on sp.query_part = a.query_part
+            ),
+            final_cte as (
+                select distinct
+                    *,
+                    case when array_length(raw_obj, 1) in (2, 3) then replace(raw_obj[1], '\ ', ' ') end schema,
+                    case when array_length(raw_obj, 1) in (2, 3) then replace(raw_obj[2], '\ ', ' ') end name,
+                    case array_length(raw_obj, 1)
+                        when 1 then unnest(string_to_array(array_to_string(raw_obj, ''), ') ('))
+                        when 3 then unnest(format('{null,%s}', raw_obj[3])::text[])
+                    end raw_obj1
+                from raw_objects
+            ),
+            final_cte1 as (
+                select *,
+                       array_remove(regexp_matches(raw_obj1, '"(.*)"\s"(.*)"\s"(.*)"|"(.*)"\s"(.*)"', 'g'), null) obj
+                from final_cte
+            ),
+            final_cte2 as (
+                select distinct
+                    first_value(
+                        case
+                            when array_length(f1.obj, 1) = 3 and f1.query_type != 'COMMENTSTMT'
+                                then 'table'
+                            else f.type
+                        end
+                    ) over (
+                        partition by coalesce(f.schema, replace(f1.obj[1], '\ ', ' ')),
+                                     coalesce(f.name, replace(f1.obj[2], '\ ', ' '))
+                        order by f.type nulls last
+                    ) type,
+                    coalesce(f.schema, replace(f1.obj[1], '\ ', ' ')) schema,
+                    coalesce(f.name, replace(f1.obj[2], '\ ', ' '))   name
+                from final_cte f
+                left join final_cte1 f1 on f.query_part = f1.query_part and f.raw_obj = f1.raw_obj
+            )
+        select f2.schema::text,
+               coalesce(t.relname, f2.name)::text name,
+               coalesce(
+                   f2.type,
+                   case c.relkind
+                       when 'v' then 'view'
+                       when 'r' then 'table'
+                       when 'i' then 'table'
+                       when 'c' then 'type'
+                   end
+               )::text type
+        from final_cte2 f2
+        left join pg_class c on c.relname = f2.name
+        left join pg_namespace n on  n.oid = c.relnamespace and n.nspname = f2.schema
+        left join pg_index i on c.oid = i.indexrelid and c.relkind = 'i'
+        left join pg_class t on t.oid = i.indrelid
+        where f2.schema != '<>'
+    ;
+    return query (
+        with recursive dep_views (dep_view) as (
+            select r.ev_class
+            from pg_rewrite r,
+                 pg_depend d,
+                 dataset_without_depend_objects f2,
+                 pg_class c,
+                 pg_namespace n
+            where d.refobjid = c.oid
+              and r.oid = d.objid
+              and d.classid = 'pg_rewrite'::regclass
+              and d.refclassid = 'pg_class'::regclass
+              and d.deptype = 'n'
+              and d.refobjid <> r.ev_class
+              and c.relname = f2.name
+              and n.nspname = f2.schema
+              and f2.type in ('table', 'view')
+            union
+            select r.ev_class
+            from pg_rewrite r,
+                 pg_depend d,
+                 dep_views dv
+            where d.refobjid = dv.dep_view
+              and r.oid = d.objid
+              and d.classid = 'pg_rewrite'::regclass
+              and d.refclassid = 'pg_class'::regclass
+              and d.deptype = 'n'
+              and d.refobjid <> r.ev_class
+        )
+        select *
+        from dataset_without_depend_objects o
+        where o.type is not null
+        union
+        select n.nspname::text,
+               c.relname::text,
+               'view'::text
+        from dep_views dv,
+             pg_class c,
+             pg_namespace n
+        where dv.dep_view = c.oid
+          and c.relkind = 'v'
+          and n.oid = c.relnamespace
+        union
+        select n.nspname::text,
+               c.relname::text,
+               'sequence'::text
+        from dataset_without_depend_objects f2,
+             pg_class rc,
+             pg_depend d,
+             pg_class c,
+             pg_namespace n
+        where d.refobjid = rc.oid
+          and rc.relnamespace = c.relnamespace
+          and rc.relkind = 'r'
+          and rc.relname = f2.name
+          and n.nspname = f2.schema
+          and f2.type = 'table'
+          and d.deptype = 'a'
+          and c.oid = d.objid
+          and c.relkind = 'S'
+          and n.oid = c.relnamespace
+          and d.classid = 'pg_class'::regclass
+          and d.refclassid = 'pg_class'::regclass
+    );
+end
 
-          replace(
-              substring(
-                  lower(ai_saving_text)
-                  FROM '([0-9]+([.,][0-9]+)?)[[:space:]]*(дн|день|дня|дней)'
-              ),
-              ',',
-              '.'
-          )::numeric AS days_value,
-
-          replace(
-              substring(
-                  lower(ai_saving_text)
-                  FROM '([0-9]+([.,][0-9]+)?)[[:space:]]*(ч|час|часа|часов)'
-              ),
-              ',',
-              '.'
-          )::numeric AS hours_value,
-
-          replace(
-              substring(
-                  lower(ai_saving_text)
-                  FROM '([0-9]+([.,][0-9]+)?)[[:space:]]*(мин|минута|минуты|минут|м)'
-              ),
-              ',',
-              '.'
-          )::numeric AS minutes_value
-
-      FROM ai_field
-  ),
-
-  ai AS (
-      SELECT
-          issue_id,
-          ai_saving_text,
-
-          CASE
-              -- Если указано просто число, считаем его часами,
-              -- как это сейчас делает приложение.
-              WHEN trim(ai_saving_text) ~ '^[0-9]+([.,][0-9]+)?$'
-                  THEN round(replace(trim(ai_saving_text), ',', '.')::numeric * 60)::int
-
-              ELSE round(
-                  coalesce(days_value, 0) * 24 * 60
-                  + coalesce(hours_value, 0) * 60
-                  + coalesce(minutes_value, 0)
-              )::int
-          END AS ai_saving_minutes
-
-      FROM ai_parts
-  )
-
-  SELECT
-      ai.issue_id                                      AS task_id,
-      'https://yt.rusal.ru/issue/' || ai.issue_id      AS task_url,
-      issue.summary                                    AS task_summary,
-      issue.assignee                                   AS task_assignee,
-
-      ai.ai_saving_text,
-      ai.ai_saving_minutes,
-      round(ai.ai_saving_minutes / 60.0, 2)            AS ai_saving_hours,
-
-      worklog.author                                   AS worklog_author,
-      worklog.creator                                  AS worklog_creator,
-      worklog.work_date,
-      worklog.work_date::date                          AS work_date,
-      worklog.minutes                                  AS worklog_minutes,
-      round(worklog.minutes / 60.0, 2)                 AS worklog_hours,
-      worklog.work_type,
-      worklog.work_text
-
-  FROM ai
-
-  LEFT JOIN tech_etl.yt_issue_snapshot issue
-      ON issue.issue_id = ai.issue_id
-
-  LEFT JOIN tech_etl.yt_issue_worklog worklog
-      ON worklog.issue_id = ai.issue_id
-
-  WHERE ai.ai_saving_minutes > 0
-
-  ORDER BY
-      worklog.work_date DESC NULLS LAST,
-      ai.issue_id,
-      worklog.author;
-
-  Результат будет выглядеть примерно так:
-
-   task_id      task_summary          ai_saving_minutes    worklog_author    work_date     worklog_minutes                                                             
-  ━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━
-   DWH-12345    Разработка витрины                  240    ivanov            2026-09-15                120
-  ───────────  ────────────────────  ───────────────────  ────────────────  ────────────  ─────────────────
-   DWH-12345    Разработка витрины                  240    petrov            2026-09-16                 60
-
-  Здесь 240 минут — экономия по всей задаче. Её нельзя складывать по строкам worklog, иначе получится двойной подсчёт.
-
-  ## Отчёт на уровне задачи
-
-  Для управленческой отчётности безопаснее сначала агрегировать списания по задаче:
-
-  WITH ai_field AS (
-      SELECT DISTINCT ON (issue_id)
-          issue_id,
-          field_value AS ai_saving_text,
-          dttm_loaded
-      FROM tech_etl.yt_issue_custom_field
-      WHERE lower(trim(field_name)) = lower('Экономия за счет ИИ')
-        AND nullif(trim(field_value), '') IS NOT NULL
-      ORDER BY issue_id, dttm_loaded DESC
-  ),
-
-  ai AS (
-      SELECT
-          issue_id,
-          ai_saving_text,
-          CASE
-              WHEN trim(ai_saving_text) ~ '^[0-9]+([.,][0-9]+)?$'
-                  THEN round(replace(trim(ai_saving_text), ',', '.')::numeric * 60)::int
-              ELSE
-                  round(
-                      coalesce(
-                          replace(
-                              substring(
-                                  lower(ai_saving_text)
-                                  FROM '([0-9]+([.,][0-9]+)?)[[:space:]]*(дн|день|дня|дней)'
-                              ),
-                              ',',
-                              '.'
-                          )::numeric,
-                          0
-                      ) * 1440
-                      +
-                      coalesce(
-                          replace(
-                              substring(
-                                  lower(ai_saving_text)
-                                  FROM '([0-9]+([.,][0-9]+)?)[[:space:]]*(ч|час|часа|часов)'
-                              ),
-                              ',',
-                              '.'
-                          )::numeric,
-                          0
-                      ) * 60
-                      +
-                      coalesce(
-                          replace(
-                              substring(
-                                  lower(ai_saving_text)
-                                  FROM '([0-9]+([.,][0-9]+)?)[[:space:]]*(мин|минута|минуты|минут|м)'
-                              ),
-                              ',',
-                              '.'
-                          )::numeric,
-                          0
-                      )
-                  )::int
-          END AS ai_saving_minutes
-      FROM ai_field
-  ),
-
-  worklog AS (
-      SELECT
-          issue_id,
-          string_agg(DISTINCT author, ', ' ORDER BY author) AS worklog_authors,
-          count(DISTINCT author)                           AS authors_count,
-          sum(coalesce(minutes, 0))                        AS worklog_minutes,
-          min(work_date)                                   AS first_work_date,
-          max(work_date)                                   AS last_work_date
-      FROM tech_etl.yt_issue_worklog
-      GROUP BY issue_id
-  )
-
-  SELECT
-      ai.issue_id                                         AS task_id,
-      'https://yt.rusal.ru/issue/' || ai.issue_id         AS task_url,
-      issue.summary                                       AS task_summary,
-      issue.assignee,
-      worklog.worklog_authors,
-      worklog.authors_count,
-      worklog.first_work_date,
-      worklog.last_work_date,
-      coalesce(worklog.worklog_minutes, 0)                AS worklog_minutes,
-      round(coalesce(worklog.worklog_minutes, 0) / 60.0, 2)
-                                                            AS worklog_hours,
-      ai.ai_saving_text,
-      ai.ai_saving_minutes,
-      round(ai.ai_saving_minutes / 60.0, 2)               AS ai_saving_hours
-
-  FROM ai
-
-  LEFT JOIN tech_etl.yt_issue_snapshot issue
-      ON issue.issue_id = ai.issue_id
-
-  LEFT JOIN worklog
-      ON worklog.issue_id = ai.issue_id
-
-  WHERE ai.ai_saving_minutes > 0
-
-  ORDER BY worklog.last_work_date DESC NULLS LAST;
-
-  ## Важное ограничение данных
-
-  Сейчас yt_issue_custom_field содержит только:
-
-  issue_id
-  field_name
-  field_value
-  dttm_loaded
-
-  Поэтому из неё невозможно узнать:
-
-  - кто заполнил поле «Экономия за счет ИИ»;
-  - когда именно поле было изменено;
-  - как менялось значение;
-  - как распределить экономию между несколькими исполнителями.
-
-  dttm_loaded — это дата загрузки данных в Greenplum, а не дата изменения поля в YouTrack.
-
-  Чтобы получить точную историю, загрузчик YouTrack нужно расширить: сохранять изменение поля «Экономия за счет ИИ» в yt_issue_timeline с полями:
-
-  issue_id
-  ts
-  author
-  field_name
-  value_from
-  value_to
+$$
+EXECUTE ON ANY;

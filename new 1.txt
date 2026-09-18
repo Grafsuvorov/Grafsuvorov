@@ -1,208 +1,125 @@
-schema_name_gp: dm_view
-schema_name_click: dm
-object_name: production_ad_kpa_electrolysis
-object_type: view
-clickhouse_cluster: '{cluster}'
-engine: ReplicatedMergeTree
-order_by:
-- dt_report
-- account_code
-- plant_code
-partitions: null
-table_settings: index_granularity = 8192
-table_comment: Витрина для КПА Электролизное производство | Витрина для КПА Электролизное производство
-settings_external_table:
-  max_threads: 20
-  max_insert_threads: 20
-  input_format_parallel_parsing: 0
-load_type: full
-recreate_mode: drop_create
-truncate_mode_on: true
-postgres_conn_id: gp_connection
-clickhouse_conn_id: clickhouse
-dag_name: null
-dag_schedule_interval:
-  PROD: 56 8 * * *
-  DEV: null
-dag_tags:
-- production
-task_pool: dm_pool
-task_pool_slots: 1
-created_at: '2026-09-18 07:07:41'
-created_by: Nikita.Suvorov@rusal.com
-created_role: admin
-attributes:
-- column_name_click: dt_report
-  column_name_gp: dt_report
-  data_type_click: Date32
-  data_type_gp: date
-  is_nullable: NOT NULL
-  description: Комментария нет
-- column_name_click: account_code
-  column_name_gp: account_code
-  data_type_click: String
-  data_type_gp: varchar
-  is_nullable: NOT NULL
-  description: Комментария нет
-- column_name_click: account_short_name
-  column_name_gp: account_short_name
-  data_type_click: String
-  data_type_gp: varchar
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: account_name
-  column_name_gp: account_name
-  data_type_click: String
-  data_type_gp: varchar
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: actual
-  column_name_gp: actual
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: active_goal
-  column_name_gp: active_goal
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference
-  column_name_gp: difference
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: subsequent_code
-  column_name_gp: subsequent_code
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: plant_code
-  column_name_gp: plant_code
-  data_type_click: String
-  data_type_gp: varchar
-  is_nullable: NOT NULL
-  description: Комментария нет
-- column_name_click: plant_name
-  column_name_gp: plant_name
-  data_type_click: String
-  data_type_gp: varchar
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: is_last_day_of_month
-  column_name_gp: is_last_day_of_month
-  data_type_click: Int32
-  data_type_gp: int4
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: actual_ytd
-  column_name_gp: actual_ytd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: active_goal_ytd
-  column_name_gp: active_goal_ytd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference_ytd
-  column_name_gp: difference_ytd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: actual_mtd
-  column_name_gp: actual_mtd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: active_goal_mtd
-  column_name_gp: active_goal_mtd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference_mtd
-  column_name_gp: difference_mtd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: month_plan
-  column_name_gp: month_plan
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference_month_plan
-  column_name_gp: difference_month_plan
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: month_plan_ytd
-  column_name_gp: month_plan_ytd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: month_plan_mtd
-  column_name_gp: month_plan_mtd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference_month_plan_mtd
-  column_name_gp: difference_month_plan_mtd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference_month_plan_ytd
-  column_name_gp: difference_month_plan_ytd
-  data_type_click: Decimal(32,10)
-  data_type_gp: numeric
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: difference_reason_comment
-  column_name_gp: difference_reason_comment
-  data_type_click: String
-  data_type_gp: varchar
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: dttm_inserted
-  column_name_gp: dttm_inserted
-  data_type_click: String
-  data_type_gp: timestamptz
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: dttm_updated
-  column_name_gp: dttm_updated
-  data_type_click: String
-  data_type_gp: timestamptz
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: deleted_flag
-  column_name_gp: deleted_flag
-  data_type_click: UInt8
-  data_type_gp: bool
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: is_active
-  column_name_gp: is_active
-  data_type_click: UInt8
-  data_type_gp: bool
-  is_nullable: 'NULL'
-  description: Комментария нет
-- column_name_click: job_name
-  column_name_gp: job_name
-  data_type_click: String
-  data_type_gp: text
-  is_nullable: 'NULL'
-  description: Комментария нет
+схема dm_view
+production_toro_equipment_downtime_and_repair_action
+production_toro_equipment_technical_readiness
+production_aluminium_customer_claim
+toro_equipment_downtime_by_production_type
+production_ad_kpa_electrolysis
+material_alumina_balance_unpivot
+production_aluminium_billets_oee_availability_coefficient
+
+ WITH t2 AS (
+         SELECT tt1_1.toro_message_code,
+            tt1_1.dt_equipment_downtime AS dt_report,
+            'АД'::text AS division_name,
+            'KPI_ALUM_TEC_08a'::text AS account_code,
+                CASE
+                    WHEN ((tt1_1.plant_owner_name)::text = 'ТАЗ'::text) THEN 'ТаАЗ'::character varying
+                    ELSE tt1_1.plant_owner_name
+                END AS entity_name,
+            tt1_1.production_activity_type_name,
+            tt1_1.production_type_name,
+            tt1_1.equipment_name,
+            tt1_1.complex_equipment_name,
+            tt1_1.technical_area_name,
+            tt1_1.repair_action_plan_text AS repair_action_text,
+            max((tt1_1.downtime_duration_in_hours_actual_quantity)::numeric) AS downtime_duration_in_hours_actual_quantity,
+            (now())::timestamp without time zone AS dttm_inserted,
+            (now())::timestamp without time zone AS dttm_updated
+           FROM dm.exp_toro_equipment_downtime_losses tt1_1
+          WHERE (((1 = 1) AND ((tt1_1.dt_equipment_downtime)::text >= '2025-01-01'::text)) AND (((tt1_1.division_name)::text = 'Алюминиевый дивизион'::text) OR ((tt1_1.division_name)::text = 'АД'::text)))
+          GROUP BY tt1_1.toro_message_code, tt1_1.dt_equipment_downtime, 'АД'::text, 'KPI_ALUM_TEC_08a'::text,
+                CASE
+                    WHEN ((tt1_1.plant_owner_name)::text = 'ТАЗ'::text) THEN 'ТаАЗ'::character varying
+                    ELSE tt1_1.plant_owner_name
+                END, tt1_1.production_activity_type_name, tt1_1.production_type_name, tt1_1.equipment_name, tt1_1.complex_equipment_name, tt1_1.technical_area_name, tt1_1.repair_action_plan_text
+        ), t1 AS (
+         SELECT exp_toro_complex_equipment_technical_readiness.dt_report,
+            exp_toro_complex_equipment_technical_readiness.division_name,
+                CASE
+                    WHEN ((exp_toro_complex_equipment_technical_readiness.plant_owner_name)::text = 'ТАЗ'::text) THEN 'ТаАЗ'::character varying
+                    ELSE exp_toro_complex_equipment_technical_readiness.plant_owner_name
+                END AS entity_name,
+            exp_toro_complex_equipment_technical_readiness.production_activity_type_name,
+            exp_toro_complex_equipment_technical_readiness.production_type_name,
+            exp_toro_complex_equipment_technical_readiness.complex_equipment_name,
+            exp_toro_complex_equipment_technical_readiness.technical_area_name,
+            exp_toro_complex_equipment_technical_readiness.downtime_duration_in_hours_actual_mtd_quantity,
+            exp_toro_complex_equipment_technical_readiness.oee_availability_coefficient_mtd_rate,
+            exp_toro_complex_equipment_technical_readiness.technical_readiness_coefficient_mtd_rate,
+            sum(exp_toro_complex_equipment_technical_readiness.downtime_duration_in_hours_actual_mtd_quantity) OVER (PARTITION BY exp_toro_complex_equipment_technical_readiness.plant_owner_name, exp_toro_complex_equipment_technical_readiness.production_activity_type_name, exp_toro_complex_equipment_technical_readiness.production_type_name, exp_toro_complex_equipment_technical_readiness.complex_equipment_name, exp_toro_complex_equipment_technical_readiness.technical_area_name, date_trunc('year'::text, (exp_toro_complex_equipment_technical_readiness.dt_report)::timestamp with time zone) ORDER BY exp_toro_complex_equipment_technical_readiness.dt_report ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS downtime_duration_in_hours_actual_ytd_quantity,
+            avg(exp_toro_complex_equipment_technical_readiness.oee_availability_coefficient_mtd_rate) OVER (PARTITION BY exp_toro_complex_equipment_technical_readiness.plant_owner_name, exp_toro_complex_equipment_technical_readiness.production_activity_type_name, exp_toro_complex_equipment_technical_readiness.production_type_name, exp_toro_complex_equipment_technical_readiness.complex_equipment_name, exp_toro_complex_equipment_technical_readiness.technical_area_name, date_trunc('year'::text, (exp_toro_complex_equipment_technical_readiness.dt_report)::timestamp with time zone) ORDER BY exp_toro_complex_equipment_technical_readiness.dt_report ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS oee_availability_coefficient_ytd_rate,
+            avg(exp_toro_complex_equipment_technical_readiness.technical_readiness_coefficient_mtd_rate) OVER (PARTITION BY exp_toro_complex_equipment_technical_readiness.plant_owner_name, exp_toro_complex_equipment_technical_readiness.production_activity_type_name, exp_toro_complex_equipment_technical_readiness.production_type_name, exp_toro_complex_equipment_technical_readiness.complex_equipment_name, exp_toro_complex_equipment_technical_readiness.technical_area_name, date_trunc('year'::text, (exp_toro_complex_equipment_technical_readiness.dt_report)::timestamp with time zone) ORDER BY exp_toro_complex_equipment_technical_readiness.dt_report ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS technical_readiness_coefficient_ytd_rate
+           FROM dm.exp_toro_complex_equipment_technical_readiness
+          WHERE (((1 = 1) AND (((exp_toro_complex_equipment_technical_readiness.division_name)::text = 'Алюминиевый дивизион'::text) OR ((exp_toro_complex_equipment_technical_readiness.division_name)::text = 'АД'::text))) AND ((exp_toro_complex_equipment_technical_readiness.downtime_losses_unit_uom_code)::text <> 'нет данных'::text))
+        ), tt1 AS (
+         SELECT t1.dt_report,
+            t1.division_name,
+            tt3.entity_name,
+            tt3.subsequent_code,
+            t1.production_activity_type_name,
+            t1.production_type_name,
+            t1.complex_equipment_name,
+            t1.technical_area_name,
+            sum(t1.downtime_duration_in_hours_actual_mtd_quantity) AS downtime_duration_in_hours_actual_mtd_quantity,
+            sum(t1.oee_availability_coefficient_mtd_rate) AS oee_availability_coefficient_mtd_rate,
+            sum(t1.technical_readiness_coefficient_mtd_rate) AS technical_readiness_coefficient_mtd_rate,
+            sum(t1.downtime_duration_in_hours_actual_ytd_quantity) AS downtime_duration_in_hours_actual_ytd_quantity,
+            sum(t1.oee_availability_coefficient_ytd_rate) AS oee_availability_coefficient_ytd_rate,
+            sum(t1.technical_readiness_coefficient_ytd_rate) AS technical_readiness_coefficient_ytd_rate,
+            (now())::timestamp without time zone AS dttm_inserted,
+            (now())::timestamp without time zone AS dttm_updated
+           FROM (t1
+             LEFT JOIN ( SELECT map_kpi_report_account_to_entity.account_code,
+                    map_kpi_report_account_to_entity.entity_code,
+                    map_kpi_report_account_to_entity.entity_name,
+                    map_kpi_report_account_to_entity.subsequent_code,
+                    map_kpi_report_account_to_entity.source_entity_code,
+                    map_kpi_report_account_to_entity.material_group_for_reporting_name,
+                    map_kpi_report_account_to_entity.material_group_for_reporting_short_name,
+                    map_kpi_report_account_to_entity.dt_loading_data_first_date,
+                    map_kpi_report_account_to_entity.dttm_inserted,
+                    map_kpi_report_account_to_entity.dttm_updated,
+                    map_kpi_report_account_to_entity.job_name,
+                    map_kpi_report_account_to_entity.deleted_flag
+                   FROM dict_dds.map_kpi_report_account_to_entity
+                  WHERE ((map_kpi_report_account_to_entity.account_code)::text = 'KPI_ALUM_TEC_08a'::text)) tt3 ON (((t1.entity_name)::text = (tt3.source_entity_code)::text)))
+          GROUP BY t1.dt_report, t1.division_name, tt3.entity_name, tt3.subsequent_code, t1.production_activity_type_name, t1.production_type_name, t1.complex_equipment_name, t1.technical_area_name
+        ), tt2 AS (
+         SELECT t2.dt_report,
+            t2.division_name,
+            t2.account_code,
+            tt3.entity_name,
+            tt3.subsequent_code,
+            t2.production_activity_type_name,
+            t2.production_type_name,
+            t2.complex_equipment_name,
+            t2.technical_area_name,
+            sum(t2.downtime_duration_in_hours_actual_quantity) AS daily_val,
+            (now())::timestamp without time zone AS dttm_inserted,
+            (now())::timestamp without time zone AS dttm_updated
+           FROM (t2
+             LEFT JOIN dict_dds.map_kpi_report_account_to_entity tt3 ON ((((t2.entity_name)::text = (tt3.source_entity_code)::text) AND (t2.account_code = (tt3.account_code)::text))))
+          WHERE (tt3.entity_name IS NOT NULL)
+          GROUP BY t2.dt_report, t2.division_name, t2.account_code, tt3.entity_name, tt3.subsequent_code, t2.production_activity_type_name, t2.production_type_name, t2.complex_equipment_name, t2.technical_area_name
+        )
+ SELECT tt2.dt_report,
+    tt2.division_name,
+    tt2.account_code,
+    tt2.entity_name,
+    tt2.subsequent_code,
+    tt2.production_activity_type_name,
+    tt2.production_type_name,
+    tt2.complex_equipment_name,
+    tt2.technical_area_name,
+    tt2.daily_val AS downtime_duration_in_hours_actual_quantity,
+    sum(tt2.daily_val) OVER (PARTITION BY tt2.account_code, tt2.division_name, tt2.entity_name, tt2.subsequent_code, tt2.production_activity_type_name, tt2.production_type_name, tt2.complex_equipment_name, tt2.technical_area_name, date_trunc('month'::text, ((tt2.dt_report)::date)::timestamp with time zone) ORDER BY tt2.dt_report ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS downtime_duration_in_hours_actual_mtd_quantity,
+    sum(tt2.daily_val) OVER (PARTITION BY tt2.account_code, tt2.division_name, tt2.entity_name, tt2.subsequent_code, tt2.production_activity_type_name, tt2.production_type_name, tt2.complex_equipment_name, tt2.technical_area_name, date_trunc('year'::text, ((tt2.dt_report)::date)::timestamp with time zone) ORDER BY tt2.dt_report ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS downtime_duration_in_hours_actual_ytd_quantity,
+    round(tt1.oee_availability_coefficient_mtd_rate, 2) AS oee_availability_coefficient_mtd_rate,
+    round(tt1.technical_readiness_coefficient_mtd_rate, 2) AS technical_readiness_coefficient_mtd_rate,
+    round(tt1.oee_availability_coefficient_ytd_rate, 2) AS oee_availability_coefficient_ytd_rate,
+    round(tt1.technical_readiness_coefficient_ytd_rate, 2) AS technical_readiness_coefficient_ytd_rate,
+    tt2.dttm_inserted,
+    tt2.dttm_updated
+   FROM (tt2
+     LEFT JOIN tt1 ON (((((((date_trunc('month'::text, ((tt2.dt_report)::date)::timestamp with time zone) = tt1.dt_report) AND (tt2.division_name = (tt1.division_name)::text)) AND ((tt2.entity_name)::text = (tt1.entity_name)::text)) AND ((tt2.production_type_name)::text = (tt1.production_type_name)::text)) AND ((tt2.complex_equipment_name)::text = (tt1.complex_equipment_name)::text)) AND ((tt2.technical_area_name)::text = (tt1.technical_area_name)::text))))
+  WHERE (1 = 1);

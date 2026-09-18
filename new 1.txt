@@ -1,43 +1,208 @@
-relation:
-  # наименование схемы
-  schema_name: dict_dds
-  # наименование таблицы
-  table_name: address
-  # тип scd (scd1, scd2)
-  scd_type: scd1
-  unique_key: # список полей уникального ключа
-    - address_code
-    - international_display_format_code
-#  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать
-#    - valid_from
-#    - valid_to
-dq:
-  - check_type: "duplicates"
-    detail_store_flag: true
-    detail_store_limit: 30
-    filter: "deleted_flag is false"
-
-
-relation:
-  # наименование схемы
-  schema_name: dds
-  # наименование таблицы
-  table_name: accounting_documents
-  # тип scd (scd1, scd2)
-  scd_type: scd2
-  unique_key: # список полей уникального ключа
-    - unit_balance_code
-    - fiscal_year
-    - accounting_document_code
-    - position_line_item
-  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать
-    - dttm_from
-    - dttm_to
-dq:
-  - check_type: "duplicates"
-    detail_store_flag: true
-    detail_store_limit: 30
-    filter: "is_active is true"
-
-
-dbt_greenplum_elt/models_metadata/dict_dds
+schema_name_gp: dm_view
+schema_name_click: dm
+object_name: production_ad_kpa_electrolysis
+object_type: view
+clickhouse_cluster: '{cluster}'
+engine: ReplicatedMergeTree
+order_by:
+- dt_report
+- account_code
+- plant_code
+partitions: null
+table_settings: index_granularity = 8192
+table_comment: Витрина для КПА Электролизное производство | Витрина для КПА Электролизное производство
+settings_external_table:
+  max_threads: 20
+  max_insert_threads: 20
+  input_format_parallel_parsing: 0
+load_type: full
+recreate_mode: drop_create
+truncate_mode_on: true
+postgres_conn_id: gp_connection
+clickhouse_conn_id: clickhouse
+dag_name: null
+dag_schedule_interval:
+  PROD: 56 8 * * *
+  DEV: null
+dag_tags:
+- production
+task_pool: dm_pool
+task_pool_slots: 1
+created_at: '2026-09-18 07:07:41'
+created_by: Nikita.Suvorov@rusal.com
+created_role: admin
+attributes:
+- column_name_click: dt_report
+  column_name_gp: dt_report
+  data_type_click: Date32
+  data_type_gp: date
+  is_nullable: NOT NULL
+  description: Комментария нет
+- column_name_click: account_code
+  column_name_gp: account_code
+  data_type_click: String
+  data_type_gp: varchar
+  is_nullable: NOT NULL
+  description: Комментария нет
+- column_name_click: account_short_name
+  column_name_gp: account_short_name
+  data_type_click: String
+  data_type_gp: varchar
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: account_name
+  column_name_gp: account_name
+  data_type_click: String
+  data_type_gp: varchar
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: actual
+  column_name_gp: actual
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: active_goal
+  column_name_gp: active_goal
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference
+  column_name_gp: difference
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: subsequent_code
+  column_name_gp: subsequent_code
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: plant_code
+  column_name_gp: plant_code
+  data_type_click: String
+  data_type_gp: varchar
+  is_nullable: NOT NULL
+  description: Комментария нет
+- column_name_click: plant_name
+  column_name_gp: plant_name
+  data_type_click: String
+  data_type_gp: varchar
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: is_last_day_of_month
+  column_name_gp: is_last_day_of_month
+  data_type_click: Int32
+  data_type_gp: int4
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: actual_ytd
+  column_name_gp: actual_ytd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: active_goal_ytd
+  column_name_gp: active_goal_ytd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference_ytd
+  column_name_gp: difference_ytd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: actual_mtd
+  column_name_gp: actual_mtd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: active_goal_mtd
+  column_name_gp: active_goal_mtd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference_mtd
+  column_name_gp: difference_mtd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: month_plan
+  column_name_gp: month_plan
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference_month_plan
+  column_name_gp: difference_month_plan
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: month_plan_ytd
+  column_name_gp: month_plan_ytd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: month_plan_mtd
+  column_name_gp: month_plan_mtd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference_month_plan_mtd
+  column_name_gp: difference_month_plan_mtd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference_month_plan_ytd
+  column_name_gp: difference_month_plan_ytd
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: difference_reason_comment
+  column_name_gp: difference_reason_comment
+  data_type_click: String
+  data_type_gp: varchar
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: dttm_inserted
+  column_name_gp: dttm_inserted
+  data_type_click: String
+  data_type_gp: timestamptz
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: dttm_updated
+  column_name_gp: dttm_updated
+  data_type_click: String
+  data_type_gp: timestamptz
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: deleted_flag
+  column_name_gp: deleted_flag
+  data_type_click: UInt8
+  data_type_gp: bool
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: is_active
+  column_name_gp: is_active
+  data_type_click: UInt8
+  data_type_gp: bool
+  is_nullable: 'NULL'
+  description: Комментария нет
+- column_name_click: job_name
+  column_name_gp: job_name
+  data_type_click: String
+  data_type_gp: text
+  is_nullable: 'NULL'
+  description: Комментария нет

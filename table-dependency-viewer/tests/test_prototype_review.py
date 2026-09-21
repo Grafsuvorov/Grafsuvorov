@@ -149,6 +149,38 @@ class LoadMergeRequestSqlBundleTests(unittest.TestCase):
         self.assertEqual(len(requested_urls), 1)
         self.assertIn("sql%2Fnew_name.sql", requested_urls[0])
 
+    def test_deletion_only_merge_request_is_loaded_without_fetching_removed_file(self) -> None:
+        changes = [{
+            "old_path": "dds/dds.account_debt_1c.sql",
+            "new_path": "dds/dds.account_debt_1c.sql",
+            "renamed_file": False,
+            "deleted_file": True,
+            "new_file": False,
+        }]
+
+        def fake_gitlab_request(**kwargs):
+            return {"changes": changes} if kwargs["path"].endswith("/changes") else self._mr_payload()
+
+        with (
+            patch.object(prototype_review, "_gitlab_json_request", side_effect=fake_gitlab_request),
+            patch.object(prototype_review, "_urlopen_without_proxy") as fake_urlopen,
+        ):
+            bundle = load_merge_request_sql_bundle(
+                gitlab_api_url="https://gitlab.example/api/v4",
+                gitlab_project="group/project",
+                gitlab_token="token",
+                gitlab_ssl_verify="true",
+                mr_input="17",
+                default_project="group/project",
+            )
+
+        self.assertEqual(bundle["files"], [])
+        self.assertEqual(
+            [item["path"] for item in bundle["deleted_files"]],
+            ["dds/dds.account_debt_1c.sql"],
+        )
+        fake_urlopen.assert_not_called()
+
 
 
 class ExtractSqlDependenciesTests(unittest.TestCase):

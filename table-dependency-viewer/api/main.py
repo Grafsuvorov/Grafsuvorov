@@ -24,6 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 import re
 import json
+import base64
 import hashlib
 import subprocess
 import tempfile
@@ -93,6 +94,7 @@ from .config import (
     DBT_GITLAB_TOKEN,
     DBT_GITLAB_PROJECT,
     DBT_REGISTRY_ROOT,
+    DBT_DQ_TECHNICAL_ROOT,
     DBT_GITLAB_TARGET_BRANCH,
     PROTOTYPE_ETL_TARGET_BRANCH,
     GITLAB_PROJECT,
@@ -180,6 +182,7 @@ from .services.prototype_review import (
     DROP_TARGET_PATTERNS,
     TARGET_PATTERNS,
     _is_clickhouse_sql_path,
+    _infer_direct_sql_file_target,
     _infer_target_from_path,
     _normalize_fqn,
     add_ytrack_issue_comment,
@@ -1027,6 +1030,7 @@ def _prototype_multi_issue_description(
     task_context: dict[str, Any],
     initiator: dict[str, Any],
     review_items: list[dict[str, Any]],
+    deleted_files: Optional[list[dict[str, Any]]] = None,
 ) -> str:
     def _format_duration(seconds: Any) -> str:
         try:
@@ -1059,6 +1063,14 @@ def _prototype_multi_issue_description(
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
             ]
         )
+    deleted_paths = [
+        str(item.get("path") or item.get("old_path") or "").strip()
+        for item in (deleted_files or [])
+        if str(item.get("path") or item.get("old_path") or "").strip()
+    ]
+    if deleted_paths:
+        lines.extend(["", "## Удалённые SQL-объекты"])
+        lines.extend(f"- `{path}`" for path in deleted_paths)
     for index, item in enumerate(review_items, start=1):
         needs_attention, missing = _prototype_item_needs_attention(item)
         item_row_count = item.get("row_count")
@@ -1510,6 +1522,70 @@ def _prototype_review_dbt_registry_path(schema_name: str, table_name: str) -> st
     )
 
 
+def _prototype_review_dbt_dq_path(schema_name: str, table_name: str) -> str:
+    schema_name_norm = str(schema_name or "").strip().lower()
+    table_name_norm = str(table_name or "").strip().lower()
+    return posix_join(
+        str(DBT_DQ_TECHNICAL_ROOT or "dbt_greenplum_elt/models/dq/technical").strip("/"),
+        f"dq_{schema_name_norm}_s_{table_name_norm}_s_duplicates.sql",
+    )
+
+
+def _prototype_review_dbt_key_list(key_attributes: list[Any]) -> str:
+    values = [str(value).strip() for value in key_attributes if str(value).strip()]
+    if not values:
+        raise ValueError("Не заполнены ключевые поля для DQ duplicates")
+    return "[" + ", ".join("'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'" for value in values) + "]"
+
+
+def _prototype_review_build_dbt_dq_model(item: dict[str, Any]) -> str:
+    check_columns = _prototype_review_dbt_key_list(item.get("key_attributes") or [])
+    return "\n".join(
+        [
+            "{{- config(",
+            "    error_code         = 'dq_all0001',",
+            "    detail_store_flag  = true,",
+            "    detail_store_limit = 30,",
+            "    check_type         = 'duplicates',",
+            f"    check_columns      = {check_columns},",
+            "    tags               = ['dq', 'technical', 'duplicates']",
+            "    ) -}}",
+            "",
+        ]
+    )
+
+
+def _prototype_review_update_dbt_dq_model(content: str, key_attributes: list[Any]) -> str:
+    check_columns = _prototype_review_dbt_key_list(key_attributes)
+    pattern = re.compile(r"(?P<prefix>\bcheck_columns\s*=\s*)\[(?P<body>.*?)\]", re.DOTALL)
+    source = str(content or "")
+    if len(list(pattern.finditer(source))) != 1:
+        raise ValueError("В DQ-модели не найден единственный параметр check_columns")
+    return pattern.sub(lambda match: f"{match.group('prefix')}{check_columns}", source, count=1)
+
+
+def _prototype_review_deleted_dbt_targets(
+    deleted_files: list[dict[str, Any]],
+    active_targets: set[str],
+) -> set[str]:
+    deleted_targets: set[str] = set()
+    active_targets_norm = {str(value or "").strip().lower() for value in active_targets if str(value or "").strip()}
+    for deleted_file in deleted_files:
+        deleted_path = str(deleted_file.get("path") or deleted_file.get("old_path") or "")
+        # Only a canonical `<schema>/<schema>.<table>.sql` deletion is strong
+        # enough evidence that the object itself was removed. Deleting one
+        # recreate/insert helper inside an ETL object directory must not
+        # remove dbt checks for a table that still exists.
+        inferred = _infer_direct_sql_file_target(deleted_path)
+        if not inferred:
+            continue
+        target_fqn, object_type = inferred
+        target_fqn = str(target_fqn or "").strip().lower()
+        if str(object_type or "").upper() == "TABLE" and target_fqn and target_fqn not in active_targets_norm:
+            deleted_targets.add(target_fqn)
+    return deleted_targets
+
+
 def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
     target_fqn = str(item.get("target_fqn") or "").strip().lower()
     if "." not in target_fqn:
@@ -1586,11 +1662,43 @@ def _prototype_gitlab_resource_exists(
         raise
 
 
+def _prototype_gitlab_file_content(
+    *,
+    project: str,
+    token: str,
+    file_path: str,
+    ref: str,
+) -> Optional[str]:
+    ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
+    try:
+        payload = _gitlab_json_request(
+            api_url=GITLAB_API_URL,
+            project=project,
+            token=token,
+            ssl_verify=ssl_verify,
+            path=f"repository/files/{urlparse.quote(file_path, safe='')}",
+            method="GET",
+            query={"ref": ref},
+        )
+    except ValueError as exc:
+        if "GitLab вернул 404" in str(exc):
+            return None
+        raise
+    raw_content = str((payload or {}).get("content") or "")
+    if str((payload or {}).get("encoding") or "").lower() == "base64":
+        try:
+            return base64.b64decode(raw_content).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ValueError(f"GitLab вернул некорректное содержимое файла {file_path}") from exc
+    return raw_content
+
+
 def _prototype_review_publish_dbt_registry(
     *,
     task_id: str,
     author: str,
     review_items: list[dict[str, Any]],
+    deleted_files: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
@@ -1601,7 +1709,8 @@ def _prototype_review_publish_dbt_registry(
     if not project_ref:
         raise ValueError("Не настроен DBT_GITLAB_PROJECT")
 
-    registry_files: dict[str, dict[str, Any]] = {}
+    dbt_files: dict[str, dict[str, Any]] = {}
+    active_targets: set[str] = set()
     for item in review_items:
         if str(item.get("object_type") or "TABLE").strip().upper() != "TABLE":
             continue
@@ -1609,14 +1718,26 @@ def _prototype_review_publish_dbt_registry(
         if "." not in target_fqn:
             continue
         schema_name, table_name = target_fqn.split(".", 1)
-        file_path = _prototype_review_dbt_registry_path(schema_name, table_name)
-        registry_files[file_path] = {
+        active_targets.add(target_fqn)
+        registry_path = _prototype_review_dbt_registry_path(schema_name, table_name)
+        dq_path = _prototype_review_dbt_dq_path(schema_name, table_name)
+        dbt_files[registry_path] = {
             "target_fqn": target_fqn,
-            "file_path": file_path,
+            "file_path": registry_path,
+            "file_kind": "registry",
             "content": _prototype_review_build_dbt_registry_yaml(item),
         }
-    if not registry_files:
-        return {"status": "skipped", "reason": "В review нет табличных объектов", "files": []}
+        dbt_files[dq_path] = {
+            "target_fqn": target_fqn,
+            "file_path": dq_path,
+            "file_kind": "dq_model",
+            "key_attributes": item.get("key_attributes") or [],
+        }
+
+    deleted_targets = _prototype_review_deleted_dbt_targets(deleted_files or [], active_targets)
+
+    if not dbt_files and not deleted_targets:
+        return {"status": "skipped", "reason": "В review нет изменённых или удалённых табличных объектов", "files": []}
 
     branch_name = f"feature/{task_id_norm}"
     target_branch = str(DBT_GITLAB_TARGET_BRANCH or "main").strip() or "main"
@@ -1629,19 +1750,37 @@ def _prototype_review_publish_dbt_registry(
     content_ref = branch_name if branch_exists else target_branch
     actions = []
     result_files = []
-    for file_data in registry_files.values():
+    for file_data in dbt_files.values():
         file_path = file_data["file_path"]
-        file_exists = _prototype_gitlab_resource_exists(
+        existing_content = _prototype_gitlab_file_content(
             project=project_ref,
             token=DBT_GITLAB_TOKEN,
-            path=f"repository/files/{urlparse.quote(file_path, safe='')}",
-            query={"ref": content_ref},
+            file_path=file_path,
+            ref=content_ref,
         )
+        if file_data["file_kind"] == "dq_model":
+            content = (
+                _prototype_review_update_dbt_dq_model(existing_content, file_data["key_attributes"])
+                if existing_content is not None
+                else _prototype_review_build_dbt_dq_model({"key_attributes": file_data["key_attributes"]})
+            )
+        else:
+            content = file_data["content"]
+        if existing_content == content:
+            result_files.append(
+                {
+                    "target_fqn": file_data["target_fqn"],
+                    "file_path": file_path,
+                    "file_kind": file_data["file_kind"],
+                    "action": "unchanged",
+                }
+            )
+            continue
         actions.append(
             {
-                "action": "update" if file_exists else "create",
+                "action": "update" if existing_content is not None else "create",
                 "file_path": file_path,
-                "content": file_data["content"],
+                "content": content,
                 "encoding": "text",
             }
         )
@@ -1649,13 +1788,47 @@ def _prototype_review_publish_dbt_registry(
             {
                 "target_fqn": file_data["target_fqn"],
                 "file_path": file_path,
-                "action": "update" if file_exists else "create",
+                "file_kind": file_data["file_kind"],
+                "action": "update" if existing_content is not None else "create",
             }
         )
 
+    for target_fqn in sorted(deleted_targets):
+        schema_name, table_name = target_fqn.split(".", 1)
+        for file_kind, file_path in (
+            ("registry", _prototype_review_dbt_registry_path(schema_name, table_name)),
+            ("dq_model", _prototype_review_dbt_dq_path(schema_name, table_name)),
+        ):
+            existing_content = _prototype_gitlab_file_content(
+                project=project_ref,
+                token=DBT_GITLAB_TOKEN,
+                file_path=file_path,
+                ref=content_ref,
+            )
+            if existing_content is None:
+                continue
+            actions.append({"action": "delete", "file_path": file_path})
+            result_files.append(
+                {
+                    "target_fqn": target_fqn,
+                    "file_path": file_path,
+                    "file_kind": file_kind,
+                    "action": "delete",
+                }
+            )
+
+    if not actions:
+        return {
+            "status": "skipped",
+            "reason": "Ключи и DQ-модели уже актуальны",
+            "branch_name": branch_name,
+            "target_branch": target_branch,
+            "files": result_files,
+        }
+
     commit_payload: dict[str, Any] = {
         "branch": branch_name,
-        "commit_message": f"{task_id_norm}: update DQ registry keys",
+        "commit_message": f"{task_id_norm}: sync DQ registry and duplicate checks",
         "actions": actions,
     }
     if not branch_exists:
@@ -1692,14 +1865,14 @@ def _prototype_review_publish_dbt_registry(
             payload={
                 "source_branch": branch_name,
                 "target_branch": target_branch,
-                "title": f"{task_id_norm}: DQ registry keys",
+                "title": f"{task_id_norm}: DQ registry and duplicate checks",
                 "description": "\n".join(
                     [
                         f"Task: {task_id_norm}",
                         f"Author: {author}",
                         "",
-                        "Registry files:",
-                        *[f"- {item['file_path']}" for item in result_files],
+                        "dbt DQ files:",
+                        *[f"- {item['action']}: {item['file_path']}" for item in result_files],
                     ]
                 ),
                 "remove_source_branch": False,
@@ -1748,7 +1921,7 @@ def _prototype_review_build_result(
                 f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; проверьте влияние удаления на объект и зависимости"
             )
     review_targets = infer_review_targets(files)
-    if not any(item.get("target_fqn") for item in review_targets):
+    if files and not any(item.get("target_fqn") for item in review_targets):
         validation_errors.append("Не удалось определить целевые таблицы по SQL-файлам MR")
 
     status_reason = "; ".join(validation_errors) if validation_errors else ""
@@ -1908,6 +2081,7 @@ def _prototype_review_build_result(
         "status": status,
         "mr": bundle.get("mr") or {},
         "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],
+        "deleted_files": bundle.get("deleted_files") or [],
         "final_target": review_items[0].get("target_fqn") if review_items else None,
         "review_items": review_items,
         "dependencies": all_dependencies,
@@ -2085,6 +2259,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             task_context=task_context,
             initiator={"email": getattr(user, "email", None), "username": getattr(user, "username", None)},
             review_items=review_items,
+            deleted_files=bundle.get("deleted_files") or [],
         )
         issue_result = create_ytrack_issue(
             base_url=YOUTRACK_URL,
@@ -2206,6 +2381,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                     task_id=issue_id,
                     author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
                     review_items=review_items,
+                    deleted_files=bundle.get("deleted_files") or [],
                 )
                 if dbt_registry.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
                     add_ytrack_issue_comment(

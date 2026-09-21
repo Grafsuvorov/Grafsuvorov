@@ -204,6 +204,7 @@ export default function AdminPrototypeReviewPage() {
   );
 
   const hasDashboardDirection = Boolean(String(form.direction || "").trim());
+  const hasDeletedFiles = Array.isArray(result?.deleted_files) && result.deleted_files.length > 0;
 
   const unresolvedItemsCount = useMemo(
     () => reviewItemsDraft.filter((item) => (
@@ -888,13 +889,13 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь MR. ETL YAML и dbt registry YAML будут записаны в одноимённые ветки задачи в соответствующих проектах.
+                Одна задача будет создана на весь MR. ETL YAML, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи.
               </div>
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={handleCreateIssue}
-                disabled={creatingIssue || unresolvedItemsCount > 0 || !reviewItemsDraft.length || !hasDashboardDirection}
+                disabled={creatingIssue || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
                 {creatingIssue ? "Создаем задачу..." : "Создать задачу"}
               </button>
@@ -967,7 +968,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
             {Array.isArray(result?.dbt_registry?.files) && result.dbt_registry.files.length > 0 ? (
               <div className="muted" style={{ marginTop: 12 }}>
-                dbt registry YAML:
+                dbt registry и DQ-модели:
                 {" "}
                 {result.dbt_registry.files.map((item) => item.file_path).join(", ")}
               </div>
@@ -993,7 +994,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
             {result?.dbt_registry_error ? (
               <div className="page-error" style={{ marginTop: 12 }}>
-                YAML в dbt-проект не записан: {result.dbt_registry_error}
+                Registry/DQ-файлы в dbt-проект не записаны: {result.dbt_registry_error}
               </div>
             ) : null}
           </section>

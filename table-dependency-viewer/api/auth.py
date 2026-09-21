@@ -179,16 +179,20 @@ def _create_access_token(email: str, role: str) -> str:
 
 
 def _get_user_by_email(email: str) -> Optional[AuthUser]:
+    email_normalized = str(email or "").strip().lower()
+    if not email_normalized:
+        return None
     with engine.connect() as conn:
         row = conn.execute(
             text(
                 """
                 SELECT id, email, username, role, password_hash, password_salt, is_active
                 FROM tech_etl.app_users
-                WHERE email = :email
+                WHERE lower(email) = :email_normalized
+                LIMIT 1
                 """
             ),
-            {"email": email},
+            {"email_normalized": email_normalized},
         ).fetchone()
     if not row:
         return None

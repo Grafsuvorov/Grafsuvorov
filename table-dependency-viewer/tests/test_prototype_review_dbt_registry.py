@@ -15,6 +15,10 @@ def _load_functions():
     names = {
         "_prototype_item_needs_attention",
         "_prototype_review_dbt_registry_path",
+        "_prototype_review_dbt_dq_path",
+        "_prototype_review_dbt_key_list",
+        "_prototype_review_build_dbt_dq_model",
+        "_prototype_review_update_dbt_dq_model",
         "_prototype_review_build_dbt_registry_yaml",
     }
     nodes = [
@@ -25,6 +29,7 @@ def _load_functions():
     namespace = {
         "Any": Any,
         "DBT_REGISTRY_ROOT": "dbt_greenplum_elt/models_metadata",
+        "DBT_DQ_TECHNICAL_ROOT": "dbt_greenplum_elt/models/dq/technical",
         "posix_join": posix_join,
         "json": json,
         "re": re,
@@ -93,6 +98,45 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
             build_path("DDS", "Accounting_Documents"),
             "dbt_greenplum_elt/models_metadata/dds/dds.accounting_documents.yml",
         )
+
+    def test_dq_path_uses_schema_table_mask(self) -> None:
+        build_path = self.functions["_prototype_review_dbt_dq_path"]
+
+        self.assertEqual(
+            build_path("DDS", "Account_Debt_1C"),
+            "dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_1c_s_duplicates.sql",
+        )
+
+    def test_new_dq_model_contains_review_keys(self) -> None:
+        build = self.functions["_prototype_review_build_dbt_dq_model"]
+
+        content = build({"key_attributes": ["dt_report", "unit_balance_code", "posting_uid_code_1c"]})
+
+        self.assertIn(
+            "check_columns      = ['dt_report', 'unit_balance_code', 'posting_uid_code_1c']",
+            content,
+        )
+        self.assertIn("error_code         = 'dq_all0001'", content)
+        self.assertIn("tags               = ['dq', 'technical', 'duplicates']", content)
+
+    def test_existing_dq_model_changes_only_check_columns(self) -> None:
+        update = self.functions["_prototype_review_update_dbt_dq_model"]
+        original = """{{- config(
+    error_code         = 'custom_code',
+    check_columns      = ['old_key'],
+    tags               = ['dq', 'technical', 'duplicates']
+    ) -}}
+
+-- custom model comment
+select 1
+"""
+
+        updated = update(original, ["new_key", "second_key"])
+
+        self.assertIn("check_columns      = ['new_key', 'second_key']", updated)
+        self.assertIn("error_code         = 'custom_code'", updated)
+        self.assertIn("-- custom model comment\nselect 1", updated)
+        self.assertNotIn("old_key", updated)
 
 
 if __name__ == "__main__":

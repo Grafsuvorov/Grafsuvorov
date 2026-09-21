@@ -535,7 +535,7 @@ def load_merge_request_sql_bundle(
                 "statements": _split_sql_statements(sql_text),
             }
         )
-    if not files:
+    if not files and not deleted_files:
         raise ValueError("В MR не найдено изменённых .sql файлов")
     return {
         "mr": {

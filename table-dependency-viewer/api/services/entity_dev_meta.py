@@ -1167,60 +1167,41 @@ def init_entity_dev_meta_bundle(
     table_name: str,
     key_attributes: Optional[list[str]] = None,
     reserved_table_ids: Optional[set[int]] = None,
+    prod_only: bool = False,
 ) -> dict[str, Any]:
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
-    try:
-        bundle = read_entity_dev_meta_bundle(
-            base_dir=base_dir,
-            root_value=dev_root_value,
-            entity_name=entity_name,
-            schema_name=schema_name,
-            table_name=table_name,
-        )
-        normalized_payload, normalized_keys = _normalize_yaml_payload_fields(
-            payload=_load_yaml_text(bundle.get("yaml_content", "")),
-            entity_name=entity_name,
-            schema_name=schema_name,
-            table_name=table_name,
-            insert_sql=bundle.get("insert_sql", ""),
-            key_attributes=key_attributes,
-            prod_root=prod_root,
-            dev_root=dev_root,
-        )
-        bundle["yaml_content"] = _dump_yaml(normalized_payload)
-        bundle["key_attributes"] = normalized_keys
-        bundle["source"] = "dev"
-        bundle["exists"] = True
-        return bundle
-    except FileNotFoundError:
-        pass
-
-    try:
-        bundle = read_entity_dev_meta_bundle(
-            base_dir=base_dir,
-            root_value=prod_root_value,
-            entity_name=entity_name,
-            schema_name=schema_name,
-            table_name=table_name,
-        )
-        normalized_payload, normalized_keys = _normalize_yaml_payload_fields(
-            payload=_load_yaml_text(bundle.get("yaml_content", "")),
-            entity_name=entity_name,
-            schema_name=schema_name,
-            table_name=table_name,
-            insert_sql=bundle.get("insert_sql", ""),
-            key_attributes=key_attributes,
-            prod_root=prod_root,
-            dev_root=dev_root,
-        )
-        bundle["yaml_content"] = _dump_yaml(normalized_payload)
-        bundle["key_attributes"] = normalized_keys
-        bundle["source"] = "prod"
-        bundle["exists"] = True
-        return bundle
-    except FileNotFoundError:
-        pass
+    lookup_roots = (
+        ((prod_root_value, "prod"),)
+        if prod_only
+        else ((dev_root_value, "dev"), (prod_root_value, "prod"))
+    )
+    for root_value, source_name in lookup_roots:
+        try:
+            bundle = read_entity_dev_meta_bundle(
+                base_dir=base_dir,
+                root_value=root_value,
+                entity_name=entity_name,
+                schema_name=schema_name,
+                table_name=table_name,
+            )
+            normalized_payload, normalized_keys = _normalize_yaml_payload_fields(
+                payload=_load_yaml_text(bundle.get("yaml_content", "")),
+                entity_name=entity_name,
+                schema_name=schema_name,
+                table_name=table_name,
+                insert_sql=bundle.get("insert_sql", ""),
+                key_attributes=key_attributes,
+                prod_root=prod_root,
+                dev_root=dev_root,
+            )
+            bundle["yaml_content"] = _dump_yaml(normalized_payload)
+            bundle["key_attributes"] = normalized_keys
+            bundle["source"] = source_name
+            bundle["exists"] = True
+            return bundle
+        except FileNotFoundError:
+            continue
 
     yaml_payload = _build_generated_yaml(
         engine=engine,

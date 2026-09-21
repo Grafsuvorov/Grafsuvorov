@@ -1274,6 +1274,7 @@ def _prototype_review_refresh_yaml_identity(
         table_name=table_name,
         key_attributes=key_attributes or None,
         reserved_table_ids=reserved_table_ids,
+        prod_only=True,
     )
     try:
         generated_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
@@ -1354,13 +1355,14 @@ def _prototype_review_resolve_item(
             table_name=table_name,
             key_attributes=list(key_attributes_override or []) or None,
             reserved_table_ids=reserved_table_ids,
+            prod_only=True,
         )
     except Exception:
         yaml_bundle = None
     if yaml_bundle:
         yaml_key_attributes = list(yaml_bundle.get("key_attributes") or [])
         yaml_entity_name = str(yaml_bundle.get("entity_name") or "").strip() or None
-    detected_keys = list(key_attributes_override or []) or yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
+    detected_keys = list(key_attributes_override or []) or yaml_key_attributes
     entity_names = []
     entity_names_seen = set()
     for variant in meta_variants:
@@ -1418,7 +1420,7 @@ def _prototype_review_resolve_item(
             yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content") or "") or {}
         except Exception:
             yaml_payload = {}
-        detected_keys = list(key_attributes_override or []) or yaml_key_attributes or list((meta or {}).get("key_attributes") or [])
+        detected_keys = list(key_attributes_override or []) or yaml_key_attributes
     table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or "").strip()
     dependencies: list[str] = []
     if current_files and path_value:

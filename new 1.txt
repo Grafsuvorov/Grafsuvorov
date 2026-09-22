@@ -1,173 +1,28 @@
-## Название задачи
+dq_dm_calc_s_account_debt_s_duplicates.sql
 
-  Добавить в CI/CD проверку удаления dbt DQ-конфигурации при удалении таблицы из ETL
-
-  ### Описание
-
-  При удалении таблицы из ETL-репозитория необходимо контролировать, что в рамках той же задачи создан MR в dbt-репозиторий, удаляющий связанные с таблицей настройки и
-  DQ-проверки.
-
-  Сейчас таблица может быть удалена из ETL, но её registry YAML и модель проверки дублей останутся в dbt. Это приведёт к запуску проверок для несуществующего объекта,
-  ошибкам dbt и появлению устаревшей конфигурации.
-
-  ### Проверяемый сценарий
-
-  Если в Git-диффе ETL удалён канонический SQL-файл таблицы:
-
-  <schema>/<schema>.<table>.sql
-
-  например:
-
-  dds/dds.account_debt_1c.sql
-
-  CI/CD должен проверить наличие связанного MR в dbt-проекте:
-
-  https://prod.gitlab.dwh.rusal.com/dwh/dbt
-
-  В dbt MR должны быть удалены как минимум следующие файлы.
-
-  Registry YAML:
-
-  dbt_greenplum_elt/models_metadata/<schema>/<schema>.<table>.yml
-
-  Пример:
-
-  dbt_greenplum_elt/models_metadata/dds/dds.account_debt_1c.yml
-
-  DQ-модель проверки дублей:
-
-  dbt_greenplum_elt/models/dq/technical/
-  dq_<schema>_s_<table>_s_duplicates.sql
-
-  Пример:
-
-  dbt_greenplum_elt/models/dq/technical/
-  dq_dds_s_account_debt_1c_s_duplicates.sql
-
-  ### Основные требования
-
-  1. Определять удалённые таблицы по Git-диффу ETL MR.
-  2. Не считать удалением таблицы:
-      - обычное переименование файла;
-      - перемещение файла в другой каталог;
-      - комбинацию delete + add, если новый файл относится к тому же физическому объекту;
-      - удаление только вспомогательного insert, recreate, truncate или миграционного скрипта;
-      - удаление ClickHouse-скрипта.
-
-  3. Для каждой действительно удалённой таблицы определять:
-      - схему;
-      - имя таблицы;
-      - ожидаемый registry YAML;
-      - ожидаемую DQ-модель.
-
-  4. Находить связанный dbt MR по номеру задачи YouTrack.
-
-  Например, для задачи:
-
-  DWH-12345
-
-  проверять ветку:
-
-  feature/DWH-12345
-
-  или MR, в названии/ветке которого присутствует DWH-12345.
-
-  5. Проверять, что dbt MR направлен в установленную целевую ветку dbt-проекта.
-  6. Проверять Git-дифф dbt MR, а не только отсутствие файлов в текущем состоянии ветки.
-
-  В диффе должны присутствовать действия deleted для требуемых файлов.
-
-  7. Если один из файлов ранее не существовал в dbt, его удаление требовать не нужно. Проверка должна зафиксировать:
-
-  not_applicable — файл отсутствовал до изменения
-
-  8. Если таблиц удаляется несколько, проверка должна выполняться отдельно для каждой таблицы.
-  9. При отсутствии dbt MR или необходимых удалений CI/CD должен завершаться ошибкой и блокировать релиз.
-
-  ### Предлагаемый алгоритм
-
-  Получить Git-дифф ETL MR
-          ↓
-  Найти удалённые канонические файлы таблиц
-          ↓
-  Исключить rename/move и delete+add того же объекта
-          ↓
-  Сформировать список schema.table
-          ↓
-  Для каждой таблицы определить ожидаемые dbt-файлы
-          ↓
-  Найти dbt MR по номеру задачи
-          ↓
-  Получить Git-дифф dbt MR
-          ↓
-  Проверить удаление registry YAML и DQ-модели
-          ↓
-  PASS или блокирующая ошибка
-
-  ### Формат результата проверки
-
-  Успешный результат:
-
-  [OK] Удаление dbt-конфигурации проверено
-
-  Таблица: dds.account_debt_1c
-  Задача: DWH-12345
-  dbt MR: !607
-
-  Удалено:
-  - dbt_greenplum_elt/models_metadata/dds/dds.account_debt_1c.yml
-  - dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_1c_s_duplicates.sql
-
-  Ошибка при отсутствии dbt MR:
-
-  [ERROR] Для удаляемой таблицы dds.account_debt_1c не найден связанный MR в проекте dwh/dbt.
-
-  Создайте MR в dbt-проекте в рамках задачи DWH-12345.
-
-  Ошибка при неполном удалении:
-
-  [ERROR] Удаление таблицы dds.account_debt_1c не синхронизировано с dbt.
-
-  dbt MR: !607
-
-  Не удалены файлы:
-  - dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_1c_s_duplicates.sql
-
-  ### Что должно сохраняться в результате проверки
-
-  Для аудита желательно записывать:
-
-  task_id
-  etl_project
-  etl_mr_iid
-  dbt_project
-  dbt_mr_iid
-  schema_name
-  table_name
-  registry_file
-  dq_model_file
-  registry_status
-  dq_model_status
-  validation_status
-  validation_message
-  commit_sha
-  checked_at
-
-  ### Критерии приёмки
-
-  - Удаление таблицы без dbt MR блокирует CI/CD.
-  - Наличие dbt MR без удаления DQ-модели блокирует CI/CD.
-  - Наличие dbt MR без удаления registry YAML блокирует CI/CD, если файл существовал.
-  - Корректное удаление обоих файлов проходит проверку.
-  - Переименование или перемещение таблицы не вызывает требование удалить проверки.
-  - delete + add одного физического объекта не считается удалением.
-  - Удаление вспомогательного SQL-файла не приводит к ложной ошибке.
-  - Несколько удаляемых таблиц проверяются независимо.
-  - В ошибке указаны таблица, задача, найденный dbt MR и отсутствующие удаления.
-  - Результат проверки сохраняется в журнале CI/CD.
-
-  ### Приоритет
-
-  P0 или P1, поскольку проверка предотвращает попадание в PROD устаревших dbt-моделей и DQ-конфигураций для уже удалённых физических объектов.
- 
- 
+create: dbt_greenplum_elt/models_metadata/dds/dds.account_debt.yml
+create: dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_s_duplicates.sql
+create: dbt_greenplum_elt/models_metadata/dds/dds.account_debt_sap.yml
+create: dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_sap_s_duplicates.sql
+create: dbt_greenplum_elt/models_metadata/dds/dds.accounting_document_subposition_payment_due.yml
+create: dbt_greenplum_elt/models/dq/technical/dq_dds_s_accounting_document_subposition_payment_due_s_duplicates.sql
+update: dbt_greenplum_elt/models_metadata/dm/dm.account_debt_for_working_capital.yml
+unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_account_debt_for_working_capital_s_duplicates.sql
+update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_credit_rating_score.yml
+unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_credit_rating_score_s_duplicates.sql
+update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_customer_insolvency.yml
+unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_customer_insolvency_s_duplicates.sql
+update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_documents_leading_to_debt.yml
+unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_documents_leading_to_debt_s_duplicates.sql
+update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_significant_overdue_account_receivable.yml
+unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_significant_overdue_account_receivable_s_duplicates.sql
+create: dbt_greenplum_elt/models_metadata/ods/ods.ral_zfi7913m_overdue.yml
+create: dbt_greenplum_elt/models/dq/technical/dq_ods_s_ral_zfi7913m_overdue_s_duplicates.sql
+delete: dbt_greenplum_elt/models_metadata/dm_calc/dm_calc.account_debt.yml
+delete: dbt_greenplum_elt/models/dq/technical/dq_dm_calc_s_account_debt_s_duplicates.sql
+delete: dbt_greenplum_elt/models_metadata/dm_calc/dm_calc.account_debt_sap.yml
+delete: dbt_greenplum_elt/models/dq/technical/dq_dm_calc_s_account_debt_sap_s_duplicates.sql
+delete: dbt_greenplum_elt/models_metadata/dm_calc/dm_calc.operating_periods_for_account_debt.yml
+delete: dbt_greenplum_elt/models/dq/technical/dq_dm_calc_s_operating_periods_for_account_debt_s_duplicates.sql
+delete: dbt_greenplum_elt/models_metadata/ods/ods.map_planned_repayment_dates_keys.yml
+delete: dbt_greenplum_elt/models/dq/technical/dq_ods_s_map_planned_repayment_dates_keys_s_duplicates.sql

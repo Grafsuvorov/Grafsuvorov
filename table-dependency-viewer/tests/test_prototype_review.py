@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import re
 import sys
 import types
 import unittest
@@ -42,8 +44,33 @@ from api.services.prototype_review import (
     link_ytrack_issues,
     extract_sql_dependencies,
     infer_review_targets,
+    infer_removed_table_targets,
     load_merge_request_sql_bundle,
 )
+
+
+def _load_collect_target_sql():
+    source = Path("api/main.py").read_text(encoding="utf-8")
+    module = ast.parse(source, filename="api/main.py")
+    node = next(
+        item
+        for item in module.body
+        if isinstance(item, ast.FunctionDef) and item.name == "_prototype_review_collect_target_sql"
+    )
+    namespace = {
+        "re": re,
+        "TARGET_PATTERNS": prototype_review.TARGET_PATTERNS,
+        "CREATE_OBJECT_PATTERNS": prototype_review.CREATE_OBJECT_PATTERNS,
+        "DROP_TARGET_PATTERNS": prototype_review.DROP_TARGET_PATTERNS,
+        "DELETE_TARGET_PATTERNS": prototype_review.DELETE_TARGET_PATTERNS,
+        "TRUNCATE_TARGET_PATTERNS": prototype_review.TRUNCATE_TARGET_PATTERNS,
+        "COMMENT_TARGET_PATTERNS": prototype_review.COMMENT_TARGET_PATTERNS,
+        "_normalize_fqn": prototype_review._normalize_fqn,
+        "_normalize_relation_ref": prototype_review._normalize_relation_ref,
+        "_strip_sql_comments": prototype_review._strip_sql_comments,
+    }
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "api/main.py", "exec"), namespace)
+    return namespace["_prototype_review_collect_target_sql"]
 
 
 class LoadMergeRequestSqlBundleTests(unittest.TestCase):
@@ -181,6 +208,83 @@ class LoadMergeRequestSqlBundleTests(unittest.TestCase):
         )
         fake_urlopen.assert_not_called()
 
+
+class RemovedTableTargetsTests(unittest.TestCase):
+    def test_native_rename_removes_old_physical_table(self) -> None:
+        result = infer_removed_table_targets(
+            files=[{
+                "path": "dds/dds.new_name.sql",
+                "old_path": "dds/dds.old_name.sql",
+                "new_path": "dds/dds.new_name.sql",
+                "change_type": "renamed",
+            }],
+            deleted_files=[],
+            active_targets={"dds.new_name"},
+        )
+
+        self.assertEqual(result, {"dds.old_name"})
+
+    def test_delete_plus_add_same_object_is_treated_as_move(self) -> None:
+        result = infer_removed_table_targets(
+            files=[{
+                "path": "dds/dds.target.sql",
+                "old_path": "dds/dds.target.sql",
+                "new_path": "dds/dds.target.sql",
+                "change_type": "added",
+            }],
+            deleted_files=[{
+                "path": "dds/dds.target.sql",
+                "old_path": "dds/dds.target.sql",
+                "change_type": "deleted",
+            }],
+            active_targets={"dds.target"},
+        )
+
+        self.assertEqual(result, set())
+
+    def test_deleted_helper_sql_does_not_remove_object(self) -> None:
+        result = infer_removed_table_targets(
+            files=[],
+            deleted_files=[{
+                "path": "etl_loads_entity/ENTITY/dds/target/sql_query_insert_init.sql",
+                "change_type": "deleted",
+            }],
+            active_targets=set(),
+        )
+
+        self.assertEqual(result, set())
+
+
+class CollectTargetSqlTests(unittest.TestCase):
+    def test_new_object_bundle_keeps_temp_preparation_and_splits_target_ddl(self) -> None:
+        collect = _load_collect_target_sql()
+        statements = [
+            "drop table if exists dm.target cascade",
+            "create table dm.target (id int)",
+            "comment on table dm.target is 'Target'",
+            "drop table if exists pg_temp.source_rows",
+            "create temp table pg_temp.source_rows (id int)",
+            "insert into pg_temp.source_rows select id from dds.source",
+            "truncate table dm.target",
+            "insert into dm.target select id from pg_temp.source_rows",
+        ]
+
+        result = collect(
+            "dm.target",
+            [{
+                "path": "dm/dm.target.sql",
+                "sql": ";\n".join(statements) + ";",
+                "statements": statements,
+            }],
+        )
+
+        self.assertIn("create table dm.target", result["recreate_sql"])
+        self.assertIn("comment on table dm.target", result["recreate_sql"])
+        self.assertIn("create temp table pg_temp.source_rows", result["insert_sql"])
+        self.assertIn("insert into pg_temp.source_rows", result["insert_sql"])
+        self.assertIn("insert into dm.target", result["insert_sql"])
+        self.assertIn("truncate table dm.target", result["truncate_sql"])
+        self.assertNotIn("create temp table", result["recreate_sql"])
 
 
 class ExtractSqlDependenciesTests(unittest.TestCase):

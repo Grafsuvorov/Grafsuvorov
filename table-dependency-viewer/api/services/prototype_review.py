@@ -400,6 +400,50 @@ def _infer_target_from_path(path_value: str) -> tuple[str, str] | None:
     return None
 
 
+def infer_removed_table_targets(
+    *,
+    files: list[dict[str, Any]],
+    deleted_files: list[dict[str, Any]],
+    active_targets: set[str],
+) -> set[str]:
+    """Return physical tables that disappeared, including native Git renames.
+
+    A path-only move keeps the same schema.table and must not remove ETL/dbt
+    metadata. A rename to a different schema.table removes the old object while
+    the normal review flow creates the new one.
+    """
+    active_targets_norm = {
+        str(value or "").strip().lower()
+        for value in active_targets
+        if str(value or "").strip()
+    }
+    removed: set[str] = set()
+
+    for deleted_file in deleted_files:
+        deleted_path = str(deleted_file.get("path") or deleted_file.get("old_path") or "")
+        inferred = _infer_direct_sql_file_target(deleted_path)
+        if not inferred:
+            continue
+        target_fqn, object_type = inferred
+        target_norm = str(target_fqn or "").strip().lower()
+        if str(object_type or "").upper() == "TABLE" and target_norm and target_norm not in active_targets_norm:
+            removed.add(target_norm)
+
+    for file_item in files:
+        if str(file_item.get("change_type") or "").strip().lower() != "renamed":
+            continue
+        old_target = _infer_direct_sql_file_target(str(file_item.get("old_path") or ""))
+        new_target = _infer_direct_sql_file_target(str(file_item.get("new_path") or file_item.get("path") or ""))
+        if not old_target or str(old_target[1] or "").upper() != "TABLE":
+            continue
+        old_fqn = str(old_target[0] or "").strip().lower()
+        new_fqn = str((new_target or ("", ""))[0] or "").strip().lower()
+        if old_fqn and old_fqn != new_fqn and old_fqn not in active_targets_norm:
+            removed.add(old_fqn)
+
+    return removed
+
+
 def parse_prototype_gitlab_ref(value: str, default_project: str) -> PrototypeGitLabRef:
     raw_value = str(value or "").strip()
     if not raw_value:

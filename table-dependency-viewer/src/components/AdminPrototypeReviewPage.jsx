@@ -436,6 +436,7 @@ export default function AdminPrototypeReviewPage() {
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
+          paths: item.paths || [],
           target_fqn: item.target_fqn,
           entity_name: String(item.entity_name || "").trim(),
           key_attributes: splitItems(item.key_attributes_text),
@@ -947,7 +948,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
             {Array.isArray(result?.meta_files) && result.meta_files.length > 0 ? (
               <div className="muted" style={{ marginTop: 12 }}>
-                YAML обновлены:
+                ETL-файлы синхронизированы:
                 {" "}
                 {result.meta_files.map((item) => item.file_path).join(", ")}
               </div>

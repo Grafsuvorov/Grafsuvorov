@@ -38,6 +38,12 @@ export default function DevCopyDagPage({ userProfile }) {
     : [schemaSyncForm.check_table_schema, schemaSyncForm.check_table_name].filter(Boolean).join(".");
   const copyWindow = status?.window || null;
   const canRunNow = Boolean(copyWindow?.allowed);
+  const blockedTargetSchemas = Array.isArray(status?.restrictions?.blocked_target_schemas)
+    ? status.restrictions.blocked_target_schemas.map((value) => String(value || "").trim().toLowerCase())
+    : ["dm_view"];
+  const targetSchemaBlocked = blockedTargetSchemas.includes(
+    String(form.target_table_schema || "").trim().replace(/^"|"$/g, "").toLowerCase()
+  );
 
   useEffect(() => {
     if (!canUsePage) return;
@@ -118,6 +124,10 @@ export default function DevCopyDagPage({ userProfile }) {
       setError("Нужно заполнить схему и таблицу для PROD и DEV");
       return;
     }
+    if (targetSchemaBlocked) {
+      setError("Выгрузка в целевую схему dm_view запрещена: схема предназначена для представлений.");
+      return;
+    }
     setRunning(true);
     setError(null);
     setMessage(null);
@@ -186,7 +196,7 @@ export default function DevCopyDagPage({ userProfile }) {
       <section className="cc-surface dev-meta-page">
         <div className="section-title">DEV Copy DAG</div>
         <div className="section-subtitle">
-          Запуск DAG `load_from_prod_to_dev` для копирования данных из PROD в DEV. Копировать можно в любую схему и с любым названием целевой таблицы. Пользоваться страницей можно только с 08:00 до 21:00 по Москве.
+          Запуск DAG `load_from_prod_to_dev` для копирования данных из PROD в DEV. Целевая схема `dm_view` запрещена, поскольку предназначена для представлений. Пользоваться страницей можно только с 08:00 до 21:00 по Москве.
         </div>
 
         <div className="dev-meta-tabs dev-copy-tabs">
@@ -236,6 +246,9 @@ export default function DevCopyDagPage({ userProfile }) {
                       onChange={(e) => setForm((prev) => ({ ...prev, target_table_schema: e.target.value }))}
                       placeholder="dm"
                     />
+                    {targetSchemaBlocked ? (
+                      <span className="login-error">Выгрузка в dm_view запрещена.</span>
+                    ) : null}
                   </label>
                   <label className="admin-field">
                     <span>target_table_name</span>
@@ -258,7 +271,7 @@ export default function DevCopyDagPage({ userProfile }) {
                   </label>
                 </div>
                 <div className="dev-meta-generator-actions">
-                  <button className="btn btn-primary" onClick={handleRun} disabled={running || !status?.airflow?.configured || !canRunNow}>
+                  <button className="btn btn-primary" onClick={handleRun} disabled={running || !status?.airflow?.configured || !canRunNow || targetSchemaBlocked}>
                     {running ? "Запускаем DAG..." : "Запустить DEV copy DAG"}
                   </button>
                   <span className="muted">

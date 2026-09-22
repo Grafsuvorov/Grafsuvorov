@@ -1052,6 +1052,120 @@ def save_meta_workspace_branch_file(
     }
 
 
+def _find_gp_object_dir_by_fqn(
+    *,
+    worktree_dir: Path,
+    entity_git_root_value: str,
+    schema_name: str,
+    table_name: str,
+) -> Path:
+    root_rel = Path(str(entity_git_root_value or "").strip().strip("/"))
+    if root_rel.is_absolute() or not root_rel.parts or ".." in root_rel.parts:
+        raise ValueError("Некорректный корневой путь GP metadata")
+    metadata_root = (worktree_dir / root_rel).resolve()
+    worktree_root = worktree_dir.resolve()
+    if metadata_root != worktree_root and worktree_root not in metadata_root.parents:
+        raise ValueError("Некорректный корневой путь GP metadata")
+    schema_norm = str(schema_name or "").strip().lower()
+    table_norm = str(table_name or "").strip().lower()
+    matches: list[Path] = []
+    if metadata_root.exists():
+        for entity_dir in metadata_root.iterdir():
+            if not entity_dir.is_dir():
+                continue
+            schema_dirs = [item for item in entity_dir.iterdir() if item.is_dir() and item.name.lower() == schema_norm]
+            for schema_dir in schema_dirs:
+                for table_dir in schema_dir.iterdir():
+                    if (
+                        table_dir.is_dir()
+                        and table_dir.name.lower() == table_norm
+                        and (table_dir / "meta_data_file.yaml").is_file()
+                    ):
+                        matches.append(table_dir)
+    if not matches:
+        raise ValueError(f"Объект `{schema_name}.{table_name}` не найден в основном ETL-каталоге")
+    if len(matches) > 1:
+        variants = ", ".join(str(path.relative_to(metadata_root)) for path in matches)
+        raise ValueError(f"Объект `{schema_name}.{table_name}` найден в нескольких сущностях: {variants}")
+    return matches[0]
+
+
+def delete_meta_workspace_branch_gp_object(
+    *,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
+    branch_name: str,
+    base_branch: str,
+    schema_name: str,
+    table_name: str,
+    task_id: str,
+    author: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите ветку")
+    schema_name_norm = str(schema_name or "").strip()
+    table_name_norm = str(table_name or "").strip()
+    if not schema_name_norm or not table_name_norm:
+        raise ValueError("Не указаны схема или таблица для удаления")
+
+    git_repo_root = Path(git_repo_value).resolve()
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name_norm,
+        base_branch=str(base_branch or "").strip() or "main",
+        author=author,
+    )
+    result: dict[str, Any] = {}
+
+    def _delete_object():
+        object_dir = _find_gp_object_dir_by_fqn(
+            worktree_dir=worktree_dir,
+            entity_git_root_value=entity_git_root_value,
+            schema_name=schema_name_norm,
+            table_name=table_name_norm,
+        )
+        object_rel = object_dir.relative_to(worktree_dir.resolve())
+        changed_files = sorted(
+            path.relative_to(worktree_dir.resolve()).as_posix()
+            for path in object_dir.rglob("*")
+            if path.is_file()
+        )
+        _run_workspace_git(git_repo_root, ["rm", "-r", "--", object_rel.as_posix()], cwd=worktree_dir)
+        task_id_norm = str(task_id or "").strip().upper()
+        commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+        _run_workspace_git(
+            git_repo_root,
+            ["commit", "-m", f"{commit_prefix}: delete {schema_name_norm}.{table_name_norm}"],
+            cwd=worktree_dir,
+        )
+        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(branch_ref)}"], cwd=worktree_dir)
+        result.update(
+            {
+                "branch_name": branch_name_norm,
+                "base_branch": str(base_branch or "").strip() or "main",
+                "entity_name": object_rel.parts[-3],
+                "schema_name": schema_name_norm,
+                "table_name": table_name_norm,
+                "object_key": "/".join(object_rel.parts[-3:]),
+                "path": object_rel.as_posix(),
+                "changed_files": changed_files,
+                "committed": True,
+                "action": "delete",
+                "workspace_path": str(worktree_dir),
+            }
+        )
+
+    _with_workspace_lock(worktree_dir, _delete_object)
+    return result
+
+
 def save_meta_workspace_branch_gp_bundle(
     *,
     git_repo_value: str,

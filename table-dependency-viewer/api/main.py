@@ -166,6 +166,7 @@ from .services.meta_workspace import (
     _build_branch_catalog,
     build_meta_workspace_branch_tree,
     create_meta_workspace_mr,
+    delete_meta_workspace_branch_gp_object,
     list_meta_workspace_branches,
     read_meta_workspace_branch_gp_bundle,
     read_meta_workspace_branch_file,
@@ -179,18 +180,22 @@ from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
+    COMMENT_TARGET_PATTERNS,
+    DELETE_TARGET_PATTERNS,
     DROP_TARGET_PATTERNS,
     TARGET_PATTERNS,
+    TRUNCATE_TARGET_PATTERNS,
     _is_clickhouse_sql_path,
-    _infer_direct_sql_file_target,
     _infer_target_from_path,
     _normalize_fqn,
+    _normalize_relation_ref,
     add_ytrack_issue_comment,
     create_ytrack_issue,
     link_ytrack_issues,
     execute_sql_review_items_in_dev,
     extract_sql_dependencies,
     infer_final_target,
+    infer_removed_table_targets,
     infer_review_targets,
     load_merge_request_sql_bundle,
     parse_prototype_task_text,
@@ -521,6 +526,7 @@ class PrototypeReviewYamlRefreshPayload(BaseModel):
 class PrototypeReviewItemPayload(BaseModel):
     item_id: Optional[str] = None
     path: Optional[str] = None
+    paths: Optional[List[str]] = None
     target_fqn: str
     entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
@@ -614,6 +620,15 @@ def _assert_dev_copy_window():
                 "Запуск DEV copy DAG разрешен только с "
                 f"{window['allowed_from']} до {window['allowed_to']} по Москве."
             ),
+        )
+
+
+def _assert_dev_copy_target_schema_allowed(schema_name: str) -> None:
+    schema_norm = str(schema_name or "").strip().strip('"').lower()
+    if schema_norm == "dm_view":
+        raise ValueError(
+            "Выгрузка данных в целевую схему dm_view запрещена: "
+            "эта схема предназначена для представлений, а не для физических копий таблиц."
         )
 
 
@@ -1169,6 +1184,7 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
         statement_insert: list[str] = []
         statement_truncate: list[str] = []
         for statement in statements or [sql_text]:
+            assigned = False
             normalized_targets: set[str] = set()
             for pattern in TARGET_PATTERNS:
                 for match in pattern.finditer(statement):
@@ -1185,19 +1201,42 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
                     normalized = _normalize_fqn(match.group(1))
                     if normalized == target_norm:
                         statement_recreate.append(statement)
+                        assigned = True
             normalized_statement = _strip_sql_comments(statement).lower()
+            mutation_targets: set[str] = set()
+            for pattern in (*DELETE_TARGET_PATTERNS, *TRUNCATE_TARGET_PATTERNS):
+                for match in pattern.finditer(statement):
+                    normalized = _normalize_fqn(match.group(1))
+                    if normalized:
+                        mutation_targets.add(normalized)
             if target_norm in normalized_targets:
                 if re.search(r"\bcreate\s+(?:or\s+replace\s+)?(?:table|view)\b", normalized_statement):
                     statement_recreate.append(statement)
+                    assigned = True
                 if re.search(r"\binsert\s+into\b", normalized_statement):
                     statement_insert.append(statement)
+                    assigned = True
             if (
                 target_norm in normalized_targets
                 and re.search(r"\binsert\s+overwrite(?:\s+table)?\b", normalized_statement)
             ):
                 statement_insert.append(statement)
-            if re.search(r"\b(?:truncate\s+table|truncate|delete\s+from)\b", normalized_statement) and target_norm in normalized_targets:
+                assigned = True
+            if re.search(r"\b(?:truncate\s+table|truncate|delete\s+from)\b", normalized_statement) and target_norm in mutation_targets:
                 statement_truncate.append(statement)
+                assigned = True
+            for pattern in COMMENT_TARGET_PATTERNS:
+                for match in pattern.finditer(statement):
+                    if _normalize_relation_ref(match.group(1)) == target_norm:
+                        statement_recreate.append(statement)
+                        assigned = True
+                        break
+            # Preparation statements for a one-object script (temporary
+            # tables, their INSERTs and helper SQL) belong to the object's
+            # calculation file. Dropping them made generated ETL bundles fail
+            # later with missing pg_temp relations.
+            if not assigned:
+                statement_insert.append(statement)
 
         if statement_recreate:
             recreate_parts.append("\n\n".join(statement_recreate))
@@ -1566,28 +1605,6 @@ def _prototype_review_update_dbt_dq_model(content: str, key_attributes: list[Any
     return pattern.sub(lambda match: f"{match.group('prefix')}{check_columns}", source, count=1)
 
 
-def _prototype_review_deleted_dbt_targets(
-    deleted_files: list[dict[str, Any]],
-    active_targets: set[str],
-) -> set[str]:
-    deleted_targets: set[str] = set()
-    active_targets_norm = {str(value or "").strip().lower() for value in active_targets if str(value or "").strip()}
-    for deleted_file in deleted_files:
-        deleted_path = str(deleted_file.get("path") or deleted_file.get("old_path") or "")
-        # Only a canonical `<schema>/<schema>.<table>.sql` deletion is strong
-        # enough evidence that the object itself was removed. Deleting one
-        # recreate/insert helper inside an ETL object directory must not
-        # remove dbt checks for a table that still exists.
-        inferred = _infer_direct_sql_file_target(deleted_path)
-        if not inferred:
-            continue
-        target_fqn, object_type = inferred
-        target_fqn = str(target_fqn or "").strip().lower()
-        if str(object_type or "").upper() == "TABLE" and target_fqn and target_fqn not in active_targets_norm:
-            deleted_targets.add(target_fqn)
-    return deleted_targets
-
-
 def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
     target_fqn = str(item.get("target_fqn") or "").strip().lower()
     if "." not in target_fqn:
@@ -1700,6 +1717,7 @@ def _prototype_review_publish_dbt_registry(
     task_id: str,
     author: str,
     review_items: list[dict[str, Any]],
+    changed_files: Optional[list[dict[str, Any]]] = None,
     deleted_files: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
@@ -1736,7 +1754,11 @@ def _prototype_review_publish_dbt_registry(
             "key_attributes": item.get("key_attributes") or [],
         }
 
-    deleted_targets = _prototype_review_deleted_dbt_targets(deleted_files or [], active_targets)
+    deleted_targets = infer_removed_table_targets(
+        files=changed_files or [],
+        deleted_files=deleted_files or [],
+        active_targets=active_targets,
+    )
 
     if not dbt_files and not deleted_targets:
         return {"status": "skipped", "reason": "В review нет изменённых или удалённых табличных объектов", "files": []}
@@ -2021,6 +2043,7 @@ def _prototype_review_build_result(
             reserved_table_ids=reserved_table_ids,
         )
         item_result["item_id"] = item_id
+        item_result["paths"] = related_paths
         item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()
         item_result["preparation"] = prep_by_item_id.get(item_id) or {"status": "skipped"}
         item_result["dependencies"] = dependencies
@@ -2304,6 +2327,16 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         if raw_issue_id:
             issue_id = str(issue_result.get("issue_id") or "").strip().upper()
             branch_name = f"feature/{issue_id}"
+            active_targets = {
+                str(item.get("target_fqn") or "").strip().lower()
+                for item in review_items
+                if str(item.get("target_fqn") or "").strip()
+            }
+            deleted_table_targets = infer_removed_table_targets(
+                files=bundle.get("files") or [],
+                deleted_files=bundle.get("deleted_files") or [],
+                active_targets=active_targets,
+            )
             for item in review_items:
                 yaml_content = str(item.get("yaml_content") or "").strip()
                 if not yaml_content:
@@ -2314,31 +2347,103 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                     continue
                 schema_name, table_name = target_fqn.split(".", 1)
                 try:
-                    save_result = save_meta_workspace_branch_file(
-                        git_repo_value=ENTITY_META_GIT_REPO,
-                        workspace_root_value=META_WORKSPACE_ROOT,
-                        workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                        branch_name=branch_name,
-                        base_branch=PROTOTYPE_ETL_TARGET_BRANCH,
-                        file_path=_prototype_review_yaml_repo_path(entity_name, schema_name, table_name),
-                        content=yaml_content,
-                        task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                        author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                        expected_revision=None,
-                    )
+                    item_paths = {
+                        str(value or "").strip()
+                        for value in (item.get("paths") or [])
+                        if str(value or "").strip()
+                    }
+                    if not item_paths:
+                        item_paths = {
+                            value.strip()
+                            for value in str(item.get("path") or "").splitlines()
+                            if value.strip()
+                        }
+                    related_files = [
+                        file_item
+                        for file_item in (bundle.get("files") or [])
+                        if str(file_item.get("path") or "").strip() in item_paths
+                    ]
+                    if item.get("is_new"):
+                        sql_bundle = _prototype_review_collect_target_sql(target_fqn, related_files)
+                        if not str(sql_bundle.get("recreate_sql") or "").strip():
+                            raise ValueError(f"Для нового объекта `{target_fqn}` не сформирован recreate SQL")
+                        save_result = save_meta_workspace_branch_gp_bundle(
+                            git_repo_value=ENTITY_META_GIT_REPO,
+                            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                            workspace_root_value=META_WORKSPACE_ROOT,
+                            workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                            branch_name=branch_name,
+                            base_branch=PROTOTYPE_ETL_TARGET_BRANCH,
+                            entity_name=entity_name,
+                            schema_name=schema_name,
+                            table_name=table_name,
+                            yaml_content=yaml_content,
+                            recreate_sql=sql_bundle.get("recreate_sql", ""),
+                            insert_sql=sql_bundle.get("insert_sql", ""),
+                            truncate_sql=sql_bundle.get("truncate_sql", ""),
+                            task_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                            author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                            expected_revision=None,
+                        )
+                    else:
+                        save_result = save_meta_workspace_branch_file(
+                            git_repo_value=ENTITY_META_GIT_REPO,
+                            workspace_root_value=META_WORKSPACE_ROOT,
+                            workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                            branch_name=branch_name,
+                            base_branch=PROTOTYPE_ETL_TARGET_BRANCH,
+                            file_path=_prototype_review_yaml_repo_path(entity_name, schema_name, table_name),
+                            content=yaml_content,
+                            task_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                            author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                            expected_revision=None,
+                        )
                     meta_files.append(
                         {
                             "target_fqn": target_fqn,
                             "entity_name": entity_name,
-                            "file_path": save_result.get("file_path"),
+                            "file_path": save_result.get("file_path") or save_result.get("path"),
                             "branch_name": save_result.get("branch_name"),
                             "committed": bool(save_result.get("committed")),
+                            "action": "create" if item.get("is_new") else "update",
+                            "changed_files": save_result.get("changed_files") or [],
                         }
                     )
                     meta_branch = save_result.get("branch_name") or meta_branch
                 except Exception as exc:
                     meta_error = str(exc)
                     break
+            if not meta_error:
+                for target_fqn in sorted(deleted_table_targets):
+                    schema_name, table_name = target_fqn.split(".", 1)
+                    try:
+                        delete_result = delete_meta_workspace_branch_gp_object(
+                            git_repo_value=ENTITY_META_GIT_REPO,
+                            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                            workspace_root_value=META_WORKSPACE_ROOT,
+                            workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                            branch_name=branch_name,
+                            base_branch=PROTOTYPE_ETL_TARGET_BRANCH,
+                            schema_name=schema_name,
+                            table_name=table_name,
+                            task_id=issue_id,
+                            author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
+                        )
+                        meta_files.append(
+                            {
+                                "target_fqn": target_fqn,
+                                "entity_name": delete_result.get("entity_name"),
+                                "file_path": delete_result.get("path"),
+                                "branch_name": delete_result.get("branch_name"),
+                                "committed": bool(delete_result.get("committed")),
+                                "action": "delete",
+                                "changed_files": delete_result.get("changed_files") or [],
+                            }
+                        )
+                        meta_branch = delete_result.get("branch_name") or meta_branch
+                    except Exception as exc:
+                        meta_error = str(exc)
+                        break
             if not meta_error and meta_branch:
                 try:
                     meta_mr = create_meta_workspace_mr(
@@ -2383,6 +2488,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                     task_id=issue_id,
                     author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
                     review_items=review_items,
+                    changed_files=bundle.get("files") or [],
                     deleted_files=bundle.get("deleted_files") or [],
                 )
                 if dbt_registry.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
@@ -4789,6 +4895,9 @@ def get_admin_dev_copy_status(request: Request):
             "configured": bool(AIRFLOW_DEV_BASE_URL),
         },
         "window": window,
+        "restrictions": {
+            "blocked_target_schemas": ["dm_view"],
+        },
     }
 
 
@@ -4807,6 +4916,7 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
         missing = [key for key in ("source_table_schema", "source_table_name", "target_table_schema", "target_table_name") if not values[key]]
         if missing:
             raise ValueError("Нужно заполнить все параметры запуска DAG")
+        _assert_dev_copy_target_schema_allowed(values["target_table_schema"])
         data = trigger_airflow_parametrized_dag(
             airflow_base_url=AIRFLOW_DEV_BASE_URL,
             dag_id=DEV_COPY_DAG_ID,

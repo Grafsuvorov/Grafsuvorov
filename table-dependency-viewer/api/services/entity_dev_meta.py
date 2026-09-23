@@ -275,7 +275,7 @@ def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> 
         "object_type": "VIEW" if schema_norm.endswith("_view") else "TABLE",
         "table_load_interval": dict(DEFAULT_INTERVAL),
         "flag_waiting_dag_finished": False,
-        "start_date": None,
+        "start_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         **_standard_sql_query_paths(
             entity_name=entity_name,
             schema_name=schema_name,
@@ -599,6 +599,11 @@ def _build_generated_yaml(
 
     if "table_load_mode" not in payload or not payload.get("table_load_mode"):
         payload["table_load_mode"] = "TRUNCATE_INIT"
+
+    # A copied template may contain an empty start_date.  New objects must be
+    # schedulable immediately and should never be emitted with YAML null here.
+    if not str(payload.get("start_date") or "").strip():
+        payload["start_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     payload["source_id"] = _automatic_source_id(schema_norm)
 

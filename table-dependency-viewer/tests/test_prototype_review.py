@@ -520,6 +520,7 @@ class EntityMetaDependenciesTests(unittest.TestCase):
         payload = _build_default_yaml("SALES_MARGIN", "dm", "margin_report")
 
         self.assertEqual(payload["source_id"], 15)
+        self.assertRegex(payload["start_date"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
         self.assertTrue(payload["sql_query_recreate_init"].endswith("/sql_query_recreate_init.sql"))
         self.assertTrue(payload["sql_query_insert_init"].endswith("/sql_query_insert_init.sql"))
 

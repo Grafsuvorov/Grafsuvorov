@@ -15,7 +15,12 @@ sys.modules.setdefault("sqlalchemy", sqlalchemy_stub)
 yaml_stub = types.ModuleType("yaml")
 yaml_stub.SafeDumper = object
 yaml_stub.dump = lambda *args, **kwargs: ""
-yaml_stub.safe_load = lambda *args, **kwargs: {}
+yaml_stub.safe_load = lambda value, *args, **kwargs: {
+    key.strip(): raw_value.strip()
+    for line in str(value or "").splitlines()
+    if ":" in line
+    for key, raw_value in [line.split(":", 1)]
+}
 sys.modules.setdefault("yaml", yaml_stub)
 
 dotenv_stub = types.ModuleType("dotenv")
@@ -31,7 +36,10 @@ class MetaWorkspaceDeleteTests(unittest.TestCase):
             worktree = Path(raw_root)
             object_dir = worktree / "meta/root" / "ENTITY_A" / "DDS" / "Account_Debt_1C"
             object_dir.mkdir(parents=True)
-            (object_dir / "meta_data_file.yaml").write_text("table_schema: dds\n", encoding="utf-8")
+            (object_dir / "meta_data_file.yaml").write_text(
+                "table_schema: dds\ntable_name: account_debt_1c\n",
+                encoding="utf-8",
+            )
 
             result = _find_gp_object_dir_by_fqn(
                 worktree_dir=worktree,
@@ -42,13 +50,35 @@ class MetaWorkspaceDeleteTests(unittest.TestCase):
 
             self.assertEqual(result, object_dir.resolve())
 
+    def test_finds_object_in_legacy_schema_table_layout_by_yaml_identity(self) -> None:
+        with TemporaryDirectory() as raw_root:
+            worktree = Path(raw_root)
+            object_dir = worktree / "meta/root" / "dm_calc" / "account_debt"
+            object_dir.mkdir(parents=True)
+            (object_dir / "meta_data_file.yaml").write_text(
+                "table_schema: dm_calc\ntable_name: account_debt\nentity_name: BI_FI\n",
+                encoding="utf-8",
+            )
+
+            result = _find_gp_object_dir_by_fqn(
+                worktree_dir=worktree,
+                entity_git_root_value="meta/root",
+                schema_name="dm_calc",
+                table_name="account_debt",
+            )
+
+            self.assertEqual(result, object_dir.resolve())
+
     def test_rejects_ambiguous_objects_in_multiple_entities(self) -> None:
         with TemporaryDirectory() as raw_root:
             worktree = Path(raw_root)
             for entity_name in ("ENTITY_A", "ENTITY_B"):
                 object_dir = worktree / "meta/root" / entity_name / "dds" / "target"
                 object_dir.mkdir(parents=True)
-                (object_dir / "meta_data_file.yaml").write_text("table_schema: dds\n", encoding="utf-8")
+                (object_dir / "meta_data_file.yaml").write_text(
+                    "table_schema: dds\ntable_name: target\n",
+                    encoding="utf-8",
+                )
 
             with self.assertRaisesRegex(ValueError, "нескольких сущностях"):
                 _find_gp_object_dir_by_fqn(

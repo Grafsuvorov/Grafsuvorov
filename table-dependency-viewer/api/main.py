@@ -1867,6 +1867,27 @@ def _prototype_review_publish_dbt_registry(
         payload=commit_payload,
     )
 
+    # GitLab commits are atomic.  Verify destructive actions against the
+    # feature branch before reporting them as successful or creating an MR.
+    # This turns an unexpected path/mask mismatch into a visible error instead
+    # of a misleading `delete` entry in the UI.
+    undeleted_paths = []
+    for action in actions:
+        if action.get("action") != "delete":
+            continue
+        file_path = str(action.get("file_path") or "")
+        if _prototype_gitlab_file_content(
+            project=project_ref,
+            token=DBT_GITLAB_TOKEN,
+            file_path=file_path,
+            ref=branch_name,
+        ) is not None:
+            undeleted_paths.append(file_path)
+    if undeleted_paths:
+        raise ValueError(
+            "После dbt-коммита не удалены файлы: " + ", ".join(sorted(undeleted_paths))
+        )
+
     existing_mrs = _gitlab_json_request(
         api_url=GITLAB_API_URL,
         project=project_ref,

@@ -1070,18 +1070,24 @@ def _find_gp_object_dir_by_fqn(
     table_norm = str(table_name or "").strip().lower()
     matches: list[Path] = []
     if metadata_root.exists():
-        for entity_dir in metadata_root.iterdir():
-            if not entity_dir.is_dir():
+        # The ETL repository contains both layouts used over its lifetime:
+        #   <root>/<entity>/<schema>/<table>/meta_data_file.yaml
+        #   <root>/<schema>/<table>/meta_data_file.yaml
+        # Do not infer identity from path depth.  The YAML fields are the
+        # authoritative identity and allow deletion to work for both layouts.
+        for yaml_path in metadata_root.rglob("meta_data_file.yaml"):
+            if not yaml_path.is_file():
                 continue
-            schema_dirs = [item for item in entity_dir.iterdir() if item.is_dir() and item.name.lower() == schema_norm]
-            for schema_dir in schema_dirs:
-                for table_dir in schema_dir.iterdir():
-                    if (
-                        table_dir.is_dir()
-                        and table_dir.name.lower() == table_norm
-                        and (table_dir / "meta_data_file.yaml").is_file()
-                    ):
-                        matches.append(table_dir)
+            try:
+                payload = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            payload_schema = str(payload.get("table_schema") or "").strip().strip('"').lower()
+            payload_table = str(payload.get("table_name") or "").strip().strip('"').lower()
+            if payload_schema == schema_norm and payload_table == table_norm:
+                matches.append(yaml_path.parent)
     if not matches:
         raise ValueError(f"Объект `{schema_name}.{table_name}` не найден в основном ETL-каталоге")
     if len(matches) > 1:
@@ -1132,6 +1138,10 @@ def delete_meta_workspace_branch_gp_object(
             table_name=table_name_norm,
         )
         object_rel = object_dir.relative_to(worktree_dir.resolve())
+        try:
+            object_payload = yaml.safe_load((object_dir / "meta_data_file.yaml").read_text(encoding="utf-8")) or {}
+        except Exception:
+            object_payload = {}
         changed_files = sorted(
             path.relative_to(worktree_dir.resolve()).as_posix()
             for path in object_dir.rglob("*")
@@ -1150,7 +1160,7 @@ def delete_meta_workspace_branch_gp_object(
             {
                 "branch_name": branch_name_norm,
                 "base_branch": str(base_branch or "").strip() or "main",
-                "entity_name": object_rel.parts[-3],
+                "entity_name": str((object_payload or {}).get("entity_name") or "").strip() or None,
                 "schema_name": schema_name_norm,
                 "table_name": table_name_norm,
                 "object_key": "/".join(object_rel.parts[-3:]),

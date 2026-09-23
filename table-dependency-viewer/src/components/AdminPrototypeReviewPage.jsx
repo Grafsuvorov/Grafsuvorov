@@ -484,21 +484,21 @@ export default function AdminPrototypeReviewPage() {
   return (
     <div className="container cc-page slow-page prototype-review-page">
       <section className="cc-header-zone">
-        <h1>Prototype Review / MR Review</h1>
+        <h1>Prototype Review</h1>
         <div className="cc-subtitle">
-          Запустите проверку MR, заполните только то, что не определилось автоматически, и создайте задачу по всему набору объектов.
+          Укажите ссылку на diff, запустите проверку и заполните только то, что не определилось автоматически.
         </div>
       </section>
 
       <section className="cc-surface">
         <div className="prototype-top-grid">
           <div className="prototype-step-field" style={{ margin: 0 }}>
-            <span className="slow-select-label">MR / DIFF URL или IID</span>
+            <span className="slow-select-label">Ссылка на diff</span>
             <input
               className="slow-entity-select"
               value={mrInput}
               onChange={(event) => setMrInput(event.target.value)}
-              placeholder="https://gitlab.../-/merge_requests/123 или .../diffs"
+              placeholder="https://gitlab.../-/merge_requests/123/diffs"
             />
           </div>
           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -510,7 +510,7 @@ export default function AdminPrototypeReviewPage() {
         </div>
 
         <div className="prototype-import-actions">
-          <div className="muted">После запуска появятся все целевые объекты MR или его diff и их статусы.</div>
+          <div className="muted">После запуска появятся все целевые объекты из diff и результаты их проверки.</div>
           <button className="btn btn-primary" onClick={handleRun} disabled={loading || !mrInput.trim()}>
             {loading ? "Идет review..." : "Запустить review"}
           </button>
@@ -535,7 +535,7 @@ export default function AdminPrototypeReviewPage() {
               <div className="hint">{result.status_reason || "—"}</div>
             </div>
             <div className="slow-summary-card">
-              <div className="label">Объекты MR</div>
+              <div className="label">Объекты diff</div>
               <div className="value">{reviewItemsDraft.length}</div>
               <div className="hint">
                 {unresolvedItemsCount > 0 ? `Нужно заполнить: ${unresolvedItemsCount}` : "Все обязательные поля заполнены"}
@@ -620,7 +620,7 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Объекты MR</div>
+            <div className="section-title">Объекты diff</div>
             <div style={{ display: "grid", gap: 16 }}>
               {reviewItemsDraft.map((item) => {
                 const needsEntity = !String(item.entity_name || "").trim();
@@ -890,7 +890,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь MR. ETL YAML, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи.
+                Одна задача будет создана на весь diff. ETL YAML, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи.
               </div>
               <button
                 type="button"

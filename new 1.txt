@@ -1,28 +1,115 @@
-dq_dm_calc_s_account_debt_s_duplicates.sql
+Предметная область:
 
-create: dbt_greenplum_elt/models_metadata/dds/dds.account_debt.yml
-create: dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_s_duplicates.sql
-create: dbt_greenplum_elt/models_metadata/dds/dds.account_debt_sap.yml
-create: dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_sap_s_duplicates.sql
-create: dbt_greenplum_elt/models_metadata/dds/dds.accounting_document_subposition_payment_due.yml
-create: dbt_greenplum_elt/models/dq/technical/dq_dds_s_accounting_document_subposition_payment_due_s_duplicates.sql
-update: dbt_greenplum_elt/models_metadata/dm/dm.account_debt_for_working_capital.yml
-unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_account_debt_for_working_capital_s_duplicates.sql
-update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_credit_rating_score.yml
-unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_credit_rating_score_s_duplicates.sql
-update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_customer_insolvency.yml
-unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_customer_insolvency_s_duplicates.sql
-update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_documents_leading_to_debt.yml
-unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_documents_leading_to_debt_s_duplicates.sql
-update: dbt_greenplum_elt/models_metadata/dm/dm.accounting_significant_overdue_account_receivable.yml
-unchanged: dbt_greenplum_elt/models/dq/technical/dq_dm_s_accounting_significant_overdue_account_receivable_s_duplicates.sql
-create: dbt_greenplum_elt/models_metadata/ods/ods.ral_zfi7913m_overdue.yml
-create: dbt_greenplum_elt/models/dq/technical/dq_ods_s_ral_zfi7913m_overdue_s_duplicates.sql
-delete: dbt_greenplum_elt/models_metadata/dm_calc/dm_calc.account_debt.yml
-delete: dbt_greenplum_elt/models/dq/technical/dq_dm_calc_s_account_debt_s_duplicates.sql
-delete: dbt_greenplum_elt/models_metadata/dm_calc/dm_calc.account_debt_sap.yml
-delete: dbt_greenplum_elt/models/dq/technical/dq_dm_calc_s_account_debt_sap_s_duplicates.sql
-delete: dbt_greenplum_elt/models_metadata/dm_calc/dm_calc.operating_periods_for_account_debt.yml
-delete: dbt_greenplum_elt/models/dq/technical/dq_dm_calc_s_operating_periods_for_account_debt_s_duplicates.sql
-delete: dbt_greenplum_elt/models_metadata/ods/ods.map_planned_repayment_dates_keys.yml
-delete: dbt_greenplum_elt/models/dq/technical/dq_ods_s_map_planned_repayment_dates_keys_s_duplicates.sql
+Сущность загрузки:
+
+Ссылка на гит:
+
+Название таблицы Greenplum:
+
+Способ обновления:
+
+Стенд:
+
+Время работы скрипта:
+
+Ссылка на статью релиза:
+
+Бизнес-ключ для проверки на дубли:
+
+Зависимые представление:
+
+Ключевые поля для загрузки в ClickHosue:
+
+Последовательность действий при (псевдо)инкрементальном обновлении таблицы:
+
+Требуется дополнительные права на таблицу:
+
+
+. Основные положения 
+Если в задаче на инженера добавляется/удаляется таблица или меняются ключи,
+то к задаче добавить блок на изменение в dbt-проекте
+https://prod.gitlab.dwh.rusal.com/dwh/dbt/-/tree/main/dbt_greenplum_elt/models/dq?ref_type=heads
+
+При изменении ключа таблицы указать на необходимость изменения ключа в dbt-модели dq-проверки дублей
+При удалении таблицы указать на удаление всех dq-проверок по этой таблице
+При добавлении таблицы указать на необходимость добавления dq-проверки на дубли с указанием ключей и фильтров
+Если таблица историческая, то в таком случае необходимо:
+
+Указывать полный ключ включая поля версии строки (например dt_from)
+Если необходимо проверять только часть данных, то указать фильтр, например: deleted_flag is false
+2. Шаблоны 
+2.1 Добавление/изменение проверок на дубли 
+Параметр	Описание	Пример
+Стенд	Название стенда	'DEV/PROD'
+Название схемы	Название схемы	dds
+Название таблицы	Название таблицы	account_debt_additional_details_1c_s_duplicates
+error_code	Код проверки из справочника dict_dds.dq_error	'dq_all0001'
+check_type	Тип проверки	'duplicates'
+check_columns	Список колонок для проверки на дубликаты	['dt_report', 'unit_balance_code', 'posting_uid_code_1c']
+detail_store_flag	Сохранять ли нарушенные строки в check_result_detail	true/false
+detail_store_limit	Ограничение на максимум строк для сохранения в детализацию	30/none
+check_filter	Дополнительный фильтр в секции WHERE (В строке фильтра WHERE не писать), не обязательный	"code is not null"
+Для данного типа проверки все необходимые dq-проверки оформляются в одну задачу
+
+Пример задачи: https://yt.rusal.ru/issue/DWH-16242
+
+2.2 Добавление/изменение nulls-проверки 
+Параметр	Описание	Пример
+Стенд	Название стенда	'DEV/PROD'
+Название схемы	Название схемы	dm
+Название таблицы	Название таблицы	purchase_lead_time_s_nulls
+error_code	Код проверки из справочника dict_dds.dq_error	'dq_all0003'
+check_type	Тип проверки	'nulls'
+check_conditions	Список условий для nulls-проверки	'plant_code is not null and plant_name is null', 'supplier_code is not null and supplier_name is null'
+detail_store_flag	Сохранять ли нарушенные строки в check_result_detail	true/false
+detail_store_limit	Ограничение на максимум строк для сохранения в детализацию	30/none
+check_filter	Дополнительный фильтр в секции WHERE (В строке фильтра WHERE не писать), не обязательный	"code is not null"
+Для данного типа проверки все необходимые dq-проверки оформляются в одну задачу
+
+Пример задачи: https://yt.rusal.ru/issue/DWH-16242
+
+2.3 Добавление/изменение бизнес-проверок 
+Параметр	Описание	Пример
+Стенд	Название стенда	'DEV/PROD'
+error_code	Код проверки из справочника dict_dds.dq_error	'dq_fi0008'
+check_type	Тип проверки	'business'
+detail_store_columns	Список колонок для сохранения их значений в поле check_result таблицы dq.check_result_detail Если этот параметр не указать, то в таком случае будет сохранение всех колонок блока select запроса	
+detail_store_flag	Сохранять ли нарушенные строки в check_result_detail	true/false
+detail_store_limit	Ограничение на максимум строк для сохранения в детализацию	30/none
+Для данного типа проверки каждая dq-проверка оформляются в отдельную задачу
+
+Пример задачи: https://yt.rusal.ru/issue/DWH-16244
+
+Запрос:
+
+select
+	m.dt_report,
+	m.unit_balance_code,
+	m.contract_number,
+	m.counterparty_code
+from
+	ods.map_zfi_kntr_data_keys m
+    left join dm.account_debt ad on
+        ad.unit_balance_code = m.unit_balance_code
+        and ad.dt = m.dt_report
+        and ad.contract_number = m.contract_number
+        and ad.counterparty_code = m.counterparty_code
+    left join dict_dds.settings_and_parameters_sap saps
+     	on ad.unit_balance_code=saps.range_low_value
+    	and saps.abap_program_code = '/RUSAL/FI_KHD'
+    	and saps.parameter_code = 'INACTBUK'
+where
+	ad.unit_balance_code is null
+	and m.dt_report between
+			(date_trunc('month', now()) - interval '1 month')::date and
+	        (date_trunc('month', now()) + interval '1 month' - interval '1 day')::date
+	and saps.range_low_value is null
+group by
+	m.dt_report,
+	m.unit_balance_code,
+	m.contract_number,
+	m.counterparty_code
+
+
+
+

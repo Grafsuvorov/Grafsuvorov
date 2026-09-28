@@ -1,39 +1,8 @@
-SELECT
-    count(*) FILTER (
-        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start = 0
-    ) AS days_0,
-
-    count(*) FILTER (
-        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start = 1
-    ) AS days_1,
-
-    count(*) FILTER (
-        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start BETWEEN 2 AND 7
-    ) AS days_2_7,
-
-    count(*) FILTER (
-        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start BETWEEN 8 AND 30
-    ) AS days_8_30,
-
-    count(*) FILTER (
-        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start > 30
-    ) AS days_gt_30,
-
-    count(*) FILTER (
-        WHERE COALESCE(dt_repair_end, CURRENT_DATE) < dt_repair_start
-    ) AS end_before_start
-FROM pg_temp.tmp_src_opr;
-
-И ещё можно почти точно посчитать количество строк, которое должен создать последний запрос, вообще не запуская generate_series:
-
-SELECT
-    SUM(
-        CASE
-            WHEN COALESCE(dt_repair_end, CURRENT_DATE) >= dt_repair_start
-            THEN COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start + 1
-            ELSE 0
-        END
-    ) AS expected_rows
-FROM pg_temp.tmp_src_opr;
-
-Вот этот результат мне особенно интересен. Если там будет около 36 млн, тогда проблема последнего запроса не в огромном размножении строк, и я бы уже внимательно разбирал именно Gather Motion 6:1 и почему Greenplum тащит 32 млн строк на один сегмент перед generate_series. Это, скорее всего, будет гораздо важнее.
+SELECT nspname
+FROM pg_namespace
+WHERE nspname IN (
+    'gp_toolkit',
+    'gpmetrics',
+    'gpperfmon',
+    'arenadata_toolkit'
+);

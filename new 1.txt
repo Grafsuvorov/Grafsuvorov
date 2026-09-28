@@ -1,22 +1,39 @@
 SELECT
-    count(*) AS cnt,
-    avg(COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start) AS avg_days,
-    max(COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start) AS max_days
+    count(*) FILTER (
+        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start = 0
+    ) AS days_0,
+
+    count(*) FILTER (
+        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start = 1
+    ) AS days_1,
+
+    count(*) FILTER (
+        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start BETWEEN 2 AND 7
+    ) AS days_2_7,
+
+    count(*) FILTER (
+        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start BETWEEN 8 AND 30
+    ) AS days_8_30,
+
+    count(*) FILTER (
+        WHERE COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start > 30
+    ) AS days_gt_30,
+
+    count(*) FILTER (
+        WHERE COALESCE(dt_repair_end, CURRENT_DATE) < dt_repair_start
+    ) AS end_before_start
 FROM pg_temp.tmp_src_opr;
 
-Особенно max_days.
+И ещё можно почти точно посчитать количество строк, которое должен создать последний запрос, вообще не запуская generate_series:
 
-Потому что, например, если из-за каких-нибудь старых незакрытых операций есть:
+SELECT
+    SUM(
+        CASE
+            WHEN COALESCE(dt_repair_end, CURRENT_DATE) >= dt_repair_start
+            THEN COALESCE(dt_repair_end, CURRENT_DATE) - dt_repair_start + 1
+            ELSE 0
+        END
+    ) AS expected_rows
+FROM pg_temp.tmp_src_opr;
 
-dt_repair_start = 2018-01-01
-dt_repair_end = NULL
-
-то вот эта строка:
-
-COALESCE(pt_tso.dt_repair_end, CURRENT_DATE)
-
-создаст тысячи строк только для одной операции. Именно это место стоит проверить особенно внимательно.
-
-Итого: сам запрос логически нормальный — он строит ежедневные срезы по каждой операции. Но проблема в масштабе: ~32 млн исходных строк размножаются на количество дней, плюс план показывает Gather Motion 6:1 и Nested Loop.
-
-Если твой вопрос именно «почему этот последний запрос долго работает и как его ускорить в Greenplum», я могу следующим сообщением разобрать этот план уже именно как DBA/оптимизатор и показать, как переписать generate_series, чтобы попытаться оставить вычисление распределённым по сегментам, а не собирать всё через Gather Motion.
+Вот этот результат мне особенно интересен. Если там будет около 36 млн, тогда проблема последнего запроса не в огромном размножении строк, и я бы уже внимательно разбирал именно Gather Motion 6:1 и почему Greenplum тащит 32 млн строк на один сегмент перед generate_series. Это, скорее всего, будет гораздо важнее.

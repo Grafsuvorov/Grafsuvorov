@@ -1,279 +1,240 @@
-## Задача: пострелизный контроль качества изменённых витрин слоя DM
-
-  ### Цель
-
-  После каждого релиза автоматически проверять все изменённые физические витрины слоя dm, фиксировать результаты проверок в отдельной таблице и использовать единый
-  механизм для дальнейшего добавления бизнес-проверок.
-
-  Проверки должны запускаться на PROD после завершения расчёта объектов и не зависеть от того, выполнялись они через legacy ETL или dbt.
-
-  ### Объекты проверки
-
-  В первый этап включаются только физические таблицы схемы:
-
-  dm.*
-
-  Не включаются:
-
-  - dm_view;
-  - ClickHouse-объекты;
-  - неизменённые витрины;
-  - технические таблицы.
-
-  Список объектов должен определяться не вручную, а из текущего релиза:
-
-  - release_id;
-  - tech_etl.release_log;
-  - tech_etl.release_objects либо фактической таблицы с объектами релиза;
-  - commit SHA и списка изменённых объектов.
-
-  ### Последовательность выполнения
-
-  1. Релизный DAG получает release_id.
-  2. В рамках релиза фиксируются все изменённые физические объекты.
-  3. Релиз выполняет расчёт и загрузку витрин.
-  4. После успешного завершения релиза запускается пострелизный DQ DAG.
-  5. DQ DAG выбирает только изменённые таблицы схемы dm.
-  6. Для каждой таблицы определяются:
-      - бизнес-ключ;
-      - фильтр проверки;
-      - тип SCD;
-      - набор активных проверок;
-      - порог критичности.
-
-  7. Проверки запускаются параллельно с ограничением по пулу.
-  8. Результат каждой проверки записывается в таблицу результатов.
-  9. По критическим ошибкам отправляется уведомление в Pulse.
-  10. В результатах сохраняются ссылка на релиз, объект, задачу YouTrack, commit SHA и запуск DAG.
-
-  ## Минимальная проверка на дубли
-
-  Для каждой изменённой DM-витрины выполняется проверка по бизнес-ключу:
-
-  select
-      count(*) as duplicate_group_count,
-      coalesce(sum(row_count - 1), 0) as duplicate_row_count
-  from (
-      select
-          key_column_1,
-          key_column_2,
-          count(*) as row_count
-      from dm.target_table
-      where <filter>
-      group by
-          key_column_1,
-          key_column_2
-      having count(*) > 1
-  ) duplicates;
-
-  Необходимо сохранять отдельно:
-
-  - количество строк в таблице;
-  - количество групп-дублей;
-  - количество лишних строк;
-  - максимальный размер группы дублей.
-
-  Если ключ состоит из нескольких колонок, группировка выполняется по полному ключу.
-
-  Для SCD2 в ключ должны входить необходимые поля версии, если это предусмотрено методикой проверки.
-
-  ## Таблица результатов
-
-  Предлагаемое имя:
-
-  tech_etl.release_data_quality_result
-
-  Основные поля:
-
-  result_id
-  release_id
-  invocation_id
-  task_id
-  commit_sha
-
-  schema_name
-  table_name
-  entity_name
-  object_type
-
-  check_code
-  check_type
-  check_name
-  check_version
-
-  business_key
-  check_filter
-  check_parameters
-
-  started_at
-  finished_at
-  duration_sec
-
-  status
-  severity
-
-  row_count
-  duplicate_group_count
-  duplicate_row_count
-  max_duplicate_group_size
-
-  metric_value
-  metric_json
-
-  error_message
-  airflow_dag_id
-  airflow_run_id
-  created_at
-
-  ### Значения status
-
-  PASSED
-  FAILED
-  ERROR
-  SKIPPED
-
-  ### Значения severity
-
-  INFO
-  WARNING
-  CRITICAL
-
-  metric_json нужен для будущих проверок, которые возвращают больше одного показателя.
-
-  Например:
-
-  {
-    "null_count": 12,
-    "invalid_count": 4,
-    "threshold": 0
-  }
-
-  ## Расширение для бизнес-проверок
-
-  Чтобы не ограничиваться дублями, необходимо ввести единый идентификатор проверки:
-
-  check_code
-  check_type
-
-  Примеры:
-
-  DM_DUPLICATES
-  DM_NULLS
-  DM_REFERENTIAL_INTEGRITY
-  DM_BUSINESS_RULE
-  DM_FRESHNESS
-  DM_ROW_COUNT_CHANGE
-
-  Для бизнес-проверки результатом должен быть не только статус, но и измеряемый показатель:
-
-  check_code: DM_BUSINESS_0001
-  check_type: business
-  check_name: Отсутствие проводок без договора
-  severity: CRITICAL
-  metric_value: 245
-  threshold: 0
-
-  SQL самой проверки должен храниться в Git-репозитории и проходить ревью. В таблице результатов нужно хранить ссылку на файл или версию проверки, а не только текст
-  запроса.
-
-  Например:
-
-  check_path:
-  dbt_greenplum_elt/models/dq/business/dm_account_debt_contract.sql
-
-  check_commit_sha:
-  abc123...
-
-  ## Повторный запуск
-
-  Повторная проверка не должна затирать предыдущий результат.
-
-  Каждый запуск обязан иметь собственный:
-
-  invocation_id
-  airflow_run_id
-  started_at
-
-  Это позволит сравнивать результаты до и после исправления.
-
-  Для защиты от дублей результатов рекомендуется уникальность:
-
-  (release_id, table_name, check_code, invocation_id)
-
-  ## Обработка ошибок
-
-  Если для изменённой DM-витрины не найден бизнес-ключ или конфигурация проверки:
-
-  - результат записывается со статусом SKIPPED или ERROR;
-  - причина сохраняется в error_message;
-  - в Pulse отправляется понятное уведомление;
-  - объект не должен исчезать из списка проверок молча.
-
-  Для критической проверки:
-
-  - создаётся инцидент;
-  - в уведомлении указываются схема, таблица, тип проверки и фактический результат;
-  - добавляется ссылка на Airflow task и релизную задачу YouTrack.
-
-  ## Требования к интеграции с текущим релизом
-
-  В результатах должны сохраняться:
-
-  - release_id;
-  - номер задачи YouTrack;
-  - commit SHA;
-  - физический объект;
-  - dbt-модель, если объект рассчитывается через dbt;
-  - Airflow DAG и конкретный run_id;
-  - дата и время проверки;
-  - итог проверки;
-  - информация о повторном запуске.
-
-  Таким образом, можно построить полную цепочку:
-
-  YouTrack-задача
-      ↓
-  release_id
-      ↓
-  изменённая DM-витрина
-      ↓
-  DQ-проверка
-      ↓
-  результат
-      ↓
-  инцидент или подтверждение успешного релиза
-
-  ## Критерии приёмки
-
-  Задача считается выполненной, если:
-
-  1. После релиза автоматически находятся все изменённые физические таблицы dm.
-  2. Для каждой таблицы запускается проверка на дубли.
-  3. Результат записывается в tech_etl.release_data_quality_result.
-  4. В результате есть release_id, таблица, ключ, фильтр, статус и метрики.
-  5. Ошибка одной проверки не скрывает результаты остальных.
-  6. Повторный запуск создаёт новую запись, не затирая предыдущую.
-  7. В Pulse отображаются конкретные схема, таблица и тип проверки.
-  8. Проверка не запускается для dm_view.
-  9. Таблица результатов поддерживает будущие бизнес-проверки без изменения структуры.
-  10. Отсутствие конфигурации ключа не приводит к молчаливому пропуску.
-  11. Для dbt и legacy ETL используется единый формат результата.
-  12. Результат можно связать с YouTrack-задачей и релизом.
-
-  ### Рекомендуемая декомпозиция
-
-  Основную задачу лучше оформить как Epic, а внутри создать задачи:
-
-  1. Спроектировать таблицу результатов.
-  2. Определить источник изменённых объектов релиза.
-  3. Реализовать DQ DAG.
-  4. Реализовать проверку дублей.
-  5. Добавить запись результатов и историю запусков.
-  6. Добавить алертинг в Pulse.
-  7. Добавить конфигурацию бизнес-проверок.
-  8. Добавить интеграцию с dbt.
-  9. Провести нагрузочное тестирование на крупных DM-таблицах.
-  10. Подготовить эксплуатационный runbook.
- 
- 
-› Ask Codex to do
+CREATE TEMP TABLE pg_temp.tmp_src_opr (
+		  toro_order_code_hdr								varchar		NULL	-- Заказ (код)
+		, toro_order_type_code_hdr							integer		NULL	-- Тип заказа (код)
+		, equipment_unit_code_hdr							varchar		NULL	-- Единица оборудования (код)
+		, dt_repair_start_hdr								date		NULL	-- Базисный срок начала (Дата + время)
+		, dt_repair_end_hdr									date		NULL	-- Базисный срок окончания (Дата + время)
+		, toro_work_type_code_hdr							varchar		NULL	-- Вид работ (код)
+		, technical_place_code_hdr							varchar		NULL	-- Техническое место (код)
+		, technical_area_code_hdr							varchar		NULL	-- Участок (код)
+		, plant_owner_code_hdr								varchar		NULL	-- Завод владелец (код)
+		, repair_team_code_opr								varchar		NULL	-- Выполняющее рабочее место (код)
+		, toro_order_code_opr								varchar		NULL	-- Заказ (код)
+		, equipment_unit_code_opr							varchar		NULL	-- Единица оборудования (код)
+		, dt_earliest_possible_repair_start_opr				date		NULL	-- Самое раннее запланированное начало (Дата + время)
+		, dt_earliest_possible_repair_end_opr				date		NULL	-- Самое раннее запланированное окончание (Дата + время)
+		, dt_repair_start_opr								date		NULL	-- Базисный срок начала (Дата + время)
+		, dt_repair_end_opr									date		NULL	-- Базисный срок окончания (Дата + время)
+		, dt_repair_start									date		NULL	-- Дата начала
+		, dt_repair_end										date		NULL	-- Дата окончания
+		, technical_place_code_opr							varchar		NULL	-- Техническое место (код)
+		, operation_code_opr								varchar		NULL	-- Операция (код)
+		, plant_of_repair_team_code_opr						varchar		NULL	-- Завод  выполняющего рабочего места (код)
+		, is_unfinished_operation_document_exist_code_opr	boolean		NULL	-- Признак отклонения
+		, template_code_opr									varchar		NULL	-- Образец (код)
+	)
+WITH (
+	  appendonly 	= TRUE
+	, orientation 	= COLUMN
+	, compresstype 	= zstd
+	, compresslevel = 3
+	)
+DISTRIBUTED BY (
+	  toro_order_code_hdr
+	, operation_code_opr
+	)
+;
+
+INSERT INTO pg_temp.tmp_src_opr (
+	  toro_order_code_hdr								-- Заказ (код) (заказ)
+	, toro_order_type_code_hdr							-- Тип заказа (код) (заказ)
+	, equipment_unit_code_hdr							-- Единица оборудования (код) (заказ)
+	, dt_repair_start_hdr								-- Базисный срок начала (Дата + время) (заказ)
+	, dt_repair_end_hdr									-- Базисный срок окончания (Дата + время) (заказ)
+	, toro_work_type_code_hdr							-- Вид работ (код) (заказ)
+	, technical_place_code_hdr							-- Техническое место (код) (заказ)
+	, technical_area_code_hdr							-- Участок (код) (заказ)
+	, plant_owner_code_hdr								-- Завод владелец (код) (заказ)
+	, repair_team_code_opr								-- Выполняющее рабочее место (код) (операция)
+	, toro_order_code_opr								-- Заказ (код) (операция)
+	, equipment_unit_code_opr							-- Единица оборудования (код) (операция)
+	, dt_earliest_possible_repair_start_opr				-- Самое раннее запланированное начало (Дата + время) (операция)
+	, dt_earliest_possible_repair_end_opr				-- Самое раннее запланированное окончание (Дата + время) (операция)
+	, dt_repair_start_opr								-- Базисный срок начала (Дата + время) (операция)
+	, dt_repair_end_opr									-- Базисный срок окончания (Дата + время) (операция)
+	, dt_repair_start									-- Дата начала
+	, dt_repair_end										-- Дата окончания
+	, technical_place_code_opr							-- Техническое место (код) (операция)
+	, operation_code_opr								-- Операция (код) (операция)
+	, plant_of_repair_team_code_opr						-- Завод  выполняющего рабочего места (код) (операция)
+	, is_unfinished_operation_document_exist_code_opr	-- Признак отклонения (операция)
+	, template_code_opr									-- Образец (код) (операция)
+	)
+SELECT
+	  d_toh.toro_order_code									AS toro_order_code_hdr 									-- TORO2_ORD_OPR-AUFNR			-- Заказ (код)
+	, d_toh.toro_order_type_code							AS toro_order_type_code_hdr								-- TORO2_ORD_HDR-AUTYP			-- Тип заказа (код)
+	, d_toh.equipment_unit_code								AS equipment_unit_code_hdr								-- TORO2_ORD_HDR-EQUNR			-- Единица оборудования (код)
+	, date(d_toh.dt_repair_start + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)							-- переводим на местное время завода
+															AS dt_repair_start_hdr									-- TORO2_ORD_HDR-GSTRP_DT		-- Базисный срок начала (Дата + время)
+	, date(d_toh.dt_repair_end + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)							-- переводим на местное время завода
+															AS dt_repair_end_hdr									-- TORO2_ORD_HDR-GLTRP_DT		-- Базисный срок окончания (Дата + время)
+	, d_toh.toro_work_type_code								AS toro_work_type_code_hdr								-- TORO2_ORD_HDR-ILART			-- Вид работ (код)
+	, d_toh.technical_place_code							AS technical_place_code_hdr								-- TORO2_ORD_HDR-TPLNR			-- Техническое место (код)
+	, d_toh.technical_area_code								AS technical_area_code_hdr								-- TORO2_ORD_HDR-ZZDIVISION		-- Участок (код)
+	, d_toh.plant_owner_code								AS plant_owner_code_hdr									-- TORO2_ORD_HDR-ZZSWERK		-- Завод владелец (код)
+	, d_too.repair_team_code								AS repair_team_code_opr									-- TORO2_ORD_OPR-ARBPL			-- Выполняющее рабочее место (код)
+	, d_too.toro_order_code									AS toro_order_code_opr									-- TORO2_ORD_OPR-AUFNR			-- Заказ (код)
+	, d_too.equipment_unit_code								AS equipment_unit_code_opr								-- TORO2_ORD_OPR-EQUNR			-- Единица оборудования (код)
+	, date(d_too.dt_earliest_possible_repair_start + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)		-- переводим на местное время завода
+															AS dt_earliest_possible_repair_start_opr				-- TORO2_ORD_OPR-FSAVD_DT		-- Самое раннее запланированное начало (Дата + время)
+	, date(d_too.dt_earliest_possible_repair_end + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)			-- переводим на местное время завода
+															AS dt_earliest_possible_repair_end_opr					-- TORO2_ORD_OPR-FSEDD_DT		-- Самое раннее запланированное окончание (Дата + время)
+	, date(d_too.dt_repair_start + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)							-- переводим на местное время завода
+															AS dt_repair_start_opr									-- TORO2_ORD_OPR-NTANF_DT		-- Базисный срок начала (Дата + время)
+	, date(d_too.dt_repair_end + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)							-- переводим на местное время завода
+															AS dt_repair_end_opr									-- TORO2_ORD_OPR-NTEND_DT		-- Базисный срок окончания (Дата + время)
+	, date(COALESCE(d_too.dt_repair_start, d_toh.dt_repair_start) + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)							
+		AS dt_repair_start									-- Дата начала
+	, date(COALESCE(d_too.dt_repair_end, d_toh.dt_repair_end) + ((SUBSTR(dd_pas.time_zone_sap_code, 4, 2)::INT - 3) || ' hours')::interval)
+		AS dt_repair_end										-- Дата окончания														
+	, d_too.technical_place_code							AS technical_place_code_opr								-- TORO2_ORD_OPR-TPLNR			-- Техническое место (код)
+	, d_too.operation_code									AS operation_code_opr 									-- TORO2_ORD_OPR-VORNR			-- Операция (код)
+	, d_too.plant_of_repair_team_code						AS plant_of_repair_team_code_opr						-- TORO2_ORD_OPR-WERKS			-- Завод  выполняющего рабочего места (код)
+	, d_too.is_unfinished_operation_document_exist_code		AS is_unfinished_operation_document_exist_code_opr		-- TORO2_ORD_OPR-ZREJECT_OPR	-- Признак отклонения
+	, d_too.template_code									AS template_code_opr 									-- TORO2_ORD_OPR-KTSCH			-- Образец (код)
+--
+FROM 
+	dds.toro_order_header AS d_toh										-- TORO2_ORD_HDR
+--
+LEFT JOIN
+	dds.toro_order_operations AS d_too									-- TORO2_ORD_OPR
+	ON d_too.toro_order_code = d_toh.toro_order_code					-- по TORO2_ORD_OPR-AUFNR = TORO2_ORD_HDR-AUFNR
+-- для перевода на местное время завода
+LEFT JOIN 
+	dict_dds.plant_and_subsidiary AS dd_pas
+	ON dd_pas.plant_code = d_toh.plant_owner_code
+--
+WHERE 
+	d_toh.toro_order_system_status_text NOT LIKE '%МТКУ%'				-- где TORO2_ORD_HDR-STTXT не как "%МТКУ%"
+	AND d_toh.toro_order_system_status_text NOT LIKE '%БЛОК%'			-- и TORO2_ORD_HDR-STTXT не как "%БЛОК%"
+	AND d_toh.toro_order_user_status_text NOT LIKE '%НВПЛ%'				-- и TORO2_ORD_HDR-ASTXT не как "%НВПЛ%"
+	AND d_toh.toro_order_user_status_text NOT LIKE '%ЗАЯВ%'				-- и TORO2_ORD_HDR-ASTXT не как "%ЗАЯВ%"
+	AND d_toh.technical_place_code IS NOT NULL							-- и TORO2_ORD_HDR-TPLNR не пусто
+	AND d_toh.toro_work_type_code NOT IN ('101','601','602','103','201', '610', '700', '800')
+	--AND LEFT(d_toh.toro_work_type_code, 1) IN ('2', '4', '5')			-- и TORO2_ORD_HDR-ILART как "2%" или как "4%" или как "5%"	
+	AND d_toh.toro_work_type_code != '201'								-- и TORO2_ORD_HDR-ILART <> "201"
+	--AND LEFT(d_too.plant_of_repair_team_code, 2) NOT IN ('25', '21')	-- и TORO2_ORD_OPR-WERKS не как "25%" или не как "21%"
+	AND d_toh.plant_owner_code NOT IN ('2528','6800','6300','5701','2507','2521','5202', '4201')
+	AND d_too.dt_earliest_possible_repair_start > (date_trunc('month', CURRENT_DATE)::date + INTERVAL '-12 months')
+	AND d_too.dt_earliest_possible_repair_start < CURRENT_DATE
+;
+
+/*
+
+SELECT * FROM pg_temp.tmp_src_opr;
+SELECT count(*) FROM pg_temp.tmp_src_opr;
+SELECT toro_order_code_hdr, operation_code_opr, count(*) FROM pg_temp.tmp_src_opr GROUP BY toro_order_code_hdr, operation_code_opr HAVING count(*) > 1;
+
+*/
+
+-- 1.1.2. С генерации дат
+
+DROP TABLE IF EXISTS pg_temp.tmp_src_opr_dt;
+
+CREATE TEMP TABLE pg_temp.tmp_src_opr_dt (
+		  toro_order_code_hdr								varchar		NULL	-- Заказ (код)
+		, toro_order_type_code_hdr							integer		NULL	-- Тип заказа (код)
+		, equipment_unit_code_hdr							varchar		NULL	-- Единица оборудования (код)
+		, dt_repair_start_hdr								date		NULL	-- Базисный срок начала (Дата + время)
+		, dt_repair_end_hdr									date		NULL	-- Базисный срок окончания (Дата + время)
+		, toro_work_type_code_hdr							varchar		NULL	-- Вид работ (код)
+		, technical_place_code_hdr							varchar		NULL	-- Техническое место (код)
+		, technical_area_code_hdr							varchar		NULL	-- Участок (код)
+		, plant_owner_code_hdr								varchar		NULL	-- Завод владелец (код)
+		, repair_team_code_opr								varchar		NULL	-- Выполняющее рабочее место (код)
+		, toro_order_code_opr								varchar		NULL	-- Заказ (код)
+		, equipment_unit_code_opr							varchar		NULL	-- Единица оборудования (код)
+		, dt_earliest_possible_repair_start_opr				date		NULL	-- Самое раннее запланированное начало (Дата + время)
+		, dt_earliest_possible_repair_end_opr				date		NULL	-- Самое раннее запланированное окончание (Дата + время)
+		, dt_repair_start_opr								date		NULL	-- Базисный срок начала (Дата + время)
+		, dt_repair_end_opr									date		NULL	-- Базисный срок окончания (Дата + время)
+		, dt_repair_start									date		NULL	-- Базисный срок начала (Дата + время)
+		, dt_repair_end										date		NULL	-- Базисный срок окончания (Дата + время)
+		, technical_place_code_opr							varchar		NULL	-- Техническое место (код)
+		, operation_code_opr								varchar		NULL	-- Операция (код)
+		, plant_of_repair_team_code_opr						varchar		NULL	-- Завод  выполняющего рабочего места (код)
+		, is_unfinished_operation_document_exist_code_opr	boolean		NULL	-- Признак отклонения
+		, template_code_opr									varchar		NULL	-- Образец (код)
+		, dt_report											date		NULL	-- Дата отчета
+	)
+WITH (
+	  appendonly 	= TRUE
+	, orientation 	= COLUMN
+	, compresstype 	= zstd
+	, compresslevel = 3
+	)
+DISTRIBUTED BY (
+	  toro_order_code_hdr
+	, operation_code_opr
+	, dt_report
+	)
+;
+
+INSERT INTO pg_temp.tmp_src_opr_dt (
+	  toro_order_code_hdr								-- Заказ (код) (заказ)
+	, toro_order_type_code_hdr							-- Тип заказа (код) (заказ)
+	, equipment_unit_code_hdr							-- Единица оборудования (код) (заказ)
+	, dt_repair_start_hdr								-- Базисный срок начала (Дата + время) (заказ)
+	, dt_repair_end_hdr									-- Базисный срок окончания (Дата + время) (заказ)
+	, toro_work_type_code_hdr							-- Вид работ (код) (заказ)
+	, technical_place_code_hdr							-- Техническое место (код) (заказ)
+	, technical_area_code_hdr							-- Участок (код) (заказ)
+	, plant_owner_code_hdr								-- Завод владелец (код) (заказ)
+	, repair_team_code_opr								-- Выполняющее рабочее место (код) (операция)
+	, toro_order_code_opr								-- Заказ (код) (операция)
+	, equipment_unit_code_opr							-- Единица оборудования (код) (операция)
+	, dt_earliest_possible_repair_start_opr				-- Самое раннее запланированное начало (Дата + время) (операция)
+	, dt_earliest_possible_repair_end_opr				-- Самое раннее запланированное окончание (Дата + время) (операция)
+	, dt_repair_start_opr								-- Базисный срок начала (Дата + время) (операция)
+	, dt_repair_end_opr									-- Базисный срок окончания (Дата + время) (операция)
+	, dt_repair_start									-- Дата начала
+	, dt_repair_end										-- Дата окончания
+	, technical_place_code_opr							-- Техническое место (код) (операция)
+	, operation_code_opr								-- Операция (код) (операция)
+	, plant_of_repair_team_code_opr						-- Завод  выполняющего рабочего места (код) (операция)
+	, is_unfinished_operation_document_exist_code_opr	-- Признак отклонения (операция)
+	, template_code_opr									-- Образец (код) (операция)
+	, dt_report											-- Дата отчета
+	)
+	
+	
+explain
+SELECT
+	  pt_tso.toro_order_code_hdr 									-- TORO2_ORD_OPR-AUFNR			-- Заказ (код)
+	, pt_tso.toro_order_type_code_hdr								-- TORO2_ORD_HDR-AUTYP			-- Тип заказа (код)
+	, pt_tso.equipment_unit_code_hdr								-- TORO2_ORD_HDR-EQUNR			-- Единица оборудования (код)
+	, pt_tso.dt_repair_start_hdr									-- TORO2_ORD_HDR-GSTRP_DT		-- Базисный срок начала (Дата + время)
+	, pt_tso.dt_repair_end_hdr										-- TORO2_ORD_HDR-GLTRP_DT		-- Базисный срок окончания (Дата + время)
+	, pt_tso.toro_work_type_code_hdr								-- TORO2_ORD_HDR-ILART			-- Вид работ (код)
+	, pt_tso.technical_place_code_hdr								-- TORO2_ORD_HDR-TPLNR			-- Техническое место (код)
+	, pt_tso.technical_area_code_hdr								-- TORO2_ORD_HDR-ZZDIVISION		-- Участок (код)
+	, pt_tso.plant_owner_code_hdr									-- TORO2_ORD_HDR-ZZSWERK		-- Завод владелец (код)
+	, pt_tso.repair_team_code_opr									-- TORO2_ORD_OPR-ARBPL			-- Выполняющее рабочее место (код)
+	, pt_tso.toro_order_code_opr									-- TORO2_ORD_OPR-AUFNR			-- Заказ (код)
+	, pt_tso.equipment_unit_code_opr								-- TORO2_ORD_OPR-EQUNR			-- Единица оборудования (код)
+	, pt_tso.dt_earliest_possible_repair_start_opr					-- TORO2_ORD_OPR-FSAVD_DT		-- Самое раннее запланированное начало (Дата + время)
+	, pt_tso.dt_earliest_possible_repair_end_opr					-- TORO2_ORD_OPR-FSEDD_DT		-- Самое раннее запланированное окончание (Дата + время)
+	, pt_tso.dt_repair_start_opr									-- TORO2_ORD_OPR-NTANF_DT		-- Базисный срок начала (Дата + время)
+	, pt_tso.dt_repair_end_opr										-- TORO2_ORD_OPR-NTEND_DT		-- Базисный срок окончания (Дата + время)
+	, pt_tso.dt_repair_start										-- TORO2_ORD_OPR-FSAVD_DT,TORO2_ORD_HDR-GSTRP_DT	-- Дата начала
+	, COALESCE(pt_tso.dt_repair_end, CURRENT_DATE) AS dt_repair_end	-- TORO2_ORD_OPR-FSEDD_DT,TORO2_ORD_HDR-GLTRP_DT	-- Дата окончания
+	, pt_tso.technical_place_code_opr								-- TORO2_ORD_OPR-TPLNR			-- Техническое место (код)
+	, pt_tso.operation_code_opr 									-- TORO2_ORD_OPR-VORNR			-- Операция (код)
+	, pt_tso.plant_of_repair_team_code_opr							-- TORO2_ORD_OPR-WERKS			-- Завод  выполняющего рабочего места (код)
+	, pt_tso.is_unfinished_operation_document_exist_code_opr		-- TORO2_ORD_OPR-ZREJECT_OPR	-- Признак отклонения
+	, pt_tso.template_code_opr 										-- TORO2_ORD_OPR-KTSCH			-- Образец (код)
+	, gs.dt_report::date					AS dt_report											-- Дата отчета
+--
+FROM 
+	pg_temp.tmp_src_opr AS pt_tso										-- TORO2_ORD_HDR
+--
+CROSS JOIN LATERAL
+	generate_series(pt_tso.dt_repair_start, COALESCE(pt_tso.dt_repair_end, CURRENT_DATE), INTERVAL '1 day' ) AS gs(dt_report)
+;
+
+
+Nested Loop  (cost=10000000000.01..10727647677.33 rows=32296344000 width=191)
+  ->  Gather Motion 6:1  (slice1; segments: 6)  (cost=0.00..979937.32 rows=32296344 width=183)
+        ->  Seq Scan on tmp_src_opr pt_tso  (cost=0.00..334010.44 rows=5382724 width=183)
+  ->  Function Scan on generate_series gs  (cost=0.01..10.01 rows=1000 width=8)
+Optimizer: Postgres query optimizer

@@ -1,8 +1,50 @@
-SELECT nspname
-FROM pg_namespace
-WHERE nspname IN (
-    'gp_toolkit',
-    'gpmetrics',
-    'gpperfmon',
-    'arenadata_toolkit'
-);
+dq_dm_s_purchase_lead_time_s_nulls.sql
+
+{{- config(
+    error_code         = 'dq_all0003',
+    detail_store_flag  = true,
+    detail_store_limit = none,
+    check_type         = 'nulls',
+    check_conditions   = [
+        'purchase_requisition_position_material_code is not null and purchase_requisition_position_material_name is null',
+        'purchase_document_position_material_code is not null and purchase_document_position_material_name is null',
+        'plant_code is not null and plant_name is null',
+        'purchase_requisition_base_uom_code is not null and purchase_requisition_base_uom_name is null',
+        'purchase_document_uom_code is not null and purchase_document_uom_name is null',
+        'purchase_responsible_department_code is not null and purchase_responsible_department_name is null',
+        'material_planning_controller_code is not null and material_planning_controller_name is null',
+        'material_planning_controller_code is not null and material_planning_controller_user_name is null',
+        'material_category_code is not null and material_category_name is null',
+        'material_group_code is not null and material_group_name is null',
+        'supplier_code is not null and supplier_name is null'
+    ],
+    check_filter       = none,
+    tags               = ['dq', 'technical', 'nulls']
+    ) -}}
+
+dbt_greenplum_elt/models/dq/technical/dq_dm_s_purchase_lead_time_s_nulls.sql
+
+
+{{ config(
+    error_code = 'dq_fi0001',
+    detail_store_flag = true,
+    detail_store_limit = 30,
+    tags = ['dq', 'fi', 'business']
+) }}
+select
+	a.dt,
+	a.contract_number,
+	c.relation_type_code
+from
+	dm.account_debt_for_working_capital as a
+    left join dict_dds.counterparty as c on
+	    a.counterparty_code = c.counterparty_code
+where
+	external_contract_source_table_name like 'sales%'
+	and responsibility_center_code is null
+group by
+	a.dt,
+	a.contract_number,
+	c.relation_type_code
+
+dbt_greenplum_elt/models/dq/business/dq_fi0001.sql

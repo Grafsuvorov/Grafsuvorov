@@ -1,242 +1,44 @@
-Предметная область: Транспортировка;
-
-Сущность загрузки: DQ;
-
-Ссылка на гит: https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/2099
-
-Название таблицы Greenplum:
-
-*загрузка этих таблиц dq в click должна быть сделана в рамках другой задачи:
-
-dq.check_result (dq_le0001, dq_le0002, dq_le0003) - GP,
-
-dq.check_result_detailed (dq_le0001, dq_le0002, dq_le0003) - GP,
-
-*вью только на click
-
-dm_view.dq_transportation_vehicle_capacity_average_utilization - Click
-
-Способ обновления: Полный;
-
-Стенд: DEV/PROD;
-
-Время работы скрипта:
-
-менее 10 сек
-
-Зависимые представление: dm_view.dq_transportation_vehicle_capacity_average_utilization
-
-Ключевые поля для загрузки в ClickHosue: error_code,error_full_name;
-
-Последовательность действий при (псевдо)инкрементальном обновлении таблицы: Полный;
-
-dq/data_quality_results/dq_le0001.sql
-select
-	cargo_arrangement_scheme_external_number,
-	plant_producer_search_name,
-	transport_type_search_name,
-	transport_subtype_search_name,
-	shape_search_name
-from dm.transportation_vehicle_capacity_average_utilization as tvc
-where tvc.cargo_arrangement_net_weight = 0
-group by 
-	cargo_arrangement_scheme_external_number,
-	plant_producer_search_name,
-	transport_type_search_name,
-	transport_subtype_search_name,
-	shape_search_name;
-
-dq/data_quality_results/dq_le0002.sql
-select
-	cargo_arrangement_scheme_external_number,
-	plant_producer_search_name,
-	transport_type_search_name,
-	transport_subtype_search_name,
-	shape_search_name
-from dm.transportation_vehicle_capacity_average_utilization as tvc
-where tvc.cargo_arrangement_gross_weight = 0
-group by 
-	cargo_arrangement_scheme_external_number,
-	plant_producer_search_name,
-	transport_type_search_name,
-	transport_subtype_search_name,
-	shape_search_name
-
-dq/data_quality_results/dq_le0003.sql
-select
-	initial_delivery_code ,
-	plant_producer_search_name,
-	transport_type_search_name,
-	transport_subtype_search_name,
-	shape_search_name
-from dm.transportation_vehicle_capacity_average_utilization as tvc
-where tvc.cargo_arrangement_scheme_code = '0000000000'
-group by 
-	initial_delivery_code ,
-	plant_producer_search_name,
-	transport_type_search_name,
-	transport_subtype_search_name,
-	shape_search_name
-
-
-drop view if exists dm_view.dq_transportation_vehicle_capacity_average_utilization on cluster '{cluster}' sync;
-CREATE view dm_view.dq_transportation_vehicle_capacity_average_utilization  on cluster '{cluster}' AS
-with last_check_dttm as (
-    select distinct on (error_code, model_name)
-        error_code,
-        model_name,
-        start_dttm as check_dttm
-    from dm_view.check_result
-    where error_code in ('dq_le0001', 'dq_le0002', 'dq_le0003')
-    order by error_code asc, model_name asc, check_dttm desc
-)
-select
-    d.error_code,															-- ID проверки
-    dqe.error_short_name,													-- Краткое наименование
-    CASE
-        WHEN d.error_code = 'dq_le0001'
-            THEN concat('Отсутствие плановой загрузки нетто в схеме погрузки ', 
-                       JSONExtractString(d.check_result, 'cargo_arrangement_scheme_external_number'), 
-                       ' (ошибка завода при регистрации схемы погрузки)')
-        WHEN d.error_code = 'dq_le0002'
-            THEN concat('Отсутствие плановой загрузки брутто в схеме погрузки ', 
-                       JSONExtractString(d.check_result, 'cargo_arrangement_scheme_external_number'), 
-                       ' (ошибка завода при регистрации схемы погрузки)')
-        WHEN d.error_code = 'dq_le0003'
-            THEN concat('Отсутствие схемы погрузки в поставке ', 
-                       JSONExtractString(d.check_result, 'initial_delivery_code'))
-    END AS error_full_name,    dqe.business_area_code,
-    dqe.error_type_code,													-- Полное наименование (текст ошибки)
-    dqe.severity_type_code,													-- Функциональная область
-    dqe.table_log_code,
-    dqe.table_source_code,
-    dqe.error_description_text,													-- Тип проверки (1-бизнес/2-технический)
-    dqe.error_algorithm_text,													-- Степень критичности (3-info|2-warning|1-critical)
-    concat ('Необходимо обратиться в отдел оформления отгрузки завода ', nullif(JSONExtractString(d.check_result, 'plant_producer_search_name'), 'None')) as error_solution_text,												-- Бизнес-смысл
-    nullif(JSONExtractString(d.check_result, 'plant_producer_search_name'), 'None') AS plant_producer_search_name,
-    nullif(JSONExtractString(d.check_result, 'transport_type_search_name'), 'None') AS transport_type_search_name,
-    nullif(JSONExtractString(d.check_result, 'transport_subtype_search_name'), 'None') AS transport_subtype_search_name,
-    nullif(JSONExtractString(d.check_result, 'shape_search_name'), 'None') AS shape_search_name,
-    nullif(JSONExtractString(d.check_result, 'cargo_arrangement_scheme_external_number'), 'None') AS cargo_arrangement_scheme_external_number,    d.check_dttm                                       as dttm_inserted,
-    d.check_dttm                                       as dttm_updated,
-    'dbt_dq'                                           as job_name,
-    false                                              as deleted_flag
-from dm_view.check_result_detail                       as d
-inner join last_check_dttm                             as ls
-    on
-        ls.error_code = d.error_code
-        and ls.check_dttm = d.check_dttm
-        and ls.model_name = d.model_name
-left join dm_view.dq_error                            as dqe
-    on
-        dqe.error_code = d.error_code
-where d.error_code in ('dq_le0001', 'dq_le0002', 'dq_le0003');
-
-comment on view dm_view.dq_transportation_vehicle_capacity_average_utilization is 'DQ витрины загрузки ПС в сравнении с нормативами';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_code is 'ID проверки | - | dq_le0001-dq_le0003.error_code';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_short_name is 'Краткое наименование | - | dq_le0001-dq_le0003.error_short_name';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_full_name is 'Полное наименование (текст ошибки) | - | dq_le0001-dq_le0003.error_full_name';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.business_area_code is 'Функциональная область | - | dm.dq_le0001-dq_le0003.business_area_code';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_type_code is 'Тип проверки (1-бизнес/2-технический) | - | dq_le0001-dq_le0003.error_type_code';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.severity_type_code is 'Степень критичности (3-info|2-warning|1-critical) | - | dq_le0001-dq_le0003.severity_type_code';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_description_text is 'Бизнес-смысл | - | dq_le0001-dq_le0003.error_description_text';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_algorithm_text is 'Алгоритм  | - | dq_le0001-dq_le0003.error_algorithm_text';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.error_solution_text is 'Текст для пользователей | - | dq_le0001-dq_le0003.error_solution_text';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.plant_producer_search_name is 'Завод | Завод | dq_le0001-dq_le0003.plant_producer_search_name';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.transport_type_search_name is 'Тип ПС | Тип ПС | dq_le0001-dq_le0003.transport_type_search_name';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.transport_subtype_search_name is 'Вид ПС | Вид ПС | dq_le0001-dq_le0003.transport_subtype_search_name';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.shape_search_name is 'Форма продукции | Форма продукции | dq_le0001-dq_le0003.shape_search_name';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.cargo_arrangement_scheme_external_number is 'Схема продукции | Схема продукции | dq_le0001-dq_le0002.cargo_arrangement_scheme_external_number';
-comment on column dm_view.dq_transportation_vehicle_capacity_average_utilization.initial_delivery_code is 'Поставка (код) | Поставка (код) | dq_le0003.initial_delivery_code';
-
-
-dbt_greenplum_elt/models/dq/business/dq_le0002.sql
-инженерный 
-{{ config(
-    error_code = 'dq_le0002',
-    detail_store_flag = true,
-    detail_store_limit = 100000,
-    tags = ['dq', 'le', 'business']
-) }}
-
-select
-    tvc.cargo_arrangement_scheme_external_number,
-    tvc.plant_producer_search_name,
-    tvc.transport_type_search_name,
-    tvc.transport_subtype_search_name,
-    tvc.shape_search_name
-from dm.transportation_vehicle_capacity_average_utilization as tvc
-where tvc.cargo_arrangement_gross_weight = 0
-group by
-    tvc.cargo_arrangement_scheme_external_number,
-    tvc.plant_producer_search_name,
-    tvc.transport_type_search_name,
-    tvc.transport_subtype_search_name,
-    tvc.shape_search_name
-
-
-dbt_greenplum_elt/models_metadata/dm/dm.dq_le0002.yml
-relation:
-  schema_name: dm
-  table_name: dq_le0002
-  scd_type: scd1
-
-dbt_greenplum_elt/models_metadata/dm_view/dm_view.dq_transportation_vehicle_capacity_average_utilization.yml
-relation:
-  schema_name: dm_view
-  table_name: dq_transportation_vehicle_capacity_average_utilization
-
-
-config_files/meta/dm_view/dq_transportation_vehicle_capacity_average_utilization.sql
-drop view if exists dm_view.dq_transportation_vehicle_capacity_average_utilization on cluster '{cluster}' sync;
-CREATE view dm_view.dq_transportation_vehicle_capacity_average_utilization  on cluster '{cluster}' AS
-with last_check_dttm as (
-    select distinct on (error_code, model_name)
-        error_code,
-        model_name,
-        start_dttm as check_dttm
-    from dm_view.check_result
-    where error_code in ('dq_le0001', 'dq_le0002', 'dq_le0003')
-    order by error_code asc, model_name asc, check_dttm desc
-)
-select
-    d.error_code,															-- ID проверки
-    dqe.error_short_name,													-- Краткое наименование
-    CASE
-        WHEN d.error_code = 'dq_le0001'
-            THEN concat('Отсутствие плановой загрузки нетто в схеме погрузки ',
-                       JSONExtractString(d.check_result, 'cargo_arrangement_scheme_external_number'),
-                       ' (ошибка завода при регистрации схемы погрузки)')
-        WHEN d.error_code = 'dq_le0002'
-            THEN concat('Отсутствие плановой загрузки брутто в схеме погрузки ',
-                       JSONExtractString(d.check_result, 'cargo_arrangement_scheme_external_number'),
-                       ' (ошибка завода при регистрации схемы погрузки)')
-        WHEN d.error_code = 'dq_le0003'
-            THEN concat('Отсутствие схемы погрузки в поставке ',
-                       JSONExtractString(d.check_result, 'initial_delivery_code'))
-    END AS error_full_name,    dqe.business_area_code,
-    dqe.error_type_code,													-- Полное наименование (текст ошибки)
-    dqe.severity_type_code,													-- Функциональная область
-    dqe.table_log_code,
-    dqe.table_source_code,
-    dqe.error_description_text,													-- Тип проверки (1-бизнес/2-технический)
-    dqe.error_algorithm_text,													-- Степень критичности (3-info|2-warning|1-critical)
-    dqe.error_solution_text,												-- Бизнес-смысл
-    nullif(JSONExtractString(d.check_result, 'plant_producer_search_name'), 'None') AS plant_producer_search_name,
-    nullif(JSONExtractString(d.check_result, 'transport_type_search_name'), 'None') AS transport_type_search_name,
-    nullif(JSONExtractString(d.check_result, 'transport_subtype_search_name'), 'None') AS transport_subtype_search_name,
-    nullif(JSONExtractString(d.check_result, 'shape_search_name'), 'None') AS shape_search_name,
-    nullif(JSONExtractString(d.check_result, 'cargo_arrangement_scheme_external_number'), 'None') AS cargo_arrangement_scheme_external_number,    d.check_dttm                                       as dttm_inserted,
-    d.check_dttm                                       as dttm_updated,
-    'dbt_dq'                                           as job_name,
-    false                                              as deleted_flag
-from dm_view.check_result_detail                       as d
-inner join last_check_dttm                             as ls
-    on
-        ls.error_code = d.error_code
-        and ls.check_dttm = d.check_dttm
-        and ls.model_name = d.model_name
-left join dm_view.dq_error                            as dqe
-    on
-        dqe.error_code = d.error_code
-where d.error_code in ('dq_le0001', 'dq_le0002', 'dq_le0003');
+ => ERROR [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-ins  689.5s
+------
+ > [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-recommends openssh-client sshpass     && rm -rf /var/lib/apt/lists/*:
+#11 0.585 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#11 0.946 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#11 1.075 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#11 1.138 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+#11 33.19 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 94.25 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 155.3 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
+#11 216.4 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 278.4 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 340.5 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
+#11 402.5 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 466.6 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 530.6 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
+#11 594.7 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 654.7 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 688.3 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [263 kB]
+#11 688.4 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 688.6 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 688.7 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 688.8 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 688.9 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 689.1 Err:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
+#11 689.1   Connection failed [IP: 10.66.228.23 1010]
+#11 689.1   503  Service Unavailable [IP: 10.66.228.23 1010]
+#11 689.2 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 689.3 Err:4 http://deb.debian.org/debian trixie/main amd64 Packages
+#11 689.3   Connection timed out [IP: 10.66.228.23 1010]
+#11 689.3   Connection failed [IP: 10.66.228.23 1010]
+#11 689.3   503  Service Unavailable [IP: 10.66.228.23 1010]
+#11 689.3 Fetched 495 kB in 11min 29s (717 B/s)
+#11 689.3 Reading package lists...
+#11 689.3 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages  503  Service Unavailable [IP: 10.66.228.23 1010]
+#11 689.3 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/main/binary-amd64/Packages  503  Service Unavailable [IP: 10.66.228.23 1010]
+#11 689.3 W: Some index files failed to download. They have been ignored, or old ones used instead.
+#11 689.3 Reading package lists...
+#11 689.4 Building dependency tree...
+#11 689.4 Reading state information...
+#11 689.4 E: Unable to locate package sshpass
+------
+failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c apt-get update     && apt-get install -y --no-install-recommends openssh-client sshpass     && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+[root@rgm-s-dwhapp01 table-dependency-viewe

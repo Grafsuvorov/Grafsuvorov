@@ -139,6 +139,7 @@ function buildDraftItem(item) {
     scd_type: item.scd_type || "scd1",
     version_key_text: joinItems(item.version_key || []),
     filter_text: item.filter || (Array.isArray(item.filters) ? item.filters[0] : "") || "",
+    null_conditions_text: joinItems(item.null_conditions || []),
     clickhouse_keys_text: joinItems(item.clickhouse_keys || []),
     stand_dev: item.stand_dev !== false,
     stand_prod: item.stand_prod !== false,
@@ -444,6 +445,7 @@ export default function AdminPrototypeReviewPage() {
           scd_type: String(item.scd_type || "scd1").toLowerCase(),
           version_key: splitItems(item.version_key_text),
           filter: String(item.filter_text || "").trim() || null,
+          null_conditions: splitItems(item.null_conditions_text),
           clickhouse_keys: splitItems(item.clickhouse_keys_text),
           dependent_views: splitItems(item.dependent_views_text),
           is_new: item.is_new,
@@ -737,6 +739,17 @@ export default function AdminPrototypeReviewPage() {
                                 <option value="scd1">SCD1 — хранится актуальное состояние</option>
                                 <option value="scd2">SCD2 — хранится история версий</option>
                               </select>
+                            </div>
+                            <div className="prototype-step-field" style={{ margin: 0 }}>
+                              <span className="slow-select-label">DQ nulls <span className="muted">(необязательно)</span></span>
+                              <textarea
+                                className="slow-entity-select mono"
+                                value={item.null_conditions_text || ""}
+                                onChange={(event) => handleReviewItemChange(item.item_id, "null_conditions_text", event.target.value)}
+                                placeholder="supplier_code is not null and supplier_name is null"
+                                style={{ minHeight: 90, resize: "vertical" }}
+                              />
+                              <div className="muted" style={{ marginTop: 6 }}>По одному условию на строку. Заполните — будет создана отдельная техническая проверка nulls.</div>
                             </div>
                             {String(item.scd_type || "scd1").toLowerCase() === "scd2" ? (
                               <div className="prototype-step-field" style={{ margin: 0 }}>

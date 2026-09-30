@@ -534,6 +534,7 @@ class PrototypeReviewItemPayload(BaseModel):
     scd_type: Optional[str] = "scd1"
     version_key: Optional[List[str]] = None
     filter: Optional[str] = None
+    null_conditions: Optional[List[str]] = None
     clickhouse_keys: Optional[List[str]] = None
     dependent_views: Optional[List[str]] = None
     is_new: Optional[bool] = None
@@ -1590,6 +1591,10 @@ def _prototype_review_dbt_dq_path(schema_name: str, table_name: str) -> str:
     )
 
 
+def _prototype_review_dbt_nulls_path(schema_name: str, table_name: str) -> str:
+    return posix_join(str(DBT_DQ_TECHNICAL_ROOT or "dbt_greenplum_elt/models/dq/technical").strip("/"), f"dq_{schema_name.strip().lower()}_s_{table_name.strip().lower()}_s_nulls.sql")
+
+
 def _prototype_review_dbt_key_list(key_attributes: list[Any]) -> str:
     values = [str(value).strip() for value in key_attributes if str(value).strip()]
     if not values:
@@ -1612,6 +1617,14 @@ def _prototype_review_build_dbt_dq_model(item: dict[str, Any]) -> str:
             "",
         ]
     )
+
+
+def _prototype_review_build_dbt_nulls_model(item: dict[str, Any]) -> str:
+    conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
+    if not conditions:
+        raise ValueError("Не заполнены условия для DQ nulls")
+    rendered = ",\n".join(f"        {json.dumps(value, ensure_ascii=False)}" for value in conditions)
+    return "\n".join(["{{- config(", "    error_code         = 'dq_all0003',", "    detail_store_flag  = true,", "    detail_store_limit = none,", "    check_type         = 'nulls',", "    check_conditions   = [", rendered, "    ],", "    check_filter       = none,", "    tags               = ['dq', 'technical', 'nulls']", "    ) -}}", ""])
 
 
 def _prototype_review_update_dbt_dq_model(content: str, key_attributes: list[Any]) -> str:
@@ -1671,6 +1684,9 @@ def _prototype_review_build_dbt_registry_yaml(item: dict[str, Any]) -> str:
     )
     if dq_filter:
         lines.append(f"    filter: {json.dumps(dq_filter, ensure_ascii=False)}")
+    null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
+    if null_conditions:
+        lines.extend(['  - check_type: "nulls"', "    detail_store_flag: true", "    detail_store_limit: none", "    conditions:", *[f"      - {json.dumps(value, ensure_ascii=False)}" for value in null_conditions]])
     return "\n".join(lines) + "\n"
 
 
@@ -1771,6 +1787,10 @@ def _prototype_review_publish_dbt_registry(
             "file_kind": "dq_model",
             "key_attributes": item.get("key_attributes") or [],
         }
+        null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
+        if null_conditions:
+            nulls_path = _prototype_review_dbt_nulls_path(schema_name, table_name)
+            dbt_files[nulls_path] = {"target_fqn": target_fqn, "file_path": nulls_path, "file_kind": "nulls_model", "null_conditions": null_conditions}
 
     deleted_targets = infer_removed_table_targets(
         files=changed_files or [],
@@ -1806,6 +1826,8 @@ def _prototype_review_publish_dbt_registry(
                 if existing_content is not None
                 else _prototype_review_build_dbt_dq_model({"key_attributes": file_data["key_attributes"]})
             )
+        elif file_data["file_kind"] == "nulls_model":
+            content = _prototype_review_build_dbt_nulls_model({"null_conditions": file_data["null_conditions"]})
         else:
             content = file_data["content"]
         if existing_content == content:
@@ -1967,7 +1989,7 @@ def _business_dq_checks_from_mr(mr_input: str, business_area_code: Optional[str]
     checks, codes, views = [], set(), []
     for item in bundle.get("files") or []:
         match = _BUSINESS_DQ_PATH.fullmatch(str(item.get("path") or ""))
-        sql = str(item.get("content") or "").strip()
+        sql = str(item.get("sql") or item.get("content") or "").strip()
         view_match = _BUSINESS_DQ_VIEW.search(sql)
         if view_match:
             views.append({"fqn": view_match.group(1).lower(), "source_path": str(item.get("path") or ""), "sql": sql.rstrip()})

@@ -1,12 +1,14 @@
-FROM python:3.11-slim
+# Pin the Debian release: the floating slim tag recently switched to trixie,
+# while the corporate package proxy intermittently serves incomplete indexes.
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash git openssh-client sshpass fonts-dejavu-core \
+RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y --no-install-recommends bash git openssh-client sshpass fonts-dejavu-core \
     && groupadd -r airflow \
     && useradd -r -g airflow airflow \
     && rm -rf /var/lib/apt/lists/*

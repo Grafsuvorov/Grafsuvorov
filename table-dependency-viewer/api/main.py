@@ -567,7 +567,7 @@ class PrototypeReviewCreateIssuePayload(BaseModel):
 class BusinessDqPreviewPayload(BaseModel):
     mr_input: str
     business_area: str
-    business_area_code: str
+    business_area_code: Optional[str] = None
 
 
 class BusinessDqCreatePayload(BusinessDqPreviewPayload):
@@ -1953,33 +1953,42 @@ def _prototype_review_publish_dbt_registry(
     }
 
 
-_BUSINESS_DQ_PATH = re.compile(r"^dq/data_quality_results/(dq_([a-z0-9]+)\.sql)$", re.IGNORECASE)
+_BUSINESS_DQ_PATH = re.compile(r"(?:^|/)dq/data_quality_results/(dq_([a-z]+\d+)\.sql)$", re.IGNORECASE)
+_BUSINESS_DQ_VIEW = re.compile(r"\bcreate\s+(?:or\s+replace\s+)?view\s+(dm_view\.[a-z0-9_]+)\b", re.IGNORECASE)
 
 
-def _business_dq_checks_from_mr(mr_input: str, business_area_code: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    code = str(business_area_code or "").strip().lower()
-    if not re.fullmatch(r"[a-z]{2,6}", code):
-        raise ValueError("Код предметной области должен состоять из 2–6 латинских букв, например le")
+def _business_dq_checks_from_mr(mr_input: str, business_area_code: Optional[str] = None) -> tuple[dict[str, Any], list[dict[str, Any]], str, list[dict[str, str]]]:
+    requested_code = str(business_area_code or "").strip().lower()
     bundle = load_merge_request_sql_bundle(
         gitlab_api_url=GITLAB_API_URL, gitlab_project=GITLAB_PROJECT, gitlab_token=GITLAB_TOKEN,
         gitlab_ssl_verify=GITLAB_SSL_VERIFY, mr_input=mr_input,
         default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
     )
-    checks = []
+    checks, codes, views = [], set(), []
     for item in bundle.get("files") or []:
         match = _BUSINESS_DQ_PATH.fullmatch(str(item.get("path") or ""))
         sql = str(item.get("content") or "").strip()
+        view_match = _BUSINESS_DQ_VIEW.search(sql)
+        if view_match:
+            views.append({"fqn": view_match.group(1).lower(), "source_path": str(item.get("path") or ""), "sql": sql.rstrip()})
         if not match or not sql:
             continue
         error_code = f"dq_{match.group(2).lower()}"
-        if not error_code.startswith(f"dq_{code}"):
-            raise ValueError(f"Код `{error_code}` не соответствует предметной области `{code}`")
+        code_match = re.fullmatch(r"dq_([a-z]+)\d+", error_code)
+        if not code_match:
+            raise ValueError(f"Некорректный код проверки `{error_code}`")
+        codes.add(code_match.group(1))
         if not re.match(r"^(?:--[^\n]*\n|/\*.*?\*/\s*)*select\b", sql, re.IGNORECASE | re.DOTALL):
             raise ValueError(f"{match.group(1)}: ожидается SQL SELECT с нарушениями")
         checks.append({"error_code": error_code, "source_path": item["path"], "sql": sql.rstrip(";\n \t")})
     if not checks:
         raise ValueError("В MR не найдены файлы dq/data_quality_results/dq_<код>.sql")
-    return bundle, sorted(checks, key=lambda item: item["error_code"])
+    if len(codes) != 1:
+        raise ValueError("В DQ-файлах должен использоваться один код предметной области")
+    code = next(iter(codes))
+    if requested_code and requested_code != code:
+        raise ValueError(f"Код области `{requested_code}` не совпадает с кодом `{code}` из имени DQ-файлов")
+    return bundle, sorted(checks, key=lambda item: item["error_code"]), code, views
 
 
 def _business_dq_model(check: dict[str, Any], area_code: str, detail_store_limit: Union[int, str]) -> str:
@@ -2276,8 +2285,8 @@ def _prototype_review_build_result(
 def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
     _require_authenticated(request)
     try:
-        bundle, checks = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
-        return {"status": "ok", "mr": bundle.get("mr") or {}, "checks": checks}
+        bundle, checks, area_code, click_views = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        return {"status": "ok", "mr": bundle.get("mr") or {}, "checks": checks, "business_area_code": area_code, "click_views": click_views}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -2286,7 +2295,7 @@ def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
 def validate_business_dq(payload: BusinessDqPreviewPayload, request: Request):
     _require_authenticated(request)
     try:
-        _, checks = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        _, checks, _, _ = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
         return {"status": "ok", "checks": _business_dq_validate_checks(checks)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -2300,7 +2309,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         direction = str(payload.direction or area).strip()
         if not area or not direction:
             raise ValueError("Заполните предметную область и Дашборд КХД/Направление")
-        bundle, source_checks = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        bundle, source_checks, derived_area_code, _ = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
         submitted = {str(item.get("error_code") or "").lower(): item for item in payload.checks}
         checks = []
         for source in source_checks:
@@ -2314,7 +2323,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         _business_dq_validate_checks(checks)
         description = "\n".join([
             "## Бизнесовые DQ-проверки", "",
-            f"**Предметная область:** {area} ({payload.business_area_code.upper()})",
+            f"**Предметная область:** {area} ({derived_area_code.upper()})",
             f"**Источник:** {bundle.get('mr', {}).get('web_url') or payload.mr_input}",
             f"**Стенды:** {', '.join(name for name, enabled in [('DEV', payload.stand_dev), ('PROD', payload.stand_prod)] if enabled) or 'не выбраны'}",
             "", "## Проверки", *[f"- `{item['error_code']}` — `{item['source_path']}`; лимит детализации: `{item['detail_store_limit']}`" for item in checks],
@@ -2325,7 +2334,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         issue = create_ytrack_issue(base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT, token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE, ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description, default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES, estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME, card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME, card_type_value=YOUTRACK_CARD_TYPE_VALUE, assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME, assignee_query=YOUTRACK_ASSIGNEE_QUERY, direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME)
         task_id = str(issue.get("issue_id") or "").upper()
         if not re.fullmatch(r"DWH-\d+", task_id): raise ValueError("YouTrack вернул некорректный номер задачи")
-        area_code = str(payload.business_area_code).strip().lower()
+        area_code = derived_area_code
         dbt_files = []
         for item in checks:
             dbt_files.extend([{ "path": f"dbt_greenplum_elt/models/dq/business/{item['error_code']}.sql", "content": _business_dq_model(item, area_code, item["detail_store_limit"]) }, { "path": _prototype_review_dbt_registry_path("dm", item["error_code"]), "content": _business_dq_registry(item["error_code"]) }])

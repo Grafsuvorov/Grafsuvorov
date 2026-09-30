@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi } from "../api/admin.js";
 import { accountApi } from "../api/account.js";
+import BusinessDqPanel from "./BusinessDqPanel.jsx";
 
 const DEFAULT_FORM = {
   summary: "",
@@ -523,6 +524,8 @@ export default function AdminPrototypeReviewPage() {
           </div>
         ) : null}
       </section>
+
+      <BusinessDqPanel />
 
       {error ? <div className="page-error">{error}</div> : null}
 

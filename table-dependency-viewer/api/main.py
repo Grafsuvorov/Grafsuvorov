@@ -564,6 +564,23 @@ class PrototypeReviewCreateIssuePayload(BaseModel):
     review_items: List[PrototypeReviewItemPayload]
 
 
+class BusinessDqPreviewPayload(BaseModel):
+    mr_input: str
+    business_area: str
+    business_area_code: str
+
+
+class BusinessDqCreatePayload(BusinessDqPreviewPayload):
+    checks: List[Dict[str, Any]]
+    detail_store_limit: Optional[Union[int, str]] = 100000
+    stand_dev: bool = True
+    stand_prod: bool = True
+    click_view_fqn: Optional[str] = None
+    click_view_sql: Optional[str] = None
+    issue_summary: Optional[str] = None
+    direction: Optional[str] = None
+
+
 def _require_dev_meta_role(request: Request):
     user = get_current_user_from_request(request)
     if not user or not getattr(user, "email", None):
@@ -1936,6 +1953,118 @@ def _prototype_review_publish_dbt_registry(
     }
 
 
+_BUSINESS_DQ_PATH = re.compile(r"^dq/data_quality_results/(dq_([a-z0-9]+)\.sql)$", re.IGNORECASE)
+
+
+def _business_dq_checks_from_mr(mr_input: str, business_area_code: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    code = str(business_area_code or "").strip().lower()
+    if not re.fullmatch(r"[a-z]{2,6}", code):
+        raise ValueError("Код предметной области должен состоять из 2–6 латинских букв, например le")
+    bundle = load_merge_request_sql_bundle(
+        gitlab_api_url=GITLAB_API_URL, gitlab_project=GITLAB_PROJECT, gitlab_token=GITLAB_TOKEN,
+        gitlab_ssl_verify=GITLAB_SSL_VERIFY, mr_input=mr_input,
+        default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
+    )
+    checks = []
+    for item in bundle.get("files") or []:
+        match = _BUSINESS_DQ_PATH.fullmatch(str(item.get("path") or ""))
+        sql = str(item.get("content") or "").strip()
+        if not match or not sql:
+            continue
+        error_code = f"dq_{match.group(2).lower()}"
+        if not error_code.startswith(f"dq_{code}"):
+            raise ValueError(f"Код `{error_code}` не соответствует предметной области `{code}`")
+        if not re.match(r"^(?:--[^\n]*\n|/\*.*?\*/\s*)*select\b", sql, re.IGNORECASE | re.DOTALL):
+            raise ValueError(f"{match.group(1)}: ожидается SQL SELECT с нарушениями")
+        checks.append({"error_code": error_code, "source_path": item["path"], "sql": sql.rstrip(";\n \t")})
+    if not checks:
+        raise ValueError("В MR не найдены файлы dq/data_quality_results/dq_<код>.sql")
+    return bundle, sorted(checks, key=lambda item: item["error_code"])
+
+
+def _business_dq_model(check: dict[str, Any], area_code: str, detail_store_limit: Union[int, str]) -> str:
+    limit = _business_dq_normalize_limit(detail_store_limit)
+    return "\n".join([
+        "{{ config(",
+        f"    error_code = '{check['error_code']}',",
+        "    detail_store_flag = true,",
+        f"    detail_store_limit = {limit},",
+        f"    tags = ['dq', '{area_code}', 'business']",
+        ") }}", "", check["sql"], "",
+    ])
+
+
+def _business_dq_normalize_limit(value: Union[int, str, None]) -> str:
+    raw_limit = str(value if value is not None else 100000).strip().lower()
+    if raw_limit == "none":
+        return "none"
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Лимит детализации должен быть положительным числом или `none`") from exc
+    if limit <= 0:
+        raise ValueError("Лимит детализации должен быть больше нуля")
+    return str(limit)
+
+
+def _business_dq_registry(error_code: str) -> str:
+    return "\n".join(["relation:", "  schema_name: dm", f"  table_name: {error_code}", "  scd_type: scd1", ""])
+
+
+def _business_dq_validate_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Execute analyst DQ SQL in DEV without retaining data or permitting mutations."""
+    results = []
+    forbidden = re.compile(r"\b(?:insert|update|delete|drop|alter|create|truncate|copy|call)\b", re.IGNORECASE)
+    for item in checks:
+        sql = str(item.get("sql") or "").strip().rstrip(";")
+        if not re.match(r"^select\b", sql, re.IGNORECASE) or forbidden.search(sql):
+            raise ValueError(f"{item.get('error_code') or 'DQ'}: допускается только SELECT без изменяющих команд")
+        started = time.monotonic()
+        try:
+            with dev_engine.connect() as conn:
+                transaction = conn.begin()
+                try:
+                    conn.execute(text("SET LOCAL statement_timeout = '120000'"))
+                    result = conn.execute(text(sql))
+                    # Fetching a row makes the database execute the statement while avoiding
+                    # transferring a potentially huge detail set to the application.
+                    result.fetchmany(1)
+                finally:
+                    transaction.rollback()
+            results.append({"error_code": item.get("error_code"), "status": "ok", "duration_sec": round(time.monotonic() - started, 3)})
+        except Exception as exc:
+            results.append({"error_code": item.get("error_code"), "status": "error", "duration_sec": round(time.monotonic() - started, 3), "error": str(exc)})
+    errors = [f"{item.get('error_code')}: {item.get('error')}" for item in results if item.get("status") == "error"]
+    if errors:
+        raise ValueError("SQL DQ не прошли DEV-проверку: " + "; ".join(errors))
+    return results
+
+
+def _business_dq_publish(*, project: str, token: str, task_id: str, target_branch: str, title: str, description: str, files: list[dict[str, str]]) -> dict[str, Any]:
+    if not token:
+        raise ValueError("Не настроен GitLab token")
+    project_ref = _parse_gitlab_project(project)
+    if not project_ref:
+        raise ValueError("Не настроен GitLab project")
+    branch = f"feature/{task_id}"
+    ssl_verify = str(GITLAB_SSL_VERIFY or "true").lower() not in {"0", "false", "no", "off"}
+    exists = _prototype_gitlab_resource_exists(project=project_ref, token=token, path=f"repository/branches/{urlparse.quote(branch, safe='')}")
+    actions = []
+    ref = branch if exists else target_branch
+    for item in files:
+        old = _prototype_gitlab_file_content(project=project_ref, token=token, file_path=item["path"], ref=ref)
+        if old != item["content"]:
+            actions.append({"action": "update" if old is not None else "create", "file_path": item["path"], "content": item["content"], "encoding": "text"})
+    if not actions:
+        return {"status": "skipped", "branch_name": branch, "target_branch": target_branch, "files": [item["path"] for item in files]}
+    payload: dict[str, Any] = {"branch": branch, "commit_message": f"{task_id}: add business DQ", "actions": actions}
+    if not exists: payload["start_branch"] = target_branch
+    _gitlab_json_request(api_url=GITLAB_API_URL, project=project_ref, token=token, ssl_verify=ssl_verify, path="repository/commits", method="POST", payload=payload)
+    opened = _gitlab_json_request(api_url=GITLAB_API_URL, project=project_ref, token=token, ssl_verify=ssl_verify, path="merge_requests", query={"state":"opened", "source_branch":branch, "target_branch":target_branch})
+    mr = opened[0] if opened else _gitlab_json_request(api_url=GITLAB_API_URL, project=project_ref, token=token, ssl_verify=ssl_verify, path="merge_requests", method="POST", payload={"source_branch":branch, "target_branch":target_branch, "title":title, "description":description, "remove_source_branch":False})
+    return {"status":"ok", "branch_name":branch, "target_branch":target_branch, "files":[item["path"] for item in files], "mr_url":mr.get("web_url")}
+
+
 def _prototype_review_build_result(
     payload: PrototypeReviewRunPayload,
     user,
@@ -2141,6 +2270,76 @@ def _prototype_review_build_result(
         "issue": {"status": "skipped", "issue_id": None, "url": None, "link": None},
         "requires_user_input": requires_user_input,
     }
+
+
+@router.post("/api/admin/prototype-review/business-dq/preview")
+def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
+    _require_authenticated(request)
+    try:
+        bundle, checks = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        return {"status": "ok", "mr": bundle.get("mr") or {}, "checks": checks}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/prototype-review/business-dq/validate")
+def validate_business_dq(payload: BusinessDqPreviewPayload, request: Request):
+    _require_authenticated(request)
+    try:
+        _, checks = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        return {"status": "ok", "checks": _business_dq_validate_checks(checks)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/prototype-review/business-dq/create")
+def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
+    user = _require_authenticated(request)
+    try:
+        area = str(payload.business_area or "").strip()
+        direction = str(payload.direction or area).strip()
+        if not area or not direction:
+            raise ValueError("Заполните предметную область и Дашборд КХД/Направление")
+        bundle, source_checks = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        submitted = {str(item.get("error_code") or "").lower(): item for item in payload.checks}
+        checks = []
+        for source in source_checks:
+            item = submitted.get(source["error_code"], {})
+            checks.append({**source, "detail_store_limit": item.get("detail_store_limit", payload.detail_store_limit)})
+        if set(submitted) != {item["error_code"] for item in checks}:
+            raise ValueError("Состав DQ-проверок изменился. Обновите предпросмотр MR")
+        summary = str(payload.issue_summary or "").strip() or f"[DQ] {area}: {', '.join(item['error_code'] for item in checks)}"
+        for item in checks:
+            item["detail_store_limit"] = _business_dq_normalize_limit(item["detail_store_limit"])
+        _business_dq_validate_checks(checks)
+        description = "\n".join([
+            "## Бизнесовые DQ-проверки", "",
+            f"**Предметная область:** {area} ({payload.business_area_code.upper()})",
+            f"**Источник:** {bundle.get('mr', {}).get('web_url') or payload.mr_input}",
+            f"**Стенды:** {', '.join(name for name, enabled in [('DEV', payload.stand_dev), ('PROD', payload.stand_prod)] if enabled) or 'не выбраны'}",
+            "", "## Проверки", *[f"- `{item['error_code']}` — `{item['source_path']}`; лимит детализации: `{item['detail_store_limit']}`" for item in checks],
+            "", "## Результат", "- dbt MR: business DQ-модели и registry (`main` → `main`).",
+            *( ["- ETL MR: Click-view (`main` → `develop`)."] if str(payload.click_view_sql or "").strip() else [] ),
+            "- `dq.check_result*` и `dq_error` в этой задаче не меняются.",
+        ])
+        issue = create_ytrack_issue(base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT, token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE, ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description, default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES, estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME, card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME, card_type_value=YOUTRACK_CARD_TYPE_VALUE, assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME, assignee_query=YOUTRACK_ASSIGNEE_QUERY, direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME)
+        task_id = str(issue.get("issue_id") or "").upper()
+        if not re.fullmatch(r"DWH-\d+", task_id): raise ValueError("YouTrack вернул некорректный номер задачи")
+        area_code = str(payload.business_area_code).strip().lower()
+        dbt_files = []
+        for item in checks:
+            dbt_files.extend([{ "path": f"dbt_greenplum_elt/models/dq/business/{item['error_code']}.sql", "content": _business_dq_model(item, area_code, item["detail_store_limit"]) }, { "path": _prototype_review_dbt_registry_path("dm", item["error_code"]), "content": _business_dq_registry(item["error_code"]) }])
+        dbt = _business_dq_publish(project=DBT_GITLAB_PROJECT, token=DBT_GITLAB_TOKEN, task_id=task_id, target_branch="main", title=f"{task_id}: business DQ {area_code}", description=description, files=dbt_files)
+        etl = None
+        view_sql, view_fqn = str(payload.click_view_sql or "").strip(), str(payload.click_view_fqn or "").strip().lower()
+        if view_sql or view_fqn:
+            if not view_sql or not re.fullmatch(r"dm_view\.[a-z0-9_]+", view_fqn): raise ValueError("Для Click-view укажите dm_view.<имя> и SQL")
+            _, table = view_fqn.split('.', 1)
+            etl = _business_dq_publish(project=GITLAB_PROJECT, token=GITLAB_TOKEN, task_id=task_id, target_branch=PROTOTYPE_ETL_TARGET_BRANCH, title=f"{task_id}: Click DQ view", description=description, files=[{"path": posix_join(str(CLICK_META_GIT_ROOT).strip('/'), "dm_view", f"{table}.sql"), "content": view_sql + "\n"}])
+        issue["link"] = _build_ytrack_link(task_id)
+        return {"status":"ok", "issue":issue, "description":description, "dbt":dbt, "etl":etl}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/api/admin/prototype-review/run")

@@ -126,6 +126,15 @@ from .runtime import engine, dbt_logs_engine, dev_engine
 from .routers.system import router as system_router
 from .routers.feedback import router as feedback_router
 from .routers.admin_ops import router as admin_ops_router
+from .routers.prototype_review import PrototypeReviewHandlers, build_prototype_review_router
+from .schemas.prototype_review import (
+    BusinessDqCreatePayload,
+    BusinessDqPreviewPayload,
+    PrototypeReviewCreateIssuePayload,
+    PrototypeReviewRunPayload,
+    PrototypeReviewTableCheckPayload,
+    PrototypeReviewYamlRefreshPayload,
+)
 
 
 from .services.entities import fetch_entities
@@ -452,101 +461,6 @@ class AssistantContextPayload(BaseModel):
 class AssistantQueryPayload(BaseModel):
     question: str
     context: Optional[AssistantContextPayload] = None
-
-
-class PrototypeReviewRunPayload(BaseModel):
-    mr_input: str
-    key_attributes: Optional[List[str]] = None
-    create_issue: bool = False
-    task_text: Optional[str] = None
-    target_table_fqn: Optional[str] = None
-    entity_name: Optional[str] = None
-    issue_summary: Optional[str] = None
-    load_mode: Optional[str] = None
-    stand_dev: bool = True
-    stand_prod: bool = True
-    copy_to_clickhouse: Optional[bool] = None
-    dependent_views: Optional[List[str]] = None
-    linked_issues: Optional[List[str]] = None
-    release_date: Optional[str] = None
-    direction: Optional[str] = None
-    business_key_changed: Optional[bool] = None
-
-
-class PrototypeReviewTableCheckPayload(BaseModel):
-    mr_input: str
-    item_id: Optional[str] = None
-    target_fqn: str
-    entity_name: Optional[str] = None
-    key_attributes: Optional[List[str]] = None
-
-
-class PrototypeReviewYamlRefreshPayload(BaseModel):
-    target_fqn: str
-    entity_name: str
-    key_attributes: Optional[List[str]] = None
-    object_type: Optional[str] = None
-    yaml_content: Optional[str] = None
-
-
-class PrototypeReviewItemPayload(BaseModel):
-    item_id: Optional[str] = None
-    path: Optional[str] = None
-    paths: Optional[List[str]] = None
-    target_fqn: str
-    entity_name: Optional[str] = None
-    key_attributes: Optional[List[str]] = None
-    scd_type: Optional[str] = "scd1"
-    version_key: Optional[List[str]] = None
-    filter: Optional[str] = None
-    null_conditions: Optional[List[str]] = None
-    clickhouse_keys: Optional[List[str]] = None
-    dependent_views: Optional[List[str]] = None
-    is_new: Optional[bool] = None
-    object_type: Optional[str] = None
-    duration_sec: Optional[float] = None
-    row_count: Optional[int] = None
-    duplicate_groups: Optional[int] = None
-    dependencies: Optional[List[str]] = None
-    impact_tables: Optional[List[Dict[str, Any]]] = None
-    yaml_content: Optional[str] = None
-    stand_dev: Optional[bool] = True
-    stand_prod: Optional[bool] = True
-    copy_to_clickhouse: Optional[bool] = None
-
-
-class PrototypeReviewCreateIssuePayload(BaseModel):
-    mr_input: str
-    task_text: Optional[str] = None
-    issue_summary: Optional[str] = None
-    load_mode: Optional[str] = None
-    stand_dev: bool = True
-    stand_prod: bool = True
-    copy_to_clickhouse: Optional[bool] = None
-    linked_issues: Optional[List[str]] = None
-    release_date: Optional[str] = None
-    direction: Optional[str] = None
-    business_key_changed: Optional[bool] = None
-    review_items: List[PrototypeReviewItemPayload]
-
-
-class BusinessDqPreviewPayload(BaseModel):
-    mr_input: str
-    business_area: str
-    business_area_code: Optional[str] = None
-
-
-class BusinessDqCreatePayload(BusinessDqPreviewPayload):
-    checks: List[Dict[str, Any]]
-    detail_store_limit: Optional[Union[int, str]] = 100000
-    stand_dev: bool = True
-    stand_prod: bool = True
-    click_view_fqn: Optional[str] = None
-    click_view_sql: Optional[str] = None
-    issue_summary: Optional[str] = None
-    direction: Optional[str] = None
-    release_date: Optional[str] = None
-    related_link: Optional[str] = None
 
 
 def _require_dev_meta_role(request: Request):
@@ -2226,7 +2140,6 @@ def _prototype_review_build_result(
     }
 
 
-@router.post("/api/admin/prototype-review/business-dq/preview")
 def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
     _require_authenticated(request)
     try:
@@ -2236,7 +2149,6 @@ def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/api/admin/prototype-review/business-dq/validate")
 def validate_business_dq(payload: BusinessDqPreviewPayload, request: Request):
     _require_authenticated(request)
     try:
@@ -2246,7 +2158,6 @@ def validate_business_dq(payload: BusinessDqPreviewPayload, request: Request):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/api/admin/prototype-review/business-dq/create")
 def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
     user = _require_authenticated(request)
     try:
@@ -2304,7 +2215,6 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/api/admin/prototype-review/run")
 def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Request):
     user = _require_authenticated(request)
     try:
@@ -2315,7 +2225,6 @@ def run_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Requ
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/api/admin/prototype-review/run-start")
 def start_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Request):
     user = _require_authenticated(request)
     job_id = uuid4().hex
@@ -2361,7 +2270,6 @@ def start_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Re
     return {"status": "queued", "job_id": job_id}
 
 
-@router.get("/api/admin/prototype-review/run-status/{job_id}")
 def get_admin_prototype_review_status(job_id: str, request: Request):
     _require_authenticated(request)
     with _prototype_review_jobs_lock:
@@ -2371,7 +2279,6 @@ def get_admin_prototype_review_status(job_id: str, request: Request):
     return payload
 
 
-@router.post("/api/admin/prototype-review/check-table")
 def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload, request: Request):
     _require_authenticated(request)
     try:
@@ -2397,7 +2304,6 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/api/admin/prototype-review/refresh-yaml")
 def refresh_admin_prototype_review_yaml(payload: PrototypeReviewYamlRefreshPayload, request: Request):
     _require_authenticated(request)
     try:
@@ -2414,7 +2320,6 @@ def refresh_admin_prototype_review_yaml(payload: PrototypeReviewYamlRefreshPaylo
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/api/admin/prototype-review/create-issue")
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
     try:
@@ -15763,7 +15668,22 @@ def search_entities(q: str):
         raise HTTPException(status_code=500, detail="Не удалось выполнить поиск")
 
 
+prototype_review_router = build_prototype_review_router(
+    PrototypeReviewHandlers(
+        business_dq_preview=preview_business_dq,
+        business_dq_validate=validate_business_dq,
+        business_dq_create=create_business_dq,
+        run=run_admin_prototype_review,
+        run_start=start_admin_prototype_review,
+        run_status=get_admin_prototype_review_status,
+        check_table=check_admin_prototype_review_table,
+        refresh_yaml=refresh_admin_prototype_review_yaml,
+        create_issue=create_admin_prototype_review_issue,
+    )
+)
+
 app.include_router(system_router)
 app.include_router(feedback_router)
 app.include_router(admin_ops_router)
+app.include_router(prototype_review_router)
 app.include_router(router)

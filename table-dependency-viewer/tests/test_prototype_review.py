@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import fields
 import re
 import sys
 import types
@@ -55,6 +56,10 @@ from api.services.prototype_review_workflow import (
 from api.services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
+)
+from api.services.prototype_review_issue_workflow import (
+    PrototypeIssueWorkflowDependencies,
+    create_prototype_review_issue,
 )
 
 
@@ -160,6 +165,60 @@ class PrototypeIssueDeliveryTests(unittest.TestCase):
         self.assertTrue(result["dbt_registry"]["task_link_attached"])
         self.assertEqual(comments[0]["issue_id"], "DWH-17")
         self.assertIn("MR с ключами", comments[0]["text"])
+
+
+class PrototypeIssueWorkflowTests(unittest.TestCase):
+    @staticmethod
+    def dependencies(**overrides):
+        values = {field.name: None for field in fields(PrototypeIssueWorkflowDependencies)}
+        values.update(overrides)
+        return PrototypeIssueWorkflowDependencies(**values)
+
+    def test_requires_dashboard_direction_before_external_calls(self) -> None:
+        payload = SimpleNamespace(direction="")
+        with self.assertRaisesRegex(ValueError, "Дашборд КХД/Направление"):
+            create_prototype_review_issue(payload, None, dependencies=self.dependencies())
+
+    def test_creates_links_and_delivers_valid_review(self) -> None:
+        created = []
+        payload = SimpleNamespace(
+            direction="Finance",
+            mr_input="17",
+            task_text="",
+            review_items=[],
+            issue_summary="Prototype finance",
+            linked_issues=["DWH-10"],
+            release_date="2026-10-12",
+            business_key_changed=False,
+        )
+
+        def create_issue(**kwargs):
+            created.append(kwargs)
+            return {"issue_id": "DWH-17", "raw": {"id": "2-17"}}
+
+        dependencies = self.dependencies(
+            load_bundle=lambda **_kwargs: {"mr": {"source_branch": "feature/x"}, "deleted_files": []},
+            parse_task=lambda _text: {},
+            refresh_yaml=lambda **_kwargs: "",
+            item_needs_attention=lambda _item: (False, []),
+            build_description=lambda **_kwargs: "Generated description",
+            create_issue=create_issue,
+            link_issues=lambda **_kwargs: [{"issue_id": "DWH-10", "status": "linked"}],
+            deliver_issue=lambda **_kwargs: {"meta_branch": None, "dbt_registry": {"status": "created"}},
+            build_issue_link=lambda issue_id: f"https://youtrack.example/issue/{issue_id}",
+            delivery=object(),
+            youtrack_url="https://youtrack.example",
+            youtrack_ssl_verify=True,
+        )
+
+        result = create_prototype_review_issue(payload, SimpleNamespace(email="user@example.com"), dependencies=dependencies)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["issue"]["link"], "https://youtrack.example/issue/DWH-17")
+        self.assertEqual(result["issue_links"][0]["issue_id"], "DWH-10")
+        self.assertEqual(result["dbt_registry"]["status"], "created")
+        self.assertEqual(created[0]["direction"], "Finance")
+        self.assertEqual(created[0]["release_date"], "2026-10-12")
 
 
 def _load_collect_target_sql():

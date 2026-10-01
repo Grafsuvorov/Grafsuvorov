@@ -241,6 +241,10 @@ from .services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
 )
+from .services.prototype_review_issue_workflow import (
+    PrototypeIssueWorkflowDependencies,
+    create_prototype_review_issue,
+)
 from .services.prototype_review_workflow import (
     PrototypeReviewWorkflowDependencies,
     build_prototype_review_result,
@@ -1595,134 +1599,82 @@ def refresh_admin_prototype_review_yaml(payload: PrototypeReviewYamlRefreshPaylo
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+def _prototype_issue_delivery_dependencies() -> PrototypeIssueDeliveryDependencies:
+    return PrototypeIssueDeliveryDependencies(
+        collect_target_sql=_prototype_review_collect_target_sql,
+        save_gp_bundle=save_meta_workspace_branch_gp_bundle,
+        save_file=save_meta_workspace_branch_file,
+        delete_object=delete_meta_workspace_branch_gp_object,
+        create_meta_mr=create_meta_workspace_mr,
+        publish_dbt=_prototype_review_publish_dbt_registry,
+        add_comment=add_ytrack_issue_comment,
+        yaml_repo_path=_prototype_review_yaml_repo_path,
+        engine=engine,
+        base_dir=BASE_DIR,
+        dev_entity_root=DEV_ENTITY_META_DIR,
+        dev_click_root=DEV_CLICK_META_DIR,
+        entity_git_repo=ENTITY_META_GIT_REPO,
+        entity_git_root=ENTITY_META_GIT_META_ROOT,
+        click_git_root=CLICK_META_GIT_ROOT,
+        workspace_root=META_WORKSPACE_ROOT,
+        base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+        target_branch=PROTOTYPE_ETL_TARGET_BRANCH,
+        gitlab_api_url=GITLAB_API_URL,
+        gitlab_project=GITLAB_PROJECT,
+        gitlab_token=GITLAB_TOKEN,
+        gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+        youtrack_url=YOUTRACK_URL,
+        youtrack_token=YOUTRACK_TOKEN,
+        youtrack_ssl_verify=YOUTRACK_SSL_VERIFY,
+    )
+
+
+def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependencies:
+    return PrototypeIssueWorkflowDependencies(
+        load_bundle=load_merge_request_sql_bundle,
+        parse_task=parse_prototype_task_text,
+        refresh_yaml=_prototype_review_refresh_yaml_identity,
+        item_needs_attention=_prototype_item_needs_attention,
+        build_description=_prototype_multi_issue_description,
+        create_issue=create_ytrack_issue,
+        link_issues=link_ytrack_issues,
+        deliver_issue=deliver_prototype_issue,
+        build_issue_link=_build_ytrack_link,
+        delivery=_prototype_issue_delivery_dependencies(),
+        gitlab_api_url=GITLAB_API_URL,
+        gitlab_project=GITLAB_PROJECT,
+        gitlab_token=GITLAB_TOKEN,
+        gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+        analyst_gitlab_project=ANALYST_GITLAB_PROJECT,
+        youtrack_url=YOUTRACK_URL,
+        youtrack_project_id=YOUTRACK_PROJECT_ID,
+        youtrack_project=YOUTRACK_PROJECT,
+        youtrack_token=YOUTRACK_TOKEN,
+        youtrack_queue=YOUTRACK_QUEUE,
+        youtrack_issue_type=YOUTRACK_ISSUE_TYPE,
+        youtrack_ssl_verify=YOUTRACK_SSL_VERIFY,
+        default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
+        estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME,
+        card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
+        card_type_value=YOUTRACK_CARD_TYPE_VALUE,
+        assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
+        assignee_query=YOUTRACK_ASSIGNEE_QUERY,
+        release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
+        direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+        business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
+    )
+
+
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
     try:
-        dashboard_direction = str(payload.direction or "").strip()
-        if not dashboard_direction:
-            raise HTTPException(status_code=400, detail="Заполните обязательное поле «Дашборд КХД/Направление»")
-        bundle = load_merge_request_sql_bundle(
-            gitlab_api_url=GITLAB_API_URL,
-            gitlab_project=GITLAB_PROJECT,
-            gitlab_token=GITLAB_TOKEN,
-            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
-            mr_input=payload.mr_input,
-            default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
+        return create_prototype_review_issue(
+            payload,
+            user,
+            dependencies=_prototype_issue_workflow_dependencies(),
         )
-        parsed_task = parse_prototype_task_text(payload.task_text or "")
-        review_items = [item.model_dump() for item in payload.review_items]
-        reserved_table_ids: set[int] = set()
-        for item in review_items:
-            if not str(item.get("yaml_content") or "").strip():
-                continue
-            try:
-                item["yaml_content"] = _prototype_review_refresh_yaml_identity(
-                    item=item,
-                    reserved_table_ids=reserved_table_ids,
-                )
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
-        incomplete = []
-        for item in review_items:
-            needs_attention, missing = _prototype_item_needs_attention(item)
-            if needs_attention:
-                incomplete.append(f"{item.get('target_fqn')}: {', '.join(missing)}")
-        if incomplete:
-            raise HTTPException(status_code=400, detail="Нужно заполнить вручную: " + "; ".join(incomplete))
-        task_context = {
-            **parsed_task,
-            "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
-            "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
-            "release_date": (payload.release_date or parsed_task.get("release_date") or "").strip(),
-            "direction": dashboard_direction,
-            "business_key_changed": (
-                payload.business_key_changed
-                if payload.business_key_changed is not None
-                else parsed_task.get("business_key_changed")
-            ),
-        }
-        summary = (payload.issue_summary or "").strip() or parsed_task.get("summary") or f"[Prototype Review] {bundle.get('mr', {}).get('source_branch') or 'prototype'}"
-        description = _prototype_multi_issue_description(
-            mr=bundle.get("mr") or {},
-            task_context=task_context,
-            initiator={"email": getattr(user, "email", None), "username": getattr(user, "username", None)},
-            review_items=review_items,
-            deleted_files=bundle.get("deleted_files") or [],
-        )
-        issue_result = create_ytrack_issue(
-            base_url=YOUTRACK_URL,
-            project_id=YOUTRACK_PROJECT_ID,
-            project=YOUTRACK_PROJECT,
-            token=YOUTRACK_TOKEN,
-            queue=YOUTRACK_QUEUE,
-            issue_type=YOUTRACK_ISSUE_TYPE,
-            ssl_verify=YOUTRACK_SSL_VERIFY,
-            summary=summary,
-            description=description,
-            default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
-            estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME,
-            card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
-            card_type_value=YOUTRACK_CARD_TYPE_VALUE,
-            assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
-            assignee_query=YOUTRACK_ASSIGNEE_QUERY,
-            release_date=task_context.get("release_date"),
-            release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
-            direction=task_context.get("direction"),
-            direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
-            business_key_changed=task_context.get("business_key_changed"),
-            business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
-        )
-        issue_links = link_ytrack_issues(
-            base_url=YOUTRACK_URL,
-            token=YOUTRACK_TOKEN,
-            issue_id=str(issue_result.get("issue_id") or ""),
-            linked_issue_ids=task_context.get("linked_issues") or [],
-            ssl_verify=YOUTRACK_SSL_VERIFY,
-        )
-        delivery = deliver_prototype_issue(
-            issue_result=issue_result,
-            review_items=review_items,
-            bundle=bundle,
-            user=user,
-            dependencies=PrototypeIssueDeliveryDependencies(
-                collect_target_sql=_prototype_review_collect_target_sql,
-                save_gp_bundle=save_meta_workspace_branch_gp_bundle,
-                save_file=save_meta_workspace_branch_file,
-                delete_object=delete_meta_workspace_branch_gp_object,
-                create_meta_mr=create_meta_workspace_mr,
-                publish_dbt=_prototype_review_publish_dbt_registry,
-                add_comment=add_ytrack_issue_comment,
-                yaml_repo_path=_prototype_review_yaml_repo_path,
-                engine=engine,
-                base_dir=BASE_DIR,
-                dev_entity_root=DEV_ENTITY_META_DIR,
-                dev_click_root=DEV_CLICK_META_DIR,
-                entity_git_repo=ENTITY_META_GIT_REPO,
-                entity_git_root=ENTITY_META_GIT_META_ROOT,
-                click_git_root=CLICK_META_GIT_ROOT,
-                workspace_root=META_WORKSPACE_ROOT,
-                base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-                target_branch=PROTOTYPE_ETL_TARGET_BRANCH,
-                gitlab_api_url=GITLAB_API_URL,
-                gitlab_project=GITLAB_PROJECT,
-                gitlab_token=GITLAB_TOKEN,
-                gitlab_ssl_verify=GITLAB_SSL_VERIFY,
-                youtrack_url=YOUTRACK_URL,
-                youtrack_token=YOUTRACK_TOKEN,
-                youtrack_ssl_verify=YOUTRACK_SSL_VERIFY,
-            ),
-        )
-        if issue_result.get("issue_id"):
-            issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
-        return {
-            "status": "ok",
-            "issue": issue_result,
-            "issue_links": issue_links,
-            "description": description,
-            **delivery,
-        }
-    except HTTPException:
-        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         print("❌ /api/admin/prototype-review/create-issue error:", exc)
         print(traceback.format_exc())

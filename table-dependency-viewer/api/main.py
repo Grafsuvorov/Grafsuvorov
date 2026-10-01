@@ -232,6 +232,8 @@ from .services.business_dq import (
     _business_dq_model,
     _business_dq_normalize_limit,
     _business_dq_registry,
+    checks_from_merge_request,
+    validate_checks,
 )
 from .services.gitlab_delivery import (
     _business_dq_publish,
@@ -1371,73 +1373,17 @@ def _prototype_review_existing_null_conditions(schema_name: str, table_name: str
     return _prototype_review_parse_null_conditions(content)
 
 
-
-
-_BUSINESS_DQ_PATH = re.compile(r"(?:^|/)dq/data_quality_results/(dq_([a-z]+\d+)\.sql)$", re.IGNORECASE)
-_BUSINESS_DQ_VIEW = re.compile(r"\bcreate\s+(?:or\s+replace\s+)?view\s+(dm_view\.[a-z0-9_]+)\b", re.IGNORECASE)
-
-
-def _business_dq_checks_from_mr(mr_input: str, business_area_code: Optional[str] = None) -> tuple[dict[str, Any], list[dict[str, Any]], str, list[dict[str, str]]]:
-    requested_code = str(business_area_code or "").strip().lower()
-    bundle = load_merge_request_sql_bundle(
-        gitlab_api_url=GITLAB_API_URL, gitlab_project=GITLAB_PROJECT, gitlab_token=GITLAB_TOKEN,
-        gitlab_ssl_verify=GITLAB_SSL_VERIFY, mr_input=mr_input,
+def _load_business_dq_checks(mr_input: str, business_area_code: Optional[str] = None):
+    return checks_from_merge_request(
+        mr_input,
+        business_area_code,
+        load_bundle=load_merge_request_sql_bundle,
+        gitlab_api_url=GITLAB_API_URL,
+        gitlab_project=GITLAB_PROJECT,
+        gitlab_token=GITLAB_TOKEN,
+        gitlab_ssl_verify=GITLAB_SSL_VERIFY,
         default_project=ANALYST_GITLAB_PROJECT or GITLAB_PROJECT,
     )
-    checks, codes, views = [], set(), []
-    for item in bundle.get("files") or []:
-        match = _BUSINESS_DQ_PATH.fullmatch(str(item.get("path") or ""))
-        sql = str(item.get("sql") or item.get("content") or "").strip()
-        view_match = _BUSINESS_DQ_VIEW.search(sql)
-        if view_match:
-            views.append({"fqn": view_match.group(1).lower(), "source_path": str(item.get("path") or ""), "sql": sql.rstrip()})
-        if not match or not sql:
-            continue
-        error_code = f"dq_{match.group(2).lower()}"
-        code_match = re.fullmatch(r"dq_([a-z]+)\d+", error_code)
-        if not code_match:
-            raise ValueError(f"Некорректный код проверки `{error_code}`")
-        codes.add(code_match.group(1))
-        if not re.match(r"^(?:--[^\n]*\n|/\*.*?\*/\s*)*select\b", sql, re.IGNORECASE | re.DOTALL):
-            raise ValueError(f"{match.group(1)}: ожидается SQL SELECT с нарушениями")
-        checks.append({"error_code": error_code, "source_path": item["path"], "sql": sql.rstrip(";\n \t")})
-    if not checks:
-        raise ValueError("В MR не найдены файлы dq/data_quality_results/dq_<код>.sql")
-    if len(codes) != 1:
-        raise ValueError("В DQ-файлах должен использоваться один код предметной области")
-    code = next(iter(codes))
-    if requested_code and requested_code != code:
-        raise ValueError(f"Код области `{requested_code}` не совпадает с кодом `{code}` из имени DQ-файлов")
-    return bundle, sorted(checks, key=lambda item: item["error_code"]), code, views
-
-
-def _business_dq_validate_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Execute analyst DQ SQL in DEV without retaining data or permitting mutations."""
-    results = []
-    forbidden = re.compile(r"\b(?:insert|update|delete|drop|alter|create|truncate|copy|call)\b", re.IGNORECASE)
-    for item in checks:
-        sql = str(item.get("sql") or "").strip().rstrip(";")
-        if not re.match(r"^select\b", sql, re.IGNORECASE) or forbidden.search(sql):
-            raise ValueError(f"{item.get('error_code') or 'DQ'}: допускается только SELECT без изменяющих команд")
-        started = time.monotonic()
-        try:
-            with dev_engine.connect() as conn:
-                transaction = conn.begin()
-                try:
-                    conn.execute(text("SET LOCAL statement_timeout = '120000'"))
-                    result = conn.execute(text(sql))
-                    # Fetching a row makes the database execute the statement while avoiding
-                    # transferring a potentially huge detail set to the application.
-                    result.fetchmany(1)
-                finally:
-                    transaction.rollback()
-            results.append({"error_code": item.get("error_code"), "status": "ok", "duration_sec": round(time.monotonic() - started, 3)})
-        except Exception as exc:
-            results.append({"error_code": item.get("error_code"), "status": "error", "duration_sec": round(time.monotonic() - started, 3), "error": str(exc)})
-    errors = [f"{item.get('error_code')}: {item.get('error')}" for item in results if item.get("status") == "error"]
-    if errors:
-        raise ValueError("SQL DQ не прошли DEV-проверку: " + "; ".join(errors))
-    return results
 
 
 def _prototype_review_build_result(
@@ -1650,7 +1596,7 @@ def _prototype_review_build_result(
 def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
     _require_authenticated(request)
     try:
-        bundle, checks, area_code, click_views = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        bundle, checks, area_code, click_views = _load_business_dq_checks(payload.mr_input, payload.business_area_code)
         return {"status": "ok", "mr": bundle.get("mr") or {}, "checks": checks, "business_area_code": area_code, "click_views": click_views}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -1659,8 +1605,8 @@ def preview_business_dq(payload: BusinessDqPreviewPayload, request: Request):
 def validate_business_dq(payload: BusinessDqPreviewPayload, request: Request):
     _require_authenticated(request)
     try:
-        _, checks, _, _ = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
-        return {"status": "ok", "checks": _business_dq_validate_checks(checks)}
+        _, checks, _, _ = _load_business_dq_checks(payload.mr_input, payload.business_area_code)
+        return {"status": "ok", "checks": validate_checks(checks, engine=dev_engine)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1672,7 +1618,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         direction = str(payload.direction or area).strip()
         if not area or not direction:
             raise ValueError("Заполните предметную область и Дашборд КХД/Направление")
-        bundle, source_checks, derived_area_code, _ = _business_dq_checks_from_mr(payload.mr_input, payload.business_area_code)
+        bundle, source_checks, derived_area_code, _ = _load_business_dq_checks(payload.mr_input, payload.business_area_code)
         submitted = {str(item.get("error_code") or "").lower(): item for item in payload.checks}
         checks = []
         for source in source_checks:
@@ -1683,7 +1629,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         summary = str(payload.issue_summary or "").strip() or f"[DQ] {area}: {', '.join(item['error_code'] for item in checks)}"
         for item in checks:
             item["detail_store_limit"] = _business_dq_normalize_limit(item["detail_store_limit"])
-        _business_dq_validate_checks(checks)
+        validate_checks(checks, engine=dev_engine)
         description = "\n".join([
             "## Бизнесовые DQ-проверки", "",
             f"**Предметная область:** {area} ({derived_area_code.upper()})",

@@ -1,42 +1,36 @@
 from __future__ import annotations
 
 import ast
-import json
-import re
 import unittest
 from pathlib import Path
-from posixpath import join as posix_join
 from typing import Any
+
+from api.services import prototype_review_dbt
 
 
 def _load_functions():
     source = Path("api/main.py").read_text(encoding="utf-8")
     module = ast.parse(source, filename="api/main.py")
-    names = {
-        "_prototype_item_needs_attention",
-        "_prototype_review_dbt_registry_path",
-        "_prototype_review_dbt_dq_path",
-        "_prototype_review_parse_null_conditions",
-        "_prototype_review_dbt_key_list",
-        "_prototype_review_build_dbt_dq_model",
-        "_prototype_review_update_dbt_dq_model",
-        "_prototype_review_build_dbt_registry_yaml",
-    }
+    names = {"_prototype_item_needs_attention"}
     nodes = [
         node for node in module.body
         if isinstance(node, ast.FunctionDef) and node.name in names
     ]
     isolated_module = ast.Module(body=nodes, type_ignores=[])
-    namespace = {
-        "Any": Any,
-        "DBT_REGISTRY_ROOT": "dbt_greenplum_elt/models_metadata",
-        "DBT_DQ_TECHNICAL_ROOT": "dbt_greenplum_elt/models/dq/technical",
-        "posix_join": posix_join,
-        "json": json,
-        "re": re,
-        "ast": ast,
-    }
+    namespace = {"Any": Any}
     exec(compile(isolated_module, "api/main.py", "exec"), namespace)
+    namespace.update({
+        name: getattr(prototype_review_dbt, name)
+        for name in (
+            "_prototype_review_dbt_registry_path",
+            "_prototype_review_dbt_dq_path",
+            "_prototype_review_parse_null_conditions",
+            "_prototype_review_dbt_key_list",
+            "_prototype_review_build_dbt_dq_model",
+            "_prototype_review_update_dbt_dq_model",
+            "_prototype_review_build_dbt_registry_yaml",
+        )
+    })
     return namespace
 
 

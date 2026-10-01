@@ -237,6 +237,10 @@ from .services.gitlab_delivery import (
     _prototype_gitlab_resource_exists,
 )
 from .services.prototype_review_delivery import _prototype_review_publish_dbt_registry
+from .services.prototype_review_issue_delivery import (
+    PrototypeIssueDeliveryDependencies,
+    deliver_prototype_issue,
+)
 from .services.prototype_review_workflow import (
     PrototypeReviewWorkflowDependencies,
     build_prototype_review_result,
@@ -1675,196 +1679,39 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             linked_issue_ids=task_context.get("linked_issues") or [],
             ssl_verify=YOUTRACK_SSL_VERIFY,
         )
-        meta_branch = None
-        meta_files = []
-        meta_error = None
-        meta_mr = None
-        meta_mr_error = None
-        dbt_registry = None
-        dbt_registry_error = None
-        raw_issue_id = str((issue_result.get("raw") or {}).get("id") or "").strip()
-        if raw_issue_id:
-            issue_id = str(issue_result.get("issue_id") or "").strip().upper()
-            branch_name = f"feature/{issue_id}"
-            active_targets = {
-                str(item.get("target_fqn") or "").strip().lower()
-                for item in review_items
-                if str(item.get("target_fqn") or "").strip()
-            }
-            deleted_table_targets = infer_removed_table_targets(
-                files=bundle.get("files") or [],
-                deleted_files=bundle.get("deleted_files") or [],
-                active_targets=active_targets,
-            )
-            for item in review_items:
-                yaml_content = str(item.get("yaml_content") or "").strip()
-                if not yaml_content:
-                    continue
-                target_fqn = str(item.get("target_fqn") or "").strip().lower()
-                entity_name = str(item.get("entity_name") or "").strip()
-                if "." not in target_fqn or not entity_name:
-                    continue
-                schema_name, table_name = target_fqn.split(".", 1)
-                try:
-                    item_paths = {
-                        str(value or "").strip()
-                        for value in (item.get("paths") or [])
-                        if str(value or "").strip()
-                    }
-                    if not item_paths:
-                        item_paths = {
-                            value.strip()
-                            for value in str(item.get("path") or "").splitlines()
-                            if value.strip()
-                        }
-                    related_files = [
-                        file_item
-                        for file_item in (bundle.get("files") or [])
-                        if str(file_item.get("path") or "").strip() in item_paths
-                    ]
-                    if item.get("is_new"):
-                        sql_bundle = _prototype_review_collect_target_sql(target_fqn, related_files)
-                        if not str(sql_bundle.get("recreate_sql") or "").strip():
-                            raise ValueError(f"Для нового объекта `{target_fqn}` не сформирован recreate SQL")
-                        save_result = save_meta_workspace_branch_gp_bundle(
-                            git_repo_value=ENTITY_META_GIT_REPO,
-                            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
-                            workspace_root_value=META_WORKSPACE_ROOT,
-                            workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                            branch_name=branch_name,
-                            base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-                            entity_name=entity_name,
-                            schema_name=schema_name,
-                            table_name=table_name,
-                            yaml_content=yaml_content,
-                            recreate_sql=sql_bundle.get("recreate_sql", ""),
-                            insert_sql=sql_bundle.get("insert_sql", ""),
-                            truncate_sql=sql_bundle.get("truncate_sql", ""),
-                            task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                            author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                            expected_revision=None,
-                        )
-                    else:
-                        save_result = save_meta_workspace_branch_file(
-                            git_repo_value=ENTITY_META_GIT_REPO,
-                            workspace_root_value=META_WORKSPACE_ROOT,
-                            workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                            branch_name=branch_name,
-                            base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-                            file_path=_prototype_review_yaml_repo_path(entity_name, schema_name, table_name),
-                            content=yaml_content,
-                            task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                            author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                            expected_revision=None,
-                        )
-                    meta_files.append(
-                        {
-                            "target_fqn": target_fqn,
-                            "entity_name": entity_name,
-                            "file_path": save_result.get("file_path") or save_result.get("path"),
-                            "branch_name": save_result.get("branch_name"),
-                            "committed": bool(save_result.get("committed")),
-                            "action": "create" if item.get("is_new") else "update",
-                            "changed_files": save_result.get("changed_files") or [],
-                        }
-                    )
-                    meta_branch = save_result.get("branch_name") or meta_branch
-                except Exception as exc:
-                    meta_error = str(exc)
-                    break
-            if not meta_error:
-                for target_fqn in sorted(deleted_table_targets):
-                    schema_name, table_name = target_fqn.split(".", 1)
-                    try:
-                        delete_result = delete_meta_workspace_branch_gp_object(
-                            git_repo_value=ENTITY_META_GIT_REPO,
-                            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
-                            workspace_root_value=META_WORKSPACE_ROOT,
-                            workspace_owner=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                            branch_name=branch_name,
-                            base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-                            schema_name=schema_name,
-                            table_name=table_name,
-                            task_id=issue_id,
-                            author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                        )
-                        meta_files.append(
-                            {
-                                "target_fqn": target_fqn,
-                                "entity_name": delete_result.get("entity_name"),
-                                "file_path": delete_result.get("path"),
-                                "branch_name": delete_result.get("branch_name"),
-                                "committed": bool(delete_result.get("committed")),
-                                "action": "delete",
-                                "changed_files": delete_result.get("changed_files") or [],
-                            }
-                        )
-                        meta_branch = delete_result.get("branch_name") or meta_branch
-                    except Exception as exc:
-                        meta_error = str(exc)
-                        break
-            if not meta_error and meta_branch:
-                try:
-                    meta_mr = create_meta_workspace_mr(
-                        engine=engine,
-                        base_dir=BASE_DIR,
-                        entity_dev_root_value=DEV_ENTITY_META_DIR,
-                        click_dev_root_value=DEV_CLICK_META_DIR,
-                        git_repo_value=ENTITY_META_GIT_REPO,
-                        entity_git_root_value=ENTITY_META_GIT_META_ROOT,
-                        click_git_root_value=CLICK_META_GIT_ROOT,
-                        gitlab_token=GITLAB_TOKEN,
-                        gitlab_project=GITLAB_PROJECT,
-                        gitlab_api_url=GITLAB_API_URL,
-                        gitlab_ssl_verify=GITLAB_SSL_VERIFY,
-                        task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                        release_branch=PROTOTYPE_ETL_TARGET_BRANCH,
-                        branch_name=meta_branch,
-                        mr_title=(
-                            f"{str(issue_result.get('issue_id') or '').strip().upper()}: "
-                            f"Engineer MR to {PROTOTYPE_ETL_TARGET_BRANCH}"
-                        ),
-                        author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                    )
-                    if meta_mr.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
-                        add_ytrack_issue_comment(
-                            base_url=YOUTRACK_URL,
-                            token=YOUTRACK_TOKEN,
-                            issue_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                            ssl_verify=YOUTRACK_SSL_VERIFY,
-                            text=(
-                                "MR создан из Prototype Review для инженера.\n"
-                                f"Ссылка: {meta_mr.get('mr_url')}\n"
-                                f"Ветка: {meta_mr.get('feature_branch') or '—'} -> "
-                                f"{meta_mr.get('release_branch') or PROTOTYPE_ETL_TARGET_BRANCH}"
-                            ),
-                        )
-                        meta_mr["task_link_attached"] = True
-                except Exception as exc:
-                    meta_mr_error = str(exc)
-            try:
-                dbt_registry = _prototype_review_publish_dbt_registry(
-                    task_id=issue_id,
-                    author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-                    review_items=review_items,
-                    changed_files=bundle.get("files") or [],
-                    deleted_files=bundle.get("deleted_files") or [],
-                )
-                if dbt_registry.get("mr_url") and YOUTRACK_URL and YOUTRACK_TOKEN:
-                    add_ytrack_issue_comment(
-                        base_url=YOUTRACK_URL,
-                        token=YOUTRACK_TOKEN,
-                        issue_id=issue_id,
-                        ssl_verify=YOUTRACK_SSL_VERIFY,
-                        text=(
-                            "MR с ключами и DQ-настройками создан в dbt-проекте.\n"
-                            f"Ссылка: {dbt_registry.get('mr_url')}\n"
-                            f"Ветка: {dbt_registry.get('branch_name')} -> {dbt_registry.get('target_branch')}"
-                        ),
-                    )
-                    dbt_registry["task_link_attached"] = True
-            except Exception as exc:
-                dbt_registry_error = str(exc)
+        delivery = deliver_prototype_issue(
+            issue_result=issue_result,
+            review_items=review_items,
+            bundle=bundle,
+            user=user,
+            dependencies=PrototypeIssueDeliveryDependencies(
+                collect_target_sql=_prototype_review_collect_target_sql,
+                save_gp_bundle=save_meta_workspace_branch_gp_bundle,
+                save_file=save_meta_workspace_branch_file,
+                delete_object=delete_meta_workspace_branch_gp_object,
+                create_meta_mr=create_meta_workspace_mr,
+                publish_dbt=_prototype_review_publish_dbt_registry,
+                add_comment=add_ytrack_issue_comment,
+                yaml_repo_path=_prototype_review_yaml_repo_path,
+                engine=engine,
+                base_dir=BASE_DIR,
+                dev_entity_root=DEV_ENTITY_META_DIR,
+                dev_click_root=DEV_CLICK_META_DIR,
+                entity_git_repo=ENTITY_META_GIT_REPO,
+                entity_git_root=ENTITY_META_GIT_META_ROOT,
+                click_git_root=CLICK_META_GIT_ROOT,
+                workspace_root=META_WORKSPACE_ROOT,
+                base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+                target_branch=PROTOTYPE_ETL_TARGET_BRANCH,
+                gitlab_api_url=GITLAB_API_URL,
+                gitlab_project=GITLAB_PROJECT,
+                gitlab_token=GITLAB_TOKEN,
+                gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+                youtrack_url=YOUTRACK_URL,
+                youtrack_token=YOUTRACK_TOKEN,
+                youtrack_ssl_verify=YOUTRACK_SSL_VERIFY,
+            ),
+        )
         if issue_result.get("issue_id"):
             issue_result["link"] = _build_ytrack_link(issue_result.get("issue_id"))
         return {
@@ -1872,13 +1719,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             "issue": issue_result,
             "issue_links": issue_links,
             "description": description,
-            "meta_branch": meta_branch,
-            "meta_files": meta_files,
-            "meta_error": meta_error,
-            "meta_mr": meta_mr,
-            "meta_mr_error": meta_mr_error,
-            "dbt_registry": dbt_registry,
-            "dbt_registry_error": dbt_registry_error,
+            **delivery,
         }
     except HTTPException:
         raise

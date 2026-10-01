@@ -52,6 +52,10 @@ from api.services.prototype_review_workflow import (
     PrototypeReviewWorkflowDependencies,
     build_prototype_review_result,
 )
+from api.services.prototype_review_issue_delivery import (
+    PrototypeIssueDeliveryDependencies,
+    deliver_prototype_issue,
+)
 
 
 class PrototypeReviewWorkflowTests(unittest.TestCase):
@@ -97,6 +101,65 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
         self.assertIn("Удалённый SQL-файл", result["validation_warnings"][0])
         self.assertEqual(result["task_context"]["summary"], "Review prototype")
         self.assertEqual(captured["default_project"], "analyst/project")
+
+
+class PrototypeIssueDeliveryTests(unittest.TestCase):
+    def test_publishes_dbt_changes_and_attaches_mr_to_issue(self) -> None:
+        published = []
+        comments = []
+
+        def forbidden(**_kwargs):
+            raise AssertionError("metadata delivery should not run without review items")
+
+        def publish_dbt(**kwargs):
+            published.append(kwargs)
+            return {
+                "mr_url": "https://gitlab.example/dbt/-/merge_requests/5",
+                "branch_name": "feature/DWH-17",
+                "target_branch": "main",
+            }
+
+        dependencies = PrototypeIssueDeliveryDependencies(
+            collect_target_sql=forbidden,
+            save_gp_bundle=forbidden,
+            save_file=forbidden,
+            delete_object=forbidden,
+            create_meta_mr=forbidden,
+            publish_dbt=publish_dbt,
+            add_comment=lambda **kwargs: comments.append(kwargs),
+            yaml_repo_path=lambda *_args: "unused.yml",
+            engine=None,
+            base_dir=Path("."),
+            dev_entity_root=Path("entity"),
+            dev_click_root=Path("click"),
+            entity_git_repo="meta",
+            entity_git_root="entity",
+            click_git_root="click",
+            workspace_root="workspace",
+            base_branch="main",
+            target_branch="release",
+            gitlab_api_url="https://gitlab.example/api/v4",
+            gitlab_project="etl/project",
+            gitlab_token="token",
+            gitlab_ssl_verify=True,
+            youtrack_url="https://youtrack.example",
+            youtrack_token="yt-token",
+            youtrack_ssl_verify=True,
+        )
+
+        result = deliver_prototype_issue(
+            issue_result={"issue_id": "DWH-17", "raw": {"id": "2-17"}},
+            review_items=[],
+            bundle={"files": [], "deleted_files": []},
+            user=SimpleNamespace(email="engineer@example.com", username="engineer"),
+            dependencies=dependencies,
+        )
+
+        self.assertEqual(published[0]["task_id"], "DWH-17")
+        self.assertEqual(published[0]["author"], "engineer@example.com")
+        self.assertTrue(result["dbt_registry"]["task_link_attached"])
+        self.assertEqual(comments[0]["issue_id"], "DWH-17")
+        self.assertIn("MR с ключами", comments[0]["text"])
 
 
 def _load_collect_target_sql():

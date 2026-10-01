@@ -23,7 +23,6 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 import re
 import json
-import base64
 import hashlib
 import subprocess
 import tempfile
@@ -233,6 +232,11 @@ from .services.business_dq import (
     _business_dq_model,
     _business_dq_normalize_limit,
     _business_dq_registry,
+)
+from .services.gitlab_delivery import (
+    _business_dq_publish,
+    _prototype_gitlab_file_content,
+    _prototype_gitlab_resource_exists,
 )
 
 
@@ -1366,62 +1370,6 @@ def _prototype_review_existing_null_conditions(schema_name: str, table_name: str
     return _prototype_review_parse_null_conditions(content)
 
 
-def _prototype_gitlab_resource_exists(
-    *,
-    project: str,
-    token: str,
-    path: str,
-    query: Optional[dict[str, Any]] = None,
-) -> bool:
-    ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
-    try:
-        _gitlab_json_request(
-            api_url=GITLAB_API_URL,
-            project=project,
-            token=token,
-            ssl_verify=ssl_verify,
-            path=path,
-            method="GET",
-            query=query,
-        )
-        return True
-    except ValueError as exc:
-        if "GitLab вернул 404" in str(exc):
-            return False
-        raise
-
-
-def _prototype_gitlab_file_content(
-    *,
-    project: str,
-    token: str,
-    file_path: str,
-    ref: str,
-) -> Optional[str]:
-    ssl_verify = str(GITLAB_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
-    try:
-        payload = _gitlab_json_request(
-            api_url=GITLAB_API_URL,
-            project=project,
-            token=token,
-            ssl_verify=ssl_verify,
-            path=f"repository/files/{urlparse.quote(file_path, safe='')}",
-            method="GET",
-            query={"ref": ref},
-        )
-    except ValueError as exc:
-        if "GitLab вернул 404" in str(exc):
-            return None
-        raise
-    raw_content = str((payload or {}).get("content") or "")
-    if str((payload or {}).get("encoding") or "").lower() == "base64":
-        try:
-            return base64.b64decode(raw_content).decode("utf-8")
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise ValueError(f"GitLab вернул некорректное содержимое файла {file_path}") from exc
-    return raw_content
-
-
 def _prototype_review_publish_dbt_registry(
     *,
     task_id: str,
@@ -1722,31 +1670,6 @@ def _business_dq_validate_checks(checks: list[dict[str, Any]]) -> list[dict[str,
     if errors:
         raise ValueError("SQL DQ не прошли DEV-проверку: " + "; ".join(errors))
     return results
-
-
-def _business_dq_publish(*, project: str, token: str, task_id: str, target_branch: str, title: str, description: str, files: list[dict[str, str]]) -> dict[str, Any]:
-    if not token:
-        raise ValueError("Не настроен GitLab token")
-    project_ref = _parse_gitlab_project(project)
-    if not project_ref:
-        raise ValueError("Не настроен GitLab project")
-    branch = f"feature/{task_id}"
-    ssl_verify = str(GITLAB_SSL_VERIFY or "true").lower() not in {"0", "false", "no", "off"}
-    exists = _prototype_gitlab_resource_exists(project=project_ref, token=token, path=f"repository/branches/{urlparse.quote(branch, safe='')}")
-    actions = []
-    ref = branch if exists else target_branch
-    for item in files:
-        old = _prototype_gitlab_file_content(project=project_ref, token=token, file_path=item["path"], ref=ref)
-        if old != item["content"]:
-            actions.append({"action": "update" if old is not None else "create", "file_path": item["path"], "content": item["content"], "encoding": "text"})
-    if not actions:
-        return {"status": "skipped", "branch_name": branch, "target_branch": target_branch, "files": [item["path"] for item in files]}
-    payload: dict[str, Any] = {"branch": branch, "commit_message": f"{task_id}: add business DQ", "actions": actions}
-    if not exists: payload["start_branch"] = target_branch
-    _gitlab_json_request(api_url=GITLAB_API_URL, project=project_ref, token=token, ssl_verify=ssl_verify, path="repository/commits", method="POST", payload=payload)
-    opened = _gitlab_json_request(api_url=GITLAB_API_URL, project=project_ref, token=token, ssl_verify=ssl_verify, path="merge_requests", query={"state":"opened", "source_branch":branch, "target_branch":target_branch})
-    mr = opened[0] if opened else _gitlab_json_request(api_url=GITLAB_API_URL, project=project_ref, token=token, ssl_verify=ssl_verify, path="merge_requests", method="POST", payload={"source_branch":branch, "target_branch":target_branch, "title":title, "description":description, "remove_source_branch":False})
-    return {"status":"ok", "branch_name":branch, "target_branch":target_branch, "files":[item["path"] for item in files], "mr_url":mr.get("web_url")}
 
 
 def _prototype_review_build_result(

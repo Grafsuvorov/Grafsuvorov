@@ -58,54 +58,9 @@ function getIssueLink(issue) {
   return String(issue.link || issue.url || "").trim();
 }
 
-function formatYamlSource(bundle) {
-  if (!bundle) return "—";
-  if (bundle.source === "new") return "Новая таблица";
-  if (bundle.source === "dev") return "DEV meta";
-  if (bundle.source === "prod") return "PROD meta";
-  return bundle.source || "—";
-}
-
 function compactList(value, fallback = "—") {
   const items = splitItems(value);
   return items.length ? items.join(", ") : fallback;
-}
-
-function buildDbtRegistryPreview(item) {
-  const target = String(item?.target_fqn || "").trim().toLowerCase();
-  if (!target.includes(".")) return "";
-  const [schemaName, tableName] = target.split(".", 2);
-  const uniqueKey = splitItems(item?.key_attributes_text);
-  const scdType = String(item?.scd_type || "scd1").toLowerCase();
-  const versionKey = splitItems(item?.version_key_text);
-  const dqFilter = String(item?.filter_text || "").trim();
-  const lines = [
-    "relation:",
-    "  # наименование схемы",
-    `  schema_name: ${schemaName}`,
-    "  # наименование таблицы",
-    `  table_name: ${tableName}`,
-    "  # тип scd (scd1, scd2)",
-    `  scd_type: ${scdType}`,
-    "  unique_key: # список полей уникального ключа",
-    ...uniqueKey.map((key) => `    - ${key}`),
-  ];
-  if (scdType === "scd2") {
-    lines.push(
-      "  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать",
-      ...versionKey.map((key) => `    - ${key}`),
-    );
-  }
-  lines.push(
-    "dq:",
-    '  - check_type: "duplicates"',
-    "    detail_store_flag: true",
-    "    detail_store_limit: 30",
-  );
-  if (dqFilter) {
-    lines.push(`    filter: ${JSON.stringify(dqFilter)}`);
-  }
-  return `${lines.join("\n")}\n`;
 }
 
 function buildTaskText(form, linkedIssues) {
@@ -161,7 +116,6 @@ export default function AdminPrototypeReviewPage() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [yamlCopied, setYamlCopied] = useState(false);
   const [reviewItemsDraft, setReviewItemsDraft] = useState([]);
   const [runProgress, setRunProgress] = useState(null);
 
@@ -177,12 +131,6 @@ export default function AdminPrototypeReviewPage() {
       return { ...prev, git_reference: mrValue };
     });
   }, [mrInput]);
-
-  useEffect(() => {
-    if (!yamlCopied) return undefined;
-    const timer = window.setTimeout(() => setYamlCopied(false), 1600);
-    return () => window.clearTimeout(timer);
-  }, [yamlCopied]);
 
   useEffect(() => {
     const items = Array.isArray(result?.review_items) ? result.review_items : [];
@@ -267,17 +215,6 @@ export default function AdminPrototypeReviewPage() {
             ...(field === "copy_to_clickhouse" && !checked ? { clickhouse_keys_text: "" } : {}),
           }
     )));
-  };
-
-  const handleCopyYaml = async (content) => {
-    const value = String(content || "").trim();
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setYamlCopied(true);
-    } catch (_) {
-      setYamlCopied(false);
-    }
   };
 
   const handleRun = async () => {
@@ -686,10 +623,6 @@ export default function AdminPrototypeReviewPage() {
                         <div className="prototype-stat-label">Время SQL</div>
                         <div className="prototype-stat-value">{item.duration_sec ? formatDuration(item.duration_sec) : "—"}</div>
                       </div>
-                      <div className="prototype-stat-card">
-                        <div className="prototype-stat-label">YAML</div>
-                        <div className="prototype-stat-value">{formatYamlSource(item.yaml_bundle)}</div>
-                      </div>
                     </div>
 
                     <div className="prototype-object-layout">
@@ -749,7 +682,9 @@ export default function AdminPrototypeReviewPage() {
                                 placeholder="supplier_code is not null and supplier_name is null"
                                 style={{ minHeight: 90, resize: "vertical" }}
                               />
-                              <div className="muted" style={{ marginTop: 6 }}>По одному условию на строку. Заполните — будет создана отдельная техническая проверка nulls.</div>
+                              <div className="muted" style={{ marginTop: 6 }}>
+                                Каждую проверку укажите с новой строки. Все строки попадут в одну DQ nulls-модель как отдельные условия. Существующие условия из dbt подгружаются автоматически — их можно удалить, изменить или дополнить.
+                              </div>
                             </div>
                             {String(item.scd_type || "scd1").toLowerCase() === "scd2" ? (
                               <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -849,43 +784,6 @@ export default function AdminPrototypeReviewPage() {
                       </div>
                     </div>
 
-                    <div className="cc-surface prototype-yaml-card" style={{ margin: "14px 0 0" }}>
-                      <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
-                        <div className="muted">
-                          ETL YAML draft
-                        </div>
-                        <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(item.yaml_bundle?.yaml_content)}>
-                          {yamlCopied ? "Скопировано" : "Скопировать YAML"}
-                        </button>
-                      </div>
-                      <textarea
-                        className="slow-entity-select mono"
-                        readOnly
-                        value={item.yaml_bundle?.yaml_content || ""}
-                        style={{ minHeight: 220, resize: "vertical" }}
-                      />
-                    </div>
-                    {isTableObject ? (
-                      <div className="cc-surface prototype-yaml-card" style={{ margin: "14px 0 0" }}>
-                        <div className="prototype-chip-row" style={{ marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
-                          <div>
-                            <div className="section-title">dbt registry YAML</div>
-                            <div className="muted mono">
-                              dbt_greenplum_elt/models_metadata/{String(item.target_fqn || "").split(".")[0]}/{String(item.target_fqn || "").toLowerCase()}.yml
-                            </div>
-                          </div>
-                          <button type="button" className="btn btn-ghost" onClick={() => handleCopyYaml(buildDbtRegistryPreview(item))}>
-                            {yamlCopied ? "Скопировано" : "Скопировать dbt YAML"}
-                          </button>
-                        </div>
-                        <textarea
-                          className="slow-entity-select mono"
-                          readOnly
-                          value={buildDbtRegistryPreview(item)}
-                          style={{ minHeight: 260, resize: "vertical" }}
-                        />
-                      </div>
-                    ) : null}
                   </div>
                 );
               })}

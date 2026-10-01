@@ -16,6 +16,7 @@ def _load_functions():
         "_prototype_item_needs_attention",
         "_prototype_review_dbt_registry_path",
         "_prototype_review_dbt_dq_path",
+        "_prototype_review_parse_null_conditions",
         "_prototype_review_dbt_key_list",
         "_prototype_review_build_dbt_dq_model",
         "_prototype_review_update_dbt_dq_model",
@@ -33,6 +34,7 @@ def _load_functions():
         "posix_join": posix_join,
         "json": json,
         "re": re,
+        "ast": ast,
     }
     exec(compile(isolated_module, "api/main.py", "exec"), namespace)
     return namespace
@@ -106,6 +108,25 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
             build_path("DDS", "Account_Debt_1C"),
             "dbt_greenplum_elt/models/dq/technical/dq_dds_s_account_debt_1c_s_duplicates.sql",
         )
+
+    def test_reads_existing_null_conditions_for_editing(self) -> None:
+        parse = self.functions["_prototype_review_parse_null_conditions"]
+        content = '''{{- config(
+    check_conditions = [
+        "supplier_code is not null and supplier_name is null",
+        'delivery_date is null'
+    ],
+    tags = ['dq', 'technical', 'nulls']
+) -}}'''
+
+        self.assertEqual(parse(content), [
+            "supplier_code is not null and supplier_name is null",
+            "delivery_date is null",
+        ])
+
+    def test_missing_null_conditions_returns_empty_list(self) -> None:
+        parse = self.functions["_prototype_review_parse_null_conditions"]
+        self.assertEqual(parse("{{ config(tags=['dq']) }}"), [])
 
     def test_new_dq_model_contains_review_keys(self) -> None:
         build = self.functions["_prototype_review_build_dbt_dq_model"]

@@ -24,6 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 import re
 import json
+import ast
 import base64
 import hashlib
 import subprocess
@@ -580,6 +581,8 @@ class BusinessDqCreatePayload(BusinessDqPreviewPayload):
     click_view_sql: Optional[str] = None
     issue_summary: Optional[str] = None
     direction: Optional[str] = None
+    release_date: Optional[str] = None
+    related_link: Optional[str] = None
 
 
 def _require_dev_meta_role(request: Request):
@@ -1519,6 +1522,12 @@ def _prototype_review_resolve_item(
             checks = {"row_count": None, "duplicate_groups": None, "distributed_by": None}
             checks_error = str(exc)
     item_warnings: list[str] = []
+    null_conditions: list[str] = []
+    if item_object_type == "TABLE":
+        try:
+            null_conditions = _prototype_review_existing_null_conditions(schema_name, table_name)
+        except Exception as exc:
+            item_warnings.append(f"Не удалось загрузить существующие DQ nulls: {exc}")
     if item_object_type == "TABLE" and not detected_keys:
         item_warnings.append("Ключевые поля не найдены автоматически")
     if current_execution.get("status") == "error":
@@ -1545,6 +1554,7 @@ def _prototype_review_resolve_item(
         "scd_type": "scd1",
         "version_key": [],
         "filter": "",
+        "null_conditions": null_conditions,
         "clickhouse_keys": clickhouse_keys,
         "dependencies": dependencies,
         "execution": current_execution,
@@ -1593,6 +1603,62 @@ def _prototype_review_dbt_dq_path(schema_name: str, table_name: str) -> str:
 
 def _prototype_review_dbt_nulls_path(schema_name: str, table_name: str) -> str:
     return posix_join(str(DBT_DQ_TECHNICAL_ROOT or "dbt_greenplum_elt/models/dq/technical").strip("/"), f"dq_{schema_name.strip().lower()}_s_{table_name.strip().lower()}_s_nulls.sql")
+
+
+def _prototype_review_parse_null_conditions(content: Optional[str]) -> list[str]:
+    """Read check_conditions from an existing dbt nulls model."""
+    source = str(content or "")
+    match = re.search(r"\bcheck_conditions\s*=\s*\[", source)
+    if not match:
+        return []
+    start = match.end() - 1
+    depth = 0
+    quote = ""
+    escaped = False
+    end = None
+    for index in range(start, len(source)):
+        char = source[index]
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"'}:
+            quote = char
+        elif char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                end = index + 1
+                break
+    if end is None:
+        raise ValueError("В существующей DQ nulls-модели не закрыт список check_conditions")
+    try:
+        values = ast.literal_eval(source[start:end])
+    except (SyntaxError, ValueError) as exc:
+        raise ValueError("Не удалось разобрать check_conditions существующей DQ nulls-модели") from exc
+    if not isinstance(values, (list, tuple)):
+        raise ValueError("check_conditions существующей DQ nulls-модели должен быть списком")
+    return [str(value).strip() for value in values if str(value).strip()]
+
+
+def _prototype_review_existing_null_conditions(schema_name: str, table_name: str) -> list[str]:
+    if not DBT_GITLAB_TOKEN:
+        return []
+    project_ref = _parse_gitlab_project(DBT_GITLAB_PROJECT)
+    if not project_ref:
+        return []
+    content = _prototype_gitlab_file_content(
+        project=project_ref,
+        token=DBT_GITLAB_TOKEN,
+        file_path=_prototype_review_dbt_nulls_path(schema_name, table_name),
+        ref=str(DBT_GITLAB_TARGET_BRANCH or "main").strip() or "main",
+    )
+    return _prototype_review_parse_null_conditions(content)
 
 
 def _prototype_review_dbt_key_list(key_attributes: list[Any]) -> str:
@@ -1788,9 +1854,8 @@ def _prototype_review_publish_dbt_registry(
             "key_attributes": item.get("key_attributes") or [],
         }
         null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
-        if null_conditions:
-            nulls_path = _prototype_review_dbt_nulls_path(schema_name, table_name)
-            dbt_files[nulls_path] = {"target_fqn": target_fqn, "file_path": nulls_path, "file_kind": "nulls_model", "null_conditions": null_conditions}
+        nulls_path = _prototype_review_dbt_nulls_path(schema_name, table_name)
+        dbt_files[nulls_path] = {"target_fqn": target_fqn, "file_path": nulls_path, "file_kind": "nulls_model", "null_conditions": null_conditions}
 
     deleted_targets = infer_removed_table_targets(
         files=changed_files or [],
@@ -1827,6 +1892,12 @@ def _prototype_review_publish_dbt_registry(
                 else _prototype_review_build_dbt_dq_model({"key_attributes": file_data["key_attributes"]})
             )
         elif file_data["file_kind"] == "nulls_model":
+            if not file_data["null_conditions"]:
+                if existing_content is None:
+                    continue
+                actions.append({"action": "delete", "file_path": file_path})
+                result_files.append({"target_fqn": file_data["target_fqn"], "file_path": file_path, "file_kind": "nulls_model", "action": "delete"})
+                continue
             content = _prototype_review_build_dbt_nulls_model({"null_conditions": file_data["null_conditions"]})
         else:
             content = file_data["content"]
@@ -1862,6 +1933,7 @@ def _prototype_review_publish_dbt_registry(
         for file_kind, file_path in (
             ("registry", _prototype_review_dbt_registry_path(schema_name, table_name)),
             ("dq_model", _prototype_review_dbt_dq_path(schema_name, table_name)),
+            ("nulls_model", _prototype_review_dbt_nulls_path(schema_name, table_name)),
         ):
             existing_content = _prototype_gitlab_file_content(
                 project=project_ref,
@@ -2347,13 +2419,11 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
             "## Бизнесовые DQ-проверки", "",
             f"**Предметная область:** {area} ({derived_area_code.upper()})",
             f"**Источник:** {bundle.get('mr', {}).get('web_url') or payload.mr_input}",
+            *( [f"**Дополнительная ссылка:** {str(payload.related_link).strip()}"] if str(payload.related_link or "").strip() else [] ),
             f"**Стенды:** {', '.join(name for name, enabled in [('DEV', payload.stand_dev), ('PROD', payload.stand_prod)] if enabled) or 'не выбраны'}",
             "", "## Проверки", *[f"- `{item['error_code']}` — `{item['source_path']}`; лимит детализации: `{item['detail_store_limit']}`" for item in checks],
-            "", "## Результат", "- dbt MR: business DQ-модели и registry (`main` → `main`).",
-            *( ["- ETL MR: Click-view (`main` → `develop`)."] if str(payload.click_view_sql or "").strip() else [] ),
-            "- `dq.check_result*` и `dq_error` в этой задаче не меняются.",
         ])
-        issue = create_ytrack_issue(base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT, token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE, ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description, default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES, estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME, card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME, card_type_value=YOUTRACK_CARD_TYPE_VALUE, assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME, assignee_query=YOUTRACK_ASSIGNEE_QUERY, direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME)
+        issue = create_ytrack_issue(base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT, token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE, ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description, default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES, estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME, card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME, card_type_value=YOUTRACK_CARD_TYPE_VALUE, assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME, assignee_query=YOUTRACK_ASSIGNEE_QUERY, direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME, release_date=str(payload.release_date or "").strip() or None, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME)
         task_id = str(issue.get("issue_id") or "").upper()
         if not re.fullmatch(r"DWH-\d+", task_id): raise ValueError("YouTrack вернул некорректный номер задачи")
         area_code = derived_area_code
@@ -2367,8 +2437,18 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
             if not view_sql or not re.fullmatch(r"dm_view\.[a-z0-9_]+", view_fqn): raise ValueError("Для Click-view укажите dm_view.<имя> и SQL")
             _, table = view_fqn.split('.', 1)
             etl = _business_dq_publish(project=GITLAB_PROJECT, token=GITLAB_TOKEN, task_id=task_id, target_branch=PROTOTYPE_ETL_TARGET_BRANCH, title=f"{task_id}: Click DQ view", description=description, files=[{"path": posix_join(str(CLICK_META_GIT_ROOT).strip('/'), "dm_view", f"{table}.sql"), "content": view_sql + "\n"}])
+        attached_links, link_errors = [], []
+        for label, mr_result in (("dbt MR с бизнесовыми DQ", dbt), ("ETL MR с ClickHouse view", etl)):
+            mr_url = str((mr_result or {}).get("mr_url") or "").strip()
+            if not mr_url:
+                continue
+            try:
+                add_ytrack_issue_comment(base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=task_id, ssl_verify=YOUTRACK_SSL_VERIFY, text=f"{label} создан.\nСсылка: {mr_url}")
+                attached_links.append(mr_url)
+            except Exception as exc:
+                link_errors.append(str(exc))
         issue["link"] = _build_ytrack_link(task_id)
-        return {"status":"ok", "issue":issue, "description":description, "dbt":dbt, "etl":etl}
+        return {"status":"ok", "issue":issue, "description":description, "dbt":dbt, "etl":etl, "task_mr_links":{"attached":attached_links, "errors":link_errors}}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

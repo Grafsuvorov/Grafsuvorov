@@ -229,6 +229,11 @@ from .services.prototype_review_dbt import (
     _prototype_review_update_dbt_dq_model,
     _prototype_review_yaml_repo_path,
 )
+from .services.business_dq import (
+    _business_dq_model,
+    _business_dq_normalize_limit,
+    _business_dq_registry,
+)
 
 
 
@@ -1688,35 +1693,6 @@ def _business_dq_checks_from_mr(mr_input: str, business_area_code: Optional[str]
     if requested_code and requested_code != code:
         raise ValueError(f"Код области `{requested_code}` не совпадает с кодом `{code}` из имени DQ-файлов")
     return bundle, sorted(checks, key=lambda item: item["error_code"]), code, views
-
-
-def _business_dq_model(check: dict[str, Any], area_code: str, detail_store_limit: Union[int, str]) -> str:
-    limit = _business_dq_normalize_limit(detail_store_limit)
-    return "\n".join([
-        "{{ config(",
-        f"    error_code = '{check['error_code']}',",
-        "    detail_store_flag = true,",
-        f"    detail_store_limit = {limit},",
-        f"    tags = ['dq', '{area_code}', 'business']",
-        ") }}", "", check["sql"], "",
-    ])
-
-
-def _business_dq_normalize_limit(value: Union[int, str, None]) -> str:
-    raw_limit = str(value if value is not None else 100000).strip().lower()
-    if raw_limit == "none":
-        return "none"
-    try:
-        limit = int(raw_limit)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Лимит детализации должен быть положительным числом или `none`") from exc
-    if limit <= 0:
-        raise ValueError("Лимит детализации должен быть больше нуля")
-    return str(limit)
-
-
-def _business_dq_registry(error_code: str) -> str:
-    return "\n".join(["relation:", "  schema_name: dm", f"  table_name: {error_code}", "  scd_type: scd1", ""])
 
 
 def _business_dq_validate_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:

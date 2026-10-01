@@ -16805,3 +16805,182 @@ html[data-theme="light"] .architecture-badge.accent {
     align-items: flex-start;
   }
 }
+
+/* Layout safety and theme contrast baseline.
+   Keep these rules generic so new screens inherit predictable behaviour. */
+:root {
+  --focus-ring: 0 0 0 3px rgba(56, 189, 248, 0.22);
+  --surface-hover: rgba(255, 255, 255, 0.055);
+  --control-bg: rgba(8, 15, 27, 0.72);
+  --table-row-hover: rgba(56, 189, 248, 0.055);
+}
+
+html[data-theme="light"] {
+  --bg: #e8eef5;
+  --bg-page: linear-gradient(180deg, #edf2f7 0%, #e7edf4 100%);
+  --surface: #f8fafc;
+  --surface-strong: #ffffff;
+  --surface-soft: #f1f5f9;
+  --surface-panel: #f8fafc;
+  --surface-panel-strong: #ffffff;
+  --text: #253247;
+  --text-strong: #111827;
+  --muted: #59677b;
+  --border: rgba(71, 85, 105, 0.22);
+  --border-strong: rgba(51, 65, 85, 0.32);
+  --surface-hover: #eef4fb;
+  --control-bg: #ffffff;
+  --table-row-hover: #edf5ff;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  --shadow-app: 0 12px 30px rgba(15, 23, 42, 0.09);
+}
+
+.app-container,
+.container,
+.cc-page,
+.cc-surface,
+.card,
+.table-wrapper,
+.prototype-review-page,
+.prototype-review-page * {
+  min-width: 0;
+}
+
+.cc-surface,
+.card,
+.dashboard-panel,
+.table-wrapper {
+  overflow-wrap: anywhere;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.table-wrapper table {
+  min-width: 720px;
+}
+
+.page-loader {
+  min-height: min(52vh, 480px);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.page-loader-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: page-loader-spin 0.8s linear infinite;
+}
+
+@keyframes page-loader-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loader-spinner { animation-duration: 1.8s; }
+}
+
+.prototype-step-grid,
+.prototype-top-grid,
+.prototype-object-stats {
+  align-items: start;
+}
+
+html[data-theme="light"] .cc-surface,
+html[data-theme="light"] .card,
+html[data-theme="light"] .dashboard-panel,
+html[data-theme="light"] .table-wrapper,
+html[data-theme="light"] .prototype-control-card,
+html[data-theme="light"] .prototype-warning-card {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.055);
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea,
+html[data-theme="light"] .slow-entity-select {
+  color: var(--text-strong);
+  background: var(--control-bg);
+  border-color: var(--border-strong);
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: #748196;
+  opacity: 1;
+}
+
+html[data-theme="light"] .muted,
+html[data-theme="light"] .section-meta,
+html[data-theme="light"] .prototype-object-subtitle {
+  color: var(--muted);
+}
+
+html[data-theme="light"] tbody tr:hover,
+html[data-theme="light"] .prototype-toggle-card:hover {
+  background: var(--table-row-hover);
+}
+
+@media (max-width: 760px) {
+  :root {
+    --container-padding: 16px;
+  }
+
+  .container,
+  .cc-page {
+    width: 100%;
+    padding-inline: var(--container-padding);
+  }
+
+  .assistant-fab {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .assistant-fab.open {
+    right: 14px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .prototype-import-actions,
+  .prototype-object-header,
+  .prototype-chip-row {
+    flex-wrap: wrap;
+  }
+
+  .prototype-import-actions > .btn,
+  .prototype-review-page .prototype-step-field {
+    width: 100%;
+  }
+}

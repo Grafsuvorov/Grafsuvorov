@@ -1,43 +1,45 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import "./index.css";
 import "./style/app.css";
 
 import Sidebar from "./components/Sidebar.jsx";
-import HomePage from "./components/HomePage.jsx";
-import IncidentsPage from "./components/IncidentsPage.jsx";
-import ErrorDashboard from "./components/ErrorDashboard.jsx";
-import TableSearch from "./components/TableSearch.jsx";
-import SlowestTables from "./components/SlowestTables.jsx";
-import TableSizesPage from "./components/TableSizesPage.jsx";
-import SlaPage from "./components/SlaPage.jsx";
-import DependencyViewer from "./components/DependencyViewer.jsx";
-import TableCard from "./components/TableCard.jsx";
-import EntityShedule from "./components/EntityShedule.jsx";
-import EntityTablesPage from "./components/EntityTablesPage.jsx";
-import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
-import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
-import NightOpsPage from "./components/NightOpsPage.jsx";
-import OnboardingPage from "./components/OnboardingPage.jsx";
-import LogicAuditPage from "./components/LogicAuditPage.jsx";
-import LoginPage from "./components/LoginPage.jsx";
-import AdminUsersPage from "./components/AdminUsersPage.jsx";
-import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
-import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
-import AdminArchitecturePage from "./components/AdminArchitecturePage.jsx";
-import AdminArchitectureBlockPage from "./components/AdminArchitectureBlockPage.jsx";
-import AdminFeedbackPage from "./components/AdminFeedbackPage.jsx";
-import AdminPrototypeReviewPage from "./components/AdminPrototypeReviewPage.jsx";
-import AccountPage from "./components/AccountPage.jsx";
-import ReleasesPage from "./components/ReleasesPage.jsx";
-import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
-import EntityDevMetaWorkspace from "./components/EntityDevMetaWorkspace.jsx";
-import MetaWorkspacePage from "./components/MetaWorkspacePage.jsx";
-import DevCopyDagPage from "./components/DevCopyDagPage.jsx";
 import GlobalHoverLabel from "./components/GlobalHoverLabel.jsx";
+import PageLoader from "./components/ui/PageLoader.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
 import { shouldUseCustomHoverLabel } from "./utils/customHoverUser.js";
+
+const HomePage = lazy(() => import("./components/HomePage.jsx"));
+const IncidentsPage = lazy(() => import("./components/IncidentsPage.jsx"));
+const ErrorDashboard = lazy(() => import("./components/ErrorDashboard.jsx"));
+const TableSearch = lazy(() => import("./components/TableSearch.jsx"));
+const SlowestTables = lazy(() => import("./components/SlowestTables.jsx"));
+const TableSizesPage = lazy(() => import("./components/TableSizesPage.jsx"));
+const SlaPage = lazy(() => import("./components/SlaPage.jsx"));
+const DependencyViewer = lazy(() => import("./components/DependencyViewer.jsx"));
+const TableCard = lazy(() => import("./components/TableCard.jsx"));
+const EntityShedule = lazy(() => import("./components/EntityShedule.jsx"));
+const EntityTablesPage = lazy(() => import("./components/EntityTablesPage.jsx"));
+const IncidentDetailsPage = lazy(() => import("./components/IncidentDetailsPage.jsx"));
+const ImpactGraphPage = lazy(() => import("./components/ImpactGraphPage.jsx"));
+const NightOpsPage = lazy(() => import("./components/NightOpsPage.jsx"));
+const OnboardingPage = lazy(() => import("./components/OnboardingPage.jsx"));
+const LogicAuditPage = lazy(() => import("./components/LogicAuditPage.jsx"));
+const LoginPage = lazy(() => import("./components/LoginPage.jsx"));
+const AdminUsersPage = lazy(() => import("./components/AdminUsersPage.jsx"));
+const DevMetaAdminPage = lazy(() => import("./components/DevMetaAdminPage.jsx"));
+const AdminEngineeringPage = lazy(() => import("./components/AdminEngineeringPage.jsx"));
+const AdminArchitecturePage = lazy(() => import("./components/AdminArchitecturePage.jsx"));
+const AdminArchitectureBlockPage = lazy(() => import("./components/AdminArchitectureBlockPage.jsx"));
+const AdminFeedbackPage = lazy(() => import("./components/AdminFeedbackPage.jsx"));
+const AdminPrototypeReviewPage = lazy(() => import("./components/AdminPrototypeReviewPage.jsx"));
+const AccountPage = lazy(() => import("./components/AccountPage.jsx"));
+const ReleasesPage = lazy(() => import("./components/ReleasesPage.jsx"));
+const AdminAssistantPanel = lazy(() => import("./components/AdminAssistantPanel.jsx"));
+const EntityDevMetaWorkspace = lazy(() => import("./components/EntityDevMetaWorkspace.jsx"));
+const MetaWorkspacePage = lazy(() => import("./components/MetaWorkspacePage.jsx"));
+const DevCopyDagPage = lazy(() => import("./components/DevCopyDagPage.jsx"));
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -461,26 +463,29 @@ export default function App() {
         }}
       />
       {userProfile ? (
-        <AdminAssistantPanel
-          open={assistantOpen}
-          onOpen={() => setAssistantOpen(true)}
-          onClose={() => setAssistantOpen(false)}
-          context={assistantContext}
-          onOpenTable={(item) => {
-            setAssistantOpen(false);
-            openView({
-              view: "table_info",
-              table: {
-                schema: item.schema,
-                table: item.table,
-                source: item.source || "current",
-              },
-            });
-          }}
-        />
+        <Suspense fallback={null}>
+          <AdminAssistantPanel
+            open={assistantOpen}
+            onOpen={() => setAssistantOpen(true)}
+            onClose={() => setAssistantOpen(false)}
+            context={assistantContext}
+            onOpenTable={(item) => {
+              setAssistantOpen(false);
+              openView({
+                view: "table_info",
+                table: {
+                  schema: item.schema,
+                  table: item.table,
+                  source: item.source || "current",
+                },
+              });
+            }}
+          />
+        </Suspense>
       ) : null}
       <main className="content">
         <div className="content-inner">
+        <Suspense fallback={<PageLoader />}>
         <Routes>
         <Route
           path="/login"
@@ -732,7 +737,8 @@ export default function App() {
         />
         <Route path="/entity_schedule" element={<Navigate to="/entities" replace />} />
         <Route path="*" element={<div className="page-error">Page not found</div>} />
-      </Routes>
+        </Routes>
+        </Suspense>
         </div>
       </main>
     </div>

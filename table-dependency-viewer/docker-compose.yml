@@ -1,75 +1,29 @@
 services:
-    frontend:
-      build:
-        context: .
-        args:
-          VITE_AUTH_ENABLED: "true"
-          VITE_API_BASE_URL: ""
-      ports:
-        - "15312:8080"
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/meta_info:/app/meta_info
-        - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
-        - /root/table-dependency-viewer/config_files:/app/config_files
-        - /root/git_dir:/root/git_dir
-        - /var/lib/table-dependency-viewer/meta-workspaces:/var/lib/table-dependency-viewer/meta-workspaces
-      ports:
-        - "5312:8000"
-      env_file:
-        - ./api/.env
-      environment:
-        - DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.201:5432/dwh
-        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - CLICK_META_DIR=/app/config_files/meta
-        - DEV_CLICK_META_DIR=/app/config_files/meta_dev
-        - DEV_DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.171:5432/dwh
-        - DEV_META_DEPLOY_HOST=10.66.129.237
-        - DEV_META_DEPLOY_PORT=22
-        - DEV_META_DEPLOY_USER=root
-        - DEV_META_DEPLOY_PASSWORD=rootuserdwh
-        - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
-        - DEV_META_DEPLOY_SSH_KEY_PATH=
-        - DEV_META_DEPLOY_STRICT_HOST_KEY=false
-        - AIRFLOW_DEV_BASE_URL=http://rgm-s-dwhair01.hq.root.ad:8080
-        - AIRFLOW_DEV_DAG_ID=
-        - AIRFLOW_DEV_USERNAME=admin
-        - AIRFLOW_DEV_PASSWORD=admin
-        - DEV_META_LOCK_TTL_MIN=30
-        - AUTH_ENABLED=true
-        - AUTH_SECRET_KEY=change_me_please
-        - AUTH_ACCESS_TTL_MIN=7200
-        - AUTH_ALLOW_REGISTER=false
-        - AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
-        - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
-        - ENTITY_META_GIT_REPO=/root/git_dir/etl
-        - ENTITY_META_GIT_META_ROOT=meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4
-        - GITLAB_PROJECT=dwh/etl
-        - GITLAB_TOKEN=${GITLAB_TOKEN}
-        - GITLAB_SSL_VERIFY=false
-        - CORP_AI_API_KEY=${CORP_AI_API_KEY}
-        - CORP_AI_BASE_URL=${CORP_AI_BASE_URL}
-        - CORP_AI_MODEL=${CORP_AI_MODEL}
-        - CORP_AI_SSL_VERIFY=${CORP_AI_SSL_VERIFY}
-        - CORP_AI_TIMEOUT_SEC=${CORP_AI_TIMEOUT_SEC}
-        - ANALYST_GITLAB_PROJECT=dwh_analyst/Sql Queries Storage
-        - DBT_GITLAB_PROJECT=dwh/dbt
-        - DBT_GITLAB_TOKEN=${DBT_GITLAB_TOKEN}
-        - DBT_REGISTRY_ROOT=dbt_greenplum_elt/models_metadata
-        - DBT_DQ_TECHNICAL_ROOT=dbt_greenplum_elt/models/dq/technical
-        - DBT_GITLAB_TARGET_BRANCH=main
-        - PROTOTYPE_ETL_BASE_BRANCH=main
-        - PROTOTYPE_ETL_TARGET_BRANCH=develop
-        - YOUTRACK_URL=${YOUTRACK_URL}
-        - YOUTRACK_TOKEN=${YOUTRACK_TOKEN}
-        - YOUTRACK_QUEUE=${YOUTRACK_QUEUE}
-        - YOUTRACK_ISSUE_TYPE=${YOUTRACK_ISSUE_TYPE}
-        - YOUTRACK_SSL_VERIFY=${YOUTRACK_SSL_VERIFY}
-        - META_WORKSPACE_ROOT=/var/lib/table-dependency-viewer/meta-workspaces
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_AUTH_ENABLED: ${VITE_AUTH_ENABLED:-true}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    ports:
+      - "${FRONTEND_PORT:-15312}:8080"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ${HOST_APP_DIR:-/root/table-dependency-viewer}/scripts:/app/scripts:ro
+      - ${HOST_APP_DIR:-/root/table-dependency-viewer}/meta_info:/app/meta_info
+      - ${HOST_APP_DIR:-/root/table-dependency-viewer}/meta_info_dev:/app/meta_info_dev
+      - ${HOST_APP_DIR:-/root/table-dependency-viewer}/config_files:/app/config_files
+      - ${HOST_GIT_DIR:-/root/git_dir}:/root/git_dir
+      - ${HOST_META_WORKSPACE_ROOT:-/var/lib/table-dependency-viewer/meta-workspaces}:/var/lib/table-dependency-viewer/meta-workspaces
+    ports:
+      - "${API_PORT:-5312}:8000"
+    restart: unless-stopped

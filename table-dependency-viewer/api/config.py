@@ -16,6 +16,10 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         return default
 
+
+def _env_list(name: str, default: str = "") -> list[str]:
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
 TABLE_LOADING_HISTORY   = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
 TABLE_ENTITIES_META     = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
 TABLE_TABLES_META       = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
@@ -121,3 +125,7 @@ AUTH_ACCESS_TTL_MIN = _env_int("AUTH_ACCESS_TTL_MIN", 480)
 AUTH_ALLOW_REGISTER = os.getenv("AUTH_ALLOW_REGISTER", "false")
 AUTH_BOOTSTRAP_ADMIN_EMAIL = os.getenv("AUTH_BOOTSTRAP_ADMIN_EMAIL")
 AUTH_BOOTSTRAP_ADMIN_PASSWORD = os.getenv("AUTH_BOOTSTRAP_ADMIN_PASSWORD")
+CORS_ORIGINS = _env_list(
+    "CORS_ORIGINS",
+    "http://rgm-s-dwhapp01.hq.root.ad:15312,http://rgm-s-dwhapp01.hq.root.ad",
+)

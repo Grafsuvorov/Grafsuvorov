@@ -27,7 +27,10 @@ dotenv_stub = types.ModuleType("dotenv")
 dotenv_stub.load_dotenv = lambda *args, **kwargs: None
 sys.modules.setdefault("dotenv", dotenv_stub)
 
-from api.services.meta_workspace import _find_gp_object_dir_by_fqn
+from api.services import meta_workspace as meta_workspace_module
+
+meta_workspace_module.yaml = yaml_stub
+_find_gp_object_dir_by_fqn = meta_workspace_module._find_gp_object_dir_by_fqn
 
 
 class MetaWorkspaceDeleteTests(unittest.TestCase):

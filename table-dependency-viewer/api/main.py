@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import List, Dict, Tuple, Set, Union, Any
 from collections import Counter, deque, defaultdict
@@ -10,7 +9,7 @@ import os
 import yaml
 
 from datetime import datetime
-from sqlalchemy import create_engine, text, bindparam
+from sqlalchemy import text, bindparam
 from typing import Optional
 from pathlib import Path
 from openpyxl import load_workbook
@@ -74,7 +73,6 @@ from .config import (
     DEV_COPY_SCHEMA_SYNC_DAG_ID,
     TABLE_SAY_COMPARE_GP_METADATA_LOG,
     TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV,
-    ADMIN_CICD_SCRIPT,
     YTRACK_ISSUE_URL,
     DATABASE_URL,
     DEV_DATABASE_URL,
@@ -89,7 +87,6 @@ from .config import (
     ENTITY_META_GIT_REPO,
     CLICK_META_GIT_ROOT,
     META_WORKSPACE_ROOT,
-    TABLE_APP_FEEDBACK,
     GITLAB_API_URL,
     ANALYST_GITLAB_PROJECT,
     DBT_GITLAB_TOKEN,
@@ -124,9 +121,13 @@ from .config import (
     YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
     YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
 )
+from .application import create_application
+from .runtime import engine, dbt_logs_engine, dev_engine
+from .routers.system import router as system_router
+from .routers.feedback import router as feedback_router
+from .routers.admin_ops import router as admin_ops_router
 
 
-from .services.admin import refresh_application_caches, run_ci_cd_script
 from .services.entities import fetch_entities
 from .services.dev_meta import (
     acquire_dev_meta_lock,
@@ -178,7 +179,6 @@ from .services.meta_workspace import (
     sync_meta_workspace_branch,
     validate_meta_workspace_branch,
 )
-from .services.feedback import list_feedback, save_feedback
 from .services.corp_ai import enhance_assistant_response
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
@@ -218,27 +218,7 @@ from .services.dbt_logs import get_dbt_model_run_history
 from .auth import auth_middleware, init_auth, router as auth_router, get_current_user_from_request
 
 
-app = FastAPI()
-# CORS для взаимодействия с фронтом
-app.add_middleware(
-  CORSMiddleware,
-  allow_origins=[
-      "http://rgm-s-dwhapp01.hq.root.ad:15312",
-      "http://rgm-s-dwhapp01.hq.root.ad",
-  ],
-  allow_credentials=True,
-  allow_methods=["*"],
-  allow_headers=["*"],
-)
-
-# Подключение
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
-dbt_logs_engine = (
-    create_engine(DBT_LOGS_DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
-    if DBT_LOGS_DATABASE_URL
-    else None
-)
-dev_engine = create_engine(DEV_DATABASE_URL, pool_pre_ping=True, pool_recycle=1800) if DEV_DATABASE_URL else engine
+app = create_application()
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -251,15 +231,6 @@ DEV_COPY_ALLOWED_HOUR_END = 21
 init_auth()
 app.middleware("http")(auth_middleware)
 app.include_router(auth_router)
-
-# admin ci_cd status (in-memory)
-_ci_cd_status = {
-    "last_run_at": None,
-    "status": None,
-    "return_code": None,
-    "stdout": None,
-    "stderr": None,
-}
 
 _prototype_review_jobs: dict[str, dict[str, Any]] = {}
 _prototype_review_jobs_lock = threading.Lock()
@@ -434,13 +405,6 @@ class MetaWorkspaceBranchFileSavePayload(BaseModel):
     expected_revision: Optional[dict] = None
 
 
-class FeedbackPayload(BaseModel):
-    topic: str
-    message: str
-    contact_email: Optional[str] = None
-    page_path: Optional[str] = None
-
-
 class MetaWorkspaceBranchGpBundlePayload(BaseModel):
     branch_name: str
     entity_name: str
@@ -606,13 +570,6 @@ def _require_meta_workspace_role(request: Request):
     return user
 
 
-def _optional_user(request: Request):
-    try:
-        return get_current_user_from_request(request)
-    except Exception:
-        return None
-
-
 def _require_authenticated(request: Request):
     user = get_current_user_from_request(request)
     if not user or not getattr(user, "email", None):
@@ -771,112 +728,6 @@ def refresh_cache(request: Request):
         raise HTTPException(status_code=500, detail="Не удалось обновить кеш")
 
     return {"ok": True}
-
-
-@router.post("/api/feedback")
-def submit_feedback(payload: FeedbackPayload, request: Request):
-    user = _optional_user(request)
-    try:
-        result = save_feedback(
-            engine=engine,
-            table_name=TABLE_APP_FEEDBACK,
-            topic=payload.topic,
-            message=payload.message,
-            user_email=getattr(user, "email", "") if user else "",
-            user_name=getattr(user, "username", "") if user else "",
-            contact_email=payload.contact_email or (getattr(user, "email", "") if user else ""),
-            page_path=payload.page_path or request.url.path,
-            meta_json=json.dumps(
-                {
-                    "user_role": getattr(user, "role", None) if user else None,
-                    "referer": request.headers.get("referer"),
-                    "user_agent": request.headers.get("user-agent"),
-                },
-                ensure_ascii=False,
-            ),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return result
-
-
-@router.get("/api/admin/feedback")
-def get_feedback(request: Request, days: int = 30, topic: str = "", limit: int = 200):
-    user = get_current_user_from_request(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    try:
-        items = list_feedback(
-            engine=engine,
-            table_name=TABLE_APP_FEEDBACK,
-            days=days,
-            topic=topic,
-            limit=limit,
-        )
-    except Exception as exc:
-        print("❌ feedback list error:", exc)
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Не удалось загрузить обратную связь")
-    return {
-        "items": items,
-        "days": max(1, min(int(days or 30), 365)),
-        "topic": str(topic or "").strip(),
-        "limit": max(1, min(int(limit or 200), 1000)),
-    }
-
-
-@router.post("/api/admin/run-ci-cd")
-def run_ci_cd(request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-    script_path = Path(ADMIN_CICD_SCRIPT)
-    if not script_path.is_absolute():
-        script_path = (BASE_DIR / script_path).resolve()
-
-    if not script_path.exists():
-        raise HTTPException(status_code=404, detail=f"Скрипт не найден: {script_path}")
-    if not script_path.is_file():
-        raise HTTPException(status_code=400, detail="Путь скрипта должен указывать на файл")
-
-    _ci_cd_status.update(
-        {
-            "last_run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": "running",
-            "return_code": None,
-            "stdout": None,
-            "stderr": None,
-        }
-    )
-
-    try:
-        result = subprocess.run(
-            ["bash", str(script_path)],
-            capture_output=True,
-            text=True,
-            timeout=900,
-            cwd=str(script_path.parent),
-            env=os.environ.copy(),
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Скрипт выполняется слишком долго (timeout)")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Не удалось запустить скрипт: {exc}")
-
-    response = {
-        "status": "ok" if result.returncode == 0 else "failed",
-        "return_code": result.returncode,
-        "stdout": (result.stdout or "").strip()[:2000],
-        "stderr": (result.stderr or "").strip()[:2000],
-        "last_run_at": _ci_cd_status.get("last_run_at"),
-    }
-    _ci_cd_status.update(response)
-    if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=response)
-    return response
 
 
 @router.post("/api/admin/assistant/query")
@@ -2859,14 +2710,6 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         print("❌ /api/admin/prototype-review/create-issue error:", exc)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.get("/api/admin/ci-cd/status")
-def get_ci_cd_status(request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-    return _ci_cd_status
 
 
 @router.get("/api/admin/engineering-efficiency")
@@ -9708,19 +9551,6 @@ def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
             ))
     return out
 
-@router.get("/api/routes")
-def list_routes():
-    return [route.path for route in app.routes]
-
-
-@router.get("/ping")
-def ping():
-    return {"pong": True}
-
-
-
-
-
 def find_all_meta_files(top_dirs: list[str]) -> list[dict]:
     all_meta = []
 
@@ -15933,4 +15763,7 @@ def search_entities(q: str):
         raise HTTPException(status_code=500, detail="Не удалось выполнить поиск")
 
 
+app.include_router(system_router)
+app.include_router(feedback_router)
+app.include_router(admin_ops_router)
 app.include_router(router)

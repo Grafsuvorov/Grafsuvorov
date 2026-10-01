@@ -61,6 +61,10 @@ from api.services.prototype_review_issue_workflow import (
     PrototypeIssueWorkflowDependencies,
     create_prototype_review_issue,
 )
+from api.services.prototype_review_item import (
+    PrototypeReviewItemDependencies,
+    resolve_prototype_review_item,
+)
 
 
 class PrototypeReviewWorkflowTests(unittest.TestCase):
@@ -219,6 +223,48 @@ class PrototypeIssueWorkflowTests(unittest.TestCase):
         self.assertEqual(result["dbt_registry"]["status"], "created")
         self.assertEqual(created[0]["direction"], "Finance")
         self.assertEqual(created[0]["release_date"], "2026-10-12")
+
+
+class PrototypeReviewItemTests(unittest.TestCase):
+    def test_resolves_new_view_without_table_keys_or_dq_lookup(self) -> None:
+        def no_meta_bundle(**_kwargs):
+            raise ValueError("metadata does not exist")
+
+        def must_not_run(*_args, **_kwargs):
+            raise AssertionError("table-only dependency must not run for a skipped view")
+
+        resolver = PrototypeReviewItemDependencies(
+            find_meta=lambda _fqn: None,
+            find_meta_variants=lambda _fqn: [],
+            init_meta_bundle=no_meta_bundle,
+            get_click_meta_index=lambda: {"meta": {}},
+            clean_table_name=lambda value: value,
+            collect_target_sql=must_not_run,
+            validate_meta_bundle=must_not_run,
+            extract_dependencies=must_not_run,
+            apply_yaml_dependencies=must_not_run,
+            impact_summary=lambda _fqn: {"downstream_count": 0},
+            query_table_checks=must_not_run,
+            existing_null_conditions=must_not_run,
+            item_needs_attention=lambda _item: (False, []),
+            engine=None,
+            base_dir=Path("."),
+            entity_meta_dir=Path("meta"),
+            dev_entity_meta_dir=Path("meta-dev"),
+            dev_database_url="postgresql://dev",
+        )
+
+        result = resolve_prototype_review_item(
+            target_fqn="dm_view.orders",
+            object_type_hint="VIEW",
+            resolver=resolver,
+        )
+
+        self.assertEqual(result["object_type"], "VIEW")
+        self.assertEqual(result["key_attributes"], [])
+        self.assertEqual(result["null_conditions"], [])
+        self.assertTrue(result["is_new"])
+        self.assertFalse(result["requires_user_input"])
 
 
 def _load_collect_target_sql():

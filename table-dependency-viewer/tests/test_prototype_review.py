@@ -6,6 +6,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import json
@@ -47,6 +48,55 @@ from api.services.prototype_review import (
     infer_removed_table_targets,
     load_merge_request_sql_bundle,
 )
+from api.services.prototype_review_workflow import (
+    PrototypeReviewWorkflowDependencies,
+    build_prototype_review_result,
+)
+
+
+class PrototypeReviewWorkflowTests(unittest.TestCase):
+    def test_builds_warning_result_for_deleted_file_without_dev_execution(self) -> None:
+        captured = {}
+
+        def load_bundle(**kwargs):
+            captured.update(kwargs)
+            return {
+                "mr": {"iid": 17},
+                "files": [],
+                "deleted_files": [{"path": "dds/dds.old_table.sql"}],
+            }
+
+        dependencies = PrototypeReviewWorkflowDependencies(
+            load_bundle=load_bundle,
+            get_meta_and_index=lambda: ([], {}),
+            resolve_item=lambda **_kwargs: {},
+            execute_review=lambda **_kwargs: ([], []),
+            gitlab_api_url="https://gitlab.example/api/v4",
+            gitlab_project="etl/project",
+            gitlab_token="token",
+            gitlab_ssl_verify=True,
+            analyst_gitlab_project="analyst/project",
+            dev_database_url="postgresql://dev",
+        )
+        payload = SimpleNamespace(
+            mr_input="17",
+            task_text="",
+            issue_summary="Review prototype",
+            dependent_views=[],
+            linked_issues=[],
+            release_date="",
+            direction="",
+            business_key_changed=None,
+            entity_name="",
+        )
+
+        result = build_prototype_review_result(payload, None, dependencies=dependencies)
+
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["deleted_files"], [{"path": "dds/dds.old_table.sql"}])
+        self.assertIn("Удалённый SQL-файл", result["validation_warnings"][0])
+        self.assertEqual(result["task_context"]["summary"], "Review prototype")
+        self.assertEqual(captured["default_project"], "analyst/project")
 
 
 def _load_collect_target_sql():

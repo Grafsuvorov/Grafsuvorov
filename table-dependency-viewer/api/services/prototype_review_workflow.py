@@ -140,12 +140,12 @@ def build_prototype_review_result(
             execution_row["error_message"] = "; ".join(dict.fromkeys(execution_error_messages))
         related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
         file_item = related_files[0] if related_files else {}
-        dependencies = extract_sql_dependencies(
+        table_dependencies = extract_sql_dependencies(
             related_files or [file_item],
             known_schemas=known_schemas,
             exclude_fqns={target_fqn},
         )
-        for dep in dependencies:
+        for dep in table_dependencies:
             if dep not in dependency_seen:
                 dependency_seen.add(dep)
                 all_dependencies.append(dep)
@@ -164,7 +164,7 @@ def build_prototype_review_result(
         item_result["paths"] = related_paths
         item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()
         item_result["preparation"] = prep_by_item_id.get(item_id) or {"status": "skipped"}
-        item_result["dependencies"] = dependencies
+        item_result["dependencies"] = table_dependencies
         requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
         review_items.append(item_result)
 
@@ -184,7 +184,7 @@ def build_prototype_review_result(
         target_fqn, object_type = fallback_target
         related_files = [row for row in files if str(row.get("path") or "").strip() == path_value]
         file_item = related_files[0] if related_files else {}
-        dependencies = extract_sql_dependencies(
+        table_dependencies = extract_sql_dependencies(
             related_files or [file_item],
             known_schemas=known_schemas,
             exclude_fqns={target_fqn},
@@ -204,7 +204,7 @@ def build_prototype_review_result(
         item_result["object_type"] = object_type
         item_result["paths"] = [path_value]
         item_result["preparation"] = {"status": "skipped"}
-        item_result["dependencies"] = dependencies
+        item_result["dependencies"] = table_dependencies
         requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
         review_items.append(item_result)
         covered_paths.add(path_value)

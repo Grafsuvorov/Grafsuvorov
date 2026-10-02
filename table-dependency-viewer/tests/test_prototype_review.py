@@ -31,6 +31,7 @@ sys.modules.setdefault("dotenv", dotenv_stub)
 
 import api.services.entity_dev_meta as entity_dev_meta
 import api.services.prototype_review as prototype_review
+import api.services.prototype_review_workflow as prototype_review_workflow
 from api.services.entity_dev_meta import (
     _automatic_source_id,
     _build_default_yaml,
@@ -110,6 +111,58 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
         self.assertIn("Удалённый SQL-файл", result["validation_warnings"][0])
         self.assertEqual(result["task_context"]["summary"], "Review prototype")
         self.assertEqual(captured["default_project"], "analyst/project")
+
+    def test_resolves_review_item_after_collecting_table_dependencies(self) -> None:
+        resolved = []
+
+        def resolve_item(**kwargs):
+            resolved.append(kwargs)
+            return {
+                "target_fqn": kwargs["target_fqn"],
+                "object_type": "TABLE",
+                "requires_user_input": False,
+                "warnings": [],
+            }
+
+        dependencies = PrototypeReviewWorkflowDependencies(
+            load_bundle=lambda **_kwargs: {"mr": {}, "files": [], "deleted_files": []},
+            get_meta_and_index=lambda: ([{"table_schema": "dds"}], {}),
+            resolve_item=resolve_item,
+            execute_review=lambda **_kwargs: ([], []),
+            gitlab_api_url="https://gitlab.example/api/v4",
+            gitlab_project="etl/project",
+            gitlab_token="token",
+            gitlab_ssl_verify=True,
+            analyst_gitlab_project="analyst/project",
+            dev_database_url="postgresql://dev",
+        )
+        payload = SimpleNamespace(
+            mr_input="17",
+            task_text="",
+            issue_summary="",
+            dependent_views=[],
+            linked_issues=[],
+            release_date="",
+            direction="",
+            business_key_changed=None,
+            entity_name="",
+        )
+        target = {
+            "item_id": "dds.orders::TABLE",
+            "target_fqn": "dds.orders",
+            "path": "dds/dds.orders.sql",
+            "paths": ["dds/dds.orders.sql"],
+            "object_type": "TABLE",
+        }
+
+        with (
+            patch.object(prototype_review_workflow, "infer_review_targets", return_value=[target]),
+            patch.object(prototype_review_workflow, "extract_sql_dependencies", return_value=["ods.orders"]),
+        ):
+            result = build_prototype_review_result(payload, None, dependencies=dependencies)
+
+        self.assertEqual(resolved[0]["target_fqn"], "dds.orders")
+        self.assertEqual(result["review_items"][0]["dependencies"], ["ods.orders"])
 
 
 class PrototypeIssueDeliveryTests(unittest.TestCase):

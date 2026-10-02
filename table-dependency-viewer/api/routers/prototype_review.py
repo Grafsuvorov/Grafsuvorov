@@ -30,6 +30,7 @@ class PrototypeReviewHandlers:
     check_table: Callable
     refresh_yaml: Callable
     create_issue: Callable
+    parent_issue: Callable
 
 
 def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRouter:
@@ -70,5 +71,9 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
     @router.post("/create-issue")
     def create_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
         return handlers.create_issue(payload, request)
+
+    @router.get("/parent-issue/{issue_id}")
+    def parent_issue(issue_id: str, request: Request):
+        return handlers.parent_issue(issue_id, request)
 
     return router

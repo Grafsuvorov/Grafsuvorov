@@ -20,6 +20,8 @@ class PrototypeReviewRunPayload(BaseModel):
     release_date: Optional[str] = None
     direction: Optional[str] = None
     business_key_changed: Optional[bool] = None
+    parent_issue: Optional[str] = None
+    diff_comment: Optional[str] = None
 
 
 class PrototypeReviewTableCheckPayload(BaseModel):
@@ -62,6 +64,11 @@ class PrototypeReviewItemPayload(BaseModel):
     stand_dev: Optional[bool] = True
     stand_prod: Optional[bool] = True
     copy_to_clickhouse: Optional[bool] = None
+    comment: Optional[str] = None
+    manual_script_name: Optional[str] = None
+    manual_script_filename: Optional[str] = None
+    manual_script_content: Optional[str] = None
+    manual_script_mime_type: Optional[str] = None
 
 
 class PrototypeReviewCreateIssuePayload(BaseModel):
@@ -76,6 +83,8 @@ class PrototypeReviewCreateIssuePayload(BaseModel):
     release_date: Optional[str] = None
     direction: Optional[str] = None
     business_key_changed: Optional[bool] = None
+    parent_issue: Optional[str] = None
+    diff_comment: Optional[str] = None
     review_items: List[PrototypeReviewItemPayload]
 
 
@@ -90,9 +99,6 @@ class BusinessDqCreatePayload(BusinessDqPreviewPayload):
     detail_store_limit: Optional[Union[int, str]] = 100000
     stand_dev: bool = True
     stand_prod: bool = True
-    click_view_fqn: Optional[str] = None
-    click_view_sql: Optional[str] = None
     issue_summary: Optional[str] = None
     direction: Optional[str] = None
     release_date: Optional[str] = None
-    related_link: Optional[str] = None

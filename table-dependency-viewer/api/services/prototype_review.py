@@ -1530,6 +1530,36 @@ def link_ytrack_issues(
     return {"status": status, "linked": linked, "errors": errors}
 
 
+def link_ytrack_parent_issue(
+    *,
+    base_url: str,
+    token: str,
+    issue_id: str,
+    parent_issue_id: str,
+    ssl_verify: str,
+) -> dict[str, Any]:
+    issue_id_norm = str(issue_id or "").strip().upper()
+    parent_norm = str(parent_issue_id or "").strip().upper()
+    if not parent_norm:
+        return {"status": "skipped", "parent_issue": None}
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*-\d+", parent_norm):
+        raise ValueError("Некорректный номер родительской задачи")
+    if not token or not issue_id_norm:
+        return {"status": "not_configured", "parent_issue": parent_norm}
+    req = urlrequest.Request(
+        f"{base_url.rstrip('/')}/api/commands",
+        data=json.dumps({"query": f"subtask of {parent_norm}", "issues": [{"idReadable": issue_id_norm}]}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)):
+            return {"status": "linked", "parent_issue": parent_norm}
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"Не удалось назначить родительскую задачу {parent_norm}: {exc.code} {body}") from exc
+
+
 def add_ytrack_issue_comment(
     *,
     base_url: str,
@@ -1566,6 +1596,45 @@ def add_ytrack_issue_comment(
         raise ValueError(f"YTrack comments вернул {exc.code}: {body}") from exc
     except Exception as exc:
         raise ValueError(f"Не удалось добавить комментарий в YTrack: {exc}") from exc
+
+
+def get_ytrack_issue_context(
+    *,
+    base_url: str,
+    token: str,
+    issue_id: str,
+    direction_field_name: str,
+    ssl_verify: str,
+) -> dict[str, Any]:
+    issue_value = str(issue_id or "").strip().upper()
+    if not re.fullmatch(r"[A-Z]+-\d+", issue_value):
+        raise ValueError("Укажите номер родительской задачи в формате DWH-123")
+    if not base_url or not token:
+        raise ValueError("Интеграция с YouTrack не настроена")
+    fields = "idReadable,summary,customFields(name,value(name,localizedName,presentation,text))"
+    req = urlrequest.Request(
+        f"{base_url.rstrip('/')}/api/issues/{urlparse.quote(issue_value, safe='')}?fields={urlparse.quote(fields, safe=',()')}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            payload = json.loads(resp.read().decode("utf-8") or "{}")
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"YouTrack не вернул задачу {issue_value}: {exc.code} {body}") from exc
+    expected = str(direction_field_name or "").strip().lower()
+    direction = ""
+    for field in payload.get("customFields") or []:
+        if str(field.get("name") or "").strip().lower() != expected:
+            continue
+        value = field.get("value")
+        if isinstance(value, dict):
+            direction = str(value.get("localizedName") or value.get("name") or value.get("presentation") or value.get("text") or "").strip()
+        else:
+            direction = str(value or "").strip()
+        break
+    return {"issue_id": payload.get("idReadable") or issue_value, "summary": payload.get("summary") or "", "direction": direction}
 
 
 def _sanitize_attachment_name(value: str) -> str:

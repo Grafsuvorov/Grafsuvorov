@@ -102,7 +102,7 @@ def build_prototype_review_result(
     all_dependencies: list[str] = []
     dependency_seen: set[str] = set()
     requires_user_input = False
-    for target_item in review_targets:
+    for target_index, target_item in enumerate(review_targets, start=1):
         item_id = str(target_item.get("item_id") or "").strip()
         target_fqn = str(target_item.get("target_fqn") or "").strip()
         if not target_fqn:
@@ -140,6 +140,14 @@ def build_prototype_review_result(
             execution_row["error_message"] = "; ".join(dict.fromkeys(execution_error_messages))
         related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
         file_item = related_files[0] if related_files else {}
+        if callable(progress_callback):
+            progress_callback({
+                "stage": "dependency_search",
+                "current": target_index,
+                "total": len(review_targets),
+                "path": path_value,
+                "target_fqn": target_fqn,
+            })
         table_dependencies = extract_sql_dependencies(
             related_files or [file_item],
             known_schemas=known_schemas,

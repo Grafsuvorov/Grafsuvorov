@@ -195,12 +195,15 @@ from .services.prototype_review import (
     _normalize_fqn,
     _normalize_relation_ref,
     add_ytrack_issue_comment,
+    attach_ytrack_issue_files,
     create_ytrack_issue,
     link_ytrack_issues,
+    link_ytrack_parent_issue,
     execute_sql_review_items_in_dev,
     extract_sql_dependencies,
     infer_final_target,
     infer_removed_table_targets,
+    get_ytrack_issue_context,
     load_merge_request_sql_bundle,
     parse_prototype_task_text,
     query_dev_table_checks,
@@ -896,8 +899,11 @@ def _prototype_multi_issue_description(
                 "",
                 "## Общие параметры",
                 f"**Git ref:** {task_context.get('git_reference') or '—'}",
+                f"**Родительская задача:** {task_context.get('parent_issue') or '—'}",
             ]
         )
+        if str(task_context.get("diff_comment") or "").strip():
+            lines.extend(["", "### Комментарий ко всему diff", str(task_context.get("diff_comment")).strip()])
     deleted_paths = [
         str(item.get("path") or item.get("old_path") or "").strip()
         for item in (deleted_files or [])
@@ -936,6 +942,13 @@ def _prototype_multi_issue_description(
         )
         if item_stands:
             lines.append(f"**Стенды:** {', '.join(item_stands)}")
+        if str(item.get("comment") or "").strip():
+            lines.extend(["", "**Комментарий аналитика:**", str(item.get("comment")).strip()])
+        if str(item.get("manual_script_name") or "").strip() or str(item.get("manual_script_filename") or "").strip():
+            lines.append(
+                f"**Ручной скрипт:** {str(item.get('manual_script_name') or '').strip() or 'требуется выполнить'}"
+                f"; файл: `{str(item.get('manual_script_filename') or '').strip() or 'не приложен'}`"
+            )
         if item.get("copy_to_clickhouse"):
             lines.append("**ClickHouse:** требуется")
             lines.append(
@@ -1288,12 +1301,16 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         direction = str(payload.direction or area).strip()
         if not area or not direction:
             raise ValueError("Заполните предметную область и Дашборд КХД/Направление")
-        bundle, source_checks, derived_area_code, _ = _load_business_dq_checks(payload.mr_input, payload.business_area_code)
+        bundle, source_checks, derived_area_code, source_click_views = _load_business_dq_checks(payload.mr_input, payload.business_area_code)
         submitted = {str(item.get("error_code") or "").lower(): item for item in payload.checks}
         checks = []
         for source in source_checks:
             item = submitted.get(source["error_code"], {})
-            checks.append({**source, "detail_store_limit": item.get("detail_store_limit", payload.detail_store_limit)})
+            checks.append({
+                **source,
+                "detail_store_limit": item.get("detail_store_limit", payload.detail_store_limit),
+                "comment": str(item.get("comment") or "").strip(),
+            })
         if set(submitted) != {item["error_code"] for item in checks}:
             raise ValueError("Состав DQ-проверок изменился. Обновите предпросмотр MR")
         summary = str(payload.issue_summary or "").strip() or f"[DQ] {area}: {', '.join(item['error_code'] for item in checks)}"
@@ -1304,9 +1321,14 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
             "## Бизнесовые DQ-проверки", "",
             f"**Предметная область:** {area} ({derived_area_code.upper()})",
             f"**Источник:** {bundle.get('mr', {}).get('web_url') or payload.mr_input}",
-            *( [f"**Дополнительная ссылка:** {str(payload.related_link).strip()}"] if str(payload.related_link or "").strip() else [] ),
             f"**Стенды:** {', '.join(name for name, enabled in [('DEV', payload.stand_dev), ('PROD', payload.stand_prod)] if enabled) or 'не выбраны'}",
-            "", "## Проверки", *[f"- `{item['error_code']}` — `{item['source_path']}`; лимит детализации: `{item['detail_store_limit']}`" for item in checks],
+            "", "## Проверки", *[
+                "\n".join(filter(None, [
+                    f"- `{item['error_code']}` — `{item['source_path']}`; лимит детализации: `{item['detail_store_limit']}`",
+                    f"  - Комментарий аналитика: {str(item.get('comment') or '').strip()}" if str(item.get('comment') or '').strip() else "",
+                ]))
+                for item in checks
+            ],
         ])
         issue = create_ytrack_issue(base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT, token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE, ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description, default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES, estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME, card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME, card_type_value=YOUTRACK_CARD_TYPE_VALUE, assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME, assignee_query=YOUTRACK_ASSIGNEE_QUERY, direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME, release_date=str(payload.release_date or "").strip() or None, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME)
         task_id = str(issue.get("issue_id") or "").upper()
@@ -1317,11 +1339,16 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
             dbt_files.extend([{ "path": f"dbt_greenplum_elt/models/dq/business/{item['error_code']}.sql", "content": _business_dq_model(item, area_code, item["detail_store_limit"]) }, { "path": _prototype_review_dbt_registry_path("dm", item["error_code"]), "content": _business_dq_registry(item["error_code"]) }])
         dbt = _business_dq_publish(project=DBT_GITLAB_PROJECT, token=DBT_GITLAB_TOKEN, task_id=task_id, target_branch="main", title=f"{task_id}: business DQ {area_code}", description=description, files=dbt_files)
         etl = None
-        view_sql, view_fqn = str(payload.click_view_sql or "").strip(), str(payload.click_view_fqn or "").strip().lower()
-        if view_sql or view_fqn:
-            if not view_sql or not re.fullmatch(r"dm_view\.[a-z0-9_]+", view_fqn): raise ValueError("Для Click-view укажите dm_view.<имя> и SQL")
+        click_view_files = []
+        for view in source_click_views:
+            view_sql = str(view.get("sql") or "").strip()
+            view_fqn = str(view.get("fqn") or "").strip().lower()
+            if not view_sql or not re.fullmatch(r"dm_view\.[a-z0-9_]+", view_fqn):
+                raise ValueError("В diff найден некорректный ClickHouse view")
             _, table = view_fqn.split('.', 1)
-            etl = _business_dq_publish(project=GITLAB_PROJECT, token=GITLAB_TOKEN, task_id=task_id, target_branch=PROTOTYPE_ETL_TARGET_BRANCH, title=f"{task_id}: Click DQ view", description=description, files=[{"path": posix_join(str(CLICK_META_GIT_ROOT).strip('/'), "dm_view", f"{table}.sql"), "content": view_sql + "\n"}])
+            click_view_files.append({"path": posix_join(str(CLICK_META_GIT_ROOT).strip('/'), "dm_view", f"{table}.sql"), "content": view_sql + "\n"})
+        if click_view_files:
+            etl = _business_dq_publish(project=GITLAB_PROJECT, token=GITLAB_TOKEN, task_id=task_id, target_branch=PROTOTYPE_ETL_TARGET_BRANCH, title=f"{task_id}: Click DQ views", description=description, files=click_view_files)
         attached_links, link_errors = [], []
         for label, mr_result in (("dbt MR с бизнесовыми DQ", dbt), ("ETL MR с ClickHouse view", etl)):
             mr_url = str((mr_result or {}).get("mr_url") or "").strip()
@@ -1478,10 +1505,13 @@ def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependenci
         load_bundle=load_merge_request_sql_bundle,
         parse_task=parse_prototype_task_text,
         refresh_yaml=_prototype_review_refresh_yaml_identity,
+        extract_dependencies=extract_sql_dependencies,
         item_needs_attention=_prototype_item_needs_attention,
         build_description=_prototype_multi_issue_description,
         create_issue=create_ytrack_issue,
         link_issues=link_ytrack_issues,
+        link_parent_issue=link_ytrack_parent_issue,
+        attach_files=attach_ytrack_issue_files,
         deliver_issue=deliver_prototype_issue,
         build_issue_link=_build_ytrack_link,
         delivery=_prototype_issue_delivery_dependencies(),
@@ -1523,6 +1553,20 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         print("❌ /api/admin/prototype-review/create-issue error:", exc)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+def get_admin_prototype_parent_issue(issue_id: str, request: Request):
+    _require_authenticated(request)
+    try:
+        return get_ytrack_issue_context(
+            base_url=YOUTRACK_URL,
+            token=YOUTRACK_TOKEN,
+            issue_id=issue_id,
+            direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+            ssl_verify=YOUTRACK_SSL_VERIFY,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/api/admin/engineering-efficiency")
@@ -14587,6 +14631,7 @@ prototype_review_router = build_prototype_review_router(
         check_table=check_admin_prototype_review_table,
         refresh_yaml=refresh_admin_prototype_review_yaml,
         create_issue=create_admin_prototype_review_issue,
+        parent_issue=get_admin_prototype_parent_issue,
     )
 )
 

@@ -20,6 +20,7 @@ export const adminApi = {
   prototypeReviewCheckTable: (body) => apiClient.post("/api/admin/prototype-review/check-table", body),
   prototypeReviewRefreshYaml: (body) => apiClient.post("/api/admin/prototype-review/refresh-yaml", body),
   prototypeReviewCreateIssue: (body) => apiClient.post("/api/admin/prototype-review/create-issue", body),
+  prototypeReviewParentIssue: (issueId) => apiClient.get(`/api/admin/prototype-review/parent-issue/${encodeURIComponent(issueId)}`),
   businessDqPreview: (body) => apiClient.post("/api/admin/prototype-review/business-dq/preview", body),
   businessDqValidate: (body) => apiClient.post("/api/admin/prototype-review/business-dq/validate", body),
   businessDqCreate: (body) => apiClient.post("/api/admin/prototype-review/business-dq/create", body),

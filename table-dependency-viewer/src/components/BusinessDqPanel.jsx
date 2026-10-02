@@ -5,10 +5,9 @@ const DEFAULT_LIMIT = "100000";
 
 export default function BusinessDqPanel() {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ mr_input: "", business_area: "TRANSPORTATION", direction: "", release_date: "", related_link: "" });
+  const [form, setForm] = useState({ mr_input: "", business_area: "TRANSPORTATION", direction: "", release_date: "" });
   const [checks, setChecks] = useState([]);
   const [clickViews, setClickViews] = useState([]);
-  const [selectedClickView, setSelectedClickView] = useState("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -22,8 +21,8 @@ export default function BusinessDqPanel() {
     setLoading(true); setError(""); setResult(null); setValidation(null);
     try {
       const data = await adminApi.businessDqPreview({ mr_input: form.mr_input, business_area: form.business_area });
-      setChecks(data.checks.map((item) => ({ ...item, detail_store_limit: DEFAULT_LIMIT })));
-      setClickViews(data.click_views || []); setSelectedClickView("");
+      setChecks(data.checks.map((item) => ({ ...item, detail_store_limit: DEFAULT_LIMIT, comment: "" })));
+      setClickViews(data.click_views || []);
       if (!form.direction) set("direction", form.business_area);
     } catch (err) { setError(err.message || "Не удалось загрузить MR"); }
     finally { setLoading(false); }
@@ -37,8 +36,7 @@ export default function BusinessDqPanel() {
   const create = async () => {
     setCreating(true); setError("");
     try {
-      const view = clickViews.find((item) => item.fqn === selectedClickView);
-      setResult(await adminApi.businessDqCreate({ ...form, click_view_fqn: view?.fqn || "", click_view_sql: view?.sql || "", issue_summary: taskTitle, checks, detail_store_limit: DEFAULT_LIMIT, stand_dev: true, stand_prod: true }));
+      setResult(await adminApi.businessDqCreate({ ...form, issue_summary: taskTitle, checks, detail_store_limit: DEFAULT_LIMIT, stand_dev: true, stand_prod: true }));
     } catch (err) { setError(err.message || "Не удалось создать задачу и MR"); }
     finally { setCreating(false); }
   };
@@ -51,20 +49,20 @@ export default function BusinessDqPanel() {
       <div className="section-title">Бизнесовые DQ-проверки</div>
       <div className="muted" style={{ marginBottom: 18 }}>Загрузите MR аналитика, проверьте найденные DQ и заполните параметры задачи. Ссылки на созданные MR добавятся в задачу автоматически.</div>
       <div className="prototype-step-grid">
-        <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Ссылка на MR аналитика</span><input className="slow-entity-select" value={form.mr_input} onChange={(e) => set("mr_input", e.target.value)} placeholder="https://gitlab.../-/merge_requests/2099" /></label>
+        <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Ссылка на diff</span><input className="slow-entity-select" value={form.mr_input} onChange={(e) => set("mr_input", e.target.value)} placeholder="https://gitlab.../-/merge_requests/2099/diffs" /></label>
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Предметная область</span><input className="slow-entity-select" value={form.business_area} onChange={(e) => set("business_area", e.target.value.toUpperCase())} /></label>
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Дашборд КХД / Направление</span><input className="slow-entity-select" value={form.direction} onChange={(e) => set("direction", e.target.value)} placeholder="Транспортировка" /></label>
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Дата релиза</span><input className="slow-entity-select" type="date" value={form.release_date} onChange={(e) => set("release_date", e.target.value)} /></label>
-        <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Дополнительная ссылка <span className="muted">(необязательно)</span></span><input className="slow-entity-select" type="url" value={form.related_link} onChange={(e) => set("related_link", e.target.value)} placeholder="https://..." /></label>
       </div>
       <div className="prototype-import-actions"><button type="button" className="btn btn-primary" onClick={preview} disabled={loading || !form.mr_input || !form.business_area}>{loading ? "Загружаем MR..." : "Загрузить проверки"}</button></div>
       {checks.length ? <>
         <div className="prototype-chip-row" style={{ margin: "20px 0 10px" }}><span className="prototype-badge">{checks.length} проверок</span><span className="muted">{taskTitle}</span></div>
         {checks.map((item, index) => <div key={item.error_code} className="card" style={{ marginTop: 10 }}>
           <div className="prototype-object-header"><div><div className="prototype-object-title mono">{item.error_code}</div><div className="muted mono">{item.source_path}</div></div><label className="prototype-step-field" style={{ margin: 0, minWidth: 180 }}><span className="slow-select-label">Лимит детализации</span><input className="slow-entity-select mono" value={item.detail_store_limit} onChange={(e) => setChecks((rows) => rows.map((row, i) => i === index ? { ...row, detail_store_limit: e.target.value } : row))} /></label></div>
-          <details style={{ marginTop: 12 }}><summary className="btn btn-ghost" style={{ display: "inline-flex", cursor: "pointer" }}>Показать SQL</summary><pre className="mono" style={{ margin: "10px 0 0", padding: 14, maxHeight: 360, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{item.sql}</pre></details>
+          <label className="prototype-step-field" style={{ marginTop: 14 }}><span className="slow-select-label">Описание / комментарий аналитика</span><textarea className="slow-entity-select" value={item.comment || ""} onChange={(e) => setChecks((rows) => rows.map((row, i) => i === index ? { ...row, comment: e.target.value } : row))} placeholder="Что особенно важно проверить в этой DQ-проверке" style={{ minHeight: 100, resize: "vertical" }} /></label>
+          <details style={{ marginTop: 12 }}><summary className="btn btn-primary" style={{ display: "inline-flex", cursor: "pointer" }}>Просмотреть SQL проверки</summary><pre className="mono" style={{ margin: "10px 0 0", padding: 14, maxHeight: 480, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{item.sql}</pre></details>
         </div>)}
-        {clickViews.length ? <div className="card" style={{ marginTop: 16 }}><div className="section-title">ClickHouse view из MR <span className="muted">(необязательно)</span></div><div className="muted">Выберите view, только если её нужно включить в отдельный ETL MR.</div><label className="prototype-toggle-card wide" style={{ display: "flex", marginTop: 10 }}><input type="radio" name="business-dq-view" checked={!selectedClickView} onChange={() => setSelectedClickView("")} /><span>Не создавать ClickHouse view</span></label>{clickViews.map((view) => <label key={view.fqn} className="prototype-toggle-card wide" style={{ display: "flex", marginTop: 10 }}><input type="radio" name="business-dq-view" checked={selectedClickView === view.fqn} onChange={() => setSelectedClickView(view.fqn)} /><span><span className="mono">{view.fqn}</span><br /><span className="muted mono">{view.source_path}</span></span></label>)}</div> : null}
+        {clickViews.length ? <div className="muted" style={{ marginTop: 14 }}>Найденные в diff ClickHouse view будут добавлены автоматически: {clickViews.map((view) => view.fqn).join(", ")}</div> : null}
         <div className="prototype-import-actions"><div className="muted">Сначала SQL безопасно выполняется в DEV Greenplum в режиме только для чтения.</div><button type="button" className="btn btn-ghost" onClick={validate} disabled={validating}>{validating ? "Проверяем SQL..." : "Проверить SQL"}</button><button type="button" className="btn btn-primary" onClick={create} disabled={creating || validation?.status !== "ok"}>{creating ? "Создаём задачу и MR..." : "Создать задачу и MR"}</button></div>
         {validation?.status === "ok" ? <div className="muted" style={{ marginTop: 10 }}>Проверка пройдена: {validation.checks.map((item) => `${item.error_code} · ${item.duration_sec} сек`).join("; ")}</div> : null}
       </> : null}

@@ -13,10 +13,13 @@ class PrototypeIssueWorkflowDependencies:
     load_bundle: Callable[..., dict[str, Any]]
     parse_task: Callable[[str], dict[str, Any]]
     refresh_yaml: Callable[..., str]
+    extract_dependencies: Callable[..., list[str]]
     item_needs_attention: Callable[[dict[str, Any]], tuple[bool, list[str]]]
     build_description: Callable[..., str]
     create_issue: Callable[..., dict[str, Any]]
     link_issues: Callable[..., Any]
+    link_parent_issue: Callable[..., dict[str, Any]]
+    attach_files: Callable[..., list[dict[str, Any]]]
     deliver_issue: Callable[..., dict[str, Any]]
     build_issue_link: Callable[[str], str | None]
     delivery: PrototypeIssueDeliveryDependencies
@@ -63,6 +66,25 @@ def create_prototype_review_issue(
     )
     parsed_task = dependencies.parse_task(payload.task_text or "")
     review_items = [item.model_dump() for item in payload.review_items]
+    changed_files = bundle.get("files") or []
+    for item in review_items:
+        item_paths = {
+            str(value or "").strip()
+            for value in (item.get("paths") or [])
+            if str(value or "").strip()
+        }
+        if not item_paths and str(item.get("path") or "").strip():
+            item_paths.add(str(item.get("path") or "").strip())
+        related_files = [
+            file_item
+            for file_item in changed_files
+            if str(file_item.get("path") or "").strip() in item_paths
+        ]
+        if related_files:
+            item["dependencies"] = dependencies.extract_dependencies(
+                related_files,
+                exclude_fqns={str(item.get("target_fqn") or "").strip()},
+            )
     reserved_table_ids: set[int] = set()
     for item in review_items:
         if str(item.get("yaml_content") or "").strip():
@@ -79,10 +101,17 @@ def create_prototype_review_issue(
     if incomplete:
         raise ValueError("Нужно заполнить вручную: " + "; ".join(incomplete))
 
+    parent_issue = str(getattr(payload, "parent_issue", None) or parsed_task.get("parent_issue") or "").strip().upper()
+    linked_issues = [
+        issue_id for issue_id in dict.fromkeys(payload.linked_issues or parsed_task.get("linked_issues") or [])
+        if str(issue_id or "").strip().upper() != parent_issue
+    ]
     task_context = {
         **parsed_task,
         "summary": (payload.issue_summary or "").strip() or parsed_task.get("summary"),
-        "linked_issues": payload.linked_issues or parsed_task.get("linked_issues") or [],
+        "linked_issues": linked_issues,
+        "parent_issue": parent_issue,
+        "diff_comment": str(getattr(payload, "diff_comment", None) or "").strip(),
         "release_date": (payload.release_date or parsed_task.get("release_date") or "").strip(),
         "direction": dashboard_direction,
         "business_key_changed": (
@@ -133,6 +162,41 @@ def create_prototype_review_issue(
         linked_issue_ids=task_context.get("linked_issues") or [],
         ssl_verify=dependencies.youtrack_ssl_verify,
     )
+    parent_link = {"status": "skipped", "parent_issue": None}
+    if parent_issue:
+        parent_link = dependencies.link_parent_issue(
+            base_url=dependencies.youtrack_url,
+            token=dependencies.youtrack_token,
+            issue_id=str(issue_result.get("issue_id") or ""),
+            parent_issue_id=parent_issue,
+            ssl_verify=dependencies.youtrack_ssl_verify,
+        )
+    attachments: list[dict[str, Any]] = []
+    attachment_error = None
+    attachment_files = [
+        {
+            "filename": item.get("manual_script_filename"),
+            "content": item.get("manual_script_content"),
+            "mime_type": item.get("manual_script_mime_type") or "text/plain; charset=utf-8",
+        }
+        for item in review_items
+        if str(item.get("manual_script_filename") or "").strip()
+        and str(item.get("manual_script_content") or "").strip()
+    ]
+    if any(len(str(item.get("content") or "").encode("utf-8")) > 2 * 1024 * 1024 for item in attachment_files):
+        attachment_error = "Файл ручного скрипта должен быть не больше 2 МБ"
+        attachment_files = []
+    if attachment_files:
+        try:
+            attachments = dependencies.attach_files(
+                base_url=dependencies.youtrack_url,
+                token=dependencies.youtrack_token,
+                issue_id=str(issue_result.get("issue_id") or ""),
+                ssl_verify=dependencies.youtrack_ssl_verify,
+                files=attachment_files,
+            )
+        except Exception as exc:
+            attachment_error = str(exc)
     delivery = dependencies.deliver_issue(
         issue_result=issue_result,
         review_items=review_items,
@@ -146,6 +210,9 @@ def create_prototype_review_issue(
         "status": "ok",
         "issue": issue_result,
         "issue_links": issue_links,
+        "parent_link": parent_link,
         "description": description,
+        "attachments": attachments,
+        "attachment_error": attachment_error,
         **delivery,
     }

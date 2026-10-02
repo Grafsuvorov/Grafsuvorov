@@ -9,6 +9,8 @@ const DEFAULT_FORM = {
   script_runtime: "",
   release_date: "",
   direction: "",
+  parent_issue: "",
+  diff_comment: "",
 };
 
 function sleep(ms) {
@@ -104,6 +106,11 @@ function buildDraftItem(item) {
     last_checked_key_attributes_text: keyAttributesText,
     checks_stale: false,
     dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
+    comment: item.comment || "",
+    manual_script_name: item.manual_script_name || "",
+    manual_script_filename: item.manual_script_filename || "",
+    manual_script_content: item.manual_script_content || "",
+    manual_script_mime_type: item.manual_script_mime_type || "text/plain",
   };
 }
 
@@ -118,6 +125,7 @@ export default function AdminPrototypeReviewPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [reviewItemsDraft, setReviewItemsDraft] = useState([]);
   const [runProgress, setRunProgress] = useState(null);
+  const [parentLoading, setParentLoading] = useState(false);
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -175,7 +183,15 @@ export default function AdminPrototypeReviewPage() {
     const current = Number(runProgress.current || 0);
     const total = Number(runProgress.total || 0);
     const remaining = total > 0 ? Math.max(total - current, 0) : null;
-    const parts = [`Статус: ${runProgress.status || "running"}`];
+    const stage = runProgress?.last_event?.stage;
+    const stageLabel = stage === "dependency_search"
+      ? "Ищем зависимости объекта"
+      : stage === "running_file"
+        ? "Проверяем SQL-файл в DEV"
+        : stage === "file_done"
+          ? "Проверка файла завершена"
+          : runProgress.status === "queued" ? "Подготавливаем review" : "Выполняем проверку";
+    const parts = [stageLabel];
     if (total > 0) {
       parts.push(`Проверено: ${current}/${total}`);
       parts.push(`Осталось: ${remaining}`);
@@ -185,6 +201,37 @@ export default function AdminPrototypeReviewPage() {
     }
     return parts.join(" · ");
   }, [runProgress]);
+
+  const handleParentIssueLookup = async () => {
+    const issueId = String(form.parent_issue || "").trim().toUpperCase();
+    if (!issueId || parentLoading) return;
+    setParentLoading(true);
+    setError(null);
+    try {
+      const payload = await adminApi.prototypeReviewParentIssue(issueId);
+      setForm((prev) => ({ ...prev, parent_issue: payload?.issue_id || issueId, direction: payload?.direction || prev.direction }));
+    } catch (err) {
+      setError(err?.message || "Не удалось загрузить родительскую задачу");
+    } finally {
+      setParentLoading(false);
+    }
+  };
+
+  const handleManualScriptFile = async (itemId, file) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Файл ручного скрипта должен быть не больше 2 МБ");
+      return;
+    }
+    const content = await file.text();
+    setReviewItemsDraft((prev) => prev.map((item) => item.item_id !== itemId ? item : {
+      ...item,
+      manual_script_filename: file.name,
+      manual_script_content: content,
+      manual_script_mime_type: file.type || "text/plain",
+      manual_script_name: item.manual_script_name || file.name,
+    }));
+  };
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -232,6 +279,8 @@ export default function AdminPrototypeReviewPage() {
         linked_issues: splitItems(linkedIssues),
         release_date: String(form.release_date || "").trim() || null,
         direction: String(form.direction || "").trim(),
+        parent_issue: String(form.parent_issue || "").trim() || null,
+        diff_comment: String(form.diff_comment || "").trim() || null,
         create_issue: false,
       });
       const jobId = String(startPayload?.job_id || "").trim();
@@ -372,6 +421,8 @@ export default function AdminPrototypeReviewPage() {
         linked_issues: splitItems(linkedIssues),
         release_date: String(form.release_date || "").trim() || null,
         direction: String(form.direction || "").trim(),
+        parent_issue: String(form.parent_issue || "").trim() || null,
+        diff_comment: String(form.diff_comment || "").trim() || null,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
@@ -396,6 +447,11 @@ export default function AdminPrototypeReviewPage() {
           stand_dev: Boolean(item.stand_dev),
           stand_prod: Boolean(item.stand_prod),
           copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
+          comment: String(item.comment || "").trim() || null,
+          manual_script_name: String(item.manual_script_name || "").trim() || null,
+          manual_script_filename: item.manual_script_filename || null,
+          manual_script_content: item.manual_script_content || null,
+          manual_script_mime_type: item.manual_script_mime_type || null,
         })),
       });
       setResult((prev) => (
@@ -411,6 +467,9 @@ export default function AdminPrototypeReviewPage() {
               dbt_registry: payload?.dbt_registry || null,
               dbt_registry_error: payload?.dbt_registry_error || null,
               issue_links: payload?.issue_links || null,
+              parent_link: payload?.parent_link || null,
+              attachments: payload?.attachments || [],
+              attachment_error: payload?.attachment_error || null,
             }
           : prev
       ));
@@ -457,9 +516,13 @@ export default function AdminPrototypeReviewPage() {
         </div>
 
         {loading || runProgress ? (
-          <div className="card muted" style={{ marginTop: 14 }}>
-            <div>{progressText || "Подготовка проверки..."}</div>
-            <div>Файл: <span className="mono">{runProgress?.current_file || "—"}</span></div>
+          <div className="card" style={{ marginTop: 14 }}>
+            <div className="section-title">{progressText || "Подготовка проверки..."}</div>
+            <div className="muted">Объект: <span className="mono">{runProgress?.current_target || "определяется"}</span></div>
+            <div className="muted">Файл: <span className="mono">{runProgress?.current_file || "подготавливается"}</span></div>
+            <div style={{ height: 8, borderRadius: 999, overflow: "hidden", background: "var(--surface-muted, rgba(128,128,128,.18))", marginTop: 12 }}>
+              <div style={{ height: "100%", width: `${runProgress?.total ? Math.max(6, Math.min(100, (Number(runProgress.current || 0) / Number(runProgress.total)) * 100)) : 12}%`, background: "var(--accent, #4f7cff)", transition: "width .3s ease" }} />
+            </div>
           </div>
         ) : null}
       </section>
@@ -528,6 +591,32 @@ export default function AdminPrototypeReviewPage() {
                 onChange={(event) => handleFieldChange("direction", event.target.value)}
                 placeholder="Например, Финансы / Оборотный капитал"
                 required
+              />
+            </div>
+            <div className="prototype-step-field" style={{ margin: 0 }}>
+              <span className="slow-select-label">Родительская задача</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="slow-entity-select"
+                  value={form.parent_issue}
+                  onChange={(event) => handleFieldChange("parent_issue", event.target.value.toUpperCase())}
+                  onBlur={handleParentIssueLookup}
+                  placeholder="DWH-12345"
+                />
+                <button type="button" className="btn btn-ghost" onClick={handleParentIssueLookup} disabled={parentLoading || !form.parent_issue.trim()}>
+                  {parentLoading ? "Загружаем…" : "Подтянуть"}
+                </button>
+              </div>
+              <div className="muted">Из родительской задачи автоматически подставится «Дашборд КХД/Направление».</div>
+            </div>
+            <div className="prototype-step-field" style={{ margin: 0, gridColumn: "1 / -1" }}>
+              <span className="slow-select-label">Комментарий ко всему diff</span>
+              <textarea
+                className="slow-entity-select"
+                value={form.diff_comment}
+                onChange={(event) => handleFieldChange("diff_comment", event.target.value)}
+                placeholder="Общие особенности проверки всех объектов diff"
+                style={{ minHeight: 130, resize: "vertical" }}
               />
             </div>
           </div>
@@ -768,6 +857,34 @@ export default function AdminPrototypeReviewPage() {
                       </div>
                     </div>
 
+                    <div className="prototype-step-grid" style={{ marginTop: 16 }}>
+                      <label className="prototype-step-field" style={{ margin: 0, gridColumn: "1 / -1" }}>
+                        <span className="slow-select-label">Комментарий по объекту</span>
+                        <textarea
+                          className="slow-entity-select"
+                          value={item.comment || ""}
+                          onChange={(event) => handleReviewItemChange(item.item_id, "comment", event.target.value)}
+                          placeholder="Особенности объекта, что проверить инженеру, ограничения и ожидаемый результат"
+                          style={{ minHeight: 150, resize: "vertical" }}
+                        />
+                      </label>
+                      <label className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Что сделать ручным скриптом</span>
+                        <textarea
+                          className="slow-entity-select"
+                          value={item.manual_script_name || ""}
+                          onChange={(event) => handleReviewItemChange(item.item_id, "manual_script_name", event.target.value)}
+                          placeholder="Например: один раз заполнить исторические данные перед запуском DAG"
+                          style={{ minHeight: 110, resize: "vertical" }}
+                        />
+                      </label>
+                      <label className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Файл ручного скрипта</span>
+                        <input type="file" accept=".sql,.txt,.py,.sh,.yaml,.yml" onChange={(event) => handleManualScriptFile(item.item_id, event.target.files?.[0])} />
+                        <div className="muted">{item.manual_script_filename ? `Выбран файл: ${item.manual_script_filename}` : "Файл будет приложен к создаваемой задаче YouTrack."}</div>
+                      </label>
+                    </div>
+
                     <div className="prototype-step-grid" style={{ marginTop: 14 }}>
                       <div className="cc-surface prototype-detail-card" style={{ margin: 0 }}>
                         <div className="section-title">Downstream-влияние</div>
@@ -812,9 +929,17 @@ export default function AdminPrototypeReviewPage() {
                 onClick={handleCreateIssue}
                 disabled={creatingIssue || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
-                {creatingIssue ? "Создаем задачу..." : "Создать задачу"}
+                {creatingIssue ? "Ищем зависимости и создаём задачу…" : "Создать задачу"}
               </button>
             </div>
+            {creatingIssue ? (
+              <div className="card" style={{ marginTop: 14 }}>
+                <div className="section-title">Подготавливаем задачу</div>
+                <div className="muted">1. Повторно ищем зависимости по файлам каждого объекта.</div>
+                <div className="muted">2. Формируем описание, комментарии и ручные скрипты.</div>
+                <div className="muted">3. Создаём YouTrack-задачу и MR.</div>
+              </div>
+            ) : null}
             {unresolvedItemsCount > 0 ? (
               <div className="muted" style={{ marginTop: 12 }}>
                 Сначала заполните обязательные поля у {unresolvedItemsCount} объектов.
@@ -843,10 +968,19 @@ export default function AdminPrototypeReviewPage() {
                 Связанные задачи: {result.issue_links.linked.join(", ")}
               </div>
             ) : null}
+            {result?.parent_link?.status === "linked" ? (
+              <div className="muted" style={{ marginTop: 12 }}>Родительская задача: {result.parent_link.parent_issue}</div>
+            ) : null}
             {Array.isArray(result?.issue_links?.errors) && result.issue_links.errors.length > 0 ? (
               <div className="page-error" style={{ marginTop: 12 }}>
                 Не удалось создать часть связей YouTrack: {result.issue_links.errors.join("; ")}
               </div>
+            ) : null}
+            {result?.attachment_error ? (
+              <div className="page-error" style={{ marginTop: 12 }}>Не удалось приложить ручной скрипт: {result.attachment_error}</div>
+            ) : null}
+            {Array.isArray(result?.attachments) && result.attachments.length > 0 ? (
+              <div className="muted" style={{ marginTop: 12 }}>Приложено файлов: {result.attachments.length}</div>
             ) : null}
             <div className="muted" style={{ marginTop: 12 }}>
               Общее время выполнения SQL:

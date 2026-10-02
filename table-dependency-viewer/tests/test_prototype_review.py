@@ -48,6 +48,7 @@ from api.services.prototype_review import (
     extract_sql_dependencies,
     infer_review_targets,
     infer_removed_table_targets,
+    get_ytrack_issue_context,
     load_merge_request_sql_bundle,
 )
 from api.services.prototype_review_workflow import (
@@ -478,6 +479,34 @@ class LoadMergeRequestSqlBundleTests(unittest.TestCase):
             ["dds/dds.account_debt_1c.sql"],
         )
         fake_urlopen.assert_not_called()
+
+
+class YTrackIssueContextTests(unittest.TestCase):
+    def test_reads_dashboard_direction_from_parent_issue(self) -> None:
+        payload = json.dumps({
+            "idReadable": "DWH-17",
+            "summary": "Parent task",
+            "customFields": [{
+                "name": "Дашборд КХД/Направление",
+                "value": {"localizedName": "Финансы"},
+            }],
+        }).encode("utf-8")
+
+        with patch.object(
+            prototype_review,
+            "_urlopen_without_proxy",
+            return_value=LoadMergeRequestSqlBundleTests.FakeResponse(payload),
+        ):
+            result = get_ytrack_issue_context(
+                base_url="https://youtrack.example",
+                token="token",
+                issue_id="dwh-17",
+                direction_field_name="Дашборд КХД/Направление",
+                ssl_verify="true",
+            )
+
+        self.assertEqual(result["issue_id"], "DWH-17")
+        self.assertEqual(result["direction"], "Финансы")
 
 
 class RemovedTableTargetsTests(unittest.TestCase):

@@ -254,7 +254,7 @@ class PrototypeIssueWorkflowTests(unittest.TestCase):
         dependencies = self.dependencies(
             load_bundle=lambda **_kwargs: {"mr": {"source_branch": "feature/x"}, "deleted_files": []},
             parse_task=lambda _text: {},
-            refresh_yaml=lambda **_kwargs: "",
+            prepare_yaml=lambda **_kwargs: "",
             item_needs_attention=lambda _item: (False, []),
             build_description=lambda **_kwargs: "Generated description",
             create_issue=create_issue,
@@ -275,8 +275,123 @@ class PrototypeIssueWorkflowTests(unittest.TestCase):
         self.assertEqual(created[0]["direction"], "Finance")
         self.assertEqual(created[0]["release_date"], "2026-10-12")
 
+    def test_prepares_yaml_and_dependencies_only_when_creating_issue(self) -> None:
+        calls = []
+        review_item = {
+            "target_fqn": "dds.orders",
+            "entity_name": "ORDERS",
+            "object_type": "TABLE",
+            "key_attributes": ["order_id"],
+            "paths": ["dds/dds.orders.sql"],
+            "manual_scripts": [
+                {"filename": f"script_{index}.sql", "content": f"select {index};"}
+                for index in range(3)
+            ],
+        }
+        payload = SimpleNamespace(
+            direction="Finance",
+            mr_input="17",
+            task_text="",
+            review_items=[SimpleNamespace(model_dump=lambda: dict(review_item))],
+            issue_summary="Prototype finance",
+            linked_issues=[],
+            release_date="",
+            business_key_changed=False,
+            parent_issue="",
+            diff_comment="",
+        )
+
+        def prepare_yaml(**kwargs):
+            calls.append(("prepare", [item["path"] for item in kwargs["related_files"]]))
+            return "table_name: orders\n"
+
+        def extract_dependencies(files, **_kwargs):
+            calls.append(("dependencies", [item["path"] for item in files]))
+            return ["ods.orders"]
+
+        def apply_yaml_dependencies(content, values):
+            calls.append(("apply", list(values)))
+            return content + "depends_on: ods.orders\n"
+
+        delivered = {}
+        attached = []
+        dependencies = self.dependencies(
+            load_bundle=lambda **_kwargs: {
+                "mr": {"source_branch": "feature/x"},
+                "files": [{"path": "dds/dds.orders.sql", "sql_text": "select 1"}],
+                "deleted_files": [],
+            },
+            parse_task=lambda _text: {},
+            prepare_yaml=prepare_yaml,
+            extract_dependencies=extract_dependencies,
+            apply_yaml_dependencies=apply_yaml_dependencies,
+            item_needs_attention=lambda _item: (False, []),
+            build_description=lambda **_kwargs: "Generated description",
+            create_issue=lambda **_kwargs: {"issue_id": "DWH-17", "raw": {"id": "2-17"}},
+            link_issues=lambda **_kwargs: [],
+            attach_files=lambda **kwargs: attached.extend(kwargs["files"]) or [],
+            deliver_issue=lambda **kwargs: delivered.update(kwargs) or {},
+            build_issue_link=lambda issue_id: f"https://youtrack.example/issue/{issue_id}",
+            delivery=object(),
+            youtrack_url="https://youtrack.example",
+            youtrack_ssl_verify=True,
+        )
+
+        create_prototype_review_issue(payload, SimpleNamespace(email="user@example.com"), dependencies=dependencies)
+
+        self.assertEqual(calls, [
+            ("dependencies", ["dds/dds.orders.sql"]),
+            ("prepare", ["dds/dds.orders.sql"]),
+            ("apply", ["ods.orders"]),
+        ])
+        self.assertIn("depends_on: ods.orders", delivered["review_items"][0]["yaml_content"])
+        self.assertEqual([item["filename"] for item in attached], [
+            "script_0.sql",
+            "script_1.sql",
+            "script_2.sql",
+        ])
+
 
 class PrototypeReviewItemTests(unittest.TestCase):
+    def test_table_review_does_not_prepare_or_validate_yaml(self) -> None:
+        def must_not_run(*_args, **_kwargs):
+            raise AssertionError("YAML preparation must only run while creating the issue")
+
+        resolver = PrototypeReviewItemDependencies(
+            find_meta=lambda _fqn: {
+                "entity_name": "ORDERS",
+                "key_attributes": ["order_id"],
+                "table_load_mode": "full",
+            },
+            find_meta_variants=lambda _fqn: [{"entity_name": "ORDERS"}],
+            init_meta_bundle=must_not_run,
+            get_click_meta_index=lambda: {"meta": {}},
+            clean_table_name=lambda value: value,
+            collect_target_sql=must_not_run,
+            validate_meta_bundle=must_not_run,
+            extract_dependencies=must_not_run,
+            apply_yaml_dependencies=must_not_run,
+            impact_summary=lambda _fqn: {"tables": [], "count": 0},
+            query_table_checks=lambda **_kwargs: {"row_count": 1, "duplicate_groups": 0},
+            existing_null_conditions=lambda _schema, _table: [],
+            item_needs_attention=lambda _item: (False, []),
+            engine=None,
+            base_dir=Path("."),
+            entity_meta_dir=Path("meta"),
+            dev_entity_meta_dir=Path("meta-dev"),
+            dev_database_url="postgresql://dev",
+        )
+
+        result = resolve_prototype_review_item(
+            target_fqn="dds.orders",
+            execution_row={"status": "ok"},
+            related_files=[{"path": "dds/dds.orders.sql"}],
+            resolver=resolver,
+        )
+
+        self.assertIsNone(result["yaml_bundle"])
+        self.assertEqual(result["key_attributes"], ["order_id"])
+
     def test_resolves_new_view_without_table_keys_or_dq_lookup(self) -> None:
         def no_meta_bundle(**_kwargs):
             raise ValueError("metadata does not exist")

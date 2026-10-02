@@ -1192,6 +1192,44 @@ def _prototype_review_refresh_yaml_identity(
     return _dump_yaml(result)
 
 
+def _prototype_review_prepare_yaml_for_issue(
+    *,
+    item: dict[str, Any],
+    related_files: list[dict[str, Any]],
+    reserved_table_ids: Optional[set[int]] = None,
+) -> str:
+    yaml_content = _prototype_review_refresh_yaml_identity(
+        item=item,
+        reserved_table_ids=reserved_table_ids,
+    )
+    target_fqn = str(item.get("target_fqn") or "").strip().lower()
+    entity_name = str(item.get("entity_name") or "").strip()
+    schema_name, table_name = target_fqn.split(".", 1)
+    key_attributes = [
+        str(value).strip()
+        for value in (item.get("key_attributes") or [])
+        if str(value).strip()
+    ]
+    sql_bundle = _prototype_review_collect_target_sql(target_fqn, related_files)
+    validation = validate_entity_dev_meta_bundle(
+        engine=engine,
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+        key_attributes=key_attributes,
+        source_object_key=None,
+        yaml_content=yaml_content,
+        recreate_sql=sql_bundle.get("recreate_sql", ""),
+        insert_sql=sql_bundle.get("insert_sql", ""),
+        truncate_sql=sql_bundle.get("truncate_sql", ""),
+        dev_database_url=DEV_DATABASE_URL,
+    )
+    return str((validation.get("normalized") or {}).get("yaml_content") or yaml_content)
+
+
 def _prototype_review_item_dependencies() -> PrototypeReviewItemDependencies:
     return PrototypeReviewItemDependencies(
         find_meta=_prototype_find_meta_by_fqn,
@@ -1505,7 +1543,7 @@ def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependenci
     return PrototypeIssueWorkflowDependencies(
         load_bundle=load_merge_request_sql_bundle,
         parse_task=parse_prototype_task_text,
-        refresh_yaml=_prototype_review_refresh_yaml_identity,
+        prepare_yaml=_prototype_review_prepare_yaml_for_issue,
         extract_dependencies=extract_sql_dependencies,
         apply_yaml_dependencies=_prototype_review_apply_yaml_dependencies,
         item_needs_attention=_prototype_item_needs_attention,

@@ -12,7 +12,7 @@ from .prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 class PrototypeIssueWorkflowDependencies:
     load_bundle: Callable[..., dict[str, Any]]
     parse_task: Callable[[str], dict[str, Any]]
-    refresh_yaml: Callable[..., str]
+    prepare_yaml: Callable[..., str]
     extract_dependencies: Callable[..., list[str]]
     apply_yaml_dependencies: Callable[[str, list[str]], str]
     item_needs_attention: Callable[[dict[str, Any]], tuple[bool, list[str]]]
@@ -86,18 +86,18 @@ def create_prototype_review_issue(
                 related_files,
                 exclude_fqns={str(item.get("target_fqn") or "").strip()},
             )
-            if str(item.get("yaml_content") or "").strip():
-                item["yaml_content"] = dependencies.apply_yaml_dependencies(
-                    str(item.get("yaml_content") or ""),
-                    item["dependencies"],
-                )
+        item["_related_files"] = related_files
     reserved_table_ids: set[int] = set()
     for item in review_items:
-        if str(item.get("yaml_content") or "").strip():
-            item["yaml_content"] = dependencies.refresh_yaml(
-                item=item,
-                reserved_table_ids=reserved_table_ids,
-            )
+        item["yaml_content"] = dependencies.prepare_yaml(
+            item=item,
+            related_files=item.pop("_related_files", []),
+            reserved_table_ids=reserved_table_ids,
+        )
+        item["yaml_content"] = dependencies.apply_yaml_dependencies(
+            item["yaml_content"],
+            list(item.get("dependencies") or []),
+        )
 
     incomplete: list[str] = []
     for item in review_items:
@@ -187,12 +187,21 @@ def create_prototype_review_issue(
             "mime_type": script.get("mime_type") or "text/plain; charset=utf-8",
         }
         for item in review_items
-        for script in (item.get("manual_scripts") or [])[:2]
+        for script in (item.get("manual_scripts") or [])
         if str(script.get("filename") or "").strip() and str(script.get("content") or "").strip()
     ]
-    if any(len(str(item.get("content") or "").encode("utf-8")) > 2 * 1024 * 1024 for item in attachment_files):
-        attachment_error = "Файл ручного скрипта должен быть не больше 2 МБ"
-        attachment_files = []
+    oversized_files = [
+        str(item.get("filename") or "")
+        for item in attachment_files
+        if len(str(item.get("content") or "").encode("utf-8")) > 2 * 1024 * 1024
+    ]
+    if oversized_files:
+        attachment_error = "Не приложены файлы больше 2 МБ: " + ", ".join(oversized_files)
+        attachment_files = [
+            item
+            for item in attachment_files
+            if len(str(item.get("content") or "").encode("utf-8")) <= 2 * 1024 * 1024
+        ]
     if attachment_files:
         try:
             attachments = dependencies.attach_files(

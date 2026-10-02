@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-import yaml
-
 
 @dataclass(frozen=True)
 class PrototypeReviewItemDependencies:
@@ -47,32 +45,7 @@ def resolve_prototype_review_item(
     meta = resolver.find_meta(target_fqn)
     meta_variants = resolver.find_meta_variants(target_fqn)
     schema_name, table_name = target_fqn.split(".", 1)
-    yaml_bundle = None
-    yaml_key_attributes: list[str] = []
-    yaml_entity_name = None
-    entity_name_seed = (
-        str((meta or {}).get("entity_name") or "").strip()
-        or str(fallback_entity_name or "").strip()
-    )
-    try:
-        yaml_bundle = resolver.init_meta_bundle(
-            engine=resolver.engine,
-            base_dir=resolver.base_dir,
-            prod_root_value=resolver.entity_meta_dir,
-            dev_root_value=resolver.dev_entity_meta_dir,
-            entity_name=entity_name_seed,
-            schema_name=schema_name,
-            table_name=table_name,
-            key_attributes=list(key_attributes_override or []) or None,
-            reserved_table_ids=reserved_table_ids,
-            prod_only=True,
-        )
-    except Exception:
-        yaml_bundle = None
-    if yaml_bundle:
-        yaml_key_attributes = list(yaml_bundle.get("key_attributes") or [])
-        yaml_entity_name = str(yaml_bundle.get("entity_name") or "").strip() or None
-    detected_keys = list(key_attributes_override or []) or yaml_key_attributes
+    detected_keys = list(key_attributes_override or []) or list((meta or {}).get("key_attributes") or [])
     entity_names = []
     entity_names_seen = set()
     for variant in meta_variants:
@@ -86,58 +59,19 @@ def resolve_prototype_review_item(
         entity_names.append(value)
     entity_name = (
         str(fallback_entity_name or "").strip()
-        or yaml_entity_name
         or str((meta or {}).get("entity_name") or "").strip()
         or None
     )
     click_idx = resolver.get_click_meta_index()
     click_meta = (click_idx.get("meta") or {}).get((schema_name.lower(), table_name.lower())) or (click_idx.get("meta") or {}).get((schema_name.lower(), resolver.clean_table_name(table_name.lower())))
     clickhouse_keys = list(((click_meta or {}).get("order_by") or []))
-    yaml_payload = None
-    if yaml_bundle and yaml_bundle.get("yaml_content"):
-        try:
-            yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content")) or {}
-        except Exception:
-            yaml_payload = {}
-    current_files = [item for item in (related_files or []) if isinstance(item, dict)]
-    if not current_files and file_item:
-        current_files = [file_item]
-    if yaml_bundle and entity_name_seed and current_files:
-        sql_bundle = resolver.collect_target_sql(target_fqn, current_files)
-        normalized = resolver.validate_meta_bundle(
-            engine=resolver.engine,
-            base_dir=resolver.base_dir,
-            prod_root_value=resolver.entity_meta_dir,
-            dev_root_value=resolver.dev_entity_meta_dir,
-            entity_name=entity_name_seed,
-            schema_name=schema_name,
-            table_name=table_name,
-            key_attributes=detected_keys,
-            source_object_key=None,
-            yaml_content=str(yaml_bundle.get("yaml_content") or ""),
-            recreate_sql=sql_bundle.get("recreate_sql", ""),
-            insert_sql=sql_bundle.get("insert_sql", ""),
-            truncate_sql=sql_bundle.get("truncate_sql", ""),
-            dev_database_url=resolver.dev_database_url,
-        )
-        normalized_bundle = normalized.get("normalized") or {}
-        if normalized_bundle.get("yaml_content"):
-            yaml_bundle["yaml_content"] = normalized_bundle.get("yaml_content")
-        if isinstance(normalized_bundle.get("key_attributes"), list):
-            yaml_bundle["key_attributes"] = normalized_bundle.get("key_attributes")
-            yaml_key_attributes = list(normalized_bundle.get("key_attributes") or [])
-        try:
-            yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content") or "") or {}
-        except Exception:
-            yaml_payload = {}
-        detected_keys = list(key_attributes_override or []) or yaml_key_attributes
-    table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or "").strip()
+    table_load_mode = str((meta or {}).get("table_load_mode") or "").strip()
     dependencies: list[str] = []
     impact = resolver.impact_summary(target_fqn)
-    is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
+    is_new = not meta
     item_object_type = (
-        str((yaml_payload or {}).get("object_type") or "").strip().upper()
-        or str(object_type_hint or "").strip().upper()
+        str(object_type_hint or "").strip().upper()
+        or str((meta or {}).get("object_type") or "").strip().upper()
         or ("VIEW" if schema_name.lower().endswith("_view") else "TABLE")
     )
     if item_object_type != "TABLE":
@@ -195,7 +129,7 @@ def resolve_prototype_review_item(
         "duration_sec": float(current_execution.get("duration_sec") or 0.0),
         "checks": checks,
         "impact": impact,
-        "yaml_bundle": yaml_bundle,
+        "yaml_bundle": None,
         "is_new": is_new,
         "stand_dev": True,
         "stand_prod": True,

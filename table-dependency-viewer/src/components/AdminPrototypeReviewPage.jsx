@@ -108,7 +108,7 @@ function buildDraftItem(item) {
     dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
     comment: item.comment || "",
     manual_script_name: item.manual_script_name || "",
-    manual_scripts: Array.isArray(item.manual_scripts) ? item.manual_scripts.slice(0, 2) : [],
+    manual_scripts: Array.isArray(item.manual_scripts) ? item.manual_scripts : [],
   };
 }
 
@@ -213,19 +213,38 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleManualScriptFile = async (itemId, slotIndex, file) => {
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setError("Файл ручного скрипта должен быть не больше 2 МБ");
-      return;
+  const handleManualScriptFiles = async (itemId, selectedFiles) => {
+    const files = Array.from(selectedFiles || []);
+    if (!files.length) return;
+    const oversizedFiles = files.filter((file) => file.size > 2 * 1024 * 1024);
+    const acceptedFiles = files.filter((file) => file.size <= 2 * 1024 * 1024);
+    if (oversizedFiles.length) {
+      setError(`Не добавлены файлы больше 2 МБ: ${oversizedFiles.map((file) => file.name).join(", ")}`);
+    } else {
+      setError(null);
     }
-    const content = await file.text();
+    const scriptsToAdd = await Promise.all(acceptedFiles.map(async (file) => ({
+      filename: file.name,
+      content: await file.text(),
+      mime_type: file.type || "text/plain",
+    })));
+    if (!scriptsToAdd.length) return;
     setReviewItemsDraft((prev) => prev.map((item) => {
       if (item.item_id !== itemId) return item;
-      const scripts = [...(item.manual_scripts || [])];
-      scripts[slotIndex] = { filename: file.name, content, mime_type: file.type || "text/plain" };
-      return { ...item, manual_scripts: scripts.filter(Boolean).slice(0, 2), manual_script_name: item.manual_script_name || file.name };
+      return {
+        ...item,
+        manual_scripts: [...(item.manual_scripts || []), ...scriptsToAdd],
+        manual_script_name: item.manual_script_name || scriptsToAdd[0].filename,
+      };
     }));
+  };
+
+  const handleRemoveManualScript = (itemId, scriptIndex) => {
+    setReviewItemsDraft((prev) => prev.map((item) => (
+      item.item_id !== itemId
+        ? item
+        : { ...item, manual_scripts: (item.manual_scripts || []).filter((_, index) => index !== scriptIndex) }
+    )));
   };
 
   const handleFieldChange = (field, value) => {
@@ -363,42 +382,6 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleRefreshYaml = async (itemId) => {
-    const current = reviewItemsDraft.find((item) => item.item_id === itemId);
-    const entityName = String(current?.entity_name || "").trim();
-    if (!current || !entityName || !current.yaml_bundle?.yaml_content || current.yaml_refreshing) return;
-    setError(null);
-    setReviewItemsDraft((prev) => prev.map((item) => (
-      item.item_id === itemId ? { ...item, yaml_refreshing: true } : item
-    )));
-    try {
-      const payload = await adminApi.prototypeReviewRefreshYaml({
-        target_fqn: current.target_fqn,
-        entity_name: entityName,
-        key_attributes: splitItems(current.key_attributes_text),
-        object_type: current.object_type,
-        yaml_content: current.yaml_bundle.yaml_content,
-      });
-      setReviewItemsDraft((prev) => prev.map((item) => (
-        item.item_id !== itemId
-          ? item
-          : {
-              ...item,
-              yaml_bundle: {
-                ...(item.yaml_bundle || {}),
-                yaml_content: payload?.yaml_content || item.yaml_bundle?.yaml_content || "",
-              },
-              yaml_refreshing: false,
-            }
-      )));
-    } catch (err) {
-      setError(err?.message || "Не удалось обновить YAML после выбора сущности");
-      setReviewItemsDraft((prev) => prev.map((item) => (
-        item.item_id === itemId ? { ...item, yaml_refreshing: false } : item
-      )));
-    }
-  };
-
   const handleCreateIssue = async () => {
     const trimmedMr = String(mrInput || "").trim();
     if (!trimmedMr || creatingIssue) return;
@@ -438,13 +421,13 @@ export default function AdminPrototypeReviewPage() {
           duplicate_groups: item.checks?.duplicate_groups ?? null,
           dependencies: item.dependencies || [],
           impact_tables: item.impact?.tables || [],
-          yaml_content: item.yaml_bundle?.yaml_content || "",
+          yaml_content: "",
           stand_dev: Boolean(item.stand_dev),
           stand_prod: Boolean(item.stand_prod),
           copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
           comment: String(item.comment || "").trim() || null,
           manual_script_name: String(item.manual_script_name || "").trim() || null,
-          manual_scripts: (item.manual_scripts || []).slice(0, 2),
+          manual_scripts: item.manual_scripts || [],
         })),
       });
       setResult((prev) => (
@@ -715,10 +698,8 @@ export default function AdminPrototypeReviewPage() {
                           className="slow-entity-select"
                           value={item.entity_name || ""}
                           onChange={(event) => handleReviewItemChange(item.item_id, "entity_name", event.target.value)}
-                          onBlur={() => handleRefreshYaml(item.item_id)}
                           placeholder="BI_SB_WUC"
                         />
-                        {item.yaml_refreshing ? <span className="muted">Обновляем YAML…</span> : null}
                         </div>
                         {isTableObject ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -873,20 +854,39 @@ export default function AdminPrototypeReviewPage() {
                       </label>
                       <div className="prototype-step-field" style={{ margin: 0 }}>
                         <span className="slow-select-label">Файлы ручных скриптов</span>
-                        <div className="prototype-upload-grid">
-                          {[0, 1].map((slotIndex) => {
-                            const script = (item.manual_scripts || [])[slotIndex];
-                            return (
-                              <label key={slotIndex} className={`prototype-upload-card ${script ? "has-file" : ""}`}>
-                                <input type="file" accept=".sql,.txt,.py,.sh,.yaml,.yml" onChange={(event) => handleManualScriptFile(item.item_id, slotIndex, event.target.files?.[0])} />
-                                <span className="prototype-upload-icon">{script ? "✓" : "+"}</span>
-                                <span className="prototype-upload-title">{script?.filename || `Добавить файл ${slotIndex + 1}`}</span>
-                                <span className="muted">{script ? "Нажмите, чтобы заменить" : "SQL, TXT, PY, SH или YAML · до 2 МБ"}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <div className="muted">Оба файла будут приложены к создаваемой задаче YouTrack.</div>
+                        <label className="prototype-upload-card prototype-upload-card-wide">
+                          <input
+                            type="file"
+                            multiple
+                            accept=".sql,.txt,.py,.sh,.yaml,.yml"
+                            onChange={(event) => {
+                              handleManualScriptFiles(item.item_id, event.target.files);
+                              event.target.value = "";
+                            }}
+                          />
+                          <span className="prototype-upload-icon">+</span>
+                          <span className="prototype-upload-title">Выбрать файлы</span>
+                          <span className="muted">Можно выбрать несколько сразу или добавить ещё позже · до 2 МБ каждый</span>
+                        </label>
+                        {(item.manual_scripts || []).length > 0 ? (
+                          <div className="prototype-upload-list">
+                            {(item.manual_scripts || []).map((script, scriptIndex) => (
+                              <div className="prototype-upload-file" key={`${script.filename}-${scriptIndex}`}>
+                                <span className="prototype-upload-file-icon">✓</span>
+                                <span className="prototype-upload-file-name">{script.filename}</span>
+                                <button
+                                  type="button"
+                                  className="prototype-upload-remove"
+                                  onClick={() => handleRemoveManualScript(item.item_id, scriptIndex)}
+                                  aria-label={`Удалить файл ${script.filename}`}
+                                >
+                                  Удалить
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="muted">Все выбранные файлы будут приложены к создаваемой задаче YouTrack.</div>
                       </div>
                     </div>
 

@@ -35,6 +35,59 @@ html[data-theme="dark"] {
   margin-top: 8px;
 }
 
+.prototype-upload-card-wide {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.prototype-upload-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+
+.prototype-upload-file {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, #2ea66f 45%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #2ea66f 7%, var(--surface));
+}
+
+.prototype-upload-file-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  background: #2ea66f;
+  font-weight: 800;
+}
+
+.prototype-upload-file-name {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prototype-upload-remove {
+  padding: 5px 8px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.prototype-upload-remove:hover {
+  color: var(--danger);
+}
+
 .prototype-upload-card {
   position: relative;
   display: grid;

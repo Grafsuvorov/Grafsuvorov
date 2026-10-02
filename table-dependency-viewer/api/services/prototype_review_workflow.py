@@ -9,7 +9,6 @@ from typing import Any, Callable
 from .prototype_review import (
     _infer_target_from_path,
     _is_clickhouse_sql_path,
-    extract_sql_dependencies,
     infer_review_targets,
     parse_prototype_task_text,
     validate_prototype_sql,
@@ -100,9 +99,8 @@ def build_prototype_review_result(
     review_items: list[dict[str, Any]] = []
     reserved_table_ids: set[int] = set()
     all_dependencies: list[str] = []
-    dependency_seen: set[str] = set()
     requires_user_input = False
-    for target_index, target_item in enumerate(review_targets, start=1):
+    for target_item in review_targets:
         item_id = str(target_item.get("item_id") or "").strip()
         target_fqn = str(target_item.get("target_fqn") or "").strip()
         if not target_fqn:
@@ -140,23 +138,7 @@ def build_prototype_review_result(
             execution_row["error_message"] = "; ".join(dict.fromkeys(execution_error_messages))
         related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
         file_item = related_files[0] if related_files else {}
-        if callable(progress_callback):
-            progress_callback({
-                "stage": "dependency_search",
-                "current": target_index,
-                "total": len(review_targets),
-                "path": path_value,
-                "target_fqn": target_fqn,
-            })
-        table_dependencies = extract_sql_dependencies(
-            related_files or [file_item],
-            known_schemas=known_schemas,
-            exclude_fqns={target_fqn},
-        )
-        for dep in table_dependencies:
-            if dep not in dependency_seen:
-                dependency_seen.add(dep)
-                all_dependencies.append(dep)
+        table_dependencies: list[str] = []
         item_result = dependencies.resolve_item(
             target_fqn=target_fqn,
             path_value=path_value,
@@ -192,11 +174,7 @@ def build_prototype_review_result(
         target_fqn, object_type = fallback_target
         related_files = [row for row in files if str(row.get("path") or "").strip() == path_value]
         file_item = related_files[0] if related_files else {}
-        table_dependencies = extract_sql_dependencies(
-            related_files or [file_item],
-            known_schemas=known_schemas,
-            exclude_fqns={target_fqn},
-        )
+        table_dependencies: list[str] = []
         item_result = dependencies.resolve_item(
             target_fqn=target_fqn,
             path_value=path_value,

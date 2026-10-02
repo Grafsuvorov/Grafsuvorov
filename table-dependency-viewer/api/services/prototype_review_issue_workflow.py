@@ -14,6 +14,7 @@ class PrototypeIssueWorkflowDependencies:
     parse_task: Callable[[str], dict[str, Any]]
     refresh_yaml: Callable[..., str]
     extract_dependencies: Callable[..., list[str]]
+    apply_yaml_dependencies: Callable[[str, list[str]], str]
     item_needs_attention: Callable[[dict[str, Any]], tuple[bool, list[str]]]
     build_description: Callable[..., str]
     create_issue: Callable[..., dict[str, Any]]
@@ -85,6 +86,11 @@ def create_prototype_review_issue(
                 related_files,
                 exclude_fqns={str(item.get("target_fqn") or "").strip()},
             )
+            if str(item.get("yaml_content") or "").strip():
+                item["yaml_content"] = dependencies.apply_yaml_dependencies(
+                    str(item.get("yaml_content") or ""),
+                    item["dependencies"],
+                )
     reserved_table_ids: set[int] = set()
     for item in review_items:
         if str(item.get("yaml_content") or "").strip():
@@ -175,13 +181,13 @@ def create_prototype_review_issue(
     attachment_error = None
     attachment_files = [
         {
-            "filename": item.get("manual_script_filename"),
-            "content": item.get("manual_script_content"),
-            "mime_type": item.get("manual_script_mime_type") or "text/plain; charset=utf-8",
+            "filename": script.get("filename"),
+            "content": script.get("content"),
+            "mime_type": script.get("mime_type") or "text/plain; charset=utf-8",
         }
         for item in review_items
-        if str(item.get("manual_script_filename") or "").strip()
-        and str(item.get("manual_script_content") or "").strip()
+        for script in (item.get("manual_scripts") or [])[:2]
+        if str(script.get("filename") or "").strip() and str(script.get("content") or "").strip()
     ]
     if any(len(str(item.get("content") or "").encode("utf-8")) > 2 * 1024 * 1024 for item in attachment_files):
         attachment_error = "Файл ручного скрипта должен быть не больше 2 МБ"

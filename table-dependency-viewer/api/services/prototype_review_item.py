@@ -133,21 +133,6 @@ def resolve_prototype_review_item(
         detected_keys = list(key_attributes_override or []) or yaml_key_attributes
     table_load_mode = str((yaml_payload or {}).get("table_load_mode") or (meta or {}).get("table_load_mode") or "").strip()
     dependencies: list[str] = []
-    if current_files and path_value:
-        dependencies = resolver.extract_dependencies(
-            current_files,
-            known_schemas=known_schemas,
-            exclude_fqns={target_fqn},
-        )
-    if yaml_bundle and yaml_bundle.get("yaml_content") is not None:
-        yaml_bundle["yaml_content"] = resolver.apply_yaml_dependencies(
-            str(yaml_bundle.get("yaml_content") or ""),
-            dependencies,
-        )
-        try:
-            yaml_payload = yaml.safe_load(yaml_bundle.get("yaml_content") or "") or {}
-        except Exception:
-            yaml_payload = {}
     impact = resolver.impact_summary(target_fqn)
     is_new = bool(yaml_bundle and yaml_bundle.get("source") == "new") or not meta
     item_object_type = (
@@ -219,4 +204,3 @@ def resolve_prototype_review_item(
         "missing_fields": missing_fields,
         "warnings": item_warnings,
     }
-

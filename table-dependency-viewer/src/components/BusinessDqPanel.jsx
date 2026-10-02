@@ -5,17 +5,28 @@ const DEFAULT_LIMIT = "100000";
 
 export default function BusinessDqPanel() {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ mr_input: "", business_area: "TRANSPORTATION", direction: "", release_date: "" });
+  const [form, setForm] = useState({ mr_input: "", business_area: "TRANSPORTATION", direction: "", release_date: "", parent_issue: "" });
   const [checks, setChecks] = useState([]);
   const [clickViews, setClickViews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState(null);
+  const [parentLoading, setParentLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const taskTitle = useMemo(() => checks.length ? `[DQ] ${form.business_area || "Предметная область"}: ${checks.map((item) => item.error_code).join(", ")}` : "", [checks, form.business_area]);
+  const loadParentIssue = async () => {
+    const issueId = String(form.parent_issue || "").trim().toUpperCase();
+    if (!issueId || parentLoading) return;
+    setParentLoading(true); setError("");
+    try {
+      const data = await adminApi.prototypeReviewParentIssue(issueId);
+      setForm((prev) => ({ ...prev, parent_issue: data?.issue_id || issueId, direction: data?.direction || prev.direction }));
+    } catch (err) { setError(err.message || "Не удалось загрузить родительскую задачу"); }
+    finally { setParentLoading(false); }
+  };
 
   const preview = async () => {
     setLoading(true); setError(""); setResult(null); setValidation(null);
@@ -47,12 +58,13 @@ export default function BusinessDqPanel() {
     </section>
     {open ? <section className="cc-surface" style={{ marginTop: 16 }}>
       <div className="section-title">Бизнесовые DQ-проверки</div>
-      <div className="muted" style={{ marginBottom: 18 }}>Загрузите MR аналитика, проверьте найденные DQ и заполните параметры задачи. Ссылки на созданные MR добавятся в задачу автоматически.</div>
+      <div className="muted" style={{ marginBottom: 18 }}>Загрузите diff аналитика, проверьте найденные DQ и заполните параметры задачи. Ссылки на созданные MR добавятся в задачу автоматически.</div>
       <div className="prototype-step-grid">
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Ссылка на diff</span><input className="slow-entity-select" value={form.mr_input} onChange={(e) => set("mr_input", e.target.value)} placeholder="https://gitlab.../-/merge_requests/2099/diffs" /></label>
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Предметная область</span><input className="slow-entity-select" value={form.business_area} onChange={(e) => set("business_area", e.target.value.toUpperCase())} /></label>
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Дашборд КХД / Направление</span><input className="slow-entity-select" value={form.direction} onChange={(e) => set("direction", e.target.value)} placeholder="Транспортировка" /></label>
         <label className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Дата релиза</span><input className="slow-entity-select" type="date" value={form.release_date} onChange={(e) => set("release_date", e.target.value)} /></label>
+        <div className="prototype-step-field" style={{ margin: 0 }}><span className="slow-select-label">Родительская задача</span><div style={{ display: "flex", gap: 8 }}><input className="slow-entity-select" value={form.parent_issue} onChange={(e) => set("parent_issue", e.target.value.toUpperCase())} onBlur={loadParentIssue} placeholder="DWH-12345" /><button type="button" className="btn btn-ghost" onClick={loadParentIssue} disabled={parentLoading || !form.parent_issue.trim()}>{parentLoading ? "Загружаем…" : "Подтянуть"}</button></div><div className="muted">Направление подставится из родительской задачи.</div></div>
       </div>
       <div className="prototype-import-actions"><button type="button" className="btn btn-primary" onClick={preview} disabled={loading || !form.mr_input || !form.business_area}>{loading ? "Загружаем MR..." : "Загрузить проверки"}</button></div>
       {checks.length ? <>

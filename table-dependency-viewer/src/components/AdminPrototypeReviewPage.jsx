@@ -108,9 +108,7 @@ function buildDraftItem(item) {
     dependent_views_text: joinItems(item.impact?.tables?.map((row) => row.fqn) || []),
     comment: item.comment || "",
     manual_script_name: item.manual_script_name || "",
-    manual_script_filename: item.manual_script_filename || "",
-    manual_script_content: item.manual_script_content || "",
-    manual_script_mime_type: item.manual_script_mime_type || "text/plain",
+    manual_scripts: Array.isArray(item.manual_scripts) ? item.manual_scripts.slice(0, 2) : [],
   };
 }
 
@@ -184,9 +182,7 @@ export default function AdminPrototypeReviewPage() {
     const total = Number(runProgress.total || 0);
     const remaining = total > 0 ? Math.max(total - current, 0) : null;
     const stage = runProgress?.last_event?.stage;
-    const stageLabel = stage === "dependency_search"
-      ? "Ищем зависимости объекта"
-      : stage === "running_file"
+    const stageLabel = stage === "running_file"
         ? "Проверяем SQL-файл в DEV"
         : stage === "file_done"
           ? "Проверка файла завершена"
@@ -217,19 +213,18 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleManualScriptFile = async (itemId, file) => {
+  const handleManualScriptFile = async (itemId, slotIndex, file) => {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       setError("Файл ручного скрипта должен быть не больше 2 МБ");
       return;
     }
     const content = await file.text();
-    setReviewItemsDraft((prev) => prev.map((item) => item.item_id !== itemId ? item : {
-      ...item,
-      manual_script_filename: file.name,
-      manual_script_content: content,
-      manual_script_mime_type: file.type || "text/plain",
-      manual_script_name: item.manual_script_name || file.name,
+    setReviewItemsDraft((prev) => prev.map((item) => {
+      if (item.item_id !== itemId) return item;
+      const scripts = [...(item.manual_scripts || [])];
+      scripts[slotIndex] = { filename: file.name, content, mime_type: file.type || "text/plain" };
+      return { ...item, manual_scripts: scripts.filter(Boolean).slice(0, 2), manual_script_name: item.manual_script_name || file.name };
     }));
   };
 
@@ -449,9 +444,7 @@ export default function AdminPrototypeReviewPage() {
           copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
           comment: String(item.comment || "").trim() || null,
           manual_script_name: String(item.manual_script_name || "").trim() || null,
-          manual_script_filename: item.manual_script_filename || null,
-          manual_script_content: item.manual_script_content || null,
-          manual_script_mime_type: item.manual_script_mime_type || null,
+          manual_scripts: (item.manual_scripts || []).slice(0, 2),
         })),
       });
       setResult((prev) => (
@@ -878,11 +871,23 @@ export default function AdminPrototypeReviewPage() {
                           style={{ minHeight: 110, resize: "vertical" }}
                         />
                       </label>
-                      <label className="prototype-step-field" style={{ margin: 0 }}>
-                        <span className="slow-select-label">Файл ручного скрипта</span>
-                        <input type="file" accept=".sql,.txt,.py,.sh,.yaml,.yml" onChange={(event) => handleManualScriptFile(item.item_id, event.target.files?.[0])} />
-                        <div className="muted">{item.manual_script_filename ? `Выбран файл: ${item.manual_script_filename}` : "Файл будет приложен к создаваемой задаче YouTrack."}</div>
-                      </label>
+                      <div className="prototype-step-field" style={{ margin: 0 }}>
+                        <span className="slow-select-label">Файлы ручных скриптов</span>
+                        <div className="prototype-upload-grid">
+                          {[0, 1].map((slotIndex) => {
+                            const script = (item.manual_scripts || [])[slotIndex];
+                            return (
+                              <label key={slotIndex} className={`prototype-upload-card ${script ? "has-file" : ""}`}>
+                                <input type="file" accept=".sql,.txt,.py,.sh,.yaml,.yml" onChange={(event) => handleManualScriptFile(item.item_id, slotIndex, event.target.files?.[0])} />
+                                <span className="prototype-upload-icon">{script ? "✓" : "+"}</span>
+                                <span className="prototype-upload-title">{script?.filename || `Добавить файл ${slotIndex + 1}`}</span>
+                                <span className="muted">{script ? "Нажмите, чтобы заменить" : "SQL, TXT, PY, SH или YAML · до 2 МБ"}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="muted">Оба файла будут приложены к создаваемой задаче YouTrack.</div>
+                      </div>
                     </div>
 
                     <div className="prototype-step-grid" style={{ marginTop: 14 }}>

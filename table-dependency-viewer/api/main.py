@@ -944,11 +944,10 @@ def _prototype_multi_issue_description(
             lines.append(f"**Стенды:** {', '.join(item_stands)}")
         if str(item.get("comment") or "").strip():
             lines.extend(["", "**Комментарий аналитика:**", str(item.get("comment")).strip()])
-        if str(item.get("manual_script_name") or "").strip() or str(item.get("manual_script_filename") or "").strip():
-            lines.append(
-                f"**Ручной скрипт:** {str(item.get('manual_script_name') or '').strip() or 'требуется выполнить'}"
-                f"; файл: `{str(item.get('manual_script_filename') or '').strip() or 'не приложен'}`"
-            )
+        manual_scripts = [script for script in (item.get("manual_scripts") or []) if str(script.get("filename") or "").strip()]
+        if str(item.get("manual_script_name") or "").strip() or manual_scripts:
+            lines.append(f"**Ручной скрипт:** {str(item.get('manual_script_name') or '').strip() or 'требуется выполнить'}")
+            lines.extend(f"- Файл: `{script.get('filename')}`" for script in manual_scripts)
         if item.get("copy_to_clickhouse"):
             lines.append("**ClickHouse:** требуется")
             lines.append(
@@ -1320,7 +1319,8 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         description = "\n".join([
             "## Бизнесовые DQ-проверки", "",
             f"**Предметная область:** {area} ({derived_area_code.upper()})",
-            f"**Источник:** {bundle.get('mr', {}).get('web_url') or payload.mr_input}",
+            f"**Ссылка на diff:** {bundle.get('mr', {}).get('web_url') or payload.mr_input}",
+            f"**Родительская задача:** {str(payload.parent_issue or '').strip().upper() or '—'}",
             f"**Стенды:** {', '.join(name for name, enabled in [('DEV', payload.stand_dev), ('PROD', payload.stand_prod)] if enabled) or 'не выбраны'}",
             "", "## Проверки", *[
                 "\n".join(filter(None, [
@@ -1333,6 +1333,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
         issue = create_ytrack_issue(base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT, token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE, ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description, default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES, estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME, card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME, card_type_value=YOUTRACK_CARD_TYPE_VALUE, assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME, assignee_query=YOUTRACK_ASSIGNEE_QUERY, direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME, release_date=str(payload.release_date or "").strip() or None, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME)
         task_id = str(issue.get("issue_id") or "").upper()
         if not re.fullmatch(r"DWH-\d+", task_id): raise ValueError("YouTrack вернул некорректный номер задачи")
+        parent_link = link_ytrack_parent_issue(base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=task_id, parent_issue_id=str(payload.parent_issue or "").strip().upper(), ssl_verify=YOUTRACK_SSL_VERIFY)
         area_code = derived_area_code
         dbt_files = []
         for item in checks:
@@ -1360,7 +1361,7 @@ def create_business_dq(payload: BusinessDqCreatePayload, request: Request):
             except Exception as exc:
                 link_errors.append(str(exc))
         issue["link"] = _build_ytrack_link(task_id)
-        return {"status":"ok", "issue":issue, "description":description, "dbt":dbt, "etl":etl, "task_mr_links":{"attached":attached_links, "errors":link_errors}}
+        return {"status":"ok", "issue":issue, "description":description, "dbt":dbt, "etl":etl, "parent_link":parent_link, "task_mr_links":{"attached":attached_links, "errors":link_errors}}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1506,6 +1507,7 @@ def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependenci
         parse_task=parse_prototype_task_text,
         refresh_yaml=_prototype_review_refresh_yaml_identity,
         extract_dependencies=extract_sql_dependencies,
+        apply_yaml_dependencies=_prototype_review_apply_yaml_dependencies,
         item_needs_attention=_prototype_item_needs_attention,
         build_description=_prototype_multi_issue_description,
         create_issue=create_ytrack_issue,

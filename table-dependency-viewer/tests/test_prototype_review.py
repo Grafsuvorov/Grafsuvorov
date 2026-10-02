@@ -113,7 +113,7 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
         self.assertEqual(result["task_context"]["summary"], "Review prototype")
         self.assertEqual(captured["default_project"], "analyst/project")
 
-    def test_resolves_review_item_after_collecting_table_dependencies(self) -> None:
+    def test_resolves_review_item_without_collecting_dependencies(self) -> None:
         resolved = []
 
         def resolve_item(**kwargs):
@@ -156,14 +156,11 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
             "object_type": "TABLE",
         }
 
-        with (
-            patch.object(prototype_review_workflow, "infer_review_targets", return_value=[target]),
-            patch.object(prototype_review_workflow, "extract_sql_dependencies", return_value=["ods.orders"]),
-        ):
+        with patch.object(prototype_review_workflow, "infer_review_targets", return_value=[target]):
             result = build_prototype_review_result(payload, None, dependencies=dependencies)
 
         self.assertEqual(resolved[0]["target_fqn"], "dds.orders")
-        self.assertEqual(result["review_items"][0]["dependencies"], ["ods.orders"])
+        self.assertEqual(result["review_items"][0]["dependencies"], [])
 
 
 class PrototypeIssueDeliveryTests(unittest.TestCase):

@@ -66,9 +66,7 @@ class PrototypeReviewItemPayload(BaseModel):
     copy_to_clickhouse: Optional[bool] = None
     comment: Optional[str] = None
     manual_script_name: Optional[str] = None
-    manual_script_filename: Optional[str] = None
-    manual_script_content: Optional[str] = None
-    manual_script_mime_type: Optional[str] = None
+    manual_scripts: Optional[List[Dict[str, Any]]] = None
 
 
 class PrototypeReviewCreateIssuePayload(BaseModel):
@@ -102,3 +100,4 @@ class BusinessDqCreatePayload(BusinessDqPreviewPayload):
     issue_summary: Optional[str] = None
     direction: Optional[str] = None
     release_date: Optional[str] = None
+    parent_issue: Optional[str] = None

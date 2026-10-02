@@ -676,6 +676,56 @@ class PrototypeReviewExecutionPlanTests(unittest.TestCase):
 
 
 class CreateYTrackIssueTests(unittest.TestCase):
+    def test_resolves_assignee_by_ui_user_email(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return b'{"id": "2-17", "idReadable": "DWH-17"}'
+
+        captured = {}
+        assignee_field = {
+            "id": "assignee-field",
+            "$type": "UserProjectCustomField",
+            "field": {"name": "Assignee", "fieldType": {"id": "user", "valueType": "user"}},
+        }
+
+        def resolve_user(**kwargs):
+            captured.setdefault("queries", []).append(kwargs["user_query"])
+            return {"login": "ui.user"}
+
+        def fake_urlopen(request, **_kwargs):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        with (
+            patch.object(prototype_review, "_resolve_ytrack_project_id", return_value="0-1"),
+            patch.object(prototype_review, "_get_ytrack_project_custom_fields", return_value=[assignee_field]),
+            patch.object(prototype_review, "_resolve_ytrack_user_value", side_effect=resolve_user),
+            patch.object(prototype_review, "_urlopen_without_proxy", side_effect=fake_urlopen),
+        ):
+            create_ytrack_issue(
+                base_url="https://youtrack.example",
+                project_id="0-1",
+                project="DWH",
+                token="token",
+                queue="DWH",
+                issue_type="task",
+                ssl_verify="false",
+                summary="Prototype",
+                description="",
+                assignee_query="User.Name@company.ru",
+                assignee_fallback_query="Suvorov Nikita",
+            )
+
+        self.assertEqual(captured["queries"], ["User.Name@company.ru"])
+        assignee = next(item for item in captured["payload"]["customFields"] if item["name"] == "Assignee")
+        self.assertEqual(assignee["value"], {"login": "ui.user"})
+
     def test_sends_dashboard_direction_as_custom_field(self) -> None:
         class FakeResponse:
             def __enter__(self):

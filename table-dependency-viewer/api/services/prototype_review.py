@@ -1326,6 +1326,7 @@ def create_ytrack_issue(
     card_type_value: str = "Task",
     assignee_field_name: str = "Assignee",
     assignee_query: str = "Suvorov Nikita",
+    assignee_fallback_query: Optional[str] = None,
     release_date: Optional[str] = None,
     release_date_field_name: str = "Дата релиза",
     direction: Optional[str] = None,
@@ -1398,6 +1399,14 @@ def create_ytrack_issue(
             ssl_verify=ssl_verify,
             user_query=str(assignee_query).strip(),
         )
+        fallback_query = str(assignee_fallback_query or "").strip()
+        if not user_value and fallback_query and fallback_query.lower() != str(assignee_query).strip().lower():
+            user_value = _resolve_ytrack_user_value(
+                base_url=base_url,
+                token=token,
+                ssl_verify=ssl_verify,
+                user_query=fallback_query,
+            )
         if user_value:
             custom_fields_payload.append(
                 _build_ytrack_user_payload(

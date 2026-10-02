@@ -3,7 +3,7 @@
 import re
 import time
 from collections.abc import Callable
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 _BUSINESS_DQ_PATH = re.compile(r"(?:^|/)dq/data_quality_results/(dq_([a-z]+\d+)\.sql)$", re.IGNORECASE)
 _BUSINESS_DQ_VIEW = re.compile(r"\bcreate\s+(?:or\s+replace\s+)?view\s+(dm_view\.[a-z0-9_]+)\b", re.IGNORECASE)
@@ -11,7 +11,7 @@ _BUSINESS_DQ_VIEW = re.compile(r"\bcreate\s+(?:or\s+replace\s+)?view\s+(dm_view\
 
 def checks_from_merge_request(
     mr_input: str,
-    business_area_code: str | None,
+    business_area_code: Optional[str],
     *,
     load_bundle: Callable[..., dict[str, Any]],
     gitlab_api_url: str,

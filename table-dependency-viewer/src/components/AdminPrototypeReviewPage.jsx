@@ -87,11 +87,12 @@ function buildTaskText(form, linkedIssues) {
 function buildDraftItem(item) {
   const keyAttributesText = joinItems(item.key_attributes || []);
   const entityNames = Array.isArray(item.entity_names) ? item.entity_names : [];
+  const entitiesText = entityNames.length ? entityNames.join(", ") : (item.entity_name || "");
   return {
     ...item,
-    entity_name: item.entity_name || "",
+    entity_name: entitiesText,
     entity_names: entityNames,
-    entity_names_label: entityNames.length ? entityNames.join(", ") : (item.entity_name || ""),
+    entity_names_label: entitiesText,
     key_attributes_text: keyAttributesText,
     scd_type: item.scd_type || "scd1",
     version_key_text: joinItems(item.version_key || []),

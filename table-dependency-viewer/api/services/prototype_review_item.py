@@ -28,6 +28,27 @@ class PrototypeReviewItemDependencies:
     dev_database_url: str
 
 
+def _variant_owns_sql(variant: dict[str, Any]) -> bool:
+    entity_name = str((variant or {}).get("entity_name") or "").strip().lower()
+    if not entity_name:
+        return False
+    for field_name in ("sql_query_recreate_init", "sql_query_insert_init", "sql_query_truncate"):
+        sql_path = str((variant or {}).get(field_name) or "").replace("\\", "/").lower()
+        if f"/etl_loads_entity/{entity_name}/" in sql_path or f"/{entity_name}/" in sql_path:
+            return True
+    return False
+
+
+def _order_meta_variants(meta_variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        meta_variants,
+        key=lambda variant: (
+            not _variant_owns_sql(variant),
+            str((variant or {}).get("entity_name") or "").strip().lower(),
+        ),
+    )
+
+
 def resolve_prototype_review_item(
     *,
     target_fqn: str,
@@ -43,7 +64,9 @@ def resolve_prototype_review_item(
     resolver: PrototypeReviewItemDependencies,
 ) -> dict[str, Any]:
     meta = resolver.find_meta(target_fqn)
-    meta_variants = resolver.find_meta_variants(target_fqn)
+    meta_variants = _order_meta_variants(resolver.find_meta_variants(target_fqn))
+    if meta_variants:
+        meta = {**(meta or {}), **meta_variants[0]}
     schema_name, table_name = target_fqn.split(".", 1)
     detected_keys = list(key_attributes_override or []) or list((meta or {}).get("key_attributes") or [])
     entity_names = []
@@ -59,7 +82,7 @@ def resolve_prototype_review_item(
         entity_names.append(value)
     entity_name = (
         str(fallback_entity_name or "").strip()
-        or str((meta or {}).get("entity_name") or "").strip()
+        or (", ".join(entity_names) if entity_names else str((meta or {}).get("entity_name") or "").strip())
         or None
     )
     click_idx = resolver.get_click_meta_index()

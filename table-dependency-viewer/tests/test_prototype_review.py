@@ -457,6 +457,59 @@ class PrototypeReviewItemTests(unittest.TestCase):
         self.assertIsNone(result["yaml_bundle"])
         self.assertEqual(result["key_attributes"], ["order_id"])
 
+    def test_orders_entities_by_sql_owner_and_prefills_all_variants(self) -> None:
+        def must_not_run(*_args, **_kwargs):
+            raise AssertionError("unexpected call")
+
+        resolver = PrototypeReviewItemDependencies(
+            find_meta=lambda _fqn: {"entity_name": "MANAGEMENT_REPORTING_2"},
+            find_meta_variants=lambda _fqn: [
+                {
+                    "entity_name": "MANAGEMENT_REPORTING_2",
+                    "sql_query_recreate_init": "meta/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_recreate_init.sql",
+                },
+                {
+                    "entity_name": "MANAGEMENT_REPORTING_1",
+                    "key_attributes": ["id"],
+                    "sql_query_recreate_init": "meta/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_recreate_init.sql",
+                },
+                {
+                    "entity_name": "MANAGEMENT_REPORTING_3",
+                    "sql_query_recreate_init": "meta/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_recreate_init.sql",
+                },
+            ],
+            init_meta_bundle=must_not_run,
+            get_click_meta_index=lambda: {"meta": {}},
+            clean_table_name=lambda value: value,
+            collect_target_sql=must_not_run,
+            validate_meta_bundle=must_not_run,
+            extract_dependencies=must_not_run,
+            apply_yaml_dependencies=must_not_run,
+            impact_summary=lambda _fqn: {"tables": [], "count": 0},
+            query_table_checks=lambda **_kwargs: {"row_count": 1, "duplicate_groups": 0},
+            existing_null_conditions=lambda _schema, _table: [],
+            item_needs_attention=lambda _item: (False, []),
+            engine=None,
+            base_dir=Path("."),
+            entity_meta_dir=Path("meta"),
+            dev_entity_meta_dir=Path("meta-dev"),
+            dev_database_url="postgresql://dev",
+        )
+
+        result = resolve_prototype_review_item(
+            target_fqn="dds.hr_employee_attendance",
+            execution_row={"status": "ok"},
+            resolver=resolver,
+        )
+
+        self.assertEqual(result["entity_names"], [
+            "MANAGEMENT_REPORTING_1",
+            "MANAGEMENT_REPORTING_2",
+            "MANAGEMENT_REPORTING_3",
+        ])
+        self.assertEqual(result["entity_name"], "MANAGEMENT_REPORTING_1, MANAGEMENT_REPORTING_2, MANAGEMENT_REPORTING_3")
+        self.assertEqual(result["key_attributes"], ["id"])
+
     def test_resolves_new_view_without_table_keys_or_dq_lookup(self) -> None:
         def no_meta_bundle(**_kwargs):
             raise ValueError("metadata does not exist")

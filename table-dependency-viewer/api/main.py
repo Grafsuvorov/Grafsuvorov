@@ -923,13 +923,15 @@ def _prototype_multi_issue_description(
         item_stands = [
             label for enabled, label in ((item.get("stand_dev"), "DEV"), (item.get("stand_prod"), "PROD")) if enabled
         ]
+        entity_names = [str(value).strip() for value in (item.get("entity_names") or []) if str(value).strip()]
+        entity_display = ", ".join(entity_names) or str(item.get("entity_name") or "—")
         lines.extend(
             [
                 "",
                 f"## Объект {index}",
                 f"**Витрина:** {item.get('target_fqn') or 'не определена'}",
                 f"**Тип объекта:** {str(item.get('object_type') or 'TABLE').upper()}",
-                f"**Сущность:** {item.get('entity_name') or '—'}",
+                f"**Сущность:** {entity_display}",
                 f"**Статус объекта:** {'новый объект' if item.get('is_new') else 'существующий объект'}",
                 f"**Ключевые поля:** {', '.join(item.get('key_attributes') or []) or '—'}",
                 f"**SCD:** {str(item.get('scd_type') or 'scd1').lower()}",
@@ -5650,6 +5652,9 @@ def get_cached_meta_and_index():
                     "entity_name": meta.get("entity_name"),
                     "depends_on": depends_on,
                     "table_id": meta.get("table_id"),
+                    "sql_query_recreate_init": meta.get("sql_query_recreate_init"),
+                    "sql_query_insert_init": meta.get("sql_query_insert_init"),
+                    "sql_query_truncate": meta.get("sql_query_truncate"),
                 })
             except Exception as e:
                 print("META ERROR:", path, e)

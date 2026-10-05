@@ -124,6 +124,7 @@ def create_prototype_review_issue(
             entity_names = [""]
         primary_entity_name, *replica_entity_names = entity_names
         item["entity_name"] = primary_entity_name
+        item["entity_names"] = entity_names
         item["replica_entity_names"] = replica_entity_names
         related_files = item.pop("_related_files", [])
         primary_yaml = dependencies.prepare_yaml(

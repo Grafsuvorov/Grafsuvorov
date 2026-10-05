@@ -1,55 +1,57 @@
-ods._rusal_lepervlka_ral.sql
-rusallepervlka_ral - как должнро быть в инженерном
- /rusal/lepervlka_ral
+table_name: hr_employee_attendance
+table_schema: dds
+table_id: 5210
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: STG_LOADER
+table_loading_index: 1
+entity_id: 42
+entity_name: MANAGEMENT_REPORTING_1
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_truncate.sql
+depends_on:
+  ods:
+  - hr_employee_attendance
 
-drop table if exists ods."/rusal/lepervlka_ral";
+вот в этой папке лежат 
+три скл 
 
-create table ods."/rusal/lepervlka_ral" (
-	id varchar null,
-	pos varchar null,
-	type_load varchar null,
-	numvag varchar null,
-	numnakl varchar null,
-	weightnet numeric(13, 3) null,
-	regdate date null,
-	senddate date null,
-	cartare varchar null,
-	type_vagon varchar null,
-	zterminal varchar null,
-	genaktdate date null,
-	arrvesdate date null,
-	delivery_in varchar null,
-	knote varchar null,
-	knote1 varchar null,
-	knote2 varchar null,
-	werks_from varchar null,
-	werks_to varchar null,
-	matnr varchar null,
-	vehicle varchar null,
-	conosnum varchar null,
-	dock_knote varchar null,
-	erdat date null,
-	erzet time null,
-	ernam varchar null,
-	aedat date null,
-	aezet time null,
-	aenam varchar null,
-	type_prod varchar null,
-	bldat date null,
-	vessel_num varchar null,
-	zowner varchar null,
-	etsng varchar null,
-	vessel varchar null,
-	terminal varchar null,
-	dttm_inserted timestamp not null default now(),
-	dttm_updated timestamp not null default now(),
-	job_name varchar(60) not null default 'airflow'::character varying,
-	deleted_flag bool not null default false
-)
-with (
-	appendonly = true,
-	orientation = column,
-	compresstype = zstd,
-	compresslevel = 3
-)
-distributed by (numvag, numnakl);
+а вот тут только один ямл
+table_name: hr_employee_attendance
+table_schema: dds
+table_id: 5211
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: STG_LOADER
+table_loading_index: 1
+entity_id: 48
+entity_name: MANAGEMENT_REPORTING_2
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dds/hr_employee_attendance/sql_query_truncate.sql
+depends_on:
+  ods:
+  - hr_employee_attendance

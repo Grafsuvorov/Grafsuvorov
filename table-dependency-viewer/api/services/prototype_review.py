@@ -622,7 +622,6 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         file_target_flags: dict[str, dict[str, Any]] = {}
         lowered_sql = _strip_sql_comments(sql_text).lower()
         path_target = _infer_target_from_path(path_value)
-        path_target_is_authoritative = _infer_direct_sql_file_target(path_value) is not None
 
         for statement in statements:
             statement_lower = statement.lower()
@@ -652,7 +651,10 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         statement_targets.append((normalized, object_type, False, True))
 
             for normalized, object_type, has_create, has_drop in statement_targets:
-                if path_target_is_authoritative and path_target != (normalized, object_type):
+                # Session-local helper tables are implementation details, not
+                # review objects.  A target script may legitimately create
+                # them before creating its physical table.
+                if normalized.lower().startswith("pg_temp."):
                     continue
                 key = f"{normalized}::{object_type}"
                 flags = file_target_flags.setdefault(
@@ -671,7 +673,11 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     seen_targets.add((normalized, object_type))
                     target_sequence.append((normalized, object_type))
 
-        if path_target and path_target not in seen_targets:
+        # The SQL itself is the source of truth.  In particular, technical
+        # filenames cannot preserve quoted object names such as
+        # ods."/rusal/lepervlka_ral".  Infer from the path only for scripts
+        # that do not declare or mutate a target relation at all.
+        if not target_sequence and path_target and path_target not in seen_targets:
             seen_targets.add(path_target)
             target_sequence.append(path_target)
 

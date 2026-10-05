@@ -667,6 +667,32 @@ class RemovedTableTargetsTests(unittest.TestCase):
         self.assertEqual(result, set())
 
 
+class InferReviewTargetsTests(unittest.TestCase):
+    def test_uses_quoted_table_name_from_sql_instead_of_sanitized_filename(self) -> None:
+        sql = '''
+        drop table if exists ods."/rusal/lepervlka_ral";
+        create table ods."/rusal/lepervlka_ral" (id varchar);
+        '''
+        result = infer_review_targets([{
+            "path": "ods/ods._rusal_lepervlka_ral.sql",
+            "sql": sql,
+            "statements": prototype_review._split_sql_statements(sql),
+        }])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["target_fqn"], "ods./rusal/lepervlka_ral")
+        self.assertNotIn("ods._rusal_lepervlka_ral", result[0]["all_targets"])
+
+    def test_uses_filename_only_when_sql_has_no_target(self) -> None:
+        result = infer_review_targets([{
+            "path": "ods/ods.technical_helper.sql",
+            "sql": "select current_date;",
+            "statements": ["select current_date"],
+        }])
+
+        self.assertEqual(result[0]["target_fqn"], "ods.technical_helper")
+
+
 class CollectTargetSqlTests(unittest.TestCase):
     def test_new_object_bundle_keeps_temp_preparation_and_splits_target_ddl(self) -> None:
         collect = _load_collect_target_sql()

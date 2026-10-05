@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable
+import re
 
 from .prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 
@@ -45,6 +46,35 @@ class PrototypeIssueWorkflowDependencies:
     release_date_field_name: str
     direction_field_name: str
     business_key_changed_field_name: str
+
+
+def _split_entity_names(value: Any) -> list[str]:
+    """Return ordered unique entity names entered as a comma-separated value."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for part in str(value or "").split(","):
+        entity_name = part.strip()
+        key = entity_name.lower()
+        if entity_name and key not in seen:
+            seen.add(key)
+            result.append(entity_name)
+    return result
+
+
+def _reuse_primary_sql_paths(replica_yaml: str, primary_yaml: str) -> str:
+    """Point a replica YAML at the SQL files owned by the primary entity."""
+    result = str(replica_yaml or "")
+    for field_name in ("sql_query_recreate_init", "sql_query_insert_init", "sql_query_truncate"):
+        primary_match = re.search(rf"(?m)^(\s*{field_name}:\s*)(.+?)\s*$", str(primary_yaml or ""))
+        if not primary_match:
+            continue
+        result = re.sub(
+            rf"(?m)^(\s*{field_name}:\s*).+?\s*$",
+            lambda match: f"{match.group(1)}{primary_match.group(2)}",
+            result,
+            count=1,
+        )
+    return result
 
 
 def create_prototype_review_issue(
@@ -89,15 +119,30 @@ def create_prototype_review_issue(
         item["_related_files"] = related_files
     reserved_table_ids: set[int] = set()
     for item in review_items:
-        item["yaml_content"] = dependencies.prepare_yaml(
-            item=item,
-            related_files=item.pop("_related_files", []),
+        entity_names = _split_entity_names(item.get("entity_name"))
+        if not entity_names:
+            entity_names = [""]
+        primary_entity_name, *replica_entity_names = entity_names
+        item["entity_name"] = primary_entity_name
+        item["replica_entity_names"] = replica_entity_names
+        related_files = item.pop("_related_files", [])
+        primary_yaml = dependencies.prepare_yaml(
+            item={**item, "entity_name": primary_entity_name},
+            related_files=related_files,
             reserved_table_ids=reserved_table_ids,
         )
-        item["yaml_content"] = dependencies.apply_yaml_dependencies(
-            item["yaml_content"],
-            list(item.get("dependencies") or []),
-        )
+        primary_yaml = dependencies.apply_yaml_dependencies(primary_yaml, list(item.get("dependencies") or []))
+        item["yaml_content"] = primary_yaml
+        replica_yaml_contents: dict[str, str] = {}
+        for replica_entity_name in replica_entity_names:
+            replica_yaml = dependencies.prepare_yaml(
+                item={**item, "entity_name": replica_entity_name},
+                related_files=related_files,
+                reserved_table_ids=reserved_table_ids,
+            )
+            replica_yaml = dependencies.apply_yaml_dependencies(replica_yaml, list(item.get("dependencies") or []))
+            replica_yaml_contents[replica_entity_name] = _reuse_primary_sql_paths(replica_yaml, primary_yaml)
+        item["replica_yaml_contents"] = replica_yaml_contents
 
     incomplete: list[str] = []
     for item in review_items:

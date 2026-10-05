@@ -351,6 +351,71 @@ class PrototypeIssueWorkflowTests(unittest.TestCase):
             "script_2.sql",
         ])
 
+    def test_creates_replica_yaml_for_each_comma_separated_entity(self) -> None:
+        payload = SimpleNamespace(
+            direction="Finance",
+            mr_input="17",
+            task_text="",
+            review_items=[SimpleNamespace(model_dump=lambda: {
+                "target_fqn": "dds.hr_employee_attendance",
+                "entity_name": "MANAGEMENT_REPORTING_1, MANAGEMENT_REPORTING_2",
+                "paths": ["dds/recreate.sql", "dds/insert.sql"],
+                "key_attributes": ["id"],
+            })],
+            issue_summary="Prototype finance",
+            linked_issues=[],
+            release_date="",
+            business_key_changed=False,
+            parent_issue="",
+            diff_comment="",
+        )
+        prepared_entities = []
+        delivered = {}
+
+        def prepare_yaml(**kwargs):
+            entity_name = kwargs["item"]["entity_name"]
+            prepared_entities.append(entity_name)
+            return "\n".join([
+                f"entity_name: {entity_name}",
+                f"sql_query_recreate_init: sql/{entity_name}/recreate.sql",
+                f"sql_query_insert_init: sql/{entity_name}/insert.sql",
+                f"sql_query_truncate: sql/{entity_name}/truncate.sql",
+                "",
+            ])
+
+        dependencies = self.dependencies(
+            load_bundle=lambda **_kwargs: {
+                "mr": {"source_branch": "feature/x"},
+                "files": [{"path": "dds/recreate.sql"}, {"path": "dds/insert.sql"}],
+                "deleted_files": [],
+            },
+            parse_task=lambda _text: {},
+            prepare_yaml=prepare_yaml,
+            extract_dependencies=lambda *_args, **_kwargs: ["ods.hr_employee_attendance"],
+            apply_yaml_dependencies=lambda content, _values: content + "depends_on: {}\n",
+            item_needs_attention=lambda _item: (False, []),
+            build_description=lambda **_kwargs: "Generated description",
+            create_issue=lambda **_kwargs: {"issue_id": "DWH-17", "raw": {"id": "2-17"}},
+            link_issues=lambda **_kwargs: [],
+            attach_files=lambda **_kwargs: [],
+            deliver_issue=lambda **kwargs: delivered.update(kwargs) or {},
+            build_issue_link=lambda issue_id: f"https://youtrack.example/issue/{issue_id}",
+            delivery=object(),
+            youtrack_url="https://youtrack.example",
+            youtrack_ssl_verify=True,
+        )
+
+        create_prototype_review_issue(payload, SimpleNamespace(email="user@example.com"), dependencies=dependencies)
+
+        item = delivered["review_items"][0]
+        self.assertEqual(prepared_entities, ["MANAGEMENT_REPORTING_1", "MANAGEMENT_REPORTING_2"])
+        self.assertEqual(item["entity_name"], "MANAGEMENT_REPORTING_1")
+        self.assertEqual(item["replica_entity_names"], ["MANAGEMENT_REPORTING_2"])
+        replica_yaml = item["replica_yaml_contents"]["MANAGEMENT_REPORTING_2"]
+        self.assertIn("entity_name: MANAGEMENT_REPORTING_2", replica_yaml)
+        self.assertIn("sql/MANAGEMENT_REPORTING_1/recreate.sql", replica_yaml)
+        self.assertNotIn("sql/MANAGEMENT_REPORTING_2/recreate.sql", replica_yaml)
+
 
 class PrototypeReviewItemTests(unittest.TestCase):
     def test_table_review_does_not_prepare_or_validate_yaml(self) -> None:
@@ -691,6 +756,26 @@ class InferReviewTargetsTests(unittest.TestCase):
         }])
 
         self.assertEqual(result[0]["target_fqn"], "ods.technical_helper")
+
+    def test_groups_recreate_and_insert_files_for_one_table(self) -> None:
+        files = [
+            {
+                "path": "dds/dds.hr_employee_attendance_recreate.sql",
+                "sql": "create table dds.hr_employee_attendance (id int);",
+                "statements": ["create table dds.hr_employee_attendance (id int)"],
+            },
+            {
+                "path": "dds/dds.hr_employee_attendance_insert.sql",
+                "sql": "insert into dds.hr_employee_attendance select 1;",
+                "statements": ["insert into dds.hr_employee_attendance select 1"],
+            },
+        ]
+
+        result = infer_review_targets(files)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["target_fqn"], "dds.hr_employee_attendance")
+        self.assertEqual(result[0]["paths"], [item["path"] for item in files])
 
 
 class CollectTargetSqlTests(unittest.TestCase):

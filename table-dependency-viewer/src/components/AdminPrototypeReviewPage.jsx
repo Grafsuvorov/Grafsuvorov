@@ -693,12 +693,12 @@ export default function AdminPrototypeReviewPage() {
                     <div className="prototype-object-layout">
                       <div className="prototype-object-main">
                         <div className="prototype-step-field" style={{ margin: 0 }}>
-                        <span className="slow-select-label">Сущность загрузки</span>
+                        <span className="slow-select-label">Сущность загрузки (несколько — через запятую)</span>
                         <input
                           className="slow-entity-select"
                           value={item.entity_name || ""}
                           onChange={(event) => handleReviewItemChange(item.item_id, "entity_name", event.target.value)}
-                          placeholder="BI_SB_WUC"
+                          placeholder="MANAGEMENT_REPORTING_1, MANAGEMENT_REPORTING_2"
                         />
                         </div>
                         {isTableObject ? (

@@ -111,6 +111,7 @@ def deliver_prototype_issue(
                         recreate_sql=sql_bundle.get("recreate_sql", ""),
                         insert_sql=sql_bundle.get("insert_sql", ""),
                         truncate_sql=sql_bundle.get("truncate_sql", ""),
+                        replica_yaml_contents=item.get("replica_yaml_contents") or {},
                         task_id=str(issue_result.get("issue_id") or "").strip().upper(),
                         author=author,
                         expected_revision=None,
@@ -128,6 +129,27 @@ def deliver_prototype_issue(
                         author=author,
                         expected_revision=None,
                     )
+                    for replica_entity_name, replica_yaml in (item.get("replica_yaml_contents") or {}).items():
+                        replica_name = str(replica_entity_name or "").strip()
+                        if not replica_name:
+                            continue
+                        replica_result = dependencies.save_file(
+                            git_repo_value=dependencies.entity_git_repo,
+                            workspace_root_value=dependencies.workspace_root,
+                            workspace_owner=author,
+                            branch_name=branch_name,
+                            base_branch=dependencies.base_branch,
+                            file_path=dependencies.yaml_repo_path(replica_name, schema_name, table_name),
+                            content=str(replica_yaml or ""),
+                            task_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                            author=author,
+                            expected_revision=None,
+                        )
+                        save_result["changed_files"] = [
+                            *(save_result.get("changed_files") or []),
+                            *(replica_result.get("changed_files") or []),
+                        ]
+                        save_result["branch_name"] = replica_result.get("branch_name") or save_result.get("branch_name")
                 meta_files.append(
                     {
                         "target_fqn": target_fqn,
@@ -245,4 +267,3 @@ def deliver_prototype_issue(
         "dbt_registry": dbt_registry,
         "dbt_registry_error": dbt_registry_error,
     }
-

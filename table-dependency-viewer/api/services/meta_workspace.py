@@ -1191,6 +1191,7 @@ def save_meta_workspace_branch_gp_bundle(
     recreate_sql: str,
     insert_sql: str,
     truncate_sql: str,
+    replica_yaml_contents: dict[str, str] | None = None,
     task_id: str,
     author: str,
     expected_revision: dict[str, Any] | None = None,
@@ -1238,9 +1239,37 @@ def save_meta_workspace_branch_gp_bundle(
             target_path = object_dir / file_name
             target_path.write_text(content, encoding="utf-8")
 
-        status_output = _run_workspace_git(git_repo_root, ["status", "--porcelain", "--", object_rel.as_posix()], cwd=worktree_dir)
+        for replica_entity_name, replica_yaml in (replica_yaml_contents or {}).items():
+            replica_entity_name_norm = str(replica_entity_name or "").strip()
+            if not replica_entity_name_norm or replica_entity_name_norm.lower() == entity_name_norm.lower():
+                continue
+            replica_yaml_path = (
+                worktree_dir / Path(entity_git_root_value) / replica_entity_name_norm
+                / schema_name_norm / table_name_norm / "meta_data_file.yaml"
+            ).resolve()
+            if not str(replica_yaml_path).startswith(str(worktree_dir.resolve())):
+                raise ValueError("Некорректный путь YAML реплики")
+            replica_yaml_path.parent.mkdir(parents=True, exist_ok=True)
+            replica_yaml_path.write_text(str(replica_yaml or ""), encoding="utf-8")
+
+        replica_rels = [
+            Path(entity_git_root_value) / str(replica_entity_name).strip() / schema_name_norm / table_name_norm / "meta_data_file.yaml"
+            for replica_entity_name in (replica_yaml_contents or {})
+            if str(replica_entity_name or "").strip()
+            and str(replica_entity_name).strip().lower() != entity_name_norm.lower()
+        ]
+        paths_to_stage = [object_rel, *replica_rels]
+        status_output = _run_workspace_git(
+            git_repo_root,
+            ["status", "--porcelain", "--", *(path.as_posix() for path in paths_to_stage)],
+            cwd=worktree_dir,
+        )
         if status_output:
-            _run_workspace_git(git_repo_root, ["add", "--", object_rel.as_posix()], cwd=worktree_dir)
+            _run_workspace_git(
+                git_repo_root,
+                ["add", "--", *(path.as_posix() for path in paths_to_stage)],
+                cwd=worktree_dir,
+            )
             task_id_norm = str(task_id or "").strip().upper()
             commit_prefix = task_id_norm if task_id_norm else branch_name_norm
             _run_workspace_git(
@@ -1258,14 +1287,18 @@ def save_meta_workspace_branch_gp_bundle(
         "base_branch": base_branch_norm,
         "object_key": f"{entity_name_norm}/{schema_name_norm}/{table_name_norm}",
         "path": object_rel.as_posix(),
-        "changed_files": sorted(
-            [
-                (object_rel / "meta_data_file.yaml").as_posix(),
-                (object_rel / "sql_query_recreate_init.sql").as_posix(),
-                (object_rel / "sql_query_insert_init.sql").as_posix(),
-                (object_rel / "sql_query_truncate.sql").as_posix(),
-            ]
-        ),
+        "changed_files": sorted([
+            (object_rel / "meta_data_file.yaml").as_posix(),
+            (object_rel / "sql_query_recreate_init.sql").as_posix(),
+            (object_rel / "sql_query_insert_init.sql").as_posix(),
+            (object_rel / "sql_query_truncate.sql").as_posix(),
+            *[
+                (Path(entity_git_root_value) / str(replica_entity_name).strip() / schema_name_norm / table_name_norm / "meta_data_file.yaml").as_posix()
+                for replica_entity_name in (replica_yaml_contents or {})
+                if str(replica_entity_name or "").strip()
+                and str(replica_entity_name).strip().lower() != entity_name_norm.lower()
+            ],
+        ]),
         "committed": committed,
         "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
         "workspace_path": str(worktree_dir),

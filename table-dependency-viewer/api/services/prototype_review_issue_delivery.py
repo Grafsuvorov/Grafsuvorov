@@ -77,79 +77,41 @@ def deliver_prototype_issue(
                 continue
             schema_name, table_name = target_fqn.split(".", 1)
             try:
-                item_paths = {
-                    str(value or "").strip()
-                    for value in (item.get("paths") or [])
-                    if str(value or "").strip()
-                }
-                if not item_paths:
-                    item_paths = {
-                        value.strip()
-                        for value in str(item.get("path") or "").splitlines()
-                        if value.strip()
-                    }
-                related_files = [
-                    file_item
-                    for file_item in (bundle.get("files") or [])
-                    if str(file_item.get("path") or "").strip() in item_paths
-                ]
-                if item.get("is_new"):
-                    sql_bundle = dependencies.collect_target_sql(target_fqn, related_files)
-                    if not str(sql_bundle.get("recreate_sql") or "").strip():
-                        raise ValueError(f"Для нового объекта `{target_fqn}` не сформирован recreate SQL")
-                    save_result = dependencies.save_gp_bundle(
-                        git_repo_value=dependencies.entity_git_repo,
-                        entity_git_root_value=dependencies.entity_git_root,
-                        workspace_root_value=dependencies.workspace_root,
-                        workspace_owner=author,
-                        branch_name=branch_name,
-                        base_branch=dependencies.base_branch,
-                        entity_name=entity_name,
-                        schema_name=schema_name,
-                        table_name=table_name,
-                        yaml_content=yaml_content,
-                        recreate_sql=sql_bundle.get("recreate_sql", ""),
-                        insert_sql=sql_bundle.get("insert_sql", ""),
-                        truncate_sql=sql_bundle.get("truncate_sql", ""),
-                        replica_yaml_contents=item.get("replica_yaml_contents") or {},
-                        task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                        author=author,
-                        expected_revision=None,
-                    )
-                else:
-                    save_result = dependencies.save_file(
+                # Prototype Review creates metadata only.  The engineer owns
+                # recreate/insert/truncate scripts and adds them manually.
+                save_result = dependencies.save_file(
+                    git_repo_value=dependencies.entity_git_repo,
+                    workspace_root_value=dependencies.workspace_root,
+                    workspace_owner=author,
+                    branch_name=branch_name,
+                    base_branch=dependencies.base_branch,
+                    file_path=dependencies.yaml_repo_path(entity_name, schema_name, table_name),
+                    content=yaml_content,
+                    task_id=str(issue_result.get("issue_id") or "").strip().upper(),
+                    author=author,
+                    expected_revision=None,
+                )
+                for replica_entity_name, replica_yaml in (item.get("replica_yaml_contents") or {}).items():
+                    replica_name = str(replica_entity_name or "").strip()
+                    if not replica_name:
+                        continue
+                    replica_result = dependencies.save_file(
                         git_repo_value=dependencies.entity_git_repo,
                         workspace_root_value=dependencies.workspace_root,
                         workspace_owner=author,
                         branch_name=branch_name,
                         base_branch=dependencies.base_branch,
-                        file_path=dependencies.yaml_repo_path(entity_name, schema_name, table_name),
-                        content=yaml_content,
+                        file_path=dependencies.yaml_repo_path(replica_name, schema_name, table_name),
+                        content=str(replica_yaml or ""),
                         task_id=str(issue_result.get("issue_id") or "").strip().upper(),
                         author=author,
                         expected_revision=None,
                     )
-                    for replica_entity_name, replica_yaml in (item.get("replica_yaml_contents") or {}).items():
-                        replica_name = str(replica_entity_name or "").strip()
-                        if not replica_name:
-                            continue
-                        replica_result = dependencies.save_file(
-                            git_repo_value=dependencies.entity_git_repo,
-                            workspace_root_value=dependencies.workspace_root,
-                            workspace_owner=author,
-                            branch_name=branch_name,
-                            base_branch=dependencies.base_branch,
-                            file_path=dependencies.yaml_repo_path(replica_name, schema_name, table_name),
-                            content=str(replica_yaml or ""),
-                            task_id=str(issue_result.get("issue_id") or "").strip().upper(),
-                            author=author,
-                            expected_revision=None,
-                        )
-                        save_result["changed_files"] = [
-                            *(save_result.get("changed_files") or []),
-                            *(replica_result.get("changed_files") or []),
-                        ]
-                        save_result["branch_name"] = replica_result.get("branch_name") or save_result.get("branch_name")
+                    save_result["changed_files"] = [
+                        *(save_result.get("changed_files") or []),
+                        *(replica_result.get("changed_files") or []),
+                    ]
+                    save_result["branch_name"] = replica_result.get("branch_name") or save_result.get("branch_name")
                 meta_files.append(
                     {
                         "target_fqn": target_fqn,

@@ -221,6 +221,68 @@ class PrototypeIssueDeliveryTests(unittest.TestCase):
         self.assertEqual(comments[0]["issue_id"], "DWH-17")
         self.assertIn("MR с ключами", comments[0]["text"])
 
+    def test_new_object_delivery_writes_only_yaml_files(self) -> None:
+        saved_files = []
+
+        def forbidden(**_kwargs):
+            raise AssertionError("Prototype Review must not publish SQL scripts")
+
+        def save_file(**kwargs):
+            saved_files.append(kwargs)
+            return {
+                "file_path": kwargs["file_path"],
+                "branch_name": kwargs["branch_name"],
+                "committed": True,
+                "changed_files": [kwargs["file_path"]],
+            }
+
+        dependencies = PrototypeIssueDeliveryDependencies(
+            collect_target_sql=forbidden,
+            save_gp_bundle=forbidden,
+            save_file=save_file,
+            delete_object=forbidden,
+            create_meta_mr=lambda **_kwargs: {},
+            publish_dbt=lambda **_kwargs: {},
+            add_comment=lambda **_kwargs: None,
+            yaml_repo_path=lambda entity, schema, table: f"meta/{entity}/{schema}/{table}/meta_data_file.yaml",
+            engine=None,
+            base_dir=Path("."),
+            dev_entity_root=Path("entity"),
+            dev_click_root=Path("click"),
+            entity_git_repo="meta",
+            entity_git_root="entity",
+            click_git_root="click",
+            workspace_root="workspace",
+            base_branch="main",
+            target_branch="release",
+            gitlab_api_url="https://gitlab.example/api/v4",
+            gitlab_project="etl/project",
+            gitlab_token="token",
+            gitlab_ssl_verify=True,
+            youtrack_url="",
+            youtrack_token="",
+            youtrack_ssl_verify=True,
+        )
+
+        deliver_prototype_issue(
+            issue_result={"issue_id": "DWH-17", "raw": {"id": "2-17"}},
+            review_items=[{
+                "target_fqn": "dds.orders",
+                "entity_name": "ORDERS",
+                "is_new": True,
+                "yaml_content": "table_name: orders\n",
+                "replica_yaml_contents": {"ORDERS_ARCHIVE": "table_name: orders\n"},
+            }],
+            bundle={"files": [{"path": "dds/orders.sql"}], "deleted_files": []},
+            user=SimpleNamespace(email="engineer@example.com", username="engineer"),
+            dependencies=dependencies,
+        )
+
+        self.assertEqual([item["file_path"] for item in saved_files], [
+            "meta/ORDERS/dds/orders/meta_data_file.yaml",
+            "meta/ORDERS_ARCHIVE/dds/orders/meta_data_file.yaml",
+        ])
+
 
 class PrototypeIssueWorkflowTests(unittest.TestCase):
     @staticmethod

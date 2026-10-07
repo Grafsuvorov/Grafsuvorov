@@ -38,6 +38,7 @@ from api.services.entity_dev_meta import (
     _build_depends_on,
     _build_generated_yaml,
     _next_table_id,
+    _reserve_next_table_id,
     validate_entity_dev_meta_bundle,
 )
 from api.services.meta_workspace import _read_branch_gp_sql_from_yaml
@@ -1230,6 +1231,28 @@ class EntityMetaDependenciesTests(unittest.TestCase):
                 _next_table_id(Path("prod"), Path("dev"), reserved_table_ids={102, 103}),
                 104,
             )
+
+    def test_reserves_table_id_from_production_sequence(self) -> None:
+        executed = []
+
+        class FakeConnection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, statement, params):
+                executed.append((str(statement), params))
+                return SimpleNamespace(scalar=lambda: 5211)
+
+        class FakeEngine:
+            def begin(self):
+                return FakeConnection()
+
+        self.assertEqual(_reserve_next_table_id(FakeEngine()), 5211)
+        self.assertIn("pg_get_serial_sequence", executed[0][0])
+        self.assertEqual(executed[0][1]["table_ref"], "tech_etl.tables_meta")
 
     def test_generated_tables_receive_unique_ids_within_one_review(self) -> None:
         reserved_ids = set()

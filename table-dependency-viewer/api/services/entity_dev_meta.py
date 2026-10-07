@@ -18,7 +18,7 @@ import yaml
 
 from sqlalchemy import create_engine, text
 
-from ..config import TABLE_ENTITIES_META
+from ..config import TABLE_ENTITIES_META, TABLE_TABLES_META
 from .dev_meta import (
     _audit_dev_meta,
     _ensure_meta_permissions,
@@ -528,6 +528,30 @@ def _next_table_id(*roots: Path, reserved_table_ids: Optional[set[int]] = None) 
     return 1
 
 
+def _reserve_next_table_id(engine) -> Optional[int]:
+    """Atomically reserve an ID from the production ``tables_meta`` sequence."""
+    if engine is None:
+        return None
+    table_ref = str(TABLE_TABLES_META or "tech_etl.tables_meta").strip()
+    try:
+        with engine.begin() as conn:
+            value = conn.execute(
+                text("SELECT nextval(pg_get_serial_sequence(:table_ref, 'table_id'))"),
+                {"table_ref": table_ref},
+            ).scalar()
+    except Exception as exc:
+        raise ValueError(
+            f"Не удалось зарезервировать table_id из sequence {table_ref}.table_id: {exc}"
+        ) from exc
+    try:
+        table_id = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Sequence для {table_ref}.table_id не вернула корректный ID") from exc
+    if table_id <= 0:
+        raise ValueError(f"Sequence для {table_ref}.table_id вернула некорректный ID: {table_id}")
+    return table_id
+
+
 def _lookup_entity_id(engine, entity_name: str) -> Optional[int]:
     table_ref = TABLE_ENTITIES_META or "tech_etl.entities_meta"
     query = text(
@@ -576,7 +600,7 @@ def _build_generated_yaml(
     payload["table_name"] = table_norm
     payload["table_schema"] = schema_norm
     payload["entity_name"] = entity_name
-    payload["table_id"] = _next_table_id(
+    payload["table_id"] = _reserve_next_table_id(engine) or _next_table_id(
         prod_root,
         dev_root,
         reserved_table_ids=reserved_table_ids,

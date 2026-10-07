@@ -57,6 +57,11 @@ def _normalize_name(value: str) -> str:
     return str(value or "").strip().strip('"').lower()
 
 
+def _object_directory_name(value: str) -> str:
+    """Convert a physical table name into its single ETL directory name."""
+    return re.sub(r"[^a-z0-9_]+", "", _normalize_name(value))
+
+
 def _automatic_source_id(schema_name: str) -> Optional[int]:
     schema_norm = _normalize_name(schema_name)
     if schema_norm in {"stg", "dict_stg"}:
@@ -72,9 +77,10 @@ def _standard_sql_query_paths(
     schema_name: str,
     table_name: str,
 ) -> dict[str, str]:
+    table_directory = _object_directory_name(table_name) or _normalize_name(table_name)
     base_path = (
         "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/"
+        f"{entity_name}/{schema_name}/{table_directory}/"
     )
     recreate_path = base_path + SQL_FILE_NAMES["recreate_sql"]
     return {
@@ -89,7 +95,7 @@ def _standard_sql_query_paths(
 
 
 def _normalize_path_segment(value: str) -> str:
-    return re.sub(r"[^a-z0-9_]+", "", _normalize_name(value))
+    return _object_directory_name(value)
 
 
 def _is_equivalent_object_name(left: str, right: str) -> bool:
@@ -1345,7 +1351,7 @@ def validate_entity_dev_meta_bundle(
 
     expected_prefix = (
         f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/"
+        f"{entity_name}/{schema_name}/{_object_directory_name(table_name) or table_name}/"
     )
     for field_name, file_name in (
         ("sql_query_recreate_init", SQL_FILE_NAMES["recreate_sql"]),

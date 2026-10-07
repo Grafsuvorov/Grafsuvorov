@@ -59,6 +59,7 @@ from api.services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
 )
+from api.services.prototype_review_dbt import yaml_repo_path
 from api.services.prototype_review_issue_workflow import (
     PrototypeIssueWorkflowDependencies,
     create_prototype_review_issue,
@@ -1211,6 +1212,16 @@ class EntityMetaDependenciesTests(unittest.TestCase):
         self.assertRegex(payload["start_date"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
         self.assertTrue(payload["sql_query_recreate_init"].endswith("/sql_query_recreate_init.sql"))
         self.assertTrue(payload["sql_query_insert_init"].endswith("/sql_query_insert_init.sql"))
+
+    def test_slashes_in_physical_table_name_do_not_create_nested_etl_directories(self) -> None:
+        payload = _build_default_yaml("TRANSPORTATION", "ods", "/rusal/shipdata_ral")
+
+        self.assertIn("/ods/rusalshipdata_ral/", payload["sql_query_recreate_init"])
+        self.assertNotIn("/ods//rusal/shipdata_ral/", payload["sql_query_recreate_init"])
+        self.assertEqual(
+            yaml_repo_path("TRANSPORTATION", "ods", "/rusal/shipdata_ral"),
+            "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/ods/rusalshipdata_ral/meta_data_file.yaml",
+        )
 
     def test_next_table_id_respects_ids_reserved_in_current_review(self) -> None:
         with patch.object(entity_dev_meta, "_collect_used_table_ids", return_value={100, 101}):

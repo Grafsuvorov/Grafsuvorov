@@ -16,8 +16,13 @@ ENTITY_META_GIT_META_ROOT = os.getenv(
 )
 
 
+def _object_directory_name(table_name: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "", str(table_name or "").strip().strip('"').lower())
+
+
 def yaml_repo_path(entity_name: str, schema_name: str, table_name: str) -> str:
-    return posix_join(Path(ENTITY_META_GIT_META_ROOT).as_posix().strip("/"), str(entity_name or "").strip(), str(schema_name or "").strip(), str(table_name or "").strip(), "meta_data_file.yaml")
+    table_directory = _object_directory_name(table_name) or str(table_name or "").strip()
+    return posix_join(Path(ENTITY_META_GIT_META_ROOT).as_posix().strip("/"), str(entity_name or "").strip(), str(schema_name or "").strip(), table_directory, "meta_data_file.yaml")
 
 
 def dbt_registry_path(schema_name: str, table_name: str) -> str:

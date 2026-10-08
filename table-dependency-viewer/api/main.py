@@ -923,7 +923,16 @@ def _prototype_multi_issue_description(
         item_stands = [
             label for enabled, label in ((item.get("stand_dev"), "DEV"), (item.get("stand_prod"), "PROD")) if enabled
         ]
-        entity_names = [str(value).strip() for value in (item.get("entity_names") or []) if str(value).strip()]
+        raw_entity_names = item.get("entity_names") or []
+        if isinstance(raw_entity_names, str):
+            raw_entity_names = raw_entity_names.split(",")
+        entity_names = [str(value).strip() for value in raw_entity_names if str(value).strip()]
+        if not entity_names:
+            entity_names = [
+                value.strip()
+                for value in str(item.get("entity_name") or "").split(",")
+                if value.strip()
+            ]
         entity_display = ", ".join(entity_names) or str(item.get("entity_name") or "—")
         lines.extend(
             [

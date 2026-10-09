@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Send a test message to an existing eXpress personal chat via Bearer token.
+"""Create an eXpress personal chat and send a test message via Bearer token.
 
 Required environment variables:
   BOTX_BASE_URL       e.g. https://usr.al.team
   BOTX_BEARER_TOKEN   token value without the ``Bearer `` prefix
   BOTX_USER_EMAIL     recipient email
 
-By default the script finds the recipient and their personal chat with the bot.
-Passing ``--send`` sends one message to that chat. The recipient must first
-open a dialog with the bot and send it a message; only then does BotX create a
-personal chat that the bot can use. No credentials are written to disk or
-printed.
+By default the script finds the recipient. Passing ``--send`` creates a
+personal chat and sends one message. The bot must have the BotX setting
+``allow_chat_creating`` enabled. No credentials are written to disk or printed.
 """
 
 from __future__ import annotations
@@ -43,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--send",
         action="store_true",
-        help="send one test message to the existing personal chat",
+        help="create a personal chat and send one test message",
     )
     parser.add_argument(
         "--message",
@@ -120,21 +118,21 @@ class BotXClient:
             raise BotXError(f"User was not found for email {email}")
         return result[0]
 
-    def get_personal_chat(self, user_huid: str) -> str:
-        try:
-            result = self.request(
-                "GET",
-                f"/api/v1/botx/chats/personal?user_huid={user_huid}",
-            ).get("result") or {}
-        except BotXError as exc:
-            if "HTTP 404" in str(exc):
-                raise BotXError(
-                    "Personal chat was not found. Open the bot in Pulse and send it any message first."
-                ) from exc
-            raise
-        chat_id = result.get("group_chat_id")
+    def create_personal_chat(self, user_huid: str) -> str:
+        result = self.request(
+            "POST",
+            "/api/v3/botx/chats/create",
+            {
+                "name": "Personal chat",
+                "description": "BotX API test chat",
+                "chat_type": "chat",
+                "members": [user_huid],
+                "shared_history": False,
+            },
+        ).get("result") or {}
+        chat_id = result.get("chat_id")
         if not chat_id:
-            raise BotXError("Personal chat response has no group_chat_id")
+            raise BotXError("Chat creation response has no chat_id")
         return str(chat_id)
 
     def send_message(self, chat_id: str, message: str) -> str:
@@ -172,13 +170,12 @@ def main() -> int:
             raise BotXError("User search response has no user_huid")
         print(f"User found: {user.get('name', email)} ({user_huid})")
 
-        chat_id = client.get_personal_chat(str(user_huid))
-        print(f"Personal chat found: {chat_id}")
-
         if not args.send:
-            print("Dry run complete. Re-run with --send to send a message.")
+            print("Dry run complete. Re-run with --send to create a personal chat and send a message.")
             return 0
 
+        chat_id = client.create_personal_chat(str(user_huid))
+        print(f"Personal chat created: {chat_id}")
         sync_id = client.send_message(chat_id, args.message)
         print(f"Message accepted by BotX: {sync_id}")
         return 0

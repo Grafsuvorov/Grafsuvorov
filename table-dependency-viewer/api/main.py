@@ -5661,6 +5661,7 @@ def get_cached_meta_and_index():
                     "entity_name": meta.get("entity_name"),
                     "depends_on": depends_on,
                     "table_id": meta.get("table_id"),
+                    "key_attributes": list(meta.get("key_attributes") or []),
                     "sql_query_recreate_init": meta.get("sql_query_recreate_init"),
                     "sql_query_insert_init": meta.get("sql_query_insert_init"),
                     "sql_query_truncate": meta.get("sql_query_truncate"),

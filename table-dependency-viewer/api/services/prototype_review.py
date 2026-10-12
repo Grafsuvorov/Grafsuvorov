@@ -5,6 +5,7 @@ import re
 import ssl
 import time
 import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Optional
 from urllib import parse as urlparse
@@ -1650,6 +1651,90 @@ def get_ytrack_issue_context(
             direction = str(value or "").strip()
         break
     return {"issue_id": payload.get("idReadable") or issue_value, "summary": payload.get("summary") or "", "direction": direction}
+
+
+def _ytrack_custom_field_text(field: dict[str, Any]) -> str:
+    value = (field or {}).get("value")
+    if isinstance(value, dict):
+        return str(
+            value.get("localizedName")
+            or value.get("name")
+            or value.get("presentation")
+            or value.get("text")
+            or ""
+        ).strip()
+    return str(value or "").strip()
+
+
+def _ytrack_custom_field_date(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value) / 1000, tz=timezone.utc).date().isoformat()
+    if isinstance(value, dict):
+        value = value.get("presentation") or value.get("text") or value.get("name")
+    text_value = str(value or "").strip()
+    for date_format in ("%Y-%m-%d", "%d.%m.%Y", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(text_value[:19], date_format).date().isoformat()
+        except ValueError:
+            continue
+    return ""
+
+
+def find_ytrack_release_slots(
+    *,
+    base_url: str,
+    token: str,
+    release_date: str,
+    card_type_field_name: str,
+    card_type_value: str,
+    actual_release_date_field_name: str,
+    ssl_verify: str,
+) -> list[dict[str, str]]:
+    try:
+        normalized_date = datetime.strptime(str(release_date or "").strip(), "%Y-%m-%d").date().isoformat()
+    except ValueError as exc:
+        raise ValueError("Дата релиза должна быть в формате ГГГГ-ММ-ДД") from exc
+    if not base_url or not token:
+        raise ValueError("Интеграция с YouTrack не настроена")
+
+    fields = "idReadable,summary,customFields(name,value(name,localizedName,presentation,text))"
+    query = f"{str(card_type_field_name or 'Тип карточки').strip()}: {{{str(card_type_value or 'Release Slot').strip()}}}"
+    request_url = (
+        f"{base_url.rstrip('/')}/api/issues"
+        f"?query={urlparse.quote(query, safe='')}&fields={urlparse.quote(fields, safe=',()')}&$top=100"
+    )
+    req = urlrequest.Request(
+        request_url,
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            payload = json.loads(resp.read().decode("utf-8") or "[]")
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"YouTrack не вернул Release Slot: {exc.code} {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось загрузить Release Slot из YouTrack: {exc}") from exc
+
+    card_type_field_norm = str(card_type_field_name or "Тип карточки").strip().casefold()
+    actual_date_field_norm = str(actual_release_date_field_name or "Фактическая дата релиза").strip().casefold()
+    card_type_norm = str(card_type_value or "Release Slot").strip().casefold()
+    slots: list[dict[str, str]] = []
+    for issue in payload or []:
+        fields_by_name = {
+            str(field.get("name") or "").strip().casefold(): field
+            for field in (issue.get("customFields") or [])
+        }
+        if _ytrack_custom_field_text(fields_by_name.get(card_type_field_norm) or {}).casefold() != card_type_norm:
+            continue
+        actual_date = _ytrack_custom_field_date((fields_by_name.get(actual_date_field_norm) or {}).get("value"))
+        if actual_date != normalized_date:
+            continue
+        issue_id = str(issue.get("idReadable") or issue.get("id") or "").strip()
+        if issue_id:
+            slots.append({"issue_id": issue_id, "summary": str(issue.get("summary") or "").strip(), "release_date": actual_date})
+    return sorted(slots, key=lambda item: (item["issue_id"], item["summary"]))
 
 
 def _sanitize_attachment_name(value: str) -> str:

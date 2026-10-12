@@ -114,6 +114,8 @@ from .config import (
     YOUTRACK_ASSIGNEE_FIELD_NAME,
     YOUTRACK_ASSIGNEE_QUERY,
     YOUTRACK_RELEASE_DATE_FIELD_NAME,
+    YOUTRACK_RELEASE_SLOT_CARD_TYPE_VALUE,
+    YOUTRACK_ACTUAL_RELEASE_DATE_FIELD_NAME,
     YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
     YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
 )
@@ -204,6 +206,7 @@ from .services.prototype_review import (
     infer_final_target,
     infer_removed_table_targets,
     get_ytrack_issue_context,
+    find_ytrack_release_slots,
     load_merge_request_sql_bundle,
     parse_prototype_task_text,
     query_dev_table_checks,
@@ -1616,6 +1619,22 @@ def get_admin_prototype_parent_issue(issue_id: str, request: Request):
             direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
             ssl_verify=YOUTRACK_SSL_VERIFY,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+def get_admin_prototype_release_slots(release_date: str, request: Request):
+    _require_authenticated(request)
+    try:
+        return {"items": find_ytrack_release_slots(
+            base_url=YOUTRACK_URL,
+            token=YOUTRACK_TOKEN,
+            release_date=release_date,
+            card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
+            card_type_value=YOUTRACK_RELEASE_SLOT_CARD_TYPE_VALUE,
+            actual_release_date_field_name=YOUTRACK_ACTUAL_RELEASE_DATE_FIELD_NAME,
+            ssl_verify=YOUTRACK_SSL_VERIFY,
+        )}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -14687,6 +14706,7 @@ prototype_review_router = build_prototype_review_router(
         refresh_yaml=refresh_admin_prototype_review_yaml,
         create_issue=create_admin_prototype_review_issue,
         parent_issue=get_admin_prototype_parent_issue,
+        release_slots=get_admin_prototype_release_slots,
     )
 )
 

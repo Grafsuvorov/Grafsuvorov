@@ -111,6 +111,11 @@ YOUTRACK_CARD_TYPE_VALUE = os.getenv("YOUTRACK_CARD_TYPE_VALUE", "Task")
 YOUTRACK_ASSIGNEE_FIELD_NAME = os.getenv("YOUTRACK_ASSIGNEE_FIELD_NAME", "Assignee")
 YOUTRACK_ASSIGNEE_QUERY = os.getenv("YOUTRACK_ASSIGNEE_QUERY", "Suvorov Nikita")
 YOUTRACK_RELEASE_DATE_FIELD_NAME = os.getenv("YOUTRACK_RELEASE_DATE_FIELD_NAME", "Дата релиза")
+YOUTRACK_RELEASE_SLOT_CARD_TYPE_VALUE = os.getenv("YOUTRACK_RELEASE_SLOT_CARD_TYPE_VALUE", "Release Slot")
+YOUTRACK_ACTUAL_RELEASE_DATE_FIELD_NAME = os.getenv(
+    "YOUTRACK_ACTUAL_RELEASE_DATE_FIELD_NAME",
+    "Фактическая дата релиза",
+)
 # Не используем прежнюю YOUTRACK_DIRECTION_FIELD_NAME: в части окружений она указывала
 # на другое поле «Направление». Для prototype review нужен именно dashboard-поле.
 YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME = os.getenv(

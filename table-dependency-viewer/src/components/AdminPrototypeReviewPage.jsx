@@ -125,6 +125,10 @@ export default function AdminPrototypeReviewPage() {
   const [reviewItemsDraft, setReviewItemsDraft] = useState([]);
   const [runProgress, setRunProgress] = useState(null);
   const [parentLoading, setParentLoading] = useState(false);
+  const [releaseSlots, setReleaseSlots] = useState([]);
+  const [releaseSlotsLoading, setReleaseSlotsLoading] = useState(false);
+  const [releaseSlotsError, setReleaseSlotsError] = useState("");
+  const [selectedReleaseSlot, setSelectedReleaseSlot] = useState("");
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -149,6 +153,33 @@ export default function AdminPrototypeReviewPage() {
     if (!releaseDate) return;
     setForm((prev) => (String(prev.release_date || "").trim() ? prev : { ...prev, release_date: releaseDate }));
   }, [result?.task_context?.release_date]);
+
+  useEffect(() => {
+    const releaseDate = String(form.release_date || "").trim();
+    let cancelled = false;
+    setSelectedReleaseSlot("");
+    setReleaseSlotsError("");
+    if (!releaseDate) {
+      setReleaseSlots([]);
+      setReleaseSlotsLoading(false);
+      return () => { cancelled = true; };
+    }
+    setReleaseSlotsLoading(true);
+    adminApi.prototypeReviewReleaseSlots(releaseDate)
+      .then((payload) => {
+        if (!cancelled) setReleaseSlots(Array.isArray(payload?.items) ? payload.items : []);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setReleaseSlots([]);
+          setReleaseSlotsError(err?.message || "Не удалось загрузить Release Slot");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReleaseSlotsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [form.release_date]);
 
   const normalizedTaskText = useMemo(
     () => buildTaskText(form, linkedIssues),
@@ -250,6 +281,19 @@ export default function AdminPrototypeReviewPage() {
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleReleaseSlotChange = (issueId) => {
+    const nextIssueId = String(issueId || "").trim();
+    const previousIssueId = String(selectedReleaseSlot || "").trim().toUpperCase();
+    setSelectedReleaseSlot(nextIssueId);
+    setLinkedIssues((previous) => {
+      const values = splitItems(previous).filter((value) => String(value).toUpperCase() !== previousIssueId);
+      if (nextIssueId && !values.some((value) => String(value).toUpperCase() === nextIssueId.toUpperCase())) {
+        values.push(nextIssueId);
+      }
+      return values.join(", ");
+    });
   };
 
   const handleReviewItemChange = (itemId, field, value) => {
@@ -560,6 +604,26 @@ export default function AdminPrototypeReviewPage() {
                 onChange={(event) => handleFieldChange("release_date", event.target.value)}
               />
             </div>
+            {form.release_date ? <div className="prototype-step-field" style={{ margin: 0 }}>
+              <span className="slow-select-label">Release Slot</span>
+              <select
+                className="slow-entity-select"
+                value={selectedReleaseSlot}
+                onChange={(event) => handleReleaseSlotChange(event.target.value)}
+                disabled={releaseSlotsLoading || !releaseSlots.length}
+              >
+                <option value="">
+                  {releaseSlotsLoading ? "Загружаем слоты…" : releaseSlots.length ? "Выберите слот" : "На эту дату слотов нет"}
+                </option>
+                {releaseSlots.map((slot) => (
+                  <option key={slot.issue_id} value={slot.issue_id}>
+                    {slot.issue_id}{slot.summary ? ` — ${slot.summary}` : ""}
+                  </option>
+                ))}
+              </select>
+              {releaseSlotsError ? <div className="muted">{releaseSlotsError}</div> : null}
+              {!releaseSlotsError && !releaseSlotsLoading && releaseSlots.length ? <div className="muted">Выбранный слот будет добавлен в связанные тикеты.</div> : null}
+            </div> : null}
             <div className="prototype-step-field" style={{ margin: 0 }}>
               <span className="slow-select-label">Дашборд КХД/Направление <span aria-hidden="true">*</span></span>
               <input

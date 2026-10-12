@@ -31,6 +31,7 @@ class PrototypeReviewHandlers:
     refresh_yaml: Callable
     create_issue: Callable
     parent_issue: Callable
+    release_slots: Callable
 
 
 def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRouter:
@@ -75,5 +76,9 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
     @router.get("/parent-issue/{issue_id}")
     def parent_issue(issue_id: str, request: Request):
         return handlers.parent_issue(issue_id, request)
+
+    @router.get("/release-slots")
+    def release_slots(release_date: str, request: Request):
+        return handlers.release_slots(release_date, request)
 
     return router

@@ -49,6 +49,7 @@ from api.services.prototype_review import (
     extract_sql_dependencies,
     infer_review_targets,
     infer_removed_table_targets,
+    find_ytrack_release_slots,
     get_ytrack_issue_context,
     load_merge_request_sql_bundle,
 )
@@ -801,6 +802,51 @@ class YTrackIssueContextTests(unittest.TestCase):
 
         self.assertEqual(result["issue_id"], "DWH-17")
         self.assertEqual(result["direction"], "Финансы")
+
+    def test_finds_release_slots_by_actual_release_date(self) -> None:
+        payload = json.dumps([
+            {
+                "idReadable": "DWH-21",
+                "summary": "Релиз КХД 21",
+                "customFields": [
+                    {"name": "Тип карточки", "value": {"name": "Release Slot"}},
+                    {"name": "Фактическая дата релиза", "value": 1791763200000},
+                ],
+            },
+            {
+                "idReadable": "DWH-22",
+                "summary": "Другой день",
+                "customFields": [
+                    {"name": "Тип карточки", "value": {"name": "Release Slot"}},
+                    {"name": "Фактическая дата релиза", "value": 1791849600000},
+                ],
+            },
+            {
+                "idReadable": "DWH-23",
+                "summary": "Не слот",
+                "customFields": [
+                    {"name": "Тип карточки", "value": {"name": "Task"}},
+                    {"name": "Фактическая дата релиза", "value": 1791763200000},
+                ],
+            },
+        ]).encode("utf-8")
+
+        with patch.object(
+            prototype_review,
+            "_urlopen_without_proxy",
+            return_value=LoadMergeRequestSqlBundleTests.FakeResponse(payload),
+        ):
+            result = find_ytrack_release_slots(
+                base_url="https://youtrack.example",
+                token="token",
+                release_date="2026-10-12",
+                card_type_field_name="Тип карточки",
+                card_type_value="Release Slot",
+                actual_release_date_field_name="Фактическая дата релиза",
+                ssl_verify="true",
+            )
+
+        self.assertEqual(result, [{"issue_id": "DWH-21", "summary": "Релиз КХД 21", "release_date": "2026-10-12"}])
 
 
 class RemovedTableTargetsTests(unittest.TestCase):

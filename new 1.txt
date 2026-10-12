@@ -1,2 +1,966 @@
-Файлы метахранилища (каталог models_metadata) detail_store_limit: null
-Файлы моделей dq-проверках (каталог dbt_greenplum_elt/models/dq/technical): detail_store_limit: none
+do
+$$
+DECLARE
+    v_row_cnt int8;
+    v_row_cnt_agg int8 = 0;
+    v_calc_time interval ;
+    v_start_dttm timestamp(0) ;
+    v_last_step_finish_dttm timestamp(0) ;
+    v_is_init bool = false ;
+BEGIN
+    v_start_dttm := clock_timestamp()  ;
+    raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
+    v_last_step_finish_dttm := clock_timestamp();
+ 
+ 
+ 
+    drop table if exists pg_temp.adrc;
+    create temporary table pg_temp.adrc with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)
+    as (
+    select
+        address_code,
+        min(country_code) as country_code
+    from
+        dict_dds.address
+    group by
+        address_code
+        )
+    distributed by (address_code);
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.adrc (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+ 
+    drop table if exists pg_temp.dim_storage_owner;
+        create temporary table pg_temp.dim_storage_owner with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)
+    as (
+        SELECT
+            delivery_code,
+            MIN(plant_producer_code) as plant_code
+        FROM dds.delivery_document_position
+        WHERE delivery_position_line_item_code = '000010'
+        GROUP BY delivery_code
+        ) distributed replicated;
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.dim_storage_owner (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+    drop table if exists pg_temp.calendar_periods;
+    CREATE temporary table pg_temp.calendar_periods with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3) as(
+        SELECT
+            dt,
+            '1' as period_comparison_rule_code,
+            (dt - INTERVAL '1 day')::date as dt_comparison
+        FROM dict_dds.calendar
+        WHERE calendar_year BETWEEN 2000 AND 2050
+ 
+        UNION ALL
+ 
+        -- 2. Предыдущая неделя (понедельник → понедельник)
+        SELECT
+            dt,
+            '2',
+            (dt - INTERVAL '1 week')::date
+        FROM dict_dds.calendar
+        WHERE day_of_week = 1
+          AND calendar_year BETWEEN 2000 AND 2050
+ 
+        UNION ALL
+ 
+        -- 3. Предыдущий месяц (последний день месяца)
+        SELECT
+            dt,
+            '3',
+            (date_trunc('month', dt)::date - 1)
+        FROM dict_dds.calendar
+        WHERE calendar_day = days_in_month
+          AND calendar_year BETWEEN 2000 AND 2050
+ 
+        UNION ALL
+ 
+        -- 4. Предыдущий квартал (последний день квартала)
+        SELECT
+            dt,
+            '4',
+            (dt + INTERVAL '1 day' - INTERVAL '3 month' - INTERVAL '1 day')::date
+        FROM dict_dds.calendar
+        WHERE date_part('quarter', dt) <> date_part('quarter', dt + INTERVAL '1 day')
+          AND calendar_year BETWEEN 2000 AND 2050
+ 
+        UNION ALL
+ 
+        -- 5. Предыдущий год (31 декабря)
+        SELECT
+            dt,
+            '5',
+            (dt - INTERVAL '1 year')::date
+        FROM dict_dds.calendar
+        WHERE calendar_month = 12
+          AND calendar_day = 31
+          AND calendar_year BETWEEN 2000 AND 2050
+    ) distributed replicated;
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.calendar_periods (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+ 
+    drop table if exists pg_temp.ods__texts_from_sap_fm_read_text;
+    create temporary table pg_temp.ods__texts_from_sap_fm_read_text with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+        SELECT
+            o_tfsfrt7.text_key_identifier_code,
+            o_tfsfrt7.text_value
+        FROM ods.texts_from_sap_fm_read_text as o_tfsfrt7
+        WHERE
+            o_tfsfrt7.is_active is true
+            and o_tfsfrt7.application_object_code = 'KNA1'
+            and o_tfsfrt7.text_object_identifier_code = 'RA16'
+            and o_tfsfrt7.language_code = 'R'
+    ) distributed replicated;
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.ods__texts_from_sap_fm_read_text (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+    drop table if exists pg_temp.dim_hub_texts_agg;
+    create temporary table pg_temp.dim_hub_texts_agg with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+        SELECT
+            transport_hub_code,
+            MAX(CASE WHEN language_code = 'R' THEN transport_hub_name END) as name_r,
+            MAX(CASE WHEN language_code = 'E' THEN transport_hub_name END) as name_e
+        FROM dict_dds.transport_hub_texts
+        GROUP BY transport_hub_code
+    ) distributed replicated;
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.dim_hub_texts_agg (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+ 
+    drop table if exists pg_temp.pre_agg_1;
+    create temporary table pg_temp.pre_agg_1 with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3) as (
+    with tmp as (select warehouse_code, sales_bundle_code, dt_report, delivery_for_storage_calculation_code, forwarder_code,
+    port_of_discharge_code, storage_cost_calculation_type_name, sales_bundle_gross_weight, storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight, storage_payable_061_090_days_gross_weight, storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight, storage_payable_over_365_days_gross_weight, receiving_plant_code, creditor_in_shipment_instruction_code, metal_owner_for_reporting_code,
+    row_number() over(partition by warehouse_code, sales_bundle_code, dt_report) as rn
+    from dm_calc.storage_sales_bundles_amount)
+ 
+ 
+    select
+        trht_3.transport_hub_name as warehouse_name,
+        base.dt_report,
+ 
+        /* измерения */
+        CASE
+            WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+            WHEN cotex.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+            ELSE cotex.country_full_name
+        END as country_of_remote_warehouse_name,
+ 
+        CASE
+            WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
+            WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+            WHEN t25a1.market_region1_name IN ('Азия', 'Китай') THEN 'Восточная Азия'
+            ELSE t25a1.market_region1_name
+        END as region_of_remote_warehouse_name,
+ 
+        COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name
+                in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+            then addr_8.address_full_name
+ 
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+            THEN counter.counterparty_full_name
+        END, 'Не определено'
+) as forwarder_name,
+ 
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
+            WHEN base.storage_cost_calculation_type_name = 'Логика СВХ' THEN 'Склад СВХ'
+            ELSE 'Не определено'
+        END as type_warehouse_name,
+ 
+        CASE
+            WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+            WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
+            ELSE 'Не определено'
+        END as type_freight_name,
+ 
+        base.metal_owner_for_reporting_code,
+        o_tfsfrt_7_2.text_value as metal_owner_for_reporting_name,
+ 
+        CASE
+                  WHEN cotex_r_w_2.country_full_name = 'Россия' THEN ht_port.name_r
+                  ELSE ht_port.name_e
+              END as port_of_discharge_name,
+ 
+ 
+ 
+        SUM(base.sales_bundle_gross_weight) as sales_bundle_gross_weight,
+ 
+        SUM(
+            base.storage_payable_001_030_days_gross_weight +
+            base.storage_payable_031_060_days_gross_weight +
+            base.storage_payable_061_090_days_gross_weight +
+            base.storage_payable_091_180_days_gross_weight +
+            base.storage_payable_181_365_days_gross_weight +
+            base.storage_payable_over_365_days_gross_weight
+        ) as storage_payable_total_gross_weight,
+ 
+        /* percentage total payable vs total weight */
+        ( SUM(
+            base.storage_payable_001_030_days_gross_weight +
+            base.storage_payable_031_060_days_gross_weight +
+            base.storage_payable_061_090_days_gross_weight +
+            base.storage_payable_091_180_days_gross_weight +
+            base.storage_payable_181_365_days_gross_weight +
+            base.storage_payable_over_365_days_gross_weight
+          )
+          / NULLIF(SUM(base.sales_bundle_gross_weight), 0)
+          * 100
+        ) as storage_payable_total_gross_weight_percentage,
+ 
+        /* разрезы payable по корзинам */
+        SUM(base.storage_payable_001_030_days_gross_weight) as storage_payable_001_030_days_gross_weight,
+        SUM(base.storage_payable_031_060_days_gross_weight) as storage_payable_031_060_days_gross_weight,
+        SUM(base.storage_payable_061_090_days_gross_weight) as storage_payable_061_090_days_gross_weight,
+        SUM(base.storage_payable_091_180_days_gross_weight) as storage_payable_091_180_days_gross_weight,
+        SUM(base.storage_payable_181_365_days_gross_weight) as storage_payable_181_365_days_gross_weight,
+        SUM(base.storage_payable_over_365_days_gross_weight) as storage_payable_over_365_days_gross_weight,
+ 
+        /* доли корзин payable внутри total payable */
+        COALESCE(
+            SUM(base.storage_payable_001_030_days_gross_weight)
+            / NULLIF(
+                SUM(
+                    base.storage_payable_001_030_days_gross_weight +
+                    base.storage_payable_031_060_days_gross_weight +
+                    base.storage_payable_061_090_days_gross_weight +
+                    base.storage_payable_091_180_days_gross_weight +
+                    base.storage_payable_181_365_days_gross_weight +
+                    base.storage_payable_over_365_days_gross_weight
+                ),
+                0
+            ) * 100,
+            0
+        ) as storage_payable_001_030_days_gross_weight_percentage,
+ 
+        COALESCE(
+            SUM(base.storage_payable_031_060_days_gross_weight)
+            / NULLIF(
+                SUM(
+                    base.storage_payable_001_030_days_gross_weight +
+                    base.storage_payable_031_060_days_gross_weight +
+                    base.storage_payable_061_090_days_gross_weight +
+                    base.storage_payable_091_180_days_gross_weight +
+                    base.storage_payable_181_365_days_gross_weight +
+                    base.storage_payable_over_365_days_gross_weight
+                ),
+                0
+            ) * 100,
+            0
+        ) as storage_payable_031_060_days_gross_weight_percentage,
+ 
+        COALESCE(
+            SUM(base.storage_payable_061_090_days_gross_weight)
+            / NULLIF(
+                SUM(
+                    base.storage_payable_001_030_days_gross_weight +
+                    base.storage_payable_031_060_days_gross_weight +
+                    base.storage_payable_061_090_days_gross_weight +
+                    base.storage_payable_091_180_days_gross_weight +
+                    base.storage_payable_181_365_days_gross_weight +
+                    base.storage_payable_over_365_days_gross_weight
+                ),
+                0
+            ) * 100,
+            0
+        ) as storage_payable_061_090_days_gross_weight_percentage,
+ 
+        COALESCE(
+            SUM(base.storage_payable_091_180_days_gross_weight)
+            / NULLIF(
+                SUM(
+                    base.storage_payable_001_030_days_gross_weight +
+                    base.storage_payable_031_060_days_gross_weight +
+                    base.storage_payable_061_090_days_gross_weight +
+                    base.storage_payable_091_180_days_gross_weight +
+                    base.storage_payable_181_365_days_gross_weight +
+                    base.storage_payable_over_365_days_gross_weight
+                ),
+                0
+            ) * 100,
+            0
+        ) as storage_payable_091_180_days_gross_weight_percentage,
+ 
+        COALESCE(
+            SUM(base.storage_payable_181_365_days_gross_weight)
+            / NULLIF(
+                SUM(
+                    base.storage_payable_001_030_days_gross_weight +
+                    base.storage_payable_031_060_days_gross_weight +
+                    base.storage_payable_061_090_days_gross_weight +
+                    base.storage_payable_091_180_days_gross_weight +
+                    base.storage_payable_181_365_days_gross_weight +
+                    base.storage_payable_over_365_days_gross_weight
+                ),
+                0
+            ) * 100,
+            0
+        ) as storage_payable_181_365_days_gross_weight_percentage,
+ 
+        COALESCE(
+            SUM(base.storage_payable_over_365_days_gross_weight)
+            / NULLIF(
+                SUM(
+                    base.storage_payable_001_030_days_gross_weight +
+                    base.storage_payable_031_060_days_gross_weight +
+                    base.storage_payable_061_090_days_gross_weight +
+                    base.storage_payable_091_180_days_gross_weight +
+                    base.storage_payable_181_365_days_gross_weight +
+                    base.storage_payable_over_365_days_gross_weight
+                ),
+                0
+            ) * 100,
+            0
+        ) as storage_payable_over_365_days_gross_weight_percentage,
+ 
+        /* payable > 1 month (всё кроме 001-030) */
+        SUM(
+            base.storage_payable_031_060_days_gross_weight +
+            base.storage_payable_061_090_days_gross_weight +
+            base.storage_payable_091_180_days_gross_weight +
+            base.storage_payable_181_365_days_gross_weight +
+            base.storage_payable_over_365_days_gross_weight
+        ) as storage_payable_over_one_month_gross_weight
+ 
+    from tmp as base
+    LEFT JOIN dict_dds.counterparty as counter_creditor ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
+    LEFT JOIN dict_dds.address as addr_8
+        ON addr_8.address_code = counter_creditor.address_code
+       AND addr_8.international_display_format_code IS NULL
+    LEFT JOIN dict_dds.transport_hub as trhu ON trhu.transport_hub_code = base.warehouse_code
+    LEFT JOIN pg_temp.adrc as adrc ON adrc.address_code = trhu.address_code
+    LEFT JOIN dict_dds.country_texts as cotex ON cotex.country_code = adrc.country_code AND cotex.language_code = 'R'
+    LEFT JOIN dict_dds.transport_hub_texts as trht_3
+        ON trht_3.transport_hub_code = base.warehouse_code
+       AND trht_3.language_code = CASE WHEN cotex.country_full_name = 'Россия' THEN 'R' ELSE 'E' end
+    LEFT JOIN pg_temp.dim_storage_owner as so ON so.delivery_code = base.delivery_for_storage_calculation_code
+ 
+ 
+ 
+    left join dict_dds.plant_and_subsidiary as pas_1029 on pas_1029.plant_code = base.receiving_plant_code
+--  left join pg_temp.ods__texts_from_sap_fm_read_text as o_tfsfrt7 on
+--          o_tfsfrt7.text_key_identifier_code = pas_1029.customer_code
+ 
+    LEFT JOIN dict_dds.counterparty as counter ON counter.counterparty_code = base.forwarder_code
+    LEFT JOIN dict_dds.country as r_sd556 ON r_sd556.country_code = adrc.country_code
+    LEFT JOIN dict_dds.market_region1_texts as t25a1
+        ON t25a1.market_region1_code = r_sd556.market_region1_code
+       AND t25a1.language_code = 'R'
+    LEFT JOIN pg_temp.dim_hub_texts_agg as ht_port ON ht_port.transport_hub_code = base.port_of_discharge_code
+ 
+ 
+    LEFT JOIN dict_dds.transport_hub as trh_remot_e_2
+           ON trh_remot_e_2.transport_hub_code = base.port_of_discharge_code
+    LEFT JOIN pg_temp.adrc as adrc_r_w_2
+           ON adrc_r_w_2.address_code = trh_remot_e_2.address_code
+    LEFT JOIN dict_dds.country_texts as cotex_r_w_2
+           ON cotex_r_w_2.country_code = adrc_r_w_2.country_code
+          AND cotex_r_w_2.language_code = 'R'
+    left join dict_dds.plant_and_subsidiary as pas_1124 on pas_1124.plant_code = base.metal_owner_for_reporting_code
+ 
+    left join pg_temp.ods__texts_from_sap_fm_read_text as o_tfsfrt_7_2 on
+        o_tfsfrt_7_2.text_key_identifier_code = pas_1124.customer_code
+ 
+where base.rn = 1
+ 
+ 
+ 
+    GROUP BY
+        warehouse_name,
+        base.dt_report,
+        country_of_remote_warehouse_name,
+        region_of_remote_warehouse_name,
+        forwarder_name,
+        type_warehouse_name,
+        type_freight_name,
+        metal_owner_for_reporting_code,
+        metal_owner_for_reporting_name,
+        port_of_discharge_name
+ 
+) DISTRIBUTED BY (warehouse_name, dt_report);
+ 
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.pre_agg_1 (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+ 
+ 
+    drop table if exists pg_temp.pre_agg_2;
+    CREATE TEMP TABLE pg_temp.pre_agg_2 with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)
+    AS (
+    SELECT
+        trht_3.transport_hub_name as warehouse_name,
+        base.dt_report,
+ 
+        /* измерения */
+        CASE
+            WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+            WHEN cotex.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+            ELSE cotex.country_full_name
+        END as country_of_remote_warehouse_name,
+ 
+        CASE
+            WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
+            WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+            WHEN t25a1.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
+            ELSE t25a1.market_region1_name
+        END as region_of_remote_warehouse_name,
+ 
+        COALESCE(
+            CASE
+                WHEN base.storage_cost_calculation_type_name
+                    in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+                then addr_8.address_full_name
+ 
+                WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+                THEN counter.counterparty_full_name
+            END,
+            'Не определено'
+        ) as forwarder_name,
+ 
+ 
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
+            WHEN base.storage_cost_calculation_type_name = 'Логика СВХ' THEN 'Склад СВХ'
+            ELSE 'Не определено'
+        END as type_warehouse_name,
+ 
+        CASE
+            WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+            WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
+            ELSE 'Не определено'
+        END as type_freight_name,
+ 
+ 
+        base.metal_owner_for_reporting_code,
+        o_tfsfrt_7_2.text_value as metal_owner_for_reporting_name,
+ 
+        CASE
+            WHEN cotex_r_w_2.country_full_name = 'Россия' THEN ht_port.name_r
+            ELSE ht_port.name_e
+        END as port_of_discharge_name,
+ 
+        SUM(
+            base.storage_calculated_cost_001_030_amount +
+            base.storage_calculated_cost_031_060_amount +
+            base.storage_calculated_cost_061_090_amount +
+            base.storage_calculated_cost_091_180_amount +
+            base.storage_calculated_cost_181_365_amount +
+            base.storage_calculated_cost_over_365_amount
+        ) as storage_calculated_cost_total_amount,
+ 
+ 
+ 
+ 
+        /* calculated cost по корзинам */
+        SUM(base.storage_calculated_cost_001_030_amount) as storage_calculated_cost_001_030_amount,
+        SUM(base.storage_calculated_cost_031_060_amount) as storage_calculated_cost_031_060_amount,
+        SUM(base.storage_calculated_cost_061_090_amount) as storage_calculated_cost_061_090_amount,
+        SUM(base.storage_calculated_cost_091_180_amount) as storage_calculated_cost_091_180_amount,
+        SUM(base.storage_calculated_cost_181_365_amount) as storage_calculated_cost_181_365_amount,
+        SUM(base.storage_calculated_cost_over_365_amount) as storage_calculated_cost_over_365_amount,
+ 
+        /* cost > 1 month (всё кроме 001-030) */
+        SUM(
+            base.storage_calculated_cost_031_060_amount +
+            base.storage_calculated_cost_061_090_amount +
+            base.storage_calculated_cost_091_180_amount +
+            base.storage_calculated_cost_181_365_amount +
+            base.storage_calculated_cost_over_365_amount
+        ) as storage_calculated_over_one_month_amount,
+ 
+        /* цена за тонну (total cost / total payable weight) */
+        COALESCE(
+            SUM(
+                base.storage_calculated_cost_001_030_amount +
+                base.storage_calculated_cost_031_060_amount +
+                base.storage_calculated_cost_061_090_amount +
+                base.storage_calculated_cost_091_180_amount +
+                base.storage_calculated_cost_181_365_amount +
+                base.storage_calculated_cost_over_365_amount
+            ), 0
+        ) as storage_price_
+ 
+    FROM dm_calc.storage_sales_bundles_amount as base
+    LEFT JOIN dict_dds.counterparty as counter_creditor ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
+    LEFT JOIN dict_dds.address as addr_8
+        ON addr_8.address_code = counter_creditor.address_code
+       AND addr_8.international_display_format_code IS NULL
+    LEFT JOIN dict_dds.transport_hub as trhu ON trhu.transport_hub_code = base.warehouse_code
+    LEFT JOIN pg_temp.adrc as adrc ON adrc.address_code = trhu.address_code
+    LEFT JOIN dict_dds.country_texts as cotex ON cotex.country_code = adrc.country_code AND cotex.language_code = 'R'
+    LEFT JOIN dict_dds.transport_hub_texts as trht_3
+        ON trht_3.transport_hub_code = base.warehouse_code
+       AND trht_3.language_code = CASE WHEN cotex.country_full_name = 'Россия' THEN 'R' ELSE 'E' end
+    LEFT JOIN pg_temp.dim_storage_owner as so ON so.delivery_code = base.delivery_for_storage_calculation_code
+ 
+    LEFT JOIN dict_dds.counterparty as counter ON counter.counterparty_code = base.forwarder_code
+    LEFT JOIN dict_dds.country as r_sd556 ON r_sd556.country_code = adrc.country_code
+    LEFT JOIN dict_dds.market_region1_texts as  t25a1
+        ON t25a1.market_region1_code = r_sd556.market_region1_code
+       AND t25a1.language_code = 'R'
+    LEFT JOIN pg_temp.dim_hub_texts_agg as ht_port ON ht_port.transport_hub_code = base.port_of_discharge_code
+ 
+    LEFT JOIN dict_dds.transport_hub as trh_remot_e_2
+           ON trh_remot_e_2.transport_hub_code = base.port_of_discharge_code
+    LEFT JOIN pg_temp.adrc as adrc_r_w_2
+           ON adrc_r_w_2.address_code = trh_remot_e_2.address_code
+    LEFT JOIN dict_dds.country_texts as cotex_r_w_2
+           ON cotex_r_w_2.country_code = adrc_r_w_2.country_code
+          AND cotex_r_w_2.language_code = 'R'
+    left join dict_dds.plant_and_subsidiary as pas_1124 on pas_1124.plant_code = base.metal_owner_for_reporting_code
+ 
+    left join pg_temp.ods__texts_from_sap_fm_read_text as o_tfsfrt_7_2 on
+        o_tfsfrt_7_2.text_key_identifier_code = pas_1124.customer_code
+ 
+ 
+    GROUP BY
+        warehouse_name,
+        base.dt_report,
+        country_of_remote_warehouse_name,
+        region_of_remote_warehouse_name,
+        forwarder_name,
+        type_warehouse_name,
+        type_freight_name,
+        metal_owner_for_reporting_code,
+        metal_owner_for_reporting_name,
+        port_of_discharge_name
+    ) DISTRIBUTED BY (warehouse_name, dt_report);
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.pre_agg_2 (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+    drop table if exists pg_temp.pre_culc;
+    CREATE TEMP TABLE pg_temp.pre_culc with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)
+    AS
+    select
+        pre_agg_1.warehouse_name, pre_agg_1.dt_report, pre_agg_1.country_of_remote_warehouse_name, pre_agg_1.region_of_remote_warehouse_name,
+        pre_agg_1.forwarder_name, pre_agg_1.type_warehouse_name, pre_agg_1.type_freight_name,
+        pre_agg_1.port_of_discharge_name, pre_agg_1.metal_owner_for_reporting_code, pre_agg_1.metal_owner_for_reporting_name,
+ 
+        pre_agg_1.sales_bundle_gross_weight, pre_agg_1.storage_payable_total_gross_weight, pre_agg_1.storage_payable_total_gross_weight_percentage, pre_agg_1.storage_payable_001_030_days_gross_weight,
+        pre_agg_1.storage_payable_031_060_days_gross_weight, pre_agg_1.storage_payable_061_090_days_gross_weight, pre_agg_1.storage_payable_091_180_days_gross_weight,
+        pre_agg_1.storage_payable_181_365_days_gross_weight, pre_agg_1.storage_payable_over_365_days_gross_weight, pre_agg_1.storage_payable_001_030_days_gross_weight_percentage,
+        pre_agg_1.storage_payable_031_060_days_gross_weight_percentage, pre_agg_1.storage_payable_061_090_days_gross_weight_percentage, pre_agg_1.storage_payable_091_180_days_gross_weight_percentage,
+        pre_agg_1.storage_payable_181_365_days_gross_weight_percentage, pre_agg_1.storage_payable_over_365_days_gross_weight_percentage, pre_agg_1.storage_payable_over_one_month_gross_weight,
+ 
+        pre_agg_2.storage_calculated_cost_total_amount, pre_agg_2.storage_calculated_cost_001_030_amount, pre_agg_2.storage_calculated_cost_031_060_amount, pre_agg_2.storage_calculated_cost_061_090_amount,
+        pre_agg_2.storage_calculated_cost_091_180_amount, pre_agg_2.storage_calculated_cost_181_365_amount, pre_agg_2.storage_calculated_cost_over_365_amount, pre_agg_2.storage_calculated_over_one_month_amount,
+        coalesce((
+                pre_agg_2.storage_price_)
+                / nullif(pre_agg_1.storage_payable_001_030_days_gross_weight + pre_agg_1.storage_payable_031_060_days_gross_weight + pre_agg_1.storage_payable_061_090_days_gross_weight +
+                pre_agg_1.storage_payable_091_180_days_gross_weight + pre_agg_1.storage_payable_181_365_days_gross_weight +
+                pre_agg_1.storage_payable_over_365_days_gross_weight, 0), 0) as storage_price_per_tonne,
+        p.period_comparison_rule_code,
+        p.dt_comparison
+    from pg_temp.pre_agg_1 as pre_agg_1
+    join pg_temp.pre_agg_2 as pre_agg_2
+    on coalesce(pre_agg_1.warehouse_name, 'Кипарис dfglh№%43**&') = coalesce(pre_agg_2.warehouse_name, 'Кипарис dfglh№%43**&')
+        and pre_agg_1.dt_report = pre_agg_2.dt_report
+        and coalesce(pre_agg_1.country_of_remote_warehouse_name, 'Кипарис dfglh№%43**&') = coalesce(pre_agg_2.country_of_remote_warehouse_name, 'Кипарис dfglh№%43**&')
+        and coalesce(pre_agg_1.region_of_remote_warehouse_name, 'Кипарис dfglh№%43**&') = coalesce(pre_agg_2.region_of_remote_warehouse_name, 'Кипарис dfglh№%43**&')
+        and coalesce(pre_agg_1.forwarder_name, 'Кипарис dfglh№%43**&') = coalesce(pre_agg_2.forwarder_name, 'Кипарис dfglh№%43**&')
+        and pre_agg_1.type_warehouse_name = pre_agg_2.type_warehouse_name
+        and pre_agg_1.type_freight_name = pre_agg_2.type_freight_name
+        and coalesce(pre_agg_1.metal_owner_for_reporting_name, 'Кипарис dfglh№%43**&') = coalesce(pre_agg_2.metal_owner_for_reporting_name, 'Кипарис dfglh№%43**&')
+        and coalesce(pre_agg_1.port_of_discharge_name, 'Кипарис dfglh№%43**&') = coalesce(pre_agg_2.port_of_discharge_name, 'Кипарис dfglh№%43**&')
+    JOIN calendar_periods as p
+      ON p.dt = pre_agg_1.dt_report
+    DISTRIBUTED BY (warehouse_name, dt_report);
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.pre_culc (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+    drop table if exists pg_temp.dt_r;
+    CREATE TEMP TABLE pg_temp.dt_r with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)
+    AS
+    select
+        dt_report
+    from
+        dm_calc.storage_sales_bundles_amount
+    group by
+        dt_report
+    DISTRIBUTED BY (dt_report);
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] create pg_temp.dt_r (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+     insert into dm.transportation_external_location_metal_stock_aggregated
+     (
+        warehouse_name,
+        dt_report,
+        period_comparison_rule_code,
+        dt_comparison,
+        country_of_remote_warehouse_name,
+        region_of_remote_warehouse_name,
+        forwarder_name,
+        type_warehouse_name,
+        type_freight_name,
+        metal_owner_for_reporting_code,
+        metal_owner_for_reporting_name,
+        port_of_discharge_name,
+        sales_bundle_gross_weight,
+        storage_payable_total_gross_weight,
+        storage_payable_total_gross_weight_percentage,
+        storage_calculated_cost_total_amount,
+        storage_payable_001_030_days_gross_weight,
+        storage_payable_031_060_days_gross_weight,
+        storage_payable_061_090_days_gross_weight,
+        storage_payable_091_180_days_gross_weight,
+        storage_payable_181_365_days_gross_weight,
+        storage_payable_over_365_days_gross_weight,
+        storage_payable_001_030_days_gross_weight_percentage,
+        storage_payable_031_060_days_gross_weight_percentage,
+        storage_payable_061_090_days_gross_weight_percentage,
+        storage_payable_091_180_days_gross_weight_percentage,
+        storage_payable_181_365_days_gross_weight_percentage,
+        storage_payable_over_365_days_gross_weight_percentage,
+        storage_calculated_cost_001_030_amount,
+        storage_calculated_cost_031_060_amount,
+        storage_calculated_cost_061_090_amount,
+        storage_calculated_cost_091_180_amount,
+        storage_calculated_cost_181_365_amount,
+        storage_calculated_cost_over_365_amount,
+        storage_payable_over_one_month_gross_weight,
+        storage_calculated_over_one_month_amount,
+        storage_price_per_tonne,
+        sales_bundle_gross_weight_diff_per_period,
+        previous_day_gross_weight,
+        previous_day_total_gross_weight,
+        previous_day_cost_amount,
+        previous_week_gross_weight,
+        previous_week_total_gross_weight,
+        previous_week_cost_amount,
+        previous_month_gross_weight,
+        previous_month_total_gross_weight,
+        previous_month_cost_amount,
+        previous_quarter_gross_weight,
+        previous_quarter_total_gross_weight,
+        previous_quarter_cost_amount,
+        previous_year_gross_weight,
+        previous_year_total_gross_weight,
+        previous_year_cost_amount
+    )
+    select
+        base.warehouse_name,
+        base.dt_report,
+        base.period_comparison_rule_code,
+        base.dt_comparison,
+        base.country_of_remote_warehouse_name,
+        base.region_of_remote_warehouse_name,
+        base.forwarder_name,
+        base.type_warehouse_name,
+        base.type_freight_name,
+        base.metal_owner_for_reporting_code,
+        base.metal_owner_for_reporting_name,
+        base.port_of_discharge_name,
+        base.sales_bundle_gross_weight,
+        base.storage_payable_total_gross_weight,
+        base.storage_payable_total_gross_weight_percentage,
+        base.storage_calculated_cost_total_amount,
+        base.storage_payable_001_030_days_gross_weight,
+        base.storage_payable_031_060_days_gross_weight,
+        base.storage_payable_061_090_days_gross_weight,
+        base.storage_payable_091_180_days_gross_weight,
+        base.storage_payable_181_365_days_gross_weight,
+        base.storage_payable_over_365_days_gross_weight,
+        base.storage_payable_001_030_days_gross_weight_percentage,
+        base.storage_payable_031_060_days_gross_weight_percentage,
+        base.storage_payable_061_090_days_gross_weight_percentage,
+        base.storage_payable_091_180_days_gross_weight_percentage,
+        base.storage_payable_181_365_days_gross_weight_percentage,
+        base.storage_payable_over_365_days_gross_weight_percentage,
+        base.storage_calculated_cost_001_030_amount,
+        base.storage_calculated_cost_031_060_amount,
+        base.storage_calculated_cost_061_090_amount,
+        base.storage_calculated_cost_091_180_amount,
+        base.storage_calculated_cost_181_365_amount,
+        base.storage_calculated_cost_over_365_amount,
+        base.storage_payable_over_one_month_gross_weight,
+        base.storage_calculated_over_one_month_amount,
+        base.storage_price_per_tonne,
+ 
+        round(base.sales_bundle_gross_weight, 2) - round(previous.sales_bundle_gross_weight, 2) as sales_bundle_gross_weight_diff_per_period, -- LE.001131
+ 
+        case when base.period_comparison_rule_code = '1' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_day_gross_weight, -- LE.001132
+ 
+        case when base.period_comparison_rule_code = '1' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_day_total_gross_weight, -- LE.001133
+ 
+        case when base.period_comparison_rule_code = '1' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_day_cost_amount, -- LE.001134
+ 
+        case when base.period_comparison_rule_code = '2' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_week_gross_weight, -- LE.001135
+ 
+        case when base.period_comparison_rule_code = '2' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_week_total_gross_weight, -- LE.001136
+ 
+        case when base.period_comparison_rule_code = '2' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_week_cost_amount, -- LE.001137
+ 
+        case when base.period_comparison_rule_code = '3' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_month_gross_weight, -- LE.001138
+ 
+        case when base.period_comparison_rule_code = '3' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_month_total_gross_weight, -- LE.001139
+ 
+        case when base.period_comparison_rule_code = '3' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_month_cost_amount, -- LE.001140
+ 
+        case when base.period_comparison_rule_code = '4' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_quarter_gross_weight, -- LE.001141
+ 
+        case when base.period_comparison_rule_code = '4' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_quarter_total_gross_weight, -- LE.001142
+ 
+        case when base.period_comparison_rule_code = '4' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_quarter_cost_amount, -- LE.001143
+ 
+        case when base.period_comparison_rule_code = '5' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_year_gross_weight, -- LE.001144
+ 
+        case when base.period_comparison_rule_code = '5' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_year_total_gross_weight, -- LE.001145
+ 
+        case when base.period_comparison_rule_code = '5' and
+            lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report) is null
+            then
+            lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+            base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.metal_owner_for_reporting_code
+            order by base.dt_report)
+        end as previous_year_cost_amount -- LE.001146
+ 
+    from pg_temp.pre_culc as base
+    left join pg_temp.pre_culc as previous on
+ 
+    coalesce(previous.warehouse_name, 'точно не склад ;%()"?') = coalesce(base.warehouse_name, 'точно не склад ;%()"?')
+    and previous.dt_report = base.dt_comparison
+    and previous.forwarder_name = base.forwarder_name
+    and previous.type_warehouse_name = base.type_warehouse_name
+    and previous.type_freight_name = base.type_freight_name
+    and previous.period_comparison_rule_code = base.period_comparison_rule_code
+    and previous.metal_owner_for_reporting_code = base.metal_owner_for_reporting_code
+    and previous.port_of_discharge_name = base.port_of_discharge_name
+ 
+ 
+ 
+union all ---- union для
+ 
+ 
+    select
+        trht.transport_hub_name as warehouse_name,
+        dt_r.dt_report as dt_report,
+        p.period_comparison_rule_code as period_comparison_rule_code,
+        null as dt_comparison,
+        countr_t.country_full_name as country_of_remote_warehouse_name,
+        marete.market_region1_name as region_of_remote_warehouse_name,
+        null as forwarder_name,
+        'Терминал порта' as type_warehouse_name,
+        'Балк' as type_freight_name,
+        null as metal_owner_for_reporting_code,
+        null as metal_owner_for_reporting_name,
+        null as port_of_discharge_name,
+        0 as sales_bundle_gross_weight,
+        0 as storage_payable_total_gross_weight,
+        0 as storage_payable_total_gross_weight_percentage,
+        0 as storage_calculated_cost_total_amount,
+        0 as storage_payable_001_030_days_gross_weight,
+        0 as storage_payable_031_060_days_gross_weight,
+        0 as storage_payable_061_090_days_gross_weight,
+        0 as storage_payable_091_180_days_gross_weight,
+        0 as storage_payable_181_365_days_gross_weight,
+        0 as storage_payable_over_365_days_gross_weight,
+        0 as storage_payable_001_030_days_gross_weight_percentage,
+        0 as storage_payable_031_060_days_gross_weight_percentage,
+        0 as storage_payable_061_090_days_gross_weight_percentage,
+        0 as storage_payable_091_180_days_gross_weight_percentage,
+        0 as storage_payable_181_365_days_gross_weight_percentage,
+        0 as storage_payable_over_365_days_gross_weight_percentage,
+        0 as storage_calculated_cost_001_030_amount,
+        0 as storage_calculated_cost_031_060_amount,
+        0 as storage_calculated_cost_061_090_amount,
+        0 as storage_calculated_cost_091_180_amount,
+        0 as storage_calculated_cost_181_365_amount,
+        0 as storage_calculated_cost_over_365_amount,
+        0 as storage_payable_over_one_month_gross_weight,
+        0 as storage_calculated_over_one_month_amount,
+        0 as storage_price_per_tonne,
+        0 as sales_bundle_gross_weight_diff_per_period,
+        0 as previous_day_gross_weight,
+        0 as previous_day_total_gross_weight,
+        0 as previous_day_cost_amount,
+        0 as previous_week_gross_weight,
+        0 as previous_week_total_gross_weight,
+        0 as previous_week_cost_amount,
+        0 as previous_month_gross_weight,
+        0 as previous_month_total_gross_weight,
+        0 as previous_month_cost_amount,
+        0 as previous_quarter_gross_weight,
+        0 as previous_quarter_total_gross_weight,
+        0 as previous_quarter_cost_amount,
+        0 as previous_year_gross_weight,
+        0 as previous_year_total_gross_weight,
+        0 as previous_year_cost_amount
+from dict_dds.foreign_warehouse_priority_definition as base
+cross join pg_temp.dt_r
+JOIN calendar_periods as p
+      ON p.dt = dt_r.dt_report
+left join dict_dds.transport_hub as trhu on
+    trhu.transport_hub_code = base.transport_hub_code
+left join dict_dds.address as address on
+    address.address_code = trhu.address_code
+    and address.international_display_format_code is null
+left join dict_dds.country as country on
+    country.country_code = address.country_code
+left join dict_dds.market_region1_texts as marete on
+    marete.market_region1_code = country.market_region1_code
+    and marete.language_code = 'R'
+left join dict_dds.country_texts as countr_t on
+    countr_t.country_code = address.country_code
+    and countr_t.language_code = 'R'
+left join dict_dds.transport_hub_texts as trht on
+    trht.transport_hub_code = base.transport_hub_code
+    and trht.language_code = 'R'
+where base.is_russian_port_code is not null;
+ 
+    get diagnostics v_row_cnt = row_count;
+    raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+    v_last_step_finish_dttm :=  clock_timestamp();
+ 
+    v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+ 
+ 
+    if v_row_cnt_agg > 0 then
+        analyze dm.transportation_external_location_metal_stock_aggregated;
+        get diagnostics v_row_cnt = row_count;
+        raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+        v_last_step_finish_dttm :=  clock_timestamp();
+    end if;
+ 
+    v_calc_time :=  clock_timestamp() - v_start_dttm ;
+    raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+end;
+$$
+ 

@@ -42,11 +42,11 @@ def publish_dbt_registry(
     for item in review_items:
         if str(item.get("object_type") or "TABLE").strip().upper() != "TABLE":
             continue
-        target_fqn = str(item.get("target_fqn") or "").strip().lower()
+        target_fqn = str(item.get("target_fqn") or "").strip()
         if "." not in target_fqn:
             continue
         schema_name, table_name = target_fqn.split(".", 1)
-        active_targets.add(target_fqn)
+        active_targets.add(target_fqn.lower())
         registry_path = dbt_registry_path(schema_name, table_name)
         duplicates_path = dbt_duplicates_path(schema_name, table_name)
         dbt_files[registry_path] = {"target_fqn": target_fqn, "file_path": registry_path, "file_kind": "registry", "content": build_registry_yaml(item)}

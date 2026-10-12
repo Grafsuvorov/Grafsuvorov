@@ -107,7 +107,7 @@ def update_duplicates_model(content: str, key_attributes: list[Any]) -> str:
 
 
 def build_registry_yaml(item: dict[str, Any]) -> str:
-    target_fqn = str(item.get("target_fqn") or "").strip().lower()
+    target_fqn = str(item.get("target_fqn") or "").strip()
     if "." not in target_fqn:
         raise ValueError(f"Не удалось определить schema/table для dbt registry: {target_fqn or '—'}")
     schema_name, table_name = target_fqn.split(".", 1)

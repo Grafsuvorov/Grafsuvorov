@@ -73,6 +73,17 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
         self.assertIn('filter: "is_active is true"', content)
         self.assertIn("#Актуально только для scd_type: scd2", content)
 
+    def test_registry_preserves_source_table_name_case(self) -> None:
+        build = self.functions["_prototype_review_build_dbt_registry_yaml"]
+
+        content = build({
+            "target_fqn": "DDS.Accounting_Documents",
+            "key_attributes": ["document_id"],
+        })
+
+        self.assertIn("schema_name: DDS", content)
+        self.assertIn("table_name: Accounting_Documents", content)
+
     def test_scd2_requires_only_version_key_besides_unique_key(self) -> None:
         needs_attention = self.functions["_prototype_item_needs_attention"]
 

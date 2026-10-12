@@ -56,6 +56,7 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
         self.assertIn("    - address_code\n    - international_display_format_code", content)
         self.assertIn("# наименование схемы", content)
         self.assertIn('check_type: "duplicates"', content)
+        self.assertIn("detail_store_limit: null", content)
 
     def test_scd2_includes_version_key_and_filter(self) -> None:
         build = self.functions["_prototype_review_build_dbt_registry_yaml"]
@@ -132,6 +133,7 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
             content,
         )
         self.assertIn("error_code         = 'dq_all0001'", content)
+        self.assertIn("detail_store_limit = none", content)
         self.assertIn("tags               = ['dq', 'technical', 'duplicates']", content)
 
     def test_existing_dq_model_changes_only_check_columns(self) -> None:

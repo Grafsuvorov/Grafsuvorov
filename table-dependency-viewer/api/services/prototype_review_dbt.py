@@ -86,7 +86,7 @@ def dbt_key_list(key_attributes: list[Any]) -> str:
 
 def build_duplicates_model(item: dict[str, Any]) -> str:
     check_columns = dbt_key_list(item.get("key_attributes") or [])
-    return "\n".join(["{{- config(", "    error_code         = 'dq_all0001',", "    detail_store_flag  = true,", "    detail_store_limit = 30,", "    check_type         = 'duplicates',", f"    check_columns      = {check_columns},", "    tags               = ['dq', 'technical', 'duplicates']", "    ) -}}", ""])
+    return "\n".join(["{{- config(", "    error_code         = 'dq_all0001',", "    detail_store_flag  = true,", "    detail_store_limit = none,", "    check_type         = 'duplicates',", f"    check_columns      = {check_columns},", "    tags               = ['dq', 'technical', 'duplicates']", "    ) -}}", ""])
 
 
 def build_nulls_model(item: dict[str, Any]) -> str:
@@ -127,12 +127,12 @@ def build_registry_yaml(item: dict[str, Any]) -> str:
     lines = ["relation:", "  # наименование схемы", f"  schema_name: {schema_name}", "  # наименование таблицы", f"  table_name: {table_name}", "  # тип scd (scd1, scd2)", f"  scd_type: {scd_type}", "  unique_key: # список полей уникального ключа", *[f"    - {value}" for value in unique_key]]
     if scd_type == "scd2":
         lines.extend(["  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать", *[f"    - {value}" for value in version_key]])
-    lines.extend(["dq:", '  - check_type: "duplicates"', "    detail_store_flag: true", "    detail_store_limit: 30"])
+    lines.extend(["dq:", '  - check_type: "duplicates"', "    detail_store_flag: true", "    detail_store_limit: null"])
     if dq_filter:
         lines.append(f"    filter: {json.dumps(dq_filter, ensure_ascii=False)}")
     null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
     if null_conditions:
-        lines.extend(['  - check_type: "nulls"', "    detail_store_flag: true", "    detail_store_limit: none", "    conditions:", *[f"      - {json.dumps(value, ensure_ascii=False)}" for value in null_conditions]])
+        lines.extend(['  - check_type: "nulls"', "    detail_store_flag: true", "    detail_store_limit: null", "    conditions:", *[f"      - {json.dumps(value, ensure_ascii=False)}" for value in null_conditions]])
     return "\n".join(lines) + "\n"
 
 

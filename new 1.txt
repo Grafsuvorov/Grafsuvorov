@@ -1,28 +1,478 @@
-dm_calc.delivery_schema_for_other_routes.yml
-
-relation:
-  # наименование схемы
-  schema_name: dm_calc
-  # наименование таблицы
-  table_name: delivery_schema_for_other_routes
-  # тип scd (scd1, scd2)
-  scd_type: scd1
-  unique_key: # список полей уникального ключа
-    - delivery_number_sales
-    - batch
-    - transport_route_technical_code
-dq:
-  - check_type: "duplicates"
-    detail_store_flag: true
-    detail_store_limit: null
+depends_on:
+  dict_dds:
+    - calendar
+    - map_kpi_report_account_to_entity
+  dm_calc:
+    - production_ad_finish_goods_load_and_shipment
+  mld:
+    - dt_report)
+  stg:
+    - kpi_account_list
+  t:
+    - dt_report)
+key_attributes:
 
 
-dq_dm_calc_s_delivery_schema_for_other_routes_s_duplicates.sql
-{{- config(
-    error_code         = 'dq_all0001',
-    detail_store_flag  = true,
-    detail_store_limit = 30,
-    check_type         = 'duplicates',
-    check_columns      = ['delivery_number_sales', 'batch', 'transport_route_technical_code'],
-    tags               = ['dq', 'technical', 'duplicates']
-    ) -}}
+
+insert into dm.production_ad_finish_goods_load_and_shipment(
+		dt_report,
+		dt_latest_data_extracted_source_system,
+		data_source_type,
+		plant_code,
+		plant_name,
+		subsequent_code,
+		is_last_day_of_month,
+		account_code,
+		account_name,
+		account_short_name,
+		difference_type_name,
+		difference_type,
+		actual,
+		month_plan,
+		active_goal,
+		difference,
+		difference_percentage,
+		execution_percentage,
+		execution_percentage_trunc,
+		actual_ytd,
+		active_goal_ytd,
+		difference_ytd,
+		difference_percentage_ytd,
+		execution_percentage_ytd,
+		execution_percentage_ytd_trunc,
+		difference_type_mtd,
+		difference_type_ytd,
+		actual_mtd,
+		active_goal_mtd,
+		difference_mtd,
+		difference_percentage_mtd,
+		execution_percentage_mtd,
+		execution_percentage_mtd_trunc,
+		month_plan_mtd,
+		month_plan_ytd,
+		difference_month_plan,
+		difference_percentage_month_plan,
+		difference_month_plan_mtd,
+		difference_percentage_month_plan_mtd,
+		difference_month_plan_ytd,
+		difference_percentage_month_plan_ytd,
+		comment
+) 
+select 
+	t1.dt_report,
+	t1.dt_latest_data_extracted_source_system,
+	t1.data_source_type,
+	t1.plant_code,
+	t1.plant_name,
+	t1.subsequent_code,
+	t1.is_last_day_of_month,
+	t1.account_code,
+	t1.account_name,	
+	t1.account_short_name,
+	t1.difference_type_name,
+	t1.difference_type,
+	t1.actual,
+	t1.month_plan,
+	t1.active_goal,
+	t1.difference,
+	t1.difference_percentage,
+	t1.execution_percentage,
+	t1.execution_percentage_trunc,
+	t1.actual_ytd,
+	t1.active_goal_ytd,
+	t1.difference_ytd,
+	t1.difference_percentage_ytd,
+	t1.execution_percentage_ytd,
+	t1.execution_percentage_ytd_trunc,
+	t1.difference_type_mtd,
+	t1.difference_type_ytd,
+	t1.actual_mtd,
+	t1.active_goal_mtd,
+	t1.difference_mtd,
+	t1.difference_percentage_mtd,
+	t1.execution_percentage_mtd,
+	t1.execution_percentage_mtd_trunc,
+	t1.month_plan_mtd,
+	t1.month_plan_ytd,
+	t1.difference_month_plan,
+	t1.difference_percentage_month_plan,
+	t1.difference_month_plan_mtd,
+	t1.difference_percentage_month_plan_mtd,
+	t1.difference_month_plan_ytd,
+	t1.difference_percentage_month_plan_ytd,
+	t1.comment
+	from( 
+with 
+mas_map_entity as (
+	select distinct
+		mkrate.entity_code,
+		mkrate.subsequent_code,
+		mkrate.entity_name,
+		mkrate.account_code,
+		mkrate.dt_loading_data_first_date,
+		ma.is_zero_row_created_automatically,
+		ma.account_name,
+		ma.account_short_name,
+		ma.source_system_name,
+		ma.discreteness_name,
+		ma.aggregation_type_code,
+		ma.difference_type_name,
+		ma.decimal_number::integer
+--		ma.is_kpi_ad
+	from dict_dds.map_kpi_report_account_to_entity as mkrate
+	join stg.kpi_account_list as ma on mkrate.account_code = ma.account_code
+	where 
+	--ma.is_kpi_ad = 'true' and 
+	exists (select 1 from 
+				dm_calc.production_ad_finish_goods_load_and_shipment as pfgls
+				where mkrate.account_code=pfgls.account_code)  
+--	and mkrate.entity_code not in ('BU_ALUM','BU_AL_AD')
+)
+, mas_all_list as (
+		select
+		mdy.dt as dt_report,
+		me.entity_code,
+		me.entity_name,
+		me.account_code,
+		me.is_zero_row_created_automatically
+	from mas_map_entity as me
+	join dict_dds.calendar as mdy on mdy.dt >= coalesce(me.dt_loading_data_first_date, to_date('01.01.2024','dd.mm.yyyy')) and mdy.dt <= date_trunc('month', timestamp 'now') + '1 month'::interval - '1 day'::interval
+)
+,ttt as (
+		select
+			mas1.dt_report,
+			mas1.plant_code,
+			mas1.account_code,
+			mas1.actual,
+		    mas1.active_goal,
+		    mas1.month_plan
+		from dm_calc.production_ad_finish_goods_load_and_shipment as mas1
+		where 1 = 1 
+		and not exists 
+		(
+			select 
+				1 
+			from dm_calc.production_ad_finish_goods_load_and_shipment as mas2
+			where mas2.dt_report = mas1.dt_report 
+				and (mas2.actual is null)
+				and  mas2.plant_code = mas1.plant_code 
+				and mas2.account_code = mas1.account_code 
+		)		
+			union all 
+			select 
+				mal.dt_report,
+			    mal.entity_code,
+				mal.account_code,
+				0 as actual,
+				coalesce(ki.active_goal,0) as active_goal,
+				coalesce(ki.month_plan,0) as month_plan
+			from mas_all_list as mal
+			left join dm_calc.production_ad_finish_goods_load_and_shipment as ki 
+				on ki.dt_report = mal.dt_report 
+				and ki.plant_code =  mal.entity_code 
+				and ki.account_code = mal.account_code 
+			where is_zero_row_created_automatically = 'true'
+				and not exists 
+				(
+					select 
+						1 
+					from dm_calc.production_ad_finish_goods_load_and_shipment as mas1
+					where mas1.dt_report = mal.dt_report 
+						and mas1.actual is not null 
+						and mas1.plant_code = mal.entity_code 
+						and mas1.account_code = mal.account_code 
+				)
+			)	
+, t as ( 
+	select
+		ttt.dt_report,
+		ttt.actual,
+		ttt.active_goal,
+		ttt.month_plan,
+		ttt.plant_code,
+		ttt.account_code,
+
+		(case 
+			--when ttt.actual_ytd is not null then ttt.actual_ytd
+			when mkrate.aggregation_type_code = 'avg' then round(avg(ttt.actual) over (partition by ttt.plant_code, ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc),mkrate.decimal_number::integer) 
+			when mkrate.aggregation_type_code = 'sum' then sum(ttt.actual) over (partition by ttt.plant_code, ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc)
+			else last_value(ttt.actual) over (partition by ttt.plant_code, ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc)
+		end) as actual_ytd,	
+		(case 
+			--when ttt.active_goal_ytd is not null then ttt.active_goal_ytd
+			when mkrate.aggregation_type_code = 'avg' then round(avg(ttt.active_goal) over (partition by ttt.plant_code,	ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc),mkrate.decimal_number::integer) 
+			when mkrate.aggregation_type_code = 'sum' then sum(ttt.active_goal) over (partition by ttt.plant_code,	ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc) 
+			else last_value(ttt.active_goal) over (partition by ttt.plant_code, ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc) 
+		end) as active_goal_ytd,
+		(case 
+			when mkrate.aggregation_type_code = 'avg' then round(avg(ttt.month_plan) over (partition by ttt.plant_code, ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc),mkrate.decimal_number::integer) 
+			when mkrate.aggregation_type_code = 'sum' then sum(ttt.month_plan) over (partition by ttt.plant_code,	ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc)
+			else last_value(ttt.month_plan) over (partition by ttt.plant_code, ttt.account_code, date_part('year',ttt.dt_report) order by ttt.dt_report asc) 
+		end) as month_plan_ytd,
+		(case 
+			--when ttt.actual_mtd is not null then ttt.actual_mtd
+			when mkrate.aggregation_type_code = 'avg' then round(avg(ttt.actual) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			when mkrate.aggregation_type_code = 'sum' then round(sum(ttt.actual) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			else round(last_value(ttt.actual) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			end) as actual_mtd,	
+		(case 
+			--when ttt.active_goal_mtd is not null then ttt.active_goal_mtd
+			when mkrate.aggregation_type_code = 'avg' then round(avg(ttt.active_goal) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			when mkrate.aggregation_type_code = 'sum' then round(sum(ttt.active_goal) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			else round(last_value(ttt.active_goal) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+		end) as active_goal_mtd,
+		(case 
+			when mkrate.aggregation_type_code = 'avg' then round(avg(ttt.month_plan) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			when mkrate.aggregation_type_code = 'sum' then round(sum(ttt.month_plan) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+			else round(last_value(ttt.month_plan) over (partition by ttt.plant_code, ttt.account_code, date_part('month',ttt.dt_report), date_part('year',ttt.dt_report) order by date_part('day',ttt.dt_report) asc, date_part('month',ttt.dt_report) asc, date_part('year',ttt.dt_report) asc),mkrate.decimal_number::integer) 
+		end) as month_plan_mtd
+	from ttt as ttt
+	join mas_map_entity as mkrate 
+		on lower(mkrate.entity_code) = lower(ttt.plant_code) 
+		and mkrate.account_code = ttt.account_code 
+	where (dt_report >= coalesce(mkrate.dt_loading_data_first_date,to_date('01.01.2024','dd.mm.yyyy')) 
+	and dt_report <=date_trunc('month', timestamp 'now') + '1 month'::interval - '1 day'::interval)
+--	and mkrate.is_kpi_ad = 'true'
+) 
+, mas_calc as (
+	select 
+	    t.dt_report,
+	    lag(t.dt_report,-1) over (partition by t.plant_code, me.account_code order by t.dt_report desc) as lag_report_date,
+	    t.plant_code,
+	    me.entity_name as plant_name,
+	    me.subsequent_code,
+	    me.account_code,
+	    me.account_name,
+	    me.account_short_name,
+		me.difference_type_name,
+		me.decimal_number,
+		(case when 
+			me.aggregation_type_code = 'sum' and (
+			(coalesce(round(sum(t.actual::numeric) - sum(t.active_goal::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(sum(t.actual::numeric) - sum(t.active_goal::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%') 
+		)then 1
+			when 
+			me.aggregation_type_code = 'avg' and (
+			(coalesce(round(avg(t.actual::numeric) - avg(t.active_goal::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(avg(t.actual::numeric) - avg(t.active_goal::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%')
+		)then 1
+		when 
+			me.aggregation_type_code = 'least' and (
+			(coalesce(round(max(t.actual::numeric) - max(t.active_goal::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(max(t.actual::numeric) - max(t.active_goal::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%')
+		) then 1
+		else 0
+		end) as difference_type,	
+		(case when me.aggregation_type_code = 'avg' then coalesce(round(avg(t.actual),me.decimal_number), 0) else coalesce(round(sum(t.actual),me.decimal_number), 0) end) as actual,
+		coalesce(round(t.month_plan,me.decimal_number),0) as month_plan,
+		(case when me.aggregation_type_code = 'avg' then coalesce(round(avg(t.active_goal),me.decimal_number),0) else coalesce(round(sum(t.active_goal),me.decimal_number),0) end) as active_goal,
+		coalesce(round(sum(t.actual) - sum(t.active_goal),me.decimal_number),0) as difference,
+		case when me.difference_type_name like '%Меньше-лучше%' 
+			then coalesce(round((sum(t.actual) - sum(t.active_goal))/sum(nullif(t.active_goal,0))*100,1),0)
+			else coalesce(round((sum(t.actual) - sum(t.active_goal))/nullif(abs(sum(t.active_goal)), 0)*100,1),0) end as difference_percentage,
+		coalesce(round(sum(t.actual)/sum(case when t.active_goal = 0 then 1 else t.active_goal end )*100,1),0) as execution_percentage,
+		least(coalesce(round(sum(t.actual)/sum(case when t.active_goal = 0 then 1 else t.active_goal end )*100,1),0),101) as execution_percentage_trunc,	
+		coalesce(round(sum(t.actual_ytd),me.decimal_number),0) as actual_ytd,
+		coalesce(round(sum(t.active_goal_ytd),me.decimal_number),0) as active_goal_ytd,
+		coalesce(round(sum( coalesce (t.actual_ytd,0)) - sum( coalesce (t.active_goal_ytd,0)),me.decimal_number),0) as difference_ytd,
+		coalesce(round((sum(t.actual_ytd) - sum(t.active_goal_ytd))/sum(nullif(t.active_goal_ytd,0))*100,1),0) as difference_percentage_ytd,
+		coalesce(round(sum(t.actual_ytd)/sum(nullif(t.active_goal_ytd,0))*100,1),0) as execution_percentage_ytd,
+		least(coalesce(round(sum(t.actual_ytd)/sum(nullif(t.active_goal_ytd,0))*100,1),0),101) as execution_percentage_ytd_trunc,
+		(case 
+	    when 
+			me.aggregation_type_code = 'sum' and (
+			(coalesce(round(sum(t.actual_mtd::numeric) - sum(t.active_goal_mtd::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(sum(t.actual_mtd::numeric) - sum(t.active_goal_mtd::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%') )then 1
+		when 
+			me.aggregation_type_code = 'avg' and (
+			(coalesce(round(avg(t.actual_mtd::numeric) - avg(t.active_goal_mtd::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(avg(t.actual_mtd::numeric) - avg(t.active_goal_mtd::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%') )then 1
+		when 
+			me.aggregation_type_code = 'least' and (
+			(coalesce(round(max(t.actual_mtd::numeric) - max(t.active_goal_mtd::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(max(t.actual_mtd::numeric) - max(t.active_goal_mtd::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%') )then 1
+		else 0
+		end) as difference_type_mtd,
+		(case 
+		when 
+			me.aggregation_type_code = 'sum' and (
+			(coalesce(round(sum(t.actual_ytd::numeric) - sum(t.active_goal_ytd::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(sum(t.actual_ytd::numeric) - sum(t.active_goal_ytd::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%')) then 1
+		when 
+			me.aggregation_type_code = 'avg' and (
+			(coalesce(round(avg(t.actual_ytd::numeric) - avg(t.active_goal_ytd::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(avg(t.actual_ytd::numeric) - avg(t.active_goal_ytd::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%')) then 1
+		when 
+			me.aggregation_type_code = 'least' and (
+			(coalesce(round(max(t.actual_ytd::numeric) - max(t.active_goal_ytd::numeric),me.decimal_number),0) >=0 and me.difference_type_name like '%Больше-лучше%') or 
+			(coalesce(round(max(t.actual_ytd::numeric) - max(t.active_goal_ytd::numeric),me.decimal_number),0) <=0 and me.difference_type_name like '%Меньше-лучше%')) then 1
+		else 0
+		end) as difference_type_ytd,
+		extract(year from t.dt_report) - 1 as prior_year ,
+		me.source_system_name,
+	    me.discreteness_name,
+	    coalesce(round(t.actual_mtd,me.decimal_number),0) as actual_mtd,
+		coalesce(round(t.active_goal_mtd,me.decimal_number),0) as active_goal_mtd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round(sum( coalesce (t.actual_mtd,0)) - sum(coalesce(t.active_goal_mtd,0)),me.decimal_number),0)
+			when 	me.aggregation_type_code = 'avg' then coalesce(round(avg( coalesce (t.actual_mtd,0)) - avg(coalesce(t.active_goal_mtd,0)),me.decimal_number),0)
+			when 	me.aggregation_type_code = 'least' then coalesce(round(( coalesce (t.actual_mtd,0)) - (coalesce(t.active_goal_mtd,0)),me.decimal_number),0)
+			else 0
+		end) as difference_mtd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round((sum(t.actual_mtd) - sum(t.active_goal_mtd))/sum(nullif(t.active_goal_mtd,0))*100,1),0)
+			when 	me.aggregation_type_code = 'avg' then coalesce(round((avg(t.actual_mtd) - sum(t.active_goal_mtd))/avg(nullif(t.active_goal_mtd,0))*100,1),0)
+			when 	me.aggregation_type_code = 'least' then coalesce(round(((t.actual_mtd) - sum(t.active_goal_mtd))/(nullif(t.active_goal_mtd,0))*100,1),0)
+			else 0
+		end) as difference_percentage_mtd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round(sum(t.actual_mtd)/sum(nullif(t.active_goal_mtd,0))*100,1),0) 
+			when 	me.aggregation_type_code = 'avg' then coalesce(round(avg(t.actual_mtd)/avg(nullif(t.active_goal_mtd,0))*100,1),0) 
+			when 	me.aggregation_type_code = 'least' then coalesce(round((t.actual_mtd)/(nullif(t.active_goal_mtd,0))*100,1),0) 
+			else 0
+		end) as execution_percentage_mtd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum'	then least(coalesce(round(sum(t.actual_mtd)/sum(nullif(t.active_goal_mtd,0))*100,1),0),101) 
+			when 	me.aggregation_type_code = 'avg' then least(coalesce(round(avg(t.actual_mtd)/sum(nullif(t.active_goal_mtd,0))*100,1),0),101) 
+			when 	me.aggregation_type_code = 'least' then least(coalesce(round((t.actual_mtd)/(nullif(t.active_goal_mtd,0))*100,1),0),101) 
+			else 0
+		end) as execution_percentage_mtd_trunc,
+		coalesce(round(t.month_plan_mtd,me.decimal_number),0) as month_plan_mtd,
+		coalesce(round(t.month_plan_ytd,me.decimal_number),0) as month_plan_ytd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round(sum( coalesce (t.actual,0)) - sum( coalesce (t.month_plan,0)),me.decimal_number),0) 
+			when 	me.aggregation_type_code = 'avg' then coalesce(round(avg( coalesce (t.actual,0)) - avg( coalesce (t.month_plan,0)),me.decimal_number),0) 
+			when 	me.aggregation_type_code = 'least' then coalesce(round(( coalesce (max(t.actual),0)) - ( coalesce (t.month_plan,0)),me.decimal_number),0) 
+			else 0
+		end) as difference_month_plan,
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round((sum(t.actual) - sum(t.month_plan))/sum(nullif( t.month_plan,0))*100,1),0) 
+			when 	me.aggregation_type_code = 'avg' then coalesce(round((sum(t.actual) - sum(t.month_plan))/sum(nullif( t.month_plan,0))*100,1),0)
+			when 	me.aggregation_type_code = 'least' then coalesce(round((max(t.actual) - (t.month_plan))/nullif( t.month_plan,0)*100,1),0)
+			else 0
+		end) as difference_percentage_month_plan,
+		(case
+	    	when 	me.aggregation_type_code = 'sum'	then coalesce(round(sum( coalesce (t.actual_mtd,0)) - sum( coalesce (t.month_plan_mtd,0)),me.decimal_number),0) 
+			when 	me.aggregation_type_code = 'avg' then coalesce(round(avg( coalesce (t.actual_mtd,0)) - avg( coalesce (t.month_plan_mtd,0)),me.decimal_number),0) 
+			when 	me.aggregation_type_code = 'least' then coalesce(round(( coalesce (t.actual_mtd,0)) - ( coalesce (t.month_plan_mtd,0)),me.decimal_number),0) 
+			else 0
+		end) as difference_month_plan_mtd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum'	then coalesce(round((sum(t.actual_mtd) - sum(t.month_plan_mtd))/sum(nullif( t.month_plan_mtd,0))*100,1),0)
+			when 	me.aggregation_type_code = 'avg' then coalesce(round((avg(t.actual_mtd) - sum(t.month_plan_mtd))/avg(nullif( t.month_plan_mtd,0))*100,1),0)
+			when 	me.aggregation_type_code = 'least' then coalesce(round(((t.actual_mtd) - sum(t.month_plan_mtd))/(nullif( t.month_plan_mtd,0))*100,1),0)
+			else 0
+		end) as difference_percentage_month_plan_mtd,	
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round(sum( coalesce (t.actual_ytd,0)) - sum( coalesce (t.month_plan_ytd,0)),me.decimal_number),0) 
+			when 	me.aggregation_type_code = 'avg' then coalesce(round(avg( coalesce (t.actual_ytd,0)) - avg( coalesce (t.month_plan_ytd,0)),me.decimal_number),0) 
+			when 	me.aggregation_type_code = 'least' then coalesce(round(( coalesce (t.actual_ytd,0)) - ( coalesce (t.month_plan_ytd,0)),me.decimal_number),0) 
+			else 0
+		end) as difference_month_plan_ytd,
+		(case
+	    	when 	me.aggregation_type_code = 'sum' then coalesce(round((sum(t.actual_ytd) - sum(t.month_plan_ytd))/sum(nullif( t.month_plan_ytd,0))*100,1),0)
+			when 	me.aggregation_type_code = 'avg' then coalesce(round((avg(t.actual_ytd) - sum(t.month_plan_ytd))/avg(nullif( t.month_plan_ytd,0))*100,1),0)
+			when 	me.aggregation_type_code = 'least' then coalesce(round(((t.actual_ytd) - sum(t.month_plan_ytd))/(nullif( t.month_plan_ytd,0))*100,1),0)
+			else 0
+		end) as difference_percentage_month_plan_ytd
+	from t
+	join mas_map_entity as me 
+		on lower(me.entity_code) = lower(t.plant_code) 
+		and me.account_code = t.account_code
+	where t.dt_report >= coalesce(me.dt_loading_data_first_date,to_date('01.01.2024','dd.mm.yyyy'))
+	group by 
+		t.dt_report,
+		t.plant_code,
+		me.subsequent_code,
+		me.entity_name,
+		me.account_code,
+	    me.account_name,
+	    me.account_short_name,
+		me.source_system_name,
+		me.discreteness_name,
+		t.actual_mtd,
+		t.active_goal_mtd,
+		me.difference_type_name,
+		me.aggregation_type_code,
+		t.month_plan,
+		month_plan_mtd,
+		t.month_plan_ytd,
+		me.decimal_number,
+		t.actual_ytd
+)
+,mas_last_day as (
+select 
+		generate_series(mc.dt_report, mc.dt_report + (((coalesce(lead(mc.dt_report) over (partition by mc.plant_code, mc.account_code order by  mc.dt_report asc), mc.dt_report) - mc.dt_report) - 1) * interval '1 day'), '1 day') as dt_report,
+		mc.plant_code,
+		mc.account_code,
+		mc.decimal_number,
+		mc.actual as mc_actual,
+		mc.dt_report as dt_latest_data_extracted_source_system
+	from mas_calc as mc
+	union all select 
+		generate_series(max(mc.dt_report), date_trunc('month', timestamp 'now') + '1 month'::interval - '1 day'::interval, '1 day') as dt_report,
+		mc.plant_code,
+		mc.account_code,
+		mc.decimal_number,
+		max(mc.actual) as mc_actual,
+		max(mc.dt_report) as dt_latest_data_extracted_source_system
+	from mas_calc as mc
+	group by 		
+		mc.plant_code,
+		mc.account_code,
+		mc.decimal_number
+		)	
+select 
+	mld.dt_report,
+	mld.dt_latest_data_extracted_source_system,
+	(case when (mld.dt_report <> mld.dt_latest_data_extracted_source_system or mld.mc_actual is null) then 'rolled forward' else 'as in source' end) as data_source_type,
+	mc.plant_code,
+	mc.plant_name,
+	mc.subsequent_code,
+	(case when extract(day from mld.dt_report) = date_part('days', date_trunc('month', mld.dt_report) + '1 month'::interval - date_trunc('month', mld.dt_report)) 
+	then true else false end) as is_last_day_of_month,
+	mc.account_code,
+	mc.account_name,	
+	mc.account_short_name,
+	mc.difference_type_name,
+	mc.difference_type,
+	mc.actual,
+	mc.month_plan,
+	mc.active_goal,
+	mc.difference,
+	mc.difference_percentage,
+	(case when mc.difference_type = 0 then 100-abs(mc.difference_percentage) else 100+abs(mc.difference_percentage) end) as execution_percentage,
+	(case when mc.difference_type = 0 then 100-abs(mc.difference_percentage) else 100+abs(mc.difference_percentage) end) as execution_percentage_trunc,
+	mc.actual_ytd,
+	mc.active_goal_ytd,
+	mc.difference_ytd,
+	mc.difference_percentage_ytd,
+	(case when mc.difference_type_ytd = 0 then 100-abs(mc.difference_percentage_ytd) else 100+abs(mc.difference_percentage_ytd) end) as execution_percentage_ytd,
+	(case when mc.difference_type_ytd = 0 then 100-abs(mc.difference_percentage_ytd) else 100+abs(mc.difference_percentage_ytd) end) as execution_percentage_ytd_trunc,
+	mc.difference_type_mtd,
+	mc.difference_type_ytd,
+	mc.actual_mtd,
+	mc.active_goal_mtd,
+	mc.difference_mtd,
+	mc.difference_percentage_mtd,
+	(case when mc.difference_type_mtd = 0 then 100-abs(mc.difference_percentage_mtd) else 100+abs(mc.difference_percentage_mtd) end) as execution_percentage_mtd,
+	(case when mc.difference_type_mtd = 0 then 100-abs(mc.difference_percentage_mtd) else 100+abs(mc.difference_percentage_mtd) end) as execution_percentage_mtd_trunc,
+	mc.month_plan_mtd,
+	mc.month_plan_ytd,
+	mc.difference_month_plan,
+	mc.difference_percentage_month_plan,
+	mc.difference_month_plan_mtd,
+	mc.difference_percentage_month_plan_mtd,
+	mc.difference_month_plan_ytd,
+	mc.difference_percentage_month_plan_ytd,
+	pfgls.comment
+from mas_last_day as mld
+join mas_calc as mc 
+	on mc.plant_code = mld.plant_code 
+	and mc.account_code = mld.account_code 
+	and mc.dt_report = mld.dt_latest_data_extracted_source_system 
+left join dm_calc.production_ad_finish_goods_load_and_shipment as pfgls 
+on mc.plant_code = pfgls.plant_code 
+and mc.dt_report::date = pfgls.dt_report
+and mc.account_code = 'KPI_AL_PRD_TOVAL_SHIPPING'
+) as t1; 

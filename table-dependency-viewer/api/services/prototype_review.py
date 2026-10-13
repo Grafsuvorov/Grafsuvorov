@@ -14,7 +14,12 @@ from urllib import error as urlerror
 
 from sqlalchemy import create_engine, text
 
-from .entity_dev_meta import _gitlab_json_request, _parse_gitlab_project, _urlopen_without_proxy
+from .entity_dev_meta import (
+    _extract_schema_table_refs,
+    _gitlab_json_request,
+    _parse_gitlab_project,
+    _urlopen_without_proxy,
+)
 
 
 SQL_FILE_RE = re.compile(r"\.sql$", re.IGNORECASE)
@@ -797,17 +802,16 @@ def _extract_statement_dependencies_normalized(
         for normalized in (_normalize_fqn(item) for item in (exclude_fqns or set()))
         if normalized
     }
-    for pattern in DEPENDENCY_PATTERNS:
-        for match in pattern.finditer(statement):
-            normalized = _normalize_fqn(match.group(1))
-            if (
-                normalized
-                and normalized not in seen
-                and normalized not in excluded
-                and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
-            ):
-                seen.add(normalized)
-                result.append(normalized)
+    for schema_name, table_name in _extract_schema_table_refs(statement, known_schemas or set()):
+        normalized = _normalize_fqn(f"{schema_name}.{table_name}")
+        if (
+            normalized
+            and normalized not in seen
+            and normalized not in excluded
+            and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
+        ):
+            seen.add(normalized)
+            result.append(normalized)
     return result
 
 
@@ -932,19 +936,17 @@ def extract_sql_dependencies(
     }
     for item in files:
         for statement in item.get("statements") or []:
-            for pattern in DEPENDENCY_PATTERNS:
-                for match in pattern.finditer(statement):
-                    normalized = _normalize_fqn(match.group(1))
-                    preserved = _preserve_fqn(match.group(1))
-                    if (
-                        normalized
-                        and preserved
-                        and normalized not in seen
-                        and normalized not in excluded
-                        and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
-                    ):
-                        seen.add(normalized)
-                        result.append(preserved)
+            for schema_name, table_name in _extract_schema_table_refs(statement, known_schemas or set()):
+                preserved = f"{schema_name}.{table_name}"
+                normalized = _normalize_fqn(preserved)
+                if (
+                    normalized
+                    and normalized not in seen
+                    and normalized not in excluded
+                    and _is_valid_dependency_fqn(normalized, known_schemas=known_schemas)
+                ):
+                    seen.add(normalized)
+                    result.append(preserved)
     return result
 
 

@@ -974,6 +974,23 @@ class CollectTargetSqlTests(unittest.TestCase):
 
 
 class ExtractSqlDependenciesTests(unittest.TestCase):
+    def test_ignores_ctes_and_aliases_used_in_extract_expressions(self) -> None:
+        files = [{
+            "statements": [
+                """
+                with t as (select * from dm_calc.source_data)
+                select extract(year from t.dt_report)
+                from t
+                join dict_dds.calendar as mld on mld.dt = t.dt_report
+                where extract(day from mld.dt) > 0
+                """,
+            ],
+        }]
+
+        result = extract_sql_dependencies(files, known_schemas={"dm_calc", "dict_dds"})
+
+        self.assertEqual(result, ["dm_calc.source_data", "dict_dds.calendar"])
+
     def test_preserves_case_for_quoted_fqn_without_quotes(self) -> None:
         files = [
             {
@@ -1207,6 +1224,20 @@ class CreateYTrackIssueTests(unittest.TestCase):
 
 
 class EntityMetaDependenciesTests(unittest.TestCase):
+    def test_ignores_ctes_and_aliases_in_depends_on(self) -> None:
+        sql = """
+        with t as (select * from dm_calc.source_data)
+        select extract(year from t.dt_report)
+        from t
+        join dict_dds.calendar as mld on mld.dt = t.dt_report
+        where extract(day from mld.dt) > 0
+        """
+
+        self.assertEqual(
+            _build_depends_on(sql, target_schema="dm", target_table="target", known_schemas={"dm_calc", "dict_dds"}),
+            {"dict_dds": ["calendar"], "dm_calc": ["source_data"]},
+        )
+
     def test_ignores_relation_alias_used_in_extract_expression(self) -> None:
         sql = """
         create temp table pg_temp.calendar_plant_table (cal_day date);

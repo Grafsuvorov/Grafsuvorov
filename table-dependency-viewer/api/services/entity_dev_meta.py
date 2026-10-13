@@ -776,6 +776,7 @@ def _extract_all_schema_refs(sql: str) -> set[str]:
 
 def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[str, str]]:
     refs: set[tuple[str, str]] = set()
+    cte_names = _extract_cte_names(sql)
     relation_aliases = _extract_relation_aliases(sql)
     pattern = re.compile(
         r"\b(?:from|join)\s+(\"?[A-Za-z_][\w]*\"?)\s*\.\s*(\"[^\"]+\"|[A-Za-z_][\w]*)",
@@ -794,7 +795,13 @@ def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[s
         table_key = _normalize_name(table_name)
         # `FROM` also appears in expressions such as EXTRACT(YEAR FROM alias.column).
         # An alias before a dot is not a schema and must never become depends_on.
-        if not schema_name or not table_name or schema_key in IGNORE_SCHEMAS or schema_key in relation_aliases:
+        if (
+            not schema_name
+            or not table_name
+            or schema_key in IGNORE_SCHEMAS
+            or schema_key in cte_names
+            or schema_key in relation_aliases
+        ):
             continue
         # A fully-qualified relation in FROM/JOIN is a dependency even when
         # its schema has no local meta file yet. Restricting this to the local

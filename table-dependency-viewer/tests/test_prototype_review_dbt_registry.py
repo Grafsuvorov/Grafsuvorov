@@ -151,6 +151,7 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
         update = self.functions["_prototype_review_update_dbt_dq_model"]
         original = """{{- config(
     error_code         = 'custom_code',
+    detail_store_limit = 30,
     check_columns      = ['old_key'],
     tags               = ['dq', 'technical', 'duplicates']
     ) -}}
@@ -162,6 +163,8 @@ select 1
         updated = update(original, ["new_key", "second_key"])
 
         self.assertIn("check_columns      = ['new_key', 'second_key']", updated)
+        self.assertIn("detail_store_limit = none", updated)
+        self.assertNotIn("detail_store_limit = 30", updated)
         self.assertIn("error_code         = 'custom_code'", updated)
         self.assertIn("-- custom model comment\nselect 1", updated)
         self.assertNotIn("old_key", updated)

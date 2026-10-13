@@ -103,7 +103,22 @@ def update_duplicates_model(content: str, key_attributes: list[Any]) -> str:
     source = str(content or "")
     if len(list(pattern.finditer(source))) != 1:
         raise ValueError("В DQ-модели не найден единственный параметр check_columns")
-    return pattern.sub(lambda match: f"{match.group('prefix')}{check_columns}", source, count=1)
+    updated = pattern.sub(lambda match: f"{match.group('prefix')}{check_columns}", source, count=1)
+    limit_pattern = re.compile(r"(?P<prefix>\bdetail_store_limit\s*=\s*)[^,\r\n]+(?P<suffix>,?)")
+    limit_matches = list(limit_pattern.finditer(updated))
+    if len(limit_matches) > 1:
+        raise ValueError("В DQ-модели найдено несколько параметров detail_store_limit")
+    if limit_matches:
+        return limit_pattern.sub(lambda match: f"{match.group('prefix')}none{match.group('suffix')}", updated, count=1)
+
+    flag_pattern = re.compile(r"(?m)^(?P<indent>\s*)detail_store_flag\s*=\s*[^\r\n]+\r?$")
+    if not flag_pattern.search(updated):
+        raise ValueError("В DQ-модели не найден параметр detail_store_flag для добавления detail_store_limit")
+    return flag_pattern.sub(
+        lambda match: f"{match.group(0)}\n{match.group('indent')}detail_store_limit = none,",
+        updated,
+        count=1,
+    )
 
 
 def build_registry_yaml(item: dict[str, Any]) -> str:

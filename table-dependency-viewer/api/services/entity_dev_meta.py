@@ -774,8 +774,9 @@ def _extract_all_schema_refs(sql: str) -> set[str]:
     return schemas
 
 
-def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[str, str]]:
-    refs: set[tuple[str, str]] = set()
+def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> list[tuple[str, str]]:
+    refs: list[tuple[str, str]] = []
+    seen_refs: set[tuple[str, str]] = set()
     cte_names = _extract_cte_names(sql)
     relation_aliases = _extract_relation_aliases(sql)
     pattern = re.compile(
@@ -807,7 +808,10 @@ def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[s
         # its schema has no local meta file yet. Restricting this to the local
         # catalog made branch validation silently miss valid sources such as
         # dds.payment_documents.
-        refs.add((schema_name, table_name))
+        ref = (schema_name, table_name)
+        if ref not in seen_refs:
+            seen_refs.add(ref)
+            refs.append(ref)
     return refs
 
 

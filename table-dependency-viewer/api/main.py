@@ -1565,6 +1565,7 @@ def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependenci
         item_needs_attention=_prototype_item_needs_attention,
         build_description=_prototype_multi_issue_description,
         create_issue=create_ytrack_issue,
+        get_parent_issue_context=get_ytrack_issue_context,
         link_issues=link_ytrack_issues,
         link_parent_issue=link_ytrack_parent_issue,
         attach_files=attach_ytrack_issue_files,

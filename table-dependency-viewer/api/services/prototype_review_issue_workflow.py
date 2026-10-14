@@ -19,6 +19,7 @@ class PrototypeIssueWorkflowDependencies:
     item_needs_attention: Callable[[dict[str, Any]], tuple[bool, list[str]]]
     build_description: Callable[..., str]
     create_issue: Callable[..., dict[str, Any]]
+    get_parent_issue_context: Callable[..., dict[str, Any]]
     link_issues: Callable[..., Any]
     link_parent_issue: Callable[..., dict[str, Any]]
     attach_files: Callable[..., list[dict[str, Any]]]
@@ -84,6 +85,20 @@ def create_prototype_review_issue(
     dependencies: PrototypeIssueWorkflowDependencies,
 ) -> dict[str, Any]:
     dashboard_direction = str(payload.direction or "").strip()
+    requested_parent_issue = str(getattr(payload, "parent_issue", None) or "").strip().upper()
+    if requested_parent_issue:
+        if not callable(dependencies.get_parent_issue_context):
+            raise ValueError("Не настроено получение данных родительской задачи YouTrack")
+        parent_context = dependencies.get_parent_issue_context(
+            base_url=dependencies.youtrack_url,
+            token=dependencies.youtrack_token,
+            issue_id=requested_parent_issue,
+            direction_field_name=dependencies.direction_field_name,
+            ssl_verify=dependencies.youtrack_ssl_verify,
+        )
+        parent_direction = str((parent_context or {}).get("direction") or "").strip()
+        if parent_direction:
+            dashboard_direction = parent_direction
     if not dashboard_direction:
         raise ValueError("Заполните обязательное поле «Дашборд КХД/Направление»")
 

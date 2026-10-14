@@ -340,6 +340,40 @@ class PrototypeIssueWorkflowTests(unittest.TestCase):
         self.assertEqual(created[0]["direction"], "Finance")
         self.assertEqual(created[0]["release_date"], "2026-10-12")
 
+    def test_inherits_direction_from_parent_issue(self) -> None:
+        created = []
+        payload = SimpleNamespace(
+            direction="",
+            parent_issue="DWH-10",
+            mr_input="17",
+            task_text="",
+            review_items=[],
+            issue_summary="Prototype finance",
+            linked_issues=[],
+            release_date="",
+            business_key_changed=False,
+        )
+        dependencies = self.dependencies(
+            get_parent_issue_context=lambda **_kwargs: {"issue_id": "DWH-10", "direction": "Финансы"},
+            load_bundle=lambda **_kwargs: {"mr": {"source_branch": "feature/x"}, "deleted_files": []},
+            parse_task=lambda _text: {},
+            prepare_yaml=lambda **_kwargs: "",
+            item_needs_attention=lambda _item: (False, []),
+            build_description=lambda **_kwargs: "Generated description",
+            create_issue=lambda **kwargs: created.append(kwargs) or {"issue_id": "DWH-17", "raw": {}},
+            link_issues=lambda **_kwargs: [],
+            link_parent_issue=lambda **_kwargs: {"status": "linked", "parent_issue": "DWH-10"},
+            deliver_issue=lambda **_kwargs: {"meta_branch": None, "dbt_registry": {"status": "created"}},
+            build_issue_link=lambda issue_id: f"https://youtrack.example/issue/{issue_id}",
+            delivery=object(),
+            youtrack_url="https://youtrack.example",
+            youtrack_ssl_verify=True,
+        )
+
+        create_prototype_review_issue(payload, SimpleNamespace(email="user@example.com"), dependencies=dependencies)
+
+        self.assertEqual(created[0]["direction"], "Финансы")
+
     def test_prepares_yaml_and_dependencies_only_when_creating_issue(self) -> None:
         calls = []
         review_item = {

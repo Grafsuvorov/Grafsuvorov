@@ -118,6 +118,10 @@ from .config import (
     YOUTRACK_ACTUAL_RELEASE_DATE_FIELD_NAME,
     YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
     YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
+    BOTX_CTS_URL,
+    BOTX_BOT_ID,
+    BOTX_SECRET_KEY,
+    BOTX_SSL_VERIFY,
 )
 from .application import create_application
 from .runtime import engine, dbt_logs_engine, dev_engine
@@ -187,6 +191,7 @@ from .services.meta_workspace import (
     validate_meta_workspace_branch,
 )
 from .services.corp_ai import enhance_assistant_response
+from .services.botx_notifications import send_completion_notification
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     COMMENT_TARGET_PATTERNS,
@@ -283,6 +288,50 @@ app.include_router(auth_router)
 
 _prototype_review_jobs: dict[str, dict[str, Any]] = {}
 _prototype_review_jobs_lock = threading.Lock()
+
+
+def _botx_ssl_verify() -> bool:
+    return str(BOTX_SSL_VERIFY or "true").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _notify_user_about_completion(user: Any, message: str) -> None:
+    email = str(getattr(user, "email", "") or "").strip()
+    status = send_completion_notification(
+        email=email,
+        message=message,
+        cts_url=BOTX_CTS_URL,
+        bot_id=BOTX_BOT_ID,
+        secret_key=BOTX_SECRET_KEY,
+        verify_ssl=_botx_ssl_verify(),
+    )
+    if status not in {"sent", "disabled"}:
+        print(f"BotX completion notification for {email or 'unknown user'}: {status}")
+
+
+def _watch_airflow_completion(*, user: Any, dag_id: str, dag_run_id: str, message: str) -> None:
+    """Wait independently from the browser; failures are deliberately silent."""
+    def _watch() -> None:
+        for _ in range(1_440):  # up to six hours, every 15 seconds
+            time.sleep(15)
+            try:
+                status = get_airflow_dev_dag_status(
+                    airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                    username=AIRFLOW_DEV_USERNAME,
+                    password=AIRFLOW_DEV_PASSWORD,
+                    dag_id=dag_id,
+                    dag_run_id=dag_run_id,
+                )
+            except Exception as exc:
+                print(f"Airflow completion watcher skipped {dag_id}/{dag_run_id}: {exc}")
+                return
+            state = str(status.get("dag_run_state") or "").lower()
+            if state == "success":
+                _notify_user_about_completion(user, message)
+                return
+            if state in {"failed", "cancelled"}:
+                return
+
+    threading.Thread(target=_watch, name=f"airflow-notify-{dag_id}", daemon=True).start()
 
 
 class DevMetaFilePayload(BaseModel):
@@ -1467,6 +1516,10 @@ def start_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Re
                 current=len(result.get("execution") or []),
                 total=len(result.get("review_items") or []),
                 result=result,
+            )
+            _notify_user_about_completion(
+                user,
+                "✨ Prototype Review завершён. Результаты готовы — можно идти проверять таблицы.",
             )
         except Exception as exc:
             _prototype_review_job_update(job_id, status="error", error=str(exc))
@@ -3932,6 +3985,10 @@ def sync_admin_meta_workspace_branch(payload: MetaWorkspaceSyncPayload, request:
             author=user.email,
             dev_database_url=DEV_DATABASE_URL,
         )
+        _notify_user_about_completion(
+            user,
+            f"✨ Meta Workspace для ветки {payload.branch_name} сохранён. Можно идти проверять изменения.",
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
@@ -4032,6 +4089,17 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
                 "author": user.email,
             },
         )
+        dag_run_id = str(((data.get("response") or {}).get("dag_run_id") or "")).strip()
+        if dag_run_id:
+            _watch_airflow_completion(
+                user=user,
+                dag_id=DEV_COPY_DAG_ID,
+                dag_run_id=dag_run_id,
+                message=(
+                    "✨ Копирование PROD → DEV завершено для "
+                    f"{values['source_table_schema']}.{values['source_table_name']}. Можно идти проверять."
+                ),
+            )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", "response": data}
@@ -4107,6 +4175,15 @@ def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, reques
             password=AIRFLOW_DEV_PASSWORD,
             conf=values,
         )
+        dag_run_id = str(((data.get("response") or {}).get("dag_run_id") or "")).strip()
+        if dag_run_id:
+            object_label = "всех объектов" if run_mode == "all" else f"{values['check_table_schema']}.{values['check_table_name']}"
+            _watch_airflow_completion(
+                user=user,
+                dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
+                dag_run_id=dag_run_id,
+                message=f"✨ Сверка metadata завершена для {object_label}. Можно идти смотреть результат.",
+            )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", "response": data}

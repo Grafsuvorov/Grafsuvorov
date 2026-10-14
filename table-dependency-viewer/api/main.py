@@ -196,6 +196,7 @@ from .services.prototype_review import (
     TRUNCATE_TARGET_PATTERNS,
     _normalize_fqn,
     _normalize_relation_ref,
+    _strip_sql_comments,
     add_ytrack_issue_comment,
     attach_ytrack_issue_files,
     create_ytrack_issue,
@@ -1030,28 +1031,29 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
         statement_insert: list[str] = []
         statement_truncate: list[str] = []
         for statement in statements or [sql_text]:
+            statement_without_comments = _strip_sql_comments(statement)
             assigned = False
             normalized_targets: set[str] = set()
             for pattern in TARGET_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
                         normalized_targets.add(normalized)
             for pattern in CREATE_OBJECT_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
                         normalized_targets.add(normalized)
             for pattern in DROP_TARGET_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized == target_norm:
                         statement_recreate.append(statement)
                         assigned = True
-            normalized_statement = _strip_sql_comments(statement).lower()
+            normalized_statement = statement_without_comments.lower()
             mutation_targets: set[str] = set()
             for pattern in (*DELETE_TARGET_PATTERNS, *TRUNCATE_TARGET_PATTERNS):
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
                         mutation_targets.add(normalized)
@@ -1072,7 +1074,7 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
                 statement_truncate.append(statement)
                 assigned = True
             for pattern in COMMENT_TARGET_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     if _normalize_relation_ref(match.group(1)) == target_norm:
                         statement_recreate.append(statement)
                         assigned = True

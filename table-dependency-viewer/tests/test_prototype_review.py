@@ -896,6 +896,24 @@ class RemovedTableTargetsTests(unittest.TestCase):
 
 
 class InferReviewTargetsTests(unittest.TestCase):
+    def test_ignores_commented_out_targets(self) -> None:
+        sql = '''
+        -- insert into dm.sales_material_turnover_detailed_20251010 select 1;
+        /* create table dm.sales_material_turnover_detailed_20251010 (id int); */
+        create table dm.sales_material_turnover_detailed (id int);
+        insert into dm.sales_material_turnover_detailed select 1;
+        '''
+        files = [{
+            "path": "dm/sales_material_turnover_detailed.sql",
+            "sql": sql,
+            "statements": prototype_review._split_sql_statements(sql),
+        }]
+
+        result = infer_review_targets(files)
+
+        self.assertEqual([item["target_fqn"] for item in result], ["dm.sales_material_turnover_detailed"])
+        self.assertEqual(prototype_review.infer_final_target(files), "dm.sales_material_turnover_detailed")
+
     def test_uses_quoted_table_name_from_sql_instead_of_sanitized_filename(self) -> None:
         sql = '''
         drop table if exists ods."/rusal/lepervlka_ral";

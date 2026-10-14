@@ -139,9 +139,55 @@ def _split_lines_block(value: str) -> list[str]:
 
 
 def _strip_sql_comments(sql: str) -> str:
-    cleaned = re.sub(r"/\*.*?\*/", " ", str(sql or ""), flags=re.DOTALL)
-    cleaned = re.sub(r"(?m)--.*?$", " ", cleaned)
-    return cleaned
+    """Remove SQL comments while preserving quoted literals and line breaks."""
+    value = str(sql or "")
+    result: list[str] = []
+    index = 0
+    in_single_quote = False
+    in_double_quote = False
+
+    while index < len(value):
+        char = value[index]
+        next_char = value[index + 1] if index + 1 < len(value) else ""
+
+        if not in_double_quote and char == "'":
+            result.append(char)
+            if in_single_quote and next_char == "'":
+                result.append(next_char)
+                index += 2
+                continue
+            in_single_quote = not in_single_quote
+            index += 1
+            continue
+        if not in_single_quote and char == '"':
+            result.append(char)
+            if in_double_quote and next_char == '"':
+                result.append(next_char)
+                index += 2
+                continue
+            in_double_quote = not in_double_quote
+            index += 1
+            continue
+
+        if not in_single_quote and not in_double_quote and char == "-" and next_char == "-":
+            index += 2
+            while index < len(value) and value[index] not in "\r\n":
+                index += 1
+            continue
+        if not in_single_quote and not in_double_quote and char == "/" and next_char == "*":
+            index += 2
+            while index < len(value):
+                if value[index] == "*" and index + 1 < len(value) and value[index + 1] == "/":
+                    index += 2
+                    break
+                if value[index] in "\r\n":
+                    result.append(value[index])
+                index += 1
+            continue
+
+        result.append(char)
+        index += 1
+    return "".join(result)
 
 
 def _normalize_sql_text(sql: str) -> str:
@@ -607,8 +653,9 @@ def infer_final_target(files: list[dict[str, Any]]) -> Optional[str]:
     targets: list[str] = []
     for item in files:
         for statement in item.get("statements") or []:
+            statement_without_comments = _strip_sql_comments(statement)
             for pattern in TARGET_PATTERNS:
-                match = pattern.search(statement)
+                match = pattern.search(statement_without_comments)
                 if match:
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
@@ -630,15 +677,16 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         path_target = _infer_target_from_path(path_value)
 
         for statement in statements:
-            statement_lower = statement.lower()
+            statement_without_comments = _strip_sql_comments(statement)
+            statement_lower = statement_without_comments.lower()
             statement_targets: list[tuple[str, str, bool, bool]] = []
             for pattern in TARGET_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
                         statement_targets.append((normalized, "TABLE", False, False))
             for pattern in CREATE_OBJECT_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
                         object_type = (
@@ -650,7 +698,7 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         )
                         statement_targets.append((normalized, object_type, True, False))
             for pattern in DROP_TARGET_PATTERNS:
-                for match in pattern.finditer(statement):
+                for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
                         object_type = "VIEW" if "drop view" in statement_lower else "TABLE"
@@ -779,12 +827,13 @@ def _extract_statement_target_fqns(statement: str) -> list[str]:
         seen.add(normalized)
         targets.append(normalized)
 
+    statement_without_comments = _strip_sql_comments(statement)
     for patterns in (TARGET_PATTERNS, CREATE_OBJECT_PATTERNS, DROP_TARGET_PATTERNS, DELETE_TARGET_PATTERNS, TRUNCATE_TARGET_PATTERNS):
         for pattern in patterns:
-            for match in pattern.finditer(statement):
+            for match in pattern.finditer(statement_without_comments):
                 _append(_normalize_fqn(match.group(1)))
     for pattern in COMMENT_TARGET_PATTERNS:
-        for match in pattern.finditer(statement):
+        for match in pattern.finditer(statement_without_comments):
             _append(_normalize_relation_ref(match.group(1)))
     return targets
 
@@ -802,7 +851,8 @@ def _extract_statement_dependencies_normalized(
         for normalized in (_normalize_fqn(item) for item in (exclude_fqns or set()))
         if normalized
     }
-    for schema_name, table_name in _extract_schema_table_refs(statement, known_schemas or set()):
+    statement_without_comments = _strip_sql_comments(statement)
+    for schema_name, table_name in _extract_schema_table_refs(statement_without_comments, known_schemas or set()):
         normalized = _normalize_fqn(f"{schema_name}.{table_name}")
         if (
             normalized

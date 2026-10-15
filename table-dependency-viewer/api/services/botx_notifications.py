@@ -62,7 +62,13 @@ class BotXNotifier:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=20, context=self.ssl_context) as response:
+            # CTS is an internal service.  Do not inherit HTTP(S)_PROXY from
+            # the container: corporate proxies reject this traffic with 407.
+            handlers: list[Any] = [urllib.request.ProxyHandler({})]
+            if self.ssl_context is not None:
+                handlers.append(urllib.request.HTTPSHandler(context=self.ssl_context))
+            opener = urllib.request.build_opener(*handlers)
+            with opener.open(request, timeout=20) as response:
                 raw = response.read()
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", "replace")[:500]

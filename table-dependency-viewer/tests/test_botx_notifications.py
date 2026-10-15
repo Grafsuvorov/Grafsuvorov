@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock, patch
 
 from api.services.botx_notifications import BotXNotifier, send_completion_notification
 
@@ -55,6 +55,23 @@ class BotXNotificationsTests(unittest.TestCase):
 
         self.assertEqual(status, "sent")
         self.assertEqual(notifier.call.call_args_list[2].args[:2], ("POST", "/api/v4/botx/notifications/direct"))
+
+    def test_botx_requests_do_not_use_container_proxy(self) -> None:
+        notifier = BotXNotifier(
+            cts_url="https://botx.example",
+            bot_id="bot-id",
+            secret_key="secret",
+            verify_ssl=True,
+        )
+        response = Mock()
+        response.read.return_value = b'{"result": []}'
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = response
+        with patch("api.services.botx_notifications.urllib.request.build_opener", return_value=opener) as build_opener:
+            self.assertEqual(notifier.call("GET", "/api/v3/botx/chats/list"), [])
+
+        proxy_handler = build_opener.call_args.args[0]
+        self.assertEqual(proxy_handler.proxies, {})
 
 
 if __name__ == "__main__":

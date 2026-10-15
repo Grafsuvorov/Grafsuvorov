@@ -88,7 +88,10 @@ class BotXNotifier:
                 str(member.get("user_huid") if isinstance(member, dict) else member)
                 for member in members
             }
-            if (chat or {}).get("chat_type") == "chat" and user_huid in member_ids:
+            # eXpress uses ``botx`` for a dialog with a bot; ``chat`` is a
+            # regular personal dialog. Both can be an existing private route
+            # for a completion notification.
+            if (chat or {}).get("chat_type") in {"chat", "botx"} and user_huid in member_ids:
                 chat_id = str((chat or {}).get("group_chat_id") or "").strip()
                 if chat_id:
                     self.call(

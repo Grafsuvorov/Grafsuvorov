@@ -1652,11 +1652,21 @@ def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependenci
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
     try:
-        return create_prototype_review_issue(
+        result = create_prototype_review_issue(
             payload,
             user,
             dependencies=_prototype_issue_workflow_dependencies(),
         )
+        issue = result.get("issue") or {}
+        issue_id = str(issue.get("issue_id") or "").strip()
+        issue_link = str(issue.get("link") or "").strip()
+        if issue_id:
+            _notify_user_about_completion(
+                user,
+                f"🎉 Задача Prototype Review {issue_id} создана. "
+                f"Можно открывать и проверять: {issue_link or 'ссылка доступна в приложении'}",
+            )
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

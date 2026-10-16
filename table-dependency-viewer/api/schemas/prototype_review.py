@@ -86,6 +86,30 @@ class PrototypeReviewCreateIssuePayload(BaseModel):
     review_items: List[PrototypeReviewItemPayload]
 
 
+class PrototypeReviewSourceLoadPayload(BaseModel):
+    target_schema: str = "stg"
+    target_table: str
+    source_schema: str
+    source_table: str
+    server_id: int
+    fields: str = "ALL"
+    distribution_field: str = "RN"
+    primary_key: Optional[str] = None
+    entity_name: str
+
+
+class PrototypeReviewSourceLoadIssuePayload(PrototypeReviewSourceLoadPayload):
+    yaml_content: str
+    recreate_sql: str = ""
+    insert_sql: str = ""
+    truncate_sql: str = ""
+    load_status: str = "ok"
+    issue_summary: Optional[str] = None
+    direction: Optional[str] = None
+    release_date: Optional[str] = None
+    parent_issue: Optional[str] = None
+
+
 class BusinessDqPreviewPayload(BaseModel):
     mr_input: str
     business_area: str

@@ -13,6 +13,8 @@ from ..schemas.prototype_review import (
     BusinessDqCreatePayload,
     BusinessDqPreviewPayload,
     PrototypeReviewCreateIssuePayload,
+    PrototypeReviewSourceLoadIssuePayload,
+    PrototypeReviewSourceLoadPayload,
     PrototypeReviewRunPayload,
     PrototypeReviewTableCheckPayload,
     PrototypeReviewYamlRefreshPayload,
@@ -32,6 +34,9 @@ class PrototypeReviewHandlers:
     create_issue: Callable
     parent_issue: Callable
     release_slots: Callable
+    source_servers: Callable
+    run_source_load: Callable
+    create_source_load_issue: Callable
 
 
 def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRouter:
@@ -80,5 +85,17 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
     @router.get("/release-slots")
     def release_slots(release_date: str, request: Request):
         return handlers.release_slots(release_date, request)
+
+    @router.get("/source-load/servers")
+    def source_servers(request: Request):
+        return handlers.source_servers(request)
+
+    @router.post("/source-load/run")
+    def run_source_load(payload: PrototypeReviewSourceLoadPayload, request: Request):
+        return handlers.run_source_load(payload, request)
+
+    @router.post("/source-load/create-issue")
+    def create_source_load_issue(payload: PrototypeReviewSourceLoadIssuePayload, request: Request):
+        return handlers.create_source_load_issue(payload, request)
 
     return router

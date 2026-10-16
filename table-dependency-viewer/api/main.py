@@ -192,6 +192,7 @@ from .services.meta_workspace import (
 )
 from .services.corp_ai import enhance_assistant_response
 from .services.botx_notifications import send_completion_notification
+from .services.stg_source_loader import list_source_servers, run_source_loader
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     COMMENT_TARGET_PATTERNS,
@@ -1673,6 +1674,115 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         print("❌ /api/admin/prototype-review/create-issue error:", exc)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+def get_admin_prototype_source_servers(request: Request):
+    _require_authenticated(request)
+    try:
+        return {"items": list_source_servers(dev_engine)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось получить серверы источников: {exc}") from exc
+
+
+def run_admin_prototype_source_load(payload, request: Request):
+    _require_authenticated(request)
+    try:
+        result = run_source_loader(dev_engine, payload.model_dump())
+        bundle = init_entity_dev_meta_bundle(
+            engine=engine,
+            base_dir=BASE_DIR,
+            prod_root_value=ENTITY_META_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            entity_name=payload.entity_name,
+            schema_name=payload.target_schema,
+            table_name=payload.target_table,
+        )
+        yaml_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
+        yaml_payload.update({
+            "source_id": int(payload.server_id),
+            "source_type": str((result.get("server") or {}).get("source_type") or "").upper() or None,
+            "table_schema": str(payload.target_schema).lower(),
+            "table_name": str(payload.target_table).lower(),
+            "entity_name": payload.entity_name,
+        })
+        if result.get("status") == "ok":
+            yaml_payload["depends_on"] = {"raw_ext": [f'{payload.target_table}_READ']}
+        result["yaml_content"] = _dump_yaml(yaml_payload)
+        result["target_fqn"] = f"{str(payload.target_schema).lower()}.{payload.target_table}"
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        print("❌ /api/admin/prototype-review/source-load/run error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def create_admin_prototype_source_load_issue(payload, request: Request):
+    user = _require_authenticated(request)
+    direction = str(payload.direction or "").strip()
+    if not direction:
+        raise HTTPException(status_code=400, detail="Заполните обязательное поле «Дашборд КХД/Направление»")
+    try:
+        summary = str(payload.issue_summary or "").strip() or (
+            f"Загрузка {payload.target_schema}.{payload.target_table} из {payload.source_schema}.{payload.source_table}"
+        )
+        description = "\n".join([
+            f"Источник: {payload.source_schema}.{payload.source_table}",
+            f"Target: {payload.target_schema}.{payload.target_table}",
+            f"Сервер source_id: {payload.server_id}",
+            f"Поля: {payload.fields}",
+            f"Распределение: {payload.distribution_field or 'RN'}",
+            f"PK: {payload.primary_key or 'не задан'}",
+            f"Сущность/расписание: {payload.entity_name}",
+            "",
+            "YAML:", payload.yaml_content,
+        ])
+        issue = create_ytrack_issue(
+            base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT,
+            token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE,
+            ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description,
+            default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
+            estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME,
+            card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
+            card_type_value=YOUTRACK_CARD_TYPE_VALUE,
+            assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
+            assignee_query=YOUTRACK_ASSIGNEE_QUERY,
+            release_date=payload.release_date, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
+            direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+            business_key_changed=False, business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
+        )
+        issue_id = str(issue.get("issue_id") or "").strip().upper()
+        if payload.load_status != "ok" or not issue_id:
+            return {"issue": {**issue, "link": _build_ytrack_link(issue_id)}, "meta_mr": None,
+                    "warning": "Функция не выполнилась: создана задача только с YAML, без инженерного MR."}
+        branch_name = f"feature/{issue_id}"
+        saved = save_meta_workspace_branch_gp_bundle(
+            git_repo_value=ENTITY_META_GIT_REPO, entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT, workspace_owner=user.email,
+            branch_name=branch_name, base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+            entity_name=payload.entity_name, schema_name=payload.target_schema, table_name=payload.target_table,
+            yaml_content=payload.yaml_content, recreate_sql=payload.recreate_sql,
+            insert_sql=payload.insert_sql, truncate_sql=payload.truncate_sql,
+            task_id=issue_id, author=user.email,
+        )
+        meta_mr = create_meta_workspace_mr(
+            engine=engine, base_dir=BASE_DIR, entity_dev_root_value=DEV_ENTITY_META_DIR,
+            click_dev_root_value=DEV_CLICK_META_DIR, git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT, click_git_root_value=CLICK_META_GIT_ROOT,
+            gitlab_token=GITLAB_TOKEN, gitlab_project=GITLAB_PROJECT, gitlab_api_url=GITLAB_API_URL,
+            gitlab_ssl_verify=GITLAB_SSL_VERIFY, task_id=issue_id,
+            release_branch=PROTOTYPE_ETL_TARGET_BRANCH, branch_name=branch_name,
+            mr_title=f"{issue_id}: загрузка {payload.target_schema}.{payload.target_table}", author=user.email,
+        )
+        _notify_user_about_completion(user, f"🎉 Задача {issue_id} и инженерный MR созданы: {meta_mr.get('mr_url') or ''}")
+        return {"issue": {**issue, "link": _build_ytrack_link(issue_id)}, "meta_mr": meta_mr, "meta_files": saved.get("changed_files")}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        print("❌ /api/admin/prototype-review/source-load/create-issue error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def get_admin_prototype_parent_issue(issue_id: str, request: Request):
@@ -14797,6 +14907,9 @@ prototype_review_router = build_prototype_review_router(
         create_issue=create_admin_prototype_review_issue,
         parent_issue=get_admin_prototype_parent_issue,
         release_slots=get_admin_prototype_release_slots,
+        source_servers=get_admin_prototype_source_servers,
+        run_source_load=run_admin_prototype_source_load,
+        create_source_load_issue=create_admin_prototype_source_load_issue,
     )
 )
 

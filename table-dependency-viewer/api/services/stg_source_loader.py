@@ -36,10 +36,60 @@ def _fields(value: str) -> str:
 def list_source_servers(engine) -> list[dict[str, Any]]:
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT source_id, source_type, source_server_name, dag_name, source_columns_catalog
+            SELECT
+                service_name,
+                server_id,
+                source_type,
+                server_name,
+                dag_name,
+                meta_view_name
             FROM tech_etl.source_servers_meta
-            ORDER BY source_id
+            ORDER BY service_name, server_id
         """)).mappings().all()
+    return [
+        {
+            **dict(row),
+            # Backwards-compatible names for older clients.
+            "source_id": row["server_id"],
+            "source_server_name": row["server_name"],
+            "source_columns_catalog": row["meta_view_name"],
+        }
+        for row in rows
+    ]
+
+
+def list_target_tables(engine, schema_name: str) -> list[dict[str, Any]]:
+    schema = str(schema_name or "").strip().lower()
+    if schema not in ALLOWED_SCHEMAS:
+        raise ValueError("Доступны только схемы stg и dict_stg")
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT
+                c.table_name,
+                string_agg(c.column_name, ',' ORDER BY c.ordinal_position) AS fields,
+                max(CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN kcu.column_name END) AS primary_key
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.key_column_usage kcu
+              ON kcu.table_schema = c.table_schema
+             AND kcu.table_name = c.table_name
+             AND kcu.column_name = c.column_name
+            LEFT JOIN information_schema.table_constraints tc
+              ON tc.constraint_schema = kcu.constraint_schema
+             AND tc.constraint_name = kcu.constraint_name
+             AND tc.table_schema = kcu.table_schema
+             AND tc.table_name = kcu.table_name
+            WHERE c.table_schema = :schema_name
+              -- etl_source_to_greenplum_new adds these fields itself; passing
+              -- them as source fields would make an update of an existing
+              -- table fail against the external source.
+              AND lower(c.column_name) NOT IN (
+                  'rn', 'dttm_inserted', 'dttm_updated', 'job_name',
+                  'deleted_flag', 'is_actual'
+              )
+            GROUP BY c.table_name
+            ORDER BY c.table_name
+        """), {"schema_name": schema}).mappings().all()
     return [dict(row) for row in rows]
 
 
@@ -94,10 +144,10 @@ def run_source_loader(engine, payload: dict[str, Any]) -> dict[str, Any]:
 
     with engine.connect() as conn:
         server = conn.execute(text("""
-            SELECT source_id, source_type, source_server_name
+            SELECT service_name, server_id, source_type, server_name, dag_name, meta_view_name
             FROM tech_etl.source_servers_meta
-            WHERE source_id = :source_id
-        """), {"source_id": server_id}).mappings().first()
+            WHERE server_id = :server_id
+        """), {"server_id": server_id}).mappings().first()
     if not server:
         raise ValueError("Выбранный сервер не найден в tech_etl.source_servers_meta")
 

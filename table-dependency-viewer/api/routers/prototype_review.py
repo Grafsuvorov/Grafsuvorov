@@ -35,6 +35,7 @@ class PrototypeReviewHandlers:
     parent_issue: Callable
     release_slots: Callable
     source_servers: Callable
+    source_tables: Callable
     run_source_load: Callable
     create_source_load_issue: Callable
 
@@ -89,6 +90,10 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
     @router.get("/source-load/servers")
     def source_servers(request: Request):
         return handlers.source_servers(request)
+
+    @router.get("/source-load/tables")
+    def source_tables(target_schema: str, request: Request):
+        return handlers.source_tables(target_schema, request)
 
     @router.post("/source-load/run")
     def run_source_load(payload: PrototypeReviewSourceLoadPayload, request: Request):

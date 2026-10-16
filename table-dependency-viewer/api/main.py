@@ -192,7 +192,7 @@ from .services.meta_workspace import (
 )
 from .services.corp_ai import enhance_assistant_response
 from .services.botx_notifications import send_completion_notification
-from .services.stg_source_loader import list_source_servers, run_source_loader
+from .services.stg_source_loader import list_source_servers, list_target_tables, run_source_loader
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     COMMENT_TARGET_PATTERNS,
@@ -1682,6 +1682,16 @@ def get_admin_prototype_source_servers(request: Request):
         return {"items": list_source_servers(dev_engine)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Не удалось получить серверы источников: {exc}") from exc
+
+
+def get_admin_prototype_source_tables(target_schema: str, request: Request):
+    _require_authenticated(request)
+    try:
+        return {"items": list_target_tables(dev_engine, target_schema)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось получить таблицы: {exc}") from exc
 
 
 def run_admin_prototype_source_load(payload, request: Request):
@@ -14908,6 +14918,7 @@ prototype_review_router = build_prototype_review_router(
         parent_issue=get_admin_prototype_parent_issue,
         release_slots=get_admin_prototype_release_slots,
         source_servers=get_admin_prototype_source_servers,
+        source_tables=get_admin_prototype_source_tables,
         run_source_load=run_admin_prototype_source_load,
         create_source_load_issue=create_admin_prototype_source_load_issue,
     )

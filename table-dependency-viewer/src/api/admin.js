@@ -23,6 +23,7 @@ export const adminApi = {
   prototypeReviewParentIssue: (issueId) => apiClient.get(`/api/admin/prototype-review/parent-issue/${encodeURIComponent(issueId)}`),
   prototypeReviewReleaseSlots: (releaseDate) => apiClient.get("/api/admin/prototype-review/release-slots", { params: { release_date: releaseDate } }),
   prototypeReviewSourceServers: () => apiClient.get("/api/admin/prototype-review/source-load/servers"),
+  prototypeReviewSourceTables: (targetSchema) => apiClient.get("/api/admin/prototype-review/source-load/tables", { params: { target_schema: targetSchema } }),
   prototypeReviewSourceLoadRun: (body) => apiClient.post("/api/admin/prototype-review/source-load/run", body),
   prototypeReviewSourceLoadCreateIssue: (body) => apiClient.post("/api/admin/prototype-review/source-load/create-issue", body),
   businessDqPreview: (body) => apiClient.post("/api/admin/prototype-review/business-dq/preview", body),

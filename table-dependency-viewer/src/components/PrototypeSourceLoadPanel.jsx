@@ -10,6 +10,7 @@ const INITIAL = {
 export default function PrototypeSourceLoadPanel() {
   const [form, setForm] = useState(INITIAL);
   const [servers, setServers] = useState([]);
+  const [targetTables, setTargetTables] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -19,7 +20,21 @@ export default function PrototypeSourceLoadPanel() {
     adminApi.prototypeReviewSourceServers().then((data) => setServers(data?.items || [])).catch((err) => setError(err?.message || "Не удалось загрузить серверы"));
   }, []);
 
+  useEffect(() => {
+    adminApi.prototypeReviewSourceTables(form.target_schema)
+      .then((data) => setTargetTables(data?.items || []))
+      .catch((err) => setError(err?.message || "Не удалось загрузить существующие таблицы"));
+  }, [form.target_schema]);
+
   const change = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
+  const changeTargetTable = (value) => {
+    const existing = targetTables.find((item) => item.table_name.toLowerCase() === value.trim().toLowerCase());
+    setForm((prev) => ({
+      ...prev,
+      target_table: value,
+      fields: existing?.fields || "ALL",
+    }));
+  };
   const run = async () => {
     setLoading(true); setError(""); setResult(null);
     try {
@@ -52,14 +67,14 @@ export default function PrototypeSourceLoadPanel() {
     </div>
     <div className="prototype-step-grid">
       <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => change("target_schema", e.target.value)}><option value="stg">stg</option><option value="dict_stg">dict_stg</option></select></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" value={form.target_table} onChange={(e) => change("target_table", e.target.value)} placeholder="SCRAPREMELTBP" /></label>
+      <label className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" list="prototype-target-tables" value={form.target_table} onChange={(e) => changeTargetTable(e.target.value)} placeholder="Начните вводить название" /><datalist id="prototype-target-tables">{targetTables.map((table) => <option key={table.table_name} value={table.table_name} />)}</datalist><span className="muted">Для существующей таблицы автоматически подставятся все её поля.</span></label>
       <label className="prototype-step-field"><span className="slow-select-label">Схема источника</span><input className="slow-entity-select" value={form.source_schema} onChange={(e) => change("source_schema", e.target.value)} placeholder="MIGR_KHD" /></label>
       <label className="prototype-step-field"><span className="slow-select-label">Таблица источника</span><input className="slow-entity-select" value={form.source_table} onChange={(e) => change("source_table", e.target.value)} placeholder="V_SCRAPREMELTBP" /></label>
       <label className="prototype-step-field"><span className="slow-select-label">Сущность / расписание</span><input className="slow-entity-select" value={form.entity_name} onChange={(e) => change("entity_name", e.target.value)} placeholder="MANAGEMENT_REPORTING_1" /></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Первичный ключ</span><input className="slow-entity-select" value={form.primary_key} onChange={(e) => change("primary_key", e.target.value)} placeholder="ID_SCRAPREMELTBP" /></label>
+      <label className="prototype-step-field"><span className="slow-select-label">Первичный ключ <span className="muted">(необязательно)</span></span><input className="slow-entity-select" value={form.primary_key} onChange={(e) => change("primary_key", e.target.value)} placeholder="Можно оставить пустым" /></label>
       <label className="prototype-step-field"><span className="slow-select-label">Поля</span><input className="slow-entity-select" value={form.fields} onChange={(e) => change("fields", e.target.value)} placeholder="ALL или FIELD_A,FIELD_B" /><span className="muted">Для изменения таблицы: сначала запустите с ALL, затем добавьте или удалите поля и запустите повторно.</span></label>
       <label className="prototype-step-field"><span className="slow-select-label">Ключ распределения</span><input className="slow-entity-select" value={form.distribution_field} onChange={(e) => change("distribution_field", e.target.value)} placeholder="RN" /></label>
-      <div className="prototype-step-field" style={{ gridColumn: "1 / -1" }}><span className="slow-select-label">Сервер источника</span><div className="prototype-control-list">{servers.map((server) => <label className="prototype-toggle-card" key={server.source_id}><input type="radio" name="source-server" checked={String(form.server_id) === String(server.source_id)} onChange={() => change("server_id", String(server.source_id))} /><span>{server.source_server_name} <small>#{server.source_id} · {server.source_type}</small></span></label>)}</div></div>
+      <div className="prototype-step-field" style={{ gridColumn: "1 / -1" }}><span className="slow-select-label">Сервер источника</span><div className="prototype-control-list">{servers.map((server) => <label className="prototype-toggle-card" key={`${server.service_name}-${server.server_id}`}><input type="radio" name="source-server" checked={String(form.server_id) === String(server.server_id)} onChange={() => change("server_id", String(server.server_id))} /><span>{server.service_name || server.server_name} <small>server_id: {server.server_id} · {server.source_type} · {server.server_name}{server.dag_name ? ` · DAG: ${server.dag_name}` : ""}{server.meta_view_name ? ` · Meta view: ${server.meta_view_name}` : ""}</small></span></label>)}</div></div>
     </div>
     <div className="prototype-import-actions"><button className="btn btn-primary" disabled={loading || !form.target_table || !form.source_schema || !form.source_table || !form.entity_name || !form.server_id} onClick={run}>{loading ? "Запускаем функцию…" : "Сгенерировать в DEV"}</button></div>
     {error ? <div className="page-error" style={{ marginTop: 12 }}>{error}</div> : null}

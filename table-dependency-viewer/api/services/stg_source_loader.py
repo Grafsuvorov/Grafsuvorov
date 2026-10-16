@@ -37,14 +37,13 @@ def list_source_servers(engine) -> list[dict[str, Any]]:
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
-                service_name,
                 server_id,
                 source_type,
                 server_name,
                 dag_name,
                 meta_view_name
             FROM tech_etl.source_servers_meta
-            ORDER BY service_name, server_id
+            ORDER BY server_id
         """)).mappings().all()
     return [
         {
@@ -144,7 +143,7 @@ def run_source_loader(engine, payload: dict[str, Any]) -> dict[str, Any]:
 
     with engine.connect() as conn:
         server = conn.execute(text("""
-            SELECT service_name, server_id, source_type, server_name, dag_name, meta_view_name
+            SELECT server_id, source_type, server_name, dag_name, meta_view_name
             FROM tech_etl.source_servers_meta
             WHERE server_id = :server_id
         """), {"server_id": server_id}).mappings().first()

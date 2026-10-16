@@ -1,3 +1,835 @@
-набор полей у таблицы сервис нейм server_id, source_type, server_name, dag_name, meta_view_name
-
-для текущих таблиц дай возможность выбрать начинает писать что бы она подтягивалась и все ее поля если она уже существует первичный ключ сделай не обязательным 
+r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1       | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1       | AUTH AUDIT INIT WARNING: (psycopg2.errors.SyntaxError) syntax             error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_event_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | AUTH FAVORITES INIT WARNING: (psycopg2.errors.SyntaxError) syn            tax error at or near "NOT"
+table-dependency-viewer-api-1       | LINE 2:                 CREATE SEQUENCE IF NOT EXISTS tech_etl            .app_u...
+table-dependency-viewer-api-1       |                                            ^
+table-dependency-viewer-api-1       |
+table-dependency-viewer-api-1       | [SQL:
+table-dependency-viewer-api-1       |                 CREATE SEQUENCE IF NOT EXISTS tech_etl.app_use            r_favorite_id_seq
+table-dependency-viewer-api-1       |                 ]
+table-dependency-viewer-api-1       | (Background on this error at: https://sqlalche.me/e/21/f405)
+table-dependency-viewer-api-1       | /app/api/main.py:543: UserWarning: Field name "schema" in "Ass            istantContextPayload" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class AssistantContextPayload(BaseModel):
+table-dependency-viewer-api-1       | /app/api/main.py:4629: UserWarning: Field name "schema" in "De            pendencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1       |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1       | Reg
+table-dependency-viewer-api-1       | Traceback (most recent call last):
+table-dependency-viewer-api-1       |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1       |     sys.exit(main())
+table-dependency-viewer-api-1       |              ^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1631, in __call__
+table-dependency-viewer-api-1       |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1552, in main
+table-dependency-viewer-api-1       |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1       |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 1415, in invoke
+table-dependency-viewer-api-1       |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/click/core.py"            , line 910, in invoke
+table-dependency-viewer-api-1       |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 448, in main
+table-dependency-viewer-api-1       |     run(
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.p            y", line 620, in run
+table-dependency-viewer-api-1       |     config.load_app()
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config            .py", line 434, in load_app
+table-dependency-viewer-api-1       |     return import_from_string(self.app)
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/site-packages/uvicorn/import            er.py", line 19, in import_from_string
+table-dependency-viewer-api-1       |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1       |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1       |   File "/usr/local/lib/python3.11/importlib/__init__.py", line             126, in import_module
+table-dependency-viewer-api-1       |     return _bootstrap._gcd_import(name[level:], package, level            )
+table-dependency-viewer-api-1       |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^            ^
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_imp            ort
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1176, in _find_an            d_load
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 1147, in _find_an            d_load_unlocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 690, in _load_unl            ocked
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap_external>", line 940, in             exec_module
+table-dependency-viewer-api-1       |   File "<frozen importlib._bootstrap>", line 241, in _call_wit            h_frames_removed
+table-dependency-viewer-api-1       |   File "/app/api/main.py", line 14898, in <module>
+table-dependency-viewer-api-1       |     PrototypeReviewHandlers(
+table-dependency-viewer-api-1       | TypeError: PrototypeReviewHandlers.__init__() missing 1 requir            ed positional argument: 'source_tables'
+table-dependency-viewer-api-1 exited with code 1

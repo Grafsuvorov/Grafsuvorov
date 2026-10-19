@@ -1731,7 +1731,10 @@ def run_admin_prototype_source_load(payload, request: Request):
 def create_admin_prototype_source_load_issue(payload, request: Request):
     user = _require_authenticated(request)
     direction = str(payload.direction or "").strip()
-    if not direction:
+    existing_issue_id = str(payload.existing_issue_id or "").strip().upper()
+    if existing_issue_id and not re.fullmatch(r"[A-Z][A-Z0-9_]*-\d+", existing_issue_id):
+        raise HTTPException(status_code=400, detail="Номер существующей задачи должен быть в формате DWH-12345")
+    if not existing_issue_id and not direction:
         raise HTTPException(status_code=400, detail="Заполните обязательное поле «Дашборд КХД/Направление»")
     try:
         summary = str(payload.issue_summary or "").strip() or (
@@ -1748,21 +1751,25 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
             "",
             "YAML:", payload.yaml_content,
         ])
-        issue = create_ytrack_issue(
-            base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT,
-            token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE,
-            ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description,
-            default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
-            estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME,
-            card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
-            card_type_value=YOUTRACK_CARD_TYPE_VALUE,
-            assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
-            assignee_query=YOUTRACK_ASSIGNEE_QUERY,
-            release_date=payload.release_date, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
-            direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
-            business_key_changed=False, business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
-        )
-        issue_id = str(issue.get("issue_id") or "").strip().upper()
+        if existing_issue_id:
+            issue_id = existing_issue_id
+            issue = {"status": "reused", "issue_id": issue_id, "url": _build_ytrack_link(issue_id)}
+        else:
+            issue = create_ytrack_issue(
+                base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT,
+                token=YOUTRACK_TOKEN, queue=YOUTRACK_QUEUE, issue_type=YOUTRACK_ISSUE_TYPE,
+                ssl_verify=YOUTRACK_SSL_VERIFY, summary=summary, description=description,
+                default_estimate_minutes=YOUTRACK_DEFAULT_ESTIMATE_MINUTES,
+                estimate_field_name=YOUTRACK_ESTIMATE_FIELD_NAME,
+                card_type_field_name=YOUTRACK_CARD_TYPE_FIELD_NAME,
+                card_type_value=YOUTRACK_CARD_TYPE_VALUE,
+                assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
+                assignee_query=YOUTRACK_ASSIGNEE_QUERY,
+                release_date=payload.release_date, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
+                direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+                business_key_changed=False, business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
+            )
+            issue_id = str(issue.get("issue_id") or "").strip().upper()
         if payload.load_status != "ok" or not issue_id:
             return {"issue": {**issue, "link": _build_ytrack_link(issue_id)}, "meta_mr": None,
                     "warning": "Функция не выполнилась: создана задача только с YAML, без инженерного MR."}
@@ -1785,7 +1792,17 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
             release_branch=PROTOTYPE_ETL_TARGET_BRANCH, branch_name=branch_name,
             mr_title=f"{issue_id}: загрузка {payload.target_schema}.{payload.target_table}", author=user.email,
         )
-        _notify_user_about_completion(user, f"🎉 Задача {issue_id} и инженерный MR созданы: {meta_mr.get('mr_url') or ''}")
+        if existing_issue_id and YOUTRACK_TOKEN:
+            try:
+                add_ytrack_issue_comment(
+                    base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=issue_id,
+                    ssl_verify=YOUTRACK_SSL_VERIFY,
+                    text=f"Добавлена загрузка `{payload.target_schema}.{payload.target_table}` из `{payload.source_schema}.{payload.source_table}`.\n{meta_mr.get('mr_url') or ''}",
+                )
+            except Exception as exc:
+                print(f"⚠️ Не удалось добавить комментарий в {issue_id}: {exc}")
+        action = "обновлены" if existing_issue_id else "созданы"
+        _notify_user_about_completion(user, f"🎉 Задача {issue_id} и инженерный MR {action}: {meta_mr.get('mr_url') or ''}")
         return {"issue": {**issue, "link": _build_ytrack_link(issue_id)}, "meta_mr": meta_mr, "meta_files": saved.get("changed_files")}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

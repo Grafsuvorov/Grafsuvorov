@@ -1,92 +1,42 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { adminApi } from "../api/admin.js";
 
-const INITIAL = {
-  target_schema: "stg", target_table: "", source_schema: "", source_table: "",
-  server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "",
-  entity_name: "", issue_summary: "", direction: "", release_date: "",
-};
+const INITIAL = { target_schema: "stg", target_table: "", source_schema: "", source_table: "", server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "", entity_name: "", issue_summary: "", direction: "", existing_issue_id: "" };
 
 export default function PrototypeSourceLoadPanel() {
-  const [form, setForm] = useState(INITIAL);
-  const [servers, setServers] = useState([]);
-  const [targetTables, setTargetTables] = useState([]);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    adminApi.prototypeReviewSourceServers().then((data) => setServers(data?.items || [])).catch((err) => setError(err?.message || "Не удалось загрузить серверы"));
-  }, []);
-
-  useEffect(() => {
-    adminApi.prototypeReviewSourceTables(form.target_schema)
-      .then((data) => setTargetTables(data?.items || []))
-      .catch((err) => setError(err?.message || "Не удалось загрузить существующие таблицы"));
-  }, [form.target_schema]);
-
+  const [isOpen, setIsOpen] = useState(false); const [pickerOpen, setPickerOpen] = useState(false);
+  const [form, setForm] = useState(INITIAL); const [servers, setServers] = useState([]); const [tables, setTables] = useState([]);
+  const [result, setResult] = useState(null); const [loading, setLoading] = useState(false); const [creating, setCreating] = useState(false); const [error, setError] = useState("");
+  useEffect(() => { adminApi.prototypeReviewSourceServers().then((v) => setServers(v?.items || [])).catch((e) => setError(e?.message || "Не удалось загрузить серверы")); }, []);
+  useEffect(() => { adminApi.prototypeReviewSourceTables(form.target_schema).then((v) => setTables(v?.items || [])).catch((e) => setError(e?.message || "Не удалось загрузить таблицы")); }, [form.target_schema]);
+  const matches = useMemo(() => { const q = form.target_table.trim().toLowerCase(); return tables.filter((v) => !q || v.table_name.toLowerCase().includes(q)).slice(0, 18); }, [form.target_table, tables]);
   const change = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
-  const changeTargetTable = (value) => {
-    const existing = targetTables.find((item) => item.table_name.toLowerCase() === value.trim().toLowerCase());
-    setForm((prev) => ({
-      ...prev,
-      target_table: value,
-      fields: existing?.fields || "ALL",
-    }));
-  };
-  const run = async () => {
-    setLoading(true); setError(""); setResult(null);
-    try {
-      const response = await adminApi.prototypeReviewSourceLoadRun({ ...form, server_id: Number(form.server_id) });
-      setResult(response);
-      if (String(form.fields || "").trim().toUpperCase() === "ALL" && response?.fields) {
-        setForm((prev) => ({ ...prev, fields: response.fields }));
-      }
-    } catch (err) { setError(err?.message || "Не удалось выполнить функцию загрузки"); }
-    finally { setLoading(false); }
-  };
-  const createIssue = async () => {
-    if (!result?.yaml_content) return;
-    setCreating(true); setError("");
-    try {
-      const created = await adminApi.prototypeReviewSourceLoadCreateIssue({
-        ...form, server_id: Number(form.server_id), yaml_content: result.yaml_content,
-        recreate_sql: result.recreate_sql || "", insert_sql: result.insert_sql || "",
-        truncate_sql: result.truncate_sql || "", load_status: result.status,
-      });
-      setResult((prev) => ({ ...prev, created }));
-    } catch (err) { setError(err?.message || "Не удалось создать задачу"); }
-    finally { setCreating(false); }
-  };
+  const selectTable = (table) => { setForm((prev) => ({ ...prev, target_table: table.table_name, fields: table.fields || "ALL", primary_key: table.primary_key || prev.primary_key })); setPickerOpen(false); };
+  const run = async () => { setLoading(true); setError(""); setResult(null); try { const response = await adminApi.prototypeReviewSourceLoadRun({ ...form, server_id: Number(form.server_id) }); setResult(response); if (form.fields.trim().toUpperCase() === "ALL" && response?.fields) change("fields", response.fields); } catch (e) { setError(e?.message || "Не удалось выполнить функцию загрузки"); } finally { setLoading(false); } };
+  const createIssue = async () => { if (!result?.yaml_content) return; setCreating(true); setError(""); try { const created = await adminApi.prototypeReviewSourceLoadCreateIssue({ ...form, server_id: Number(form.server_id), yaml_content: result.yaml_content, recreate_sql: result.recreate_sql || "", insert_sql: result.insert_sql || "", truncate_sql: result.truncate_sql || "", load_status: result.status }); setResult((prev) => ({ ...prev, created })); } catch (e) { setError(e?.message || "Не удалось создать задачу"); } finally { setCreating(false); } };
+  const reusingIssue = Boolean(form.existing_issue_id.trim());
 
-  return <section className="cc-surface" style={{ marginTop: 18 }}>
-    <div className="section-title">Загрузка из источника в STG</div>
-    <div className="muted" style={{ marginBottom: 14 }}>
-      Новый сценарий без аналитического MR. Функция создаёт/пересоздаёт объект в DEV; после успешного запуска будут подготовлены YAML и SQL для инженерного MR.
-    </div>
-    <div className="prototype-step-grid">
-      <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => change("target_schema", e.target.value)}><option value="stg">stg</option><option value="dict_stg">dict_stg</option></select></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" list="prototype-target-tables" value={form.target_table} onChange={(e) => changeTargetTable(e.target.value)} placeholder="Начните вводить название" /><datalist id="prototype-target-tables">{targetTables.map((table) => <option key={table.table_name} value={table.table_name} />)}</datalist><span className="muted">Для существующей таблицы автоматически подставятся все её поля.</span></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Схема источника</span><input className="slow-entity-select" value={form.source_schema} onChange={(e) => change("source_schema", e.target.value)} placeholder="MIGR_KHD" /></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Таблица источника</span><input className="slow-entity-select" value={form.source_table} onChange={(e) => change("source_table", e.target.value)} placeholder="V_SCRAPREMELTBP" /></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Сущность / расписание</span><input className="slow-entity-select" value={form.entity_name} onChange={(e) => change("entity_name", e.target.value)} placeholder="MANAGEMENT_REPORTING_1" /></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Первичный ключ <span className="muted">(необязательно)</span></span><input className="slow-entity-select" value={form.primary_key} onChange={(e) => change("primary_key", e.target.value)} placeholder="Можно оставить пустым" /></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Поля</span><input className="slow-entity-select" value={form.fields} onChange={(e) => change("fields", e.target.value)} placeholder="ALL или FIELD_A,FIELD_B" /><span className="muted">Для изменения таблицы: сначала запустите с ALL, затем добавьте или удалите поля и запустите повторно.</span></label>
-      <label className="prototype-step-field"><span className="slow-select-label">Ключ распределения</span><input className="slow-entity-select" value={form.distribution_field} onChange={(e) => change("distribution_field", e.target.value)} placeholder="RN" /></label>
-      <div className="prototype-step-field" style={{ gridColumn: "1 / -1" }}><span className="slow-select-label">Сервер источника</span><div className="prototype-control-list">{servers.map((server) => <label className="prototype-toggle-card" key={server.server_id}><input type="radio" name="source-server" checked={String(form.server_id) === String(server.server_id)} onChange={() => change("server_id", String(server.server_id))} /><span>{server.server_name} <small>server_id: {server.server_id} · {server.source_type}{server.dag_name ? ` · DAG: ${server.dag_name}` : ""}{server.meta_view_name ? ` · Meta view: ${server.meta_view_name}` : ""}</small></span></label>)}</div></div>
-    </div>
-    <div className="prototype-import-actions"><button className="btn btn-primary" disabled={loading || !form.target_table || !form.source_schema || !form.source_table || !form.entity_name || !form.server_id} onClick={run}>{loading ? "Запускаем функцию…" : "Сгенерировать в DEV"}</button></div>
-    {error ? <div className="page-error" style={{ marginTop: 12 }}>{error}</div> : null}
-    {result ? <div className={`card ${result.status === "error" ? "page-error" : ""}`} style={{ marginTop: 14 }}>
-      <div className="section-title">{result.status === "ok" ? "DEV-генерация выполнена" : "Функция завершилась с ошибкой"}</div>
-      {result.error ? <pre style={{ whiteSpace: "pre-wrap" }}>{result.error}</pre> : null}
-      {result.fields ? <div className="muted">Поля из источника: <span className="mono">{result.fields}</span></div> : null}
-      <details><summary>YAML</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.yaml_content}</pre></details>
-      {result.status === "ok" ? <><details><summary>Recreate SQL</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.recreate_sql}</pre></details><details><summary>Insert SQL</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.insert_sql}</pre></details></> : null}
-      <div className="prototype-step-grid" style={{ marginTop: 14 }}><label className="prototype-step-field"><span className="slow-select-label">Название задачи</span><input className="slow-entity-select" value={form.issue_summary} onChange={(e) => change("issue_summary", e.target.value)} placeholder="Загрузка stg..." /></label><label className="prototype-step-field"><span className="slow-select-label">Дашборд КХД/Направление</span><input className="slow-entity-select" value={form.direction} onChange={(e) => change("direction", e.target.value)} placeholder="Производство" /></label></div>
-      <button className="btn btn-primary" disabled={creating || !form.direction} onClick={createIssue}>{creating ? "Создаём…" : result.status === "ok" ? "Создать задачу и инженерный MR" : "Создать задачу только с YAML"}</button>
-      {result.created?.issue?.issue_id ? <div className="muted" style={{ marginTop: 12 }}>Создана задача: {result.created.issue.issue_id}{result.created.meta_mr?.mr_url ? <> · <a href={result.created.meta_mr.mr_url} target="_blank" rel="noreferrer">инженерный MR</a></> : null}</div> : null}
-    </div> : null}
+  return <section className="cc-surface prototype-source-load" style={{ marginTop: 18 }}>
+    <button type="button" className="prototype-source-load-trigger" onClick={() => setIsOpen((v) => !v)} aria-expanded={isOpen}><span><strong>Загрузка из источника в STG</strong><small>Создание или изменение stg / dict_stg без аналитического MR</small></span><b>{isOpen ? "⌃" : "⌄"}</b></button>
+    {isOpen && <div className="prototype-source-load-body">
+      <div className="muted">Функция создаёт или пересоздаёт объект в DEV. Успешный запуск формирует YAML и SQL для инженерного MR.</div>
+      <div className="prototype-step-grid" style={{ marginTop: 16 }}>
+        <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => { change("target_schema", e.target.value); change("target_table", ""); change("fields", "ALL"); }}><option value="stg">stg</option><option value="dict_stg">dict_stg</option></select></label>
+        <div className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" value={form.target_table} onFocus={() => setPickerOpen(true)} onChange={(e) => { change("target_table", e.target.value); setPickerOpen(true); }} placeholder="Начните вводить название" />{pickerOpen && <div className="prototype-table-picker">{matches.length ? matches.map((table) => <button type="button" key={table.table_name} className={`prototype-table-option ${form.target_table.toLowerCase() === table.table_name.toLowerCase() ? "active" : ""}`} onClick={() => selectTable(table)}><span className="prototype-table-check">{form.target_table.toLowerCase() === table.table_name.toLowerCase() ? "✓" : ""}</span><span className="mono">{table.table_name}</span></button>) : <div className="muted">Совпадений нет — будет создана новая таблица.</div>}</div>}<span className="muted">Выберите существующую — её поля подставятся автоматически.</span></div>
+        <label className="prototype-step-field"><span className="slow-select-label">Схема источника</span><input className="slow-entity-select" value={form.source_schema} onChange={(e) => change("source_schema", e.target.value)} placeholder="MIGR_KHD" /></label>
+        <label className="prototype-step-field"><span className="slow-select-label">Таблица источника</span><input className="slow-entity-select" value={form.source_table} onChange={(e) => change("source_table", e.target.value)} placeholder="V_SCRAPREMELTBP" /></label>
+        <label className="prototype-step-field"><span className="slow-select-label">Сущность / расписание</span><input className="slow-entity-select" value={form.entity_name} onChange={(e) => change("entity_name", e.target.value)} placeholder="MANAGEMENT_REPORTING_1" /></label>
+        <label className="prototype-step-field"><span className="slow-select-label">Первичный ключ <span className="muted">(необязательно)</span></span><input className="slow-entity-select" value={form.primary_key} onChange={(e) => change("primary_key", e.target.value)} placeholder="Можно оставить пустым" /></label>
+        <label className="prototype-step-field prototype-source-fields"><span className="slow-select-label">Поля</span><textarea className="slow-entity-select" value={form.fields} onChange={(e) => change("fields", e.target.value)} placeholder="ALL или FIELD_A, FIELD_B" /><span className="muted">Можно добавлять и удалять поля перед повторным запуском.</span></label>
+        <label className="prototype-step-field"><span className="slow-select-label">Ключ распределения</span><input className="slow-entity-select" value={form.distribution_field} onChange={(e) => change("distribution_field", e.target.value)} placeholder="RN" /></label>
+        <label className="prototype-step-field"><span className="slow-select-label">Сервер источника</span><select className="slow-entity-select" value={form.server_id} onChange={(e) => change("server_id", e.target.value)}><option value="">Выберите сервер</option>{servers.map((s) => <option key={s.server_id} value={s.server_id}>{s.server_name} · ID {s.server_id}</option>)}</select></label>
+      </div>
+      <div className="prototype-import-actions"><button className="btn btn-primary" disabled={loading || !form.target_table || !form.source_schema || !form.source_table || !form.entity_name || !form.server_id} onClick={run}>{loading ? "Запускаем функцию…" : "Сгенерировать в DEV"}</button></div>
+      {error && <div className="page-error" style={{ marginTop: 12 }}>{error}</div>}
+      {result && <div className={`card ${result.status === "error" ? "page-error" : ""}`} style={{ marginTop: 14 }}><div className="section-title">{result.status === "ok" ? "DEV-генерация выполнена" : "Функция завершилась с ошибкой"}</div>{result.error && <pre style={{ whiteSpace: "pre-wrap" }}>{result.error}</pre>}{result.fields && <div className="muted">Поля из источника: <span className="mono">{result.fields}</span></div>}<details><summary>YAML</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.yaml_content}</pre></details>{result.status === "ok" && <><details><summary>Recreate SQL</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.recreate_sql}</pre></details><details><summary>Insert SQL</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.insert_sql}</pre></details></>}
+        <div className="prototype-step-grid" style={{ marginTop: 14 }}><label className="prototype-step-field"><span className="slow-select-label">Добавить к задаче Prototype Review <span className="muted">(необязательно)</span></span><input className="slow-entity-select" value={form.existing_issue_id} onChange={(e) => change("existing_issue_id", e.target.value.toUpperCase())} placeholder="DWH-12345" /><span className="muted">Файлы попадут в инженерную ветку и MR этой задачи.</span></label><label className="prototype-step-field"><span className="slow-select-label">Название новой задачи</span><input className="slow-entity-select" disabled={reusingIssue} value={form.issue_summary} onChange={(e) => change("issue_summary", e.target.value)} placeholder="Загрузка stg..." /></label><label className="prototype-step-field"><span className="slow-select-label">Дашборд КХД/Направление</span><input className="slow-entity-select" disabled={reusingIssue} value={form.direction} onChange={(e) => change("direction", e.target.value)} placeholder="Производство" /></label></div>
+        <button className="btn btn-primary" disabled={creating || (!reusingIssue && !form.direction)} onClick={createIssue}>{creating ? "Сохраняем…" : reusingIssue ? "Добавить в существующую задачу и MR" : result.status === "ok" ? "Создать задачу и инженерный MR" : "Создать задачу только с YAML"}</button>{result.created?.issue?.issue_id && <div className="muted" style={{ marginTop: 12 }}>Задача: {result.created.issue.issue_id}{result.created.meta_mr?.mr_url && <> · <a href={result.created.meta_mr.mr_url} target="_blank" rel="noreferrer">инженерный MR</a></>}</div>}
+      </div>}
+    </div>}
   </section>;
 }

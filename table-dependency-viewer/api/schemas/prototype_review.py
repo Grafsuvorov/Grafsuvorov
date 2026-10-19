@@ -108,6 +108,7 @@ class PrototypeReviewSourceLoadIssuePayload(PrototypeReviewSourceLoadPayload):
     direction: Optional[str] = None
     release_date: Optional[str] = None
     parent_issue: Optional[str] = None
+    existing_issue_id: Optional[str] = None
 
 
 class BusinessDqPreviewPayload(BaseModel):

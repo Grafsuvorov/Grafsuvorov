@@ -45,6 +45,7 @@ class PrototypeReviewItemPayload(BaseModel):
     path: Optional[str] = None
     paths: Optional[List[str]] = None
     target_fqn: str
+    table_id: Optional[int] = None
     entity_name: Optional[str] = None
     key_attributes: Optional[List[str]] = None
     scd_type: Optional[str] = "scd1"

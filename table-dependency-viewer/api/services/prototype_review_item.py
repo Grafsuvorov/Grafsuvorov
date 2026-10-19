@@ -136,6 +136,9 @@ def resolve_prototype_review_item(
     return {
         "path": path_value,
         "target_fqn": target_fqn,
+        # The metadata catalogue is authoritative for an existing object.
+        # Carry its identity through the browser form to issue creation.
+        "table_id": (meta or {}).get("table_id"),
         "object_type": item_object_type,
         "entity_name": entity_name,
         "entity_names": entity_names,

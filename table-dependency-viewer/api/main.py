@@ -1245,7 +1245,10 @@ def _prototype_review_refresh_yaml_identity(
         try:
             submitted_table_id = int(submitted_payload.get("table_id"))
         except Exception:
-            submitted_table_id = None
+            try:
+                submitted_table_id = int(item.get("table_id"))
+            except Exception:
+                submitted_table_id = None
         if submitted_table_id and submitted_table_id > 0:
             result["table_id"] = submitted_table_id
 

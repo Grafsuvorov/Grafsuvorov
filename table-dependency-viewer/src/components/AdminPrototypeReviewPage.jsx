@@ -452,6 +452,7 @@ export default function AdminPrototypeReviewPage() {
           path: item.path,
           paths: item.paths || [],
           target_fqn: item.target_fqn,
+          table_id: item.table_id ?? null,
           entity_name: String(item.entity_name || "").trim(),
           key_attributes: splitItems(item.key_attributes_text),
           scd_type: String(item.scd_type || "scd1").toLowerCase(),

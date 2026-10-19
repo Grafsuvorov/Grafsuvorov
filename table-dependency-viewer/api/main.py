@@ -1268,6 +1268,9 @@ def _prototype_review_prepare_yaml_for_issue(
     yaml_content = _prototype_review_refresh_yaml_identity(
         item=item,
         reserved_table_ids=reserved_table_ids,
+        # The review form already contains the YAML identity confirmed during
+        # the run. Creating a task must not allocate a different table_id.
+        preserve_submitted_table_id=True,
     )
     target_fqn = str(item.get("target_fqn") or "").strip().lower()
     entity_name = str(item.get("entity_name") or "").strip()

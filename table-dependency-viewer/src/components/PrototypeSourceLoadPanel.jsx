@@ -16,9 +16,11 @@ export default function PrototypeSourceLoadPanel() {
   const createIssue = async () => { if (!result?.yaml_content) return; setCreating(true); setError(""); try { const created = await adminApi.prototypeReviewSourceLoadCreateIssue({ ...form, server_id: Number(form.server_id), yaml_content: result.yaml_content, recreate_sql: result.recreate_sql || "", insert_sql: result.insert_sql || "", truncate_sql: result.truncate_sql || "", load_status: result.status }); setResult((prev) => ({ ...prev, created })); } catch (e) { setError(e?.message || "Не удалось создать задачу"); } finally { setCreating(false); } };
   const reusingIssue = Boolean(form.existing_issue_id.trim());
 
-  return <section className="cc-surface prototype-source-load" style={{ marginTop: 18 }}>
-    <button type="button" className="prototype-source-load-trigger" onClick={() => setIsOpen((v) => !v)} aria-expanded={isOpen}><span><strong>Загрузка из источника в STG</strong><small>Создание или изменение stg / dict_stg без аналитического MR</small></span><b>{isOpen ? "⌃" : "⌄"}</b></button>
-    {isOpen && <div className="prototype-source-load-body">
+  return <>
+    <section className="cc-surface" style={{ marginTop: 16, padding: 10 }}>
+      <button type="button" className={`btn ${isOpen ? "btn-primary" : "btn-ghost"}`} onClick={() => setIsOpen((v) => !v)} aria-expanded={isOpen}>Загрузка из источника в STG: создание или изменение</button>
+    </section>
+    {isOpen && <section className="cc-surface prototype-source-load" style={{ marginTop: 16 }}>
       <div className="muted">Функция создаёт или пересоздаёт объект в DEV. Успешный запуск формирует YAML и SQL для инженерного MR.</div>
       <div className="prototype-step-grid" style={{ marginTop: 16 }}>
         <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => { change("target_schema", e.target.value); change("target_table", ""); change("fields", "ALL"); }}><option value="stg">stg</option><option value="dict_stg">dict_stg</option></select></label>
@@ -37,6 +39,6 @@ export default function PrototypeSourceLoadPanel() {
         <div className="prototype-step-grid" style={{ marginTop: 14 }}><label className="prototype-step-field"><span className="slow-select-label">Добавить к задаче Prototype Review <span className="muted">(необязательно)</span></span><input className="slow-entity-select" value={form.existing_issue_id} onChange={(e) => change("existing_issue_id", e.target.value.toUpperCase())} placeholder="DWH-12345" /><span className="muted">Файлы попадут в инженерную ветку и MR этой задачи.</span></label><label className="prototype-step-field"><span className="slow-select-label">Название новой задачи</span><input className="slow-entity-select" disabled={reusingIssue} value={form.issue_summary} onChange={(e) => change("issue_summary", e.target.value)} placeholder="Загрузка stg..." /></label><label className="prototype-step-field"><span className="slow-select-label">Дашборд КХД/Направление</span><input className="slow-entity-select" disabled={reusingIssue} value={form.direction} onChange={(e) => change("direction", e.target.value)} placeholder="Производство" /></label></div>
         <button className="btn btn-primary" disabled={creating || (!reusingIssue && !form.direction)} onClick={createIssue}>{creating ? "Сохраняем…" : reusingIssue ? "Добавить в существующую задачу и MR" : result.status === "ok" ? "Создать задачу и инженерный MR" : "Создать задачу только с YAML"}</button>{result.created?.issue?.issue_id && <div className="muted" style={{ marginTop: 12 }}>Задача: {result.created.issue.issue_id}{result.created.meta_mr?.mr_url && <> · <a href={result.created.meta_mr.mr_url} target="_blank" rel="noreferrer">инженерный MR</a></>}</div>}
       </div>}
-    </div>}
-  </section>;
+    </section>}
+  </>;
 }

@@ -1202,41 +1202,20 @@ def _prototype_review_refresh_yaml_identity(
         for value in (item.get("key_attributes") or [])
         if str(value).strip()
     ]
-    # Existing objects always take their identity from main Git.  Local DEV
-    # metadata and the browser payload can be stale after a prior draft.
-    canonical_identity_found = False
-    try:
-        bundle = read_meta_workspace_branch_gp_bundle(
-            git_repo_value=ENTITY_META_GIT_REPO,
-            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
-            workspace_root_value=META_WORKSPACE_ROOT,
-            workspace_owner="prototype-review",
-            branch_name=PROTOTYPE_ETL_BASE_BRANCH,
-            base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-            entity_name=entity_name,
-            schema_name=schema_name,
-            table_name=table_name,
-        )
-        canonical_identity_found = True
-    except MetaWorkspaceObjectNotFoundError:
-        existing_object = item.get("is_new") is False or bool(item.get("table_id"))
-        if existing_object:
-            raise ValueError(
-                f"Для существующего объекта `{target_fqn}` YAML не найден в main Git. "
-                "Создание задачи остановлено, чтобы не изменить table_id."
-            ) from None
-        bundle = init_entity_dev_meta_bundle(
-            engine=engine,
-            base_dir=BASE_DIR,
-            prod_root_value=ENTITY_META_DIR,
-            dev_root_value=DEV_ENTITY_META_DIR,
-            entity_name=entity_name,
-            schema_name=schema_name,
-            table_name=table_name,
-            key_attributes=key_attributes or None,
-            reserved_table_ids=reserved_table_ids,
-            prod_only=True,
-        )
+    # Do not put Git network access in the task-creation path. The identity
+    # of an existing object is verified directly against tables_meta below.
+    bundle = init_entity_dev_meta_bundle(
+        engine=engine,
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+        key_attributes=key_attributes or None,
+        reserved_table_ids=reserved_table_ids,
+        prod_only=True,
+    )
     try:
         generated_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
         submitted_payload = yaml.safe_load(item.get("yaml_content") or "") or {}
@@ -1264,7 +1243,7 @@ def _prototype_review_refresh_yaml_identity(
         else:
             result.pop(field_name, None)
 
-    if preserve_submitted_table_id and not canonical_identity_found:
+    if preserve_submitted_table_id:
         try:
             submitted_table_id = int(submitted_payload.get("table_id"))
         except Exception:
@@ -1274,6 +1253,17 @@ def _prototype_review_refresh_yaml_identity(
                 submitted_table_id = None
         if submitted_table_id and submitted_table_id > 0:
             result["table_id"] = submitted_table_id
+
+    existing_object = item.get("is_new") is False or bool(item.get("table_id"))
+    if existing_object:
+        with engine.connect() as conn:
+            catalog_table_id = get_table_id_by_fqn(conn, schema_name, table_name)
+        if not catalog_table_id:
+            raise ValueError(
+                f"Для существующего объекта `{target_fqn}` не найден table_id в {TABLE_TABLES_META}. "
+                "Создание задачи остановлено, чтобы не записать новый ID."
+            )
+        result["table_id"] = int(catalog_table_id)
 
     object_type = str(item.get("object_type") or result.get("object_type") or "TABLE").strip().upper()
     result["object_type"] = object_type
@@ -12205,8 +12195,9 @@ def get_table_id_by_fqn(conn, schema: str, table: str):
         f"""
         SELECT table_id
         FROM {TABLE_TABLES_META}
-        WHERE table_schema = :schema
-          AND table_name   = :table
+        WHERE lower(table_schema) = lower(:schema)
+          AND lower(table_name) = lower(:table)
+        ORDER BY table_id
         LIMIT 1
     """
     )

@@ -35,6 +35,10 @@ class BranchRevisionConflictError(PermissionError):
     pass
 
 
+class MetaWorkspaceObjectNotFoundError(ValueError):
+    """The requested GP metadata object is absent from the selected Git ref."""
+
+
 CLICK_DIFF_SYSTEM_FIELDS = {"dttm_inserted", "dttm_updated", "deleted_flag", "job_name"}
 
 
@@ -46,6 +50,30 @@ def _load_yaml_if_possible(text_content: str) -> dict[str, Any]:
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _find_child_case_insensitive(parent: Path, name: str) -> Path | None:
+    if not parent.is_dir():
+        return None
+    wanted = str(name or "").casefold()
+    return next((child for child in parent.iterdir() if child.name.casefold() == wanted), None)
+
+
+def _resolve_gp_object_dir(
+    *, worktree_dir: Path, entity_git_root_value: str, entity_name: str, schema_name: str, table_name: str
+) -> tuple[Path, Path]:
+    """Resolve the Git tree path without treating identifier case as significant."""
+    current = worktree_dir / Path(entity_git_root_value)
+    relative = Path(entity_git_root_value)
+    for segment in (entity_name, schema_name, table_name):
+        child = _find_child_case_insensitive(current, segment)
+        if child is None:
+            current = current / segment
+            relative = relative / segment
+        else:
+            current = child
+            relative = relative / child.name
+    return current.resolve(), relative
 
 
 def _read_branch_gp_sql_from_yaml(
@@ -933,13 +961,20 @@ def read_meta_workspace_branch_gp_bundle(
         branch_name=branch_name,
         base_branch=base_branch,
     )
-    object_rel = Path(entity_git_root_value) / entity_name / schema_name / table_name
-    object_dir = (worktree_dir / object_rel).resolve()
+    object_dir, object_rel = _resolve_gp_object_dir(
+        worktree_dir=worktree_dir,
+        entity_git_root_value=entity_git_root_value,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+    )
     if not str(object_dir).startswith(str(worktree_dir.resolve())):
         raise ValueError("Некорректный путь объекта")
     yaml_path = object_dir / "meta_data_file.yaml"
     if not yaml_path.exists():
-        raise ValueError(f"Объект `{entity_name}/{schema_name}/{table_name}` не найден в ветке `{branch_name}`")
+        raise MetaWorkspaceObjectNotFoundError(
+            f"Объект `{entity_name}/{schema_name}/{table_name}` не найден в ветке `{branch_name}`"
+        )
     yaml_content = yaml_path.read_text(encoding="utf-8")
     payload = _load_yaml_text(yaml_content)
     recreate_sql, recreate_sql_source = _read_branch_gp_sql_from_yaml(

@@ -176,6 +176,7 @@ from .services.entity_dev_meta import (
 )
 from .services.meta_workspace import (
     BranchRevisionConflictError,
+    MetaWorkspaceObjectNotFoundError,
     create_meta_workspace_branch,
     _build_branch_catalog,
     build_meta_workspace_branch_tree,
@@ -192,7 +193,7 @@ from .services.meta_workspace import (
 )
 from .services.corp_ai import enhance_assistant_response
 from .services.botx_notifications import send_completion_notification
-from .services.stg_source_loader import list_source_servers, list_target_tables, run_source_loader
+from .services.stg_source_loader import list_source_servers, list_target_tables, run_source_loader, target_table_exists
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     COMMENT_TARGET_PATTERNS,
@@ -1695,18 +1696,41 @@ def get_admin_prototype_source_tables(target_schema: str, request: Request):
 
 
 def run_admin_prototype_source_load(payload, request: Request):
-    _require_authenticated(request)
+    user = _require_authenticated(request)
     try:
+        # Metadata identity comes from the canonical Git main branch.  Do this
+        # before executing the database function: an existing physical table
+        # must never be updated under a newly allocated table_id.
+        exists_in_dev = target_table_exists(dev_engine, payload.target_schema, payload.target_table)
+        try:
+            bundle = read_meta_workspace_branch_gp_bundle(
+                git_repo_value=ENTITY_META_GIT_REPO,
+                entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                workspace_root_value=META_WORKSPACE_ROOT,
+                workspace_owner=user.email,
+                branch_name=PROTOTYPE_ETL_BASE_BRANCH,
+                base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+                entity_name=payload.entity_name,
+                schema_name=payload.target_schema,
+                table_name=payload.target_table,
+            )
+        except MetaWorkspaceObjectNotFoundError:
+            if exists_in_dev:
+                raise ValueError(
+                    "Таблица уже существует в DEV, но её YAML не найден в main Git. "
+                    "Загрузка остановлена: проверьте сущность и метаданные, чтобы не создать новый table_id."
+                ) from None
+            bundle = init_entity_dev_meta_bundle(
+                engine=engine,
+                base_dir=BASE_DIR,
+                prod_root_value=ENTITY_META_DIR,
+                dev_root_value=DEV_ENTITY_META_DIR,
+                entity_name=payload.entity_name,
+                schema_name=payload.target_schema,
+                table_name=payload.target_table,
+            )
+
         result = run_source_loader(dev_engine, payload.model_dump())
-        bundle = init_entity_dev_meta_bundle(
-            engine=engine,
-            base_dir=BASE_DIR,
-            prod_root_value=ENTITY_META_DIR,
-            dev_root_value=DEV_ENTITY_META_DIR,
-            entity_name=payload.entity_name,
-            schema_name=payload.target_schema,
-            table_name=payload.target_table,
-        )
         yaml_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
         yaml_payload.update({
             "source_id": int(payload.server_id),

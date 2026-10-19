@@ -92,6 +92,27 @@ def list_target_tables(engine, schema_name: str) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def target_table_exists(engine, schema_name: str, table_name: str) -> bool:
+    """Return whether the physical DEV target already exists.
+
+    A source-load update must never silently receive a new metadata identity.
+    The caller uses this check before it invokes the database loading function.
+    """
+    schema = str(schema_name or "").strip().lower()
+    table = _identifier(table_name, "Таблица target")
+    if schema not in ALLOWED_SCHEMAS:
+        raise ValueError("Доступны только схемы stg и dict_stg")
+    with engine.connect() as conn:
+        return bool(conn.execute(text("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = :schema_name
+                  AND lower(table_name) = lower(:table_name)
+            )
+        """), {"schema_name": schema, "table_name": table}).scalar())
+
+
 def _notice_value(notices: list[str], marker: str, stop_markers: tuple[str, ...]) -> str:
     for index, raw in enumerate(notices):
         line = str(raw or "")

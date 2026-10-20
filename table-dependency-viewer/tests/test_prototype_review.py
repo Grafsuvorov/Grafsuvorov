@@ -61,7 +61,12 @@ from api.services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
 )
-from api.services.prototype_review_dbt import yaml_repo_path
+from api.services.prototype_review_dbt import (
+    dbt_duplicates_path,
+    dbt_nulls_path,
+    dbt_registry_path,
+    yaml_repo_path,
+)
 from api.services.prototype_review_issue_workflow import (
     PrototypeIssueWorkflowDependencies,
     create_prototype_review_issue,
@@ -1351,6 +1356,22 @@ class EntityMetaDependenciesTests(unittest.TestCase):
         self.assertEqual(
             yaml_repo_path("TRANSPORTATION", "ods", "/rusal/shipdata_ral"),
             "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/ods/rusalshipdata_ral/meta_data_file.yaml",
+        )
+
+    def test_slashes_in_physical_table_name_do_not_create_nested_dbt_directories(self) -> None:
+        table_name = "/rusal/leport_ral"
+
+        self.assertEqual(
+            dbt_duplicates_path("ods", table_name),
+            "dbt_greenplum_elt/models/dq/technical/dq_ods_s_rusalleport_ral_s_duplicates.sql",
+        )
+        self.assertEqual(
+            dbt_nulls_path("ods", table_name),
+            "dbt_greenplum_elt/models/dq/technical/dq_ods_s_rusalleport_ral_s_nulls.sql",
+        )
+        self.assertEqual(
+            dbt_registry_path("ods", table_name),
+            "dbt_greenplum_elt/models_metadata/ods/ods.rusalleport_ral.yml",
         )
 
     def test_next_table_id_respects_ids_reserved_in_current_review(self) -> None:

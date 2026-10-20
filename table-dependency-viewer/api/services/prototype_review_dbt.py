@@ -27,18 +27,23 @@ def yaml_repo_path(entity_name: str, schema_name: str, table_name: str) -> str:
 
 def dbt_registry_path(schema_name: str, table_name: str) -> str:
     schema_name_norm = str(schema_name or "").strip().lower()
-    table_name_norm = str(table_name or "").strip().lower()
+    # A quoted Greenplum relation may contain `/`.  It remains unchanged in
+    # the registry content and dbt alias, but must never create subfolders in
+    # a Git file path.
+    table_name_norm = _object_directory_name(table_name) or str(table_name or "").strip().lower()
     return posix_join(str(DBT_REGISTRY_ROOT or "dbt_greenplum_elt/models_metadata").strip("/"), schema_name_norm, f"{schema_name_norm}.{table_name_norm}.yml")
 
 
 def dbt_duplicates_path(schema_name: str, table_name: str) -> str:
     schema_name_norm = str(schema_name or "").strip().lower()
-    table_name_norm = str(table_name or "").strip().lower()
+    table_name_norm = _object_directory_name(table_name) or str(table_name or "").strip().lower()
     return posix_join(str(DBT_DQ_TECHNICAL_ROOT or "dbt_greenplum_elt/models/dq/technical").strip("/"), f"dq_{schema_name_norm}_s_{table_name_norm}_s_duplicates.sql")
 
 
 def dbt_nulls_path(schema_name: str, table_name: str) -> str:
-    return posix_join(str(DBT_DQ_TECHNICAL_ROOT or "dbt_greenplum_elt/models/dq/technical").strip("/"), f"dq_{schema_name.strip().lower()}_s_{table_name.strip().lower()}_s_nulls.sql")
+    schema_name_norm = str(schema_name or "").strip().lower()
+    table_name_norm = _object_directory_name(table_name) or str(table_name or "").strip().lower()
+    return posix_join(str(DBT_DQ_TECHNICAL_ROOT or "dbt_greenplum_elt/models/dq/technical").strip("/"), f"dq_{schema_name_norm}_s_{table_name_norm}_s_nulls.sql")
 
 
 def parse_null_conditions(content: Optional[str]) -> list[str]:

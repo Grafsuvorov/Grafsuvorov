@@ -1,16 +1,5 @@
-dbt_greenplum_elt/models/dq/technical/dq_ods_s_rusalleport_ral_s_duplicates.sql
-
-{{- config(
-    error_code         = 'dq_all0001',
-    detail_store_flag  = true,
-    detail_store_limit = none,
-    check_type         = 'duplicates',
-    check_columns      = ['bl', 'databl', 'container'],
-    alias              = "/rusal/leport_ral",
-    tags               = ['dq', 'technical', 'duplicates']
-    ) -}}
-
 dbt_greenplum_elt/models_metadata/ods/ods.rusalleport_ral.yml
+
 relation:
   # наименование схемы
   schema_name: ods
@@ -27,3 +16,21 @@ dq:
   - check_type: "duplicates"
     detail_store_flag: true
     detail_store_limit: null
+
+dbt_greenplum_elt/models_metadata/ods/ods.rusallepervlk1_ral.yml
+
+как должно пример 
+relation:
+  schema_name: ods
+  table_name: /rusal/lepervlk1_ral
+  scd_type: scd1
+  unique_key:
+    - id
+    - pos
+    - type_load
+    - numvag
+    - numnakl
+dq:
+  - check_type: "duplicates"
+    detail_store_flag: true
+    detail_store_limit: 30

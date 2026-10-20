@@ -1,14 +1,29 @@
--- tech_etl.source_servers_meta определение
+dbt_greenplum_elt/models/dq/technical/dq_ods_s_rusalleport_ral_s_duplicates.sql
 
--- Drop table
+{{- config(
+    error_code         = 'dq_all0001',
+    detail_store_flag  = true,
+    detail_store_limit = none,
+    check_type         = 'duplicates',
+    check_columns      = ['bl', 'databl', 'container'],
+    alias              = "/rusal/leport_ral",
+    tags               = ['dq', 'technical', 'duplicates']
+    ) -}}
 
--- DROP TABLE tech_etl.source_servers_meta;
-
-CREATE TABLE tech_etl.source_servers_meta (
-	server_id serial4 NOT NULL,
-	source_type text NULL,
-	server_name text NULL,
-	dag_name text NULL,
-	meta_view_name varchar NULL
-)
-DISTRIBUTED REPLICATED;
+dbt_greenplum_elt/models_metadata/ods/ods.rusalleport_ral.yml
+relation:
+  # наименование схемы
+  schema_name: ods
+  # наименование таблицы
+  table_name: /rusal/leport_ral
+  scd_type: scd1
+  # тип scd (scd1, scd2)
+  scd_type: scd1
+  unique_key: # список полей уникального ключа
+    - bl
+    - databl
+    - container
+dq:
+  - check_type: "duplicates"
+    detail_store_flag: true
+    detail_store_limit: null

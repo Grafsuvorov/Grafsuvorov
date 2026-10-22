@@ -1,36 +1,56 @@
-dbt_greenplum_elt/models_metadata/ods/ods.rusalleport_ral.yml
+table_name: SCRAPREMELTBP
+table_schema: stg
+table_id: 7038
+source_id: 5
+source_type: ORACLE_MESDW
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 42
+entity_name: MANAGEMENT_REPORTING_1
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/stg/scrapremeltbp/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/stg/scrapremeltbp/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/stg/scrapremeltbp/sql_query_truncate.sql
+depends_on:
+  raw_ext:
+    - SCRAPREMELTBP_READ
 
-relation:
-  # наименование схемы
-  schema_name: ods
-  # наименование таблицы
-  table_name: /rusal/leport_ral
-  scd_type: scd1
-  # тип scd (scd1, scd2)
-  scd_type: scd1
-  unique_key: # список полей уникального ключа
-    - bl
-    - databl
-    - container
-dq:
-  - check_type: "duplicates"
-    detail_store_flag: true
-    detail_store_limit: null
 
-dbt_greenplum_elt/models_metadata/ods/ods.rusallepervlk1_ral.yml
+Функция создаёт или пересоздаёт объект в DEV. Успешный запуск формирует YAML и SQL для инженерного MR.
+Схема target
 
-как должно пример 
-relation:
-  schema_name: ods
-  table_name: /rusal/lepervlk1_ral
-  scd_type: scd1
-  unique_key:
-    - id
-    - pos
-    - type_load
-    - numvag
-    - numnakl
-dq:
-  - check_type: "duplicates"
-    detail_store_flag: true
-    detail_store_limit: 30
+stg
+Таблица target
+SCRAPREMELTBP
+
+✓
+SCRAPREMELTBP
+Выберите существующую — её поля подставятся автоматически.
+Схема источника
+MIGR_KHD
+Таблица источника
+V_SCRAPREMELTBP
+Сущность / расписание
+MANAGMENT_REPORTING_1
+Первичный ключ (необязательно)
+Можно оставить пустым
+Поля
+ID_SCRAPREMELTBP,ID_STRUCT,INTERNALSCRAPLO,INTERNALSCRAPAZ,OWNSCRAPAD,RETURNFG,EXTERNALSCRAP,SECONDARYAL,DATEBEG,DATEEND,DTEDIT,ORANAME,ID_SMELTEREDIT,USER_ID,MONTHBP,YEARBP,VERSION,LOWPURITY,SCRAP
+Можно добавлять и удалять поля перед повторным запуском.
+Ключ распределения
+RN
+Сервер источника
+
+oracle_mesdw · ID 5
+Сгенерировать в DEV
+Таблица уже существует в DEV, но её YAML не найден в main Git. Загрузка остановлена: проверьте сущность и метаданные, чтобы не создать новый table_id.

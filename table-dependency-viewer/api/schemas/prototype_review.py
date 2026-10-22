@@ -106,6 +106,7 @@ class PrototypeReviewSourceLoadIssuePayload(PrototypeReviewSourceLoadPayload):
     truncate_sql: str = ""
     load_status: str = "ok"
     issue_summary: Optional[str] = None
+    linked_issues: Optional[List[str]] = None
     direction: Optional[str] = None
     release_date: Optional[str] = None
     parent_issue: Optional[str] = None

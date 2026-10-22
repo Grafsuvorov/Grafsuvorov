@@ -1844,17 +1844,55 @@ def run_admin_prototype_source_load(payload, request: Request):
 def create_admin_prototype_source_load_issue(payload, request: Request):
     user = _require_authenticated(request)
     try:
+        parent_issue = str(payload.parent_issue or "").strip().upper()
+        direction = str(payload.direction or "").strip()
+        if parent_issue:
+            parent_context = get_ytrack_issue_context(
+                base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=parent_issue,
+                direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+                ssl_verify=YOUTRACK_SSL_VERIFY,
+            )
+            direction = str((parent_context or {}).get("direction") or direction).strip()
+        if not direction:
+            raise ValueError("Заполните обязательное поле «Дашборд КХД/Направление»")
+
+        source_server = next(
+            (row for row in list_source_servers(dev_engine) if int(row.get("server_id") or 0) == int(payload.server_id)),
+            {},
+        )
+        source_name = str(source_server.get("server_name") or payload.server_id)
+        source_label = {"oracle_mesdw": "Oracle MES (ЕАСУ ЛП)"}.get(source_name.lower(), source_name)
+        release_date = str(payload.release_date or "").strip()
+        linked_issues = [str(value or "").strip().upper() for value in (payload.linked_issues or []) if str(value or "").strip()]
         summary = str(payload.issue_summary or "").strip() or (
-            f"Загрузка {payload.target_schema}.{payload.target_table} из {payload.source_schema}.{payload.source_table}"
+            f"Создать таблицу {payload.target_schema}.{payload.target_table}"
         )
         description = "\n".join([
-            f"Источник: {payload.source_schema}.{payload.source_table}",
-            f"Target: {payload.target_schema}.{payload.target_table}",
-            f"Сервер source_id: {payload.server_id}",
-            f"Поля: {payload.fields}",
-            f"Распределение: {payload.distribution_field or 'RN'}",
-            f"PK: {payload.primary_key or 'не задан'}",
-            f"Сущность/расписание: {payload.entity_name}",
+            f'Прошу создать таблицу "{payload.target_table}" в схеме {payload.target_schema} на DEV и PROD',
+            "",
+            f"Таблица нужна для загрузки данных из {source_label}",
+            "",
+            f"Направление: {direction};",
+            "",
+            f"Источник: {source_label};",
+            "",
+            f"Название схемы на источнике: {payload.source_schema};",
+            "",
+            f"Название таблицы на источнике: {payload.source_table};",
+            "",
+            f'Название таблицы в таргете: {payload.target_schema}."{payload.target_table}";',
+            "",
+            f'Ключ распределения: DISTRIBUTED BY ("{payload.distribution_field or "RN"}");',
+            "",
+            "Условие при загрузке: грузим без условий;",
+            "",
+            f"Расписание загрузки: {payload.entity_name};",
+            "",
+            "Стенд: DEV и PROD;",
+            "",
+            "Доступ к таблице на источнике: Предоставлен;",
+            *( ["", f"Дата релиза: {release_date};"] if release_date else [] ),
+            *( ["", f"Связанные задачи: {', '.join(linked_issues)};"] if linked_issues else [] ),
         ])
         issue = create_ytrack_issue(
             base_url=YOUTRACK_URL, project_id=YOUTRACK_PROJECT_ID, project=YOUTRACK_PROJECT,
@@ -1866,13 +1904,23 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
             card_type_value=YOUTRACK_CARD_TYPE_VALUE,
             assignee_field_name=YOUTRACK_ASSIGNEE_FIELD_NAME,
             assignee_query=YOUTRACK_ASSIGNEE_QUERY,
+            release_date=release_date or None, release_date_field_name=YOUTRACK_RELEASE_DATE_FIELD_NAME,
+            direction=direction, direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
             business_key_changed=False, business_key_changed_field_name=YOUTRACK_BUSINESS_KEY_CHANGED_FIELD_NAME,
         )
         issue_id = str(issue.get("issue_id") or "").strip().upper()
         issue_link = _build_ytrack_link(issue_id)
+        issue_links = link_ytrack_issues(
+            base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=issue_id,
+            linked_issue_ids=linked_issues, ssl_verify=YOUTRACK_SSL_VERIFY,
+        )
+        parent_link = link_ytrack_parent_issue(
+            base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=issue_id,
+            parent_issue_id=parent_issue, ssl_verify=YOUTRACK_SSL_VERIFY,
+        )
         if issue_id:
             _notify_user_about_completion(user, f"🎉 Задача {issue_id} создана: {issue_link}")
-        return {"issue": {**issue, "link": issue_link}}
+        return {"issue": {**issue, "link": issue_link}, "issue_links": issue_links, "parent_link": parent_link}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

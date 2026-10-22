@@ -1,3 +1,584 @@
+DROP TABLE IF EXISTS STG."LIKP" CASCADE ;
+create table STG."LIKP" (
+"MANDT" varchar(9) NULL,
+ "VBELN" varchar(30) NULL,
+ "ERNAM" varchar(36) NULL,
+ "ERZET" varchar(18) NULL,
+ "ERDAT" varchar(24) NULL,
+ "VSTEL" varchar(12) NULL,
+ "VKORG" varchar(12) NULL,
+ "LFART" varchar(12) NULL,
+ "LDDAT" varchar(24) NULL,
+ "TDDAT" varchar(24) NULL,
+ "KODAT" varchar(24) NULL,
+ "INCO2" varchar(84) NULL,
+ "ROUTE" varchar(18) NULL,
+ "VBTYP" varchar(3) NULL,
+ "KUNNR" varchar(30) NULL,
+ "BTGEW" decimal(15,3) NULL,
+ "NTGEW" decimal(15,3) NULL,
+ "GEWEI" varchar(9) NULL,
+ "LSTEL" varchar(6) NULL,
+ "BOLNR" varchar(105) NULL,
+ "TRATY" varchar(12) NULL,
+ "TRAID" varchar(60) NULL,
+ "XABLN" varchar(30) NULL,
+ "WADAT_IST" varchar(24) NULL,
+ "TRSPG" varchar(6) NULL,
+ "LIFEX" varchar(105) NULL,
+ "VSART" varchar(6) NULL,
+ "SDABW" varchar(12) NULL,
+ "RN" integer NOT NULL) 
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+) DISTRIBUTED BY("RN");
+NOTICE:  DDL CREATE TABLE: DROP TABLE IF EXISTS STG."LIKP" CASCADE ;
+create table STG."LIKP" (
+"MANDT" varchar(9) NULL,
+ "VBELN" varchar(30) NULL,
+ "ERNAM" varchar(36) NULL,
+ "ERZET" varchar(18) NULL,
+ "ERDAT" varchar(24) NULL,
+ "VSTEL" varchar(12) NULL,
+ "VKORG" varchar(12) NULL,
+ "LFART" varchar(12) NULL,
+ "LDDAT" varchar(24) NULL,
+ "TDDAT" varchar(24) NULL,
+ "KODAT" varchar(24) NULL,
+ "INCO2" varchar(84) NULL,
+ "ROUTE" varchar(18) NULL,
+ "VBTYP" varchar(3) NULL,
+ "KUNNR" varchar(30) NULL,
+ "BTGEW" decimal(15,3) NULL,
+ "NTGEW" decimal(15,3) NULL,
+ "GEWEI" varchar(9) NULL,
+ "LSTEL" varchar(6) NULL,
+ "BOLNR" varchar(105) NULL,
+ "TRATY" varchar(12) NULL,
+ "TRAID" varchar(60) NULL,
+ "XABLN" varchar(30) NULL,
+ "WADAT_IST" varchar(24) NULL,
+ "TRSPG" varchar(6) NULL,
+ "LIFEX" varchar(105) NULL,
+ "VSART" varchar(6) NULL,
+ "SDABW" varchar(12) NULL,
+ "RN" integer NOT NULL) 
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+) DISTRIBUTED BY("RN");
+
+NOTICE:  Status: target table created
+
+NOTICE:  Query to get columns: select tech_etl.generate_greenplum_readable_statement_ddl_oracle
+ (v_target_schema_name := 'STG', 
+ v_target_table_name := 'LIKP', 
+ v_source_server_name := 'oracle_sap_erp_prod', 
+ v_script_name := 'LIKP' 
+)
+
+NOTICE:  ALL COLUMNS: DROP EXTERNAL TABLE IF EXISTS RAW_EXT."LIKP_READ" CASCADE ;
+CREATE READABLE EXTERNAL TABLE RAW_EXT."LIKP_READ"(
+LIKE STG."LIKP"
+)
+LOCATION (
+'pxf://query:query_LIKP?PROFILE=JDBC&SERVER=oracle_sap_erp_prod&FETCH_SIZE=5000&PARTITION_BY=RN:int&RANGE=1:5&INTERVAL=1'
+) ON ALL
+FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import')
+ENCODING 'UTF8';
+
+NOTICE:  DDL CREATE READABLE: DROP EXTERNAL TABLE IF EXISTS RAW_EXT."LIKP_READ" CASCADE ;
+CREATE READABLE EXTERNAL TABLE RAW_EXT."LIKP_READ"(
+LIKE STG."LIKP"
+)
+LOCATION (
+'pxf://query:query_LIKP?PROFILE=JDBC&SERVER=oracle_sap_erp_prod&FETCH_SIZE=5000&PARTITION_BY=RN:int&RANGE=1:5&INTERVAL=1'
+) ON ALL
+FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import')
+ENCODING 'UTF8';
+
+NOTICE:  Status: readable external table created
+
+NOTICE:  LOG BASH: SAPSR3
+LIKP
+MANDT,VBELN,ERNAM,ERZET,ERDAT,VSTEL,VKORG,LFART,LDDAT,TDDAT,KODAT,INCO2,ROUTE,VBTYP,KUNNR,BTGEW,NTGEW,GEWEI,LSTEL,BOLNR,TRATY,TRAID,XABLN,WADAT_IST,TRSPG,LIFEX,VSART,SDABW
+query_LIKP
+oracle_sap_erp_prod
+"VBELN" || "MANDT"
+TRUE
+oracle
+COPY 1
+Syncing PXF configuration files from master host to standby master host and 6 segment hosts...
+PXF configs synced successfully on 7 out of 7 hosts
+
+NOTICE:  Status: query fox PXF loaded
+
+NOTICE:  DDL ALTERS: ALTER TABLE STG."LIKP" 
+ ADD COLUMN  "DTTM_INSERTED" TIMESTAMP NOT NULL DEFAULT now(), 
+ ADD COLUMN  "DTTM_UPDATED" TIMESTAMP NOT NULL DEFAULT now(), 
+ ADD COLUMN  "JOB_NAME" varchar(60) NOT NULL DEFAULT 'airflow', 
+ ADD COLUMN  "DELETED_FLAG" bool NOT NULL DEFAULT false, 
+ ADD COLUMN  "IS_ACTUAL" bool NOT NULL DEFAULT true;
+
+NOTICE:  Status:  Technical fields were added to target
+
+NOTICE:  Readable schema: RAW_EXT
+
+NOTICE:  Insert fields: "MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+"DTTM_INSERTED",
+"DTTM_UPDATED",
+"JOB_NAME",
+"DELETED_FLAG",
+"IS_ACTUAL"
+
+NOTICE:  Select fields: "MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+now(),
+now(),
+'airflow',
+false,
+true
+
+NOTICE:  Insert query:  INSERT INTO STG."LIKP"(
+"MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+"DTTM_INSERTED",
+"DTTM_UPDATED",
+"JOB_NAME",
+"DELETED_FLAG",
+"IS_ACTUAL")
+ SELECT 
+"MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+now(),
+now(),
+'airflow',
+false,
+true
+ FROM  RAW_EXT."LIKP_READ";
+
+NOTICE:  DML INSERT QUERY:  INSERT INTO STG."LIKP"(
+"MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+"DTTM_INSERTED",
+"DTTM_UPDATED",
+"JOB_NAME",
+"DELETED_FLAG",
+"IS_ACTUAL")
+ SELECT 
+"MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+now(),
+now(),
+'airflow',
+false,
+true
+ FROM  RAW_EXT."LIKP_READ";
+
+NOTICE:  Value: 28549083
+
+NOTICE:  Status: data was inserted to the target table
+
+NOTICE:  QUERY CREATE WITH FIELDS:
+select tech_etl.etl_source_to_greenplum_new(
+    v_source_schema_name := 'SAPSR3',
+    v_source_table_name := 'LIKP',
+    v_fields_list := 'MANDT,VBELN,ERNAM,ERZET,ERDAT,VSTEL,VKORG,LFART,LDDAT,TDDAT,KODAT,INCO2,ROUTE,VBTYP,KUNNR,BTGEW,NTGEW,GEWEI,LSTEL,BOLNR,TRATY,TRAID,XABLN,WADAT_IST,TRSPG,LIFEX,VSART,SDABW',
+    v_target_schema_name := 'STG',
+    v_target_table_name := 'LIKP',
+    v_server_id := '1',
+    v_distribution_field := 'RN',
+    v_pk := '"VBELN" || "MANDT"'
+);
+
+
+INSERT INTO STG."LIKP"(
+"MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+"DTTM_INSERTED",
+"DTTM_UPDATED",
+"JOB_NAME",
+"DELETED_FLAG",
+"IS_ACTUAL")
+ SELECT 
+"MANDT",
+"VBELN",
+"ERNAM",
+"ERZET",
+"ERDAT",
+"VSTEL",
+"VKORG",
+"LFART",
+"LDDAT",
+"TDDAT",
+"KODAT",
+"INCO2",
+"ROUTE",
+"VBTYP",
+"KUNNR",
+"BTGEW",
+"NTGEW",
+"GEWEI",
+"LSTEL",
+"BOLNR",
+"TRATY",
+"TRAID",
+"XABLN",
+"WADAT_IST",
+"TRSPG",
+"LIFEX",
+"VSART",
+"SDABW",
+"RN",
+now(),
+now(),
+'airflow',
+false,
+true
+ FROM  RAW_EXT."LIKP_READ";
+NOTICE:  Value: 28549083
+
+NOTICE:  Status: data was inserted to the target table
+
+NOTICE:  QUERY CREATE WITH FIELDS:
+select tech_etl.etl_source_to_greenplum_new(
+    v_source_schema_name := 'SAPSR3',
+    v_source_table_name := 'LIKP',
+    v_fields_list := 'MANDT,VBELN,ERNAM,ERZET,ERDAT,VSTEL,VKORG,LFART,LDDAT,TDDAT,KODAT,INCO2,ROUTE,VBTYP,KUNNR,BTGEW,NTGEW,GEWEI,LSTEL,BOLNR,TRATY,TRAID,XABLN,WADAT_IST,TRSPG,LIFEX,VSART,SDABW',
+    v_target_schema_name := 'STG',
+    v_target_table_name := 'LIKP',
+    v_server_id := '1',
+    v_distribution_field := 'RN',
+    v_pk := '"VBELN" || "MANDT"'
+);
+
+
+table_name: likp
+table_schema: stg
+table_id: 1307
+source_id: 1
+source_type: ORACLE
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 34
+entity_name: TRANSPORTATION
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 23:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/stg/likp/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/stg/likp/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/stg/likp/sql_query_truncate.sql
+depends_on:
+  raw_ext:
+    - LIKP_READ
+
+как должно быть
+
+table_name: LIKP
+table_schema: stg
+table_id: 1307
+source_id: 1
+source_type: ORACLE_ERP_PROD
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 34
+entity_name: TRANSPORTATION
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 23:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/stg/likp/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/stg/likp/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/stg/likp/sql_query_truncate.sql
+depends_on:
+  raw_ext:
+    - LIKP_READ
+
+
+INSERT INTO STG."LIKP"(
+	"MANDT",
+	"VBELN",
+	"ERNAM",
+	"ERZET",
+	"ERDAT",
+	"VSTEL",
+	"VKORG",
+	"LFART",
+	"LDDAT",
+	"TDDAT",
+	"KODAT",
+	"INCO2",
+	"ROUTE",
+	"VBTYP",
+	"KUNNR",
+	"BTGEW",
+	"NTGEW",
+	"GEWEI",
+	"LSTEL",
+	"BOLNR",
+	"TRATY",
+	"TRAID",
+	"XABLN",
+	"WADAT_IST",
+	"TRSPG",
+	"LIFEX",
+	"VSART",
+	"SDABW",
+	"RN",
+	"DTTM_INSERTED",
+	"DTTM_UPDATED",
+	"JOB_NAME",
+	"DELETED_FLAG",
+	"IS_ACTUAL")
+SELECT 
+	"MANDT",
+	"VBELN",
+	"ERNAM",
+	"ERZET",
+	"ERDAT",
+	"VSTEL",
+	"VKORG",
+	"LFART",
+	"LDDAT",
+	"TDDAT",
+	"KODAT",
+	"INCO2",
+	"ROUTE",
+	"VBTYP",
+	"KUNNR",
+	"BTGEW",
+	"NTGEW",
+	"GEWEI",
+	"LSTEL",
+	"BOLNR",
+	"TRATY",
+	"TRAID",
+	"XABLN",
+	"WADAT_IST",
+	"TRSPG",
+	"LIFEX",
+	"VSART",
+	"SDABW",
+	"RN",
+	now(),
+	now(),
+	'airflow',
+	false,
+	true
+FROM RAW_EXT."LIKP_READ"
+WHERE "MANDT" = '400';  
+
+
 SELECT tech_etl.etl_source_to_greenplum_new(
     v_source_schema_name := 'SAPSR3',
     v_source_table_name := 'LIKP',

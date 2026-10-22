@@ -21,7 +21,10 @@ export default function PrototypeSourceLoadPanel() {
       setForm((prev) => ({
         ...prev,
         fields: table.fields || prev.fields,
-        primary_key: table.primary_key || keyAttributes || prev.primary_key,
+        source_schema: meta.source_schema_name || prev.source_schema,
+        source_table: meta.source_table_name || prev.source_table,
+        primary_key: meta.primary_key || table.primary_key || keyAttributes || prev.primary_key,
+        distribution_field: meta.distribution_field || prev.distribution_field,
         entity_name: details?.entity_name || meta.entity_name || prev.entity_name,
         server_id: meta.source_id != null ? String(meta.source_id) : prev.server_id,
       }));

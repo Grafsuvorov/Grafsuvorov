@@ -1824,6 +1824,12 @@ def run_admin_prototype_source_load(payload, request: Request):
         yaml_payload.update({
             "source_id": int(payload.server_id),
             "source_type": str((result.get("server") or {}).get("source_type") or "").upper() or None,
+            # These fields retain the arguments of etl_source_to_greenplum_new
+            # so a later edit of the same target can restore the complete form.
+            "source_schema_name": str(payload.source_schema).strip(),
+            "source_table_name": str(payload.source_table).strip(),
+            "primary_key": str(payload.primary_key).strip(),
+            "distribution_field": str(payload.distribution_field or "RN").strip(),
             "table_schema": str(payload.target_schema).lower(),
             "table_name": str(payload.target_table).lower(),
             "entity_name": payload.entity_name,

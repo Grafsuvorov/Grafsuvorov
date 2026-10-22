@@ -16,6 +16,32 @@ ALLOWED_SCHEMAS = {"stg", "dict_stg"}
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$#/]*$")
 
 
+def source_loader_parameters_from_sql(sql: str) -> dict[str, str]:
+    """Extract persisted ``etl_source_to_greenplum_new`` arguments from SQL.
+
+    Older STG metadata does not keep source relation and key fields in YAML,
+    but its ``sql_query_recreate_init.sql`` already contains the canonical
+    function call.  This also makes old tables editable without migration.
+    """
+    result: dict[str, str] = {}
+    field_map = {
+        "v_source_schema_name": "source_schema_name",
+        "v_source_table_name": "source_table_name",
+        "v_fields_list": "fields",
+        "v_distribution_field": "distribution_field",
+        "v_pk": "primary_key",
+    }
+    for argument_name, result_name in field_map.items():
+        match = re.search(
+            rf"\b{argument_name}\s*:=\s*'((?:''|[^'])*)'",
+            str(sql or ""),
+            flags=re.IGNORECASE,
+        )
+        if match:
+            result[result_name] = match.group(1).replace("''", "'").strip()
+    return result
+
+
 def _identifier(value: str, label: str) -> str:
     result = str(value or "").strip().strip('"')
     if not result or not IDENTIFIER_RE.fullmatch(result):

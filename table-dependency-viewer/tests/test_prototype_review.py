@@ -75,7 +75,7 @@ from api.services.prototype_review_item import (
     PrototypeReviewItemDependencies,
     resolve_prototype_review_item,
 )
-from api.services.stg_source_loader import _primary_key_expression
+from api.services.stg_source_loader import _primary_key_expression, source_loader_parameters_from_sql
 
 
 class PrototypeReviewWorkflowTests(unittest.TestCase):
@@ -90,6 +90,21 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "Первичный ключ"):
             _primary_key_expression("")
+
+    def test_source_loader_restores_parameters_from_recreate_sql(self) -> None:
+        params = source_loader_parameters_from_sql("""
+            select tech_etl.etl_source_to_greenplum_new(
+                v_source_schema_name := 'SAPSR3',
+                v_source_table_name := '/RUSAL/LEPORT',
+                v_fields_list := 'MANDT,BL',
+                v_distribution_field := 'RN',
+                v_pk := '"CONTAINER" || "MANDT"'
+            );
+        """)
+        self.assertEqual(params["source_schema_name"], "SAPSR3")
+        self.assertEqual(params["source_table_name"], "/RUSAL/LEPORT")
+        self.assertEqual(params["distribution_field"], "RN")
+        self.assertEqual(params["primary_key"], '"CONTAINER" || "MANDT"')
 
     def test_builds_warning_result_for_deleted_file_without_dev_execution(self) -> None:
         captured = {}

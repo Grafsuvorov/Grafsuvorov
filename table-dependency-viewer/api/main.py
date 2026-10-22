@@ -193,7 +193,13 @@ from .services.meta_workspace import (
 )
 from .services.corp_ai import enhance_assistant_response
 from .services.botx_notifications import send_completion_notification
-from .services.stg_source_loader import list_source_servers, list_target_tables, run_source_loader, target_table_exists
+from .services.stg_source_loader import (
+    list_source_servers,
+    list_target_tables,
+    run_source_loader,
+    source_loader_parameters_from_sql,
+    target_table_exists,
+)
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
     COMMENT_TARGET_PATTERNS,
@@ -1763,6 +1769,12 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
                 raw_metadata = yaml.safe_load(bundle.get("yaml_content") or "") or {}
                 if isinstance(raw_metadata, dict):
                     metadata = raw_metadata
+                    # Source arguments of older objects live in the recreate
+                    # SQL rather than the YAML.  Fill missing YAML values from
+                    # that canonical function invocation.
+                    for key, value in source_loader_parameters_from_sql(bundle.get("recreate_sql") or "").items():
+                        if value and not metadata.get(key):
+                            metadata[key] = value
                     entity_name = str(metadata.get("entity_name") or entity_name).strip()
             except MetaWorkspaceObjectNotFoundError:
                 # The physical table can predate the Git metadata.  Keep the

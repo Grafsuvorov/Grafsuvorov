@@ -1,56 +1,9 @@
-table_name: SCRAPREMELTBP
-table_schema: stg
-table_id: 7038
-source_id: 5
-source_type: ORACLE_MESDW
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 42
-entity_name: MANAGEMENT_REPORTING_1
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/stg/scrapremeltbp/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/stg/scrapremeltbp/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/stg/scrapremeltbp/sql_query_truncate.sql
-depends_on:
-  raw_ext:
-    - SCRAPREMELTBP_READ
-
-
-Функция создаёт или пересоздаёт объект в DEV. Успешный запуск формирует YAML и SQL для инженерного MR.
-Схема target
-
-stg
-Таблица target
-SCRAPREMELTBP
-
-✓
-SCRAPREMELTBP
-Выберите существующую — её поля подставятся автоматически.
-Схема источника
-MIGR_KHD
-Таблица источника
-V_SCRAPREMELTBP
-Сущность / расписание
-MANAGMENT_REPORTING_1
-Первичный ключ (необязательно)
-Можно оставить пустым
-Поля
-ID_SCRAPREMELTBP,ID_STRUCT,INTERNALSCRAPLO,INTERNALSCRAPAZ,OWNSCRAPAD,RETURNFG,EXTERNALSCRAP,SECONDARYAL,DATEBEG,DATEEND,DTEDIT,ORANAME,ID_SMELTEREDIT,USER_ID,MONTHBP,YEARBP,VERSION,LOWPURITY,SCRAP
-Можно добавлять и удалять поля перед повторным запуском.
-Ключ распределения
-RN
-Сервер источника
-
-oracle_mesdw · ID 5
-Сгенерировать в DEV
-Таблица уже существует в DEV, но её YAML не найден в main Git. Загрузка остановлена: проверьте сущность и метаданные, чтобы не создать новый table_id.
+SELECT tech_etl.etl_source_to_greenplum_new(
+    v_source_schema_name := 'SAPSR3',
+    v_source_table_name := 'LIKP',
+    v_fields_list := 'MANDT,VBELN,VKORG,TRAID,BOLNR,LFART,LDDAT,ROUTE,SDABW,XABLN,TRATY,LIFEX,LSTEL,NTGEW,BTGEW,GEWEI,ERDAT,ERZET,VBTYP,KODAT,VSTEL,ERNAM,VSART,KUNNR,WADAT_IST,TRSPG,TDDAT,INCO2',
+    v_target_schema_name := 'STG',
+    v_target_table_name := 'LIKP',
+    v_server_id := 1,
+    v_distribution_field := 'RN',
+    v_pk := '"VBELN" || "MANDT"');

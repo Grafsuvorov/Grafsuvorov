@@ -95,7 +95,7 @@ class PrototypeReviewSourceLoadPayload(BaseModel):
     server_id: int
     fields: str = "ALL"
     distribution_field: str = "RN"
-    primary_key: Optional[str] = None
+    primary_key: str
     entity_name: str
 
 

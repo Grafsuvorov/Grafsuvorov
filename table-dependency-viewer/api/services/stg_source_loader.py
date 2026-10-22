@@ -33,6 +33,23 @@ def _fields(value: str) -> str:
     return ",".join(names)
 
 
+def _primary_key_expression(value: str) -> str:
+    """Build the expression expected by ``etl_source_to_greenplum_new``.
+
+    The loader accepts a compound business key as ``"FIELD_A" || "FIELD_B"``.
+    In the UI it is convenient to enter either this expression or a comma
+    separated list; normalising both forms prevents malformed SQL parameters.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("Заполните обязательное поле «Первичный ключ»")
+    parts = re.split(r"\s*\|\|\s*|\s*,\s*", raw)
+    names = [_identifier(part, "Первичный ключ") for part in parts if part.strip()]
+    if not names or len(names) != len(parts):
+        raise ValueError("Первичный ключ должен содержать одно или несколько имён полей")
+    return " || ".join(f'"{name}"' for name in names)
+
+
 def list_source_servers(engine) -> list[dict[str, Any]]:
     with engine.connect() as conn:
         rows = conn.execute(text("""
@@ -67,7 +84,10 @@ def list_target_tables(engine, schema_name: str) -> list[dict[str, Any]]:
             SELECT
                 c.table_name,
                 string_agg(c.column_name, ',' ORDER BY c.ordinal_position) AS fields,
-                max(CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN kcu.column_name END) AS primary_key
+                string_agg(
+                    CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN quote_ident(kcu.column_name) END,
+                    ' || ' ORDER BY kcu.ordinal_position
+                ) AS primary_key
             FROM information_schema.columns c
             LEFT JOIN information_schema.key_column_usage kcu
               ON kcu.table_schema = c.table_schema
@@ -153,9 +173,7 @@ def run_source_loader(engine, payload: dict[str, Any]) -> dict[str, Any]:
     source_table = _identifier(payload.get("source_table"), "Таблица источника")
     target_table = _identifier(payload.get("target_table"), "Таблица target")
     distribution_field = _identifier(payload.get("distribution_field") or "RN", "Ключ распределения")
-    primary_key = str(payload.get("primary_key") or "").strip().strip('"')
-    if primary_key:
-        primary_key = _identifier(primary_key, "Первичный ключ")
+    primary_key = _primary_key_expression(payload.get("primary_key"))
     fields = _fields(payload.get("fields"))
     try:
         server_id = int(payload.get("server_id"))
@@ -185,7 +203,7 @@ def run_source_loader(engine, payload: dict[str, Any]) -> dict[str, Any]:
                 v_distribution_field := %s,
                 v_pk := %s
             )
-        """, (source_schema, source_table, fields, schema_name.upper(), target_table, str(server_id), distribution_field, f'"{primary_key}"' if primary_key else None))
+        """, (source_schema, source_table, fields, schema_name.upper(), target_table, str(server_id), distribution_field, primary_key))
         raw_connection.commit()
         notices = list(getattr(raw_connection, "notices", []) or [])
     except Exception as exc:

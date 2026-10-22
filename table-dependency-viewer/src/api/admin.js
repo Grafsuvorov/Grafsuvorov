@@ -24,6 +24,7 @@ export const adminApi = {
   prototypeReviewReleaseSlots: (releaseDate) => apiClient.get("/api/admin/prototype-review/release-slots", { params: { release_date: releaseDate } }),
   prototypeReviewSourceServers: () => apiClient.get("/api/admin/prototype-review/source-load/servers"),
   prototypeReviewSourceTables: (targetSchema) => apiClient.get("/api/admin/prototype-review/source-load/tables", { params: { target_schema: targetSchema } }),
+  prototypeReviewSourceTableDetails: (targetSchema, targetTable) => apiClient.get("/api/admin/prototype-review/source-load/table-details", { params: { target_schema: targetSchema, target_table: targetTable } }),
   prototypeReviewSourceLoadRun: (body) => apiClient.post("/api/admin/prototype-review/source-load/run", body),
   prototypeReviewSourceLoadCreateIssue: (body) => apiClient.post("/api/admin/prototype-review/source-load/create-issue", body),
   businessDqPreview: (body) => apiClient.post("/api/admin/prototype-review/business-dq/preview", body),

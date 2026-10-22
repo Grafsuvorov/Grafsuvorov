@@ -1714,6 +1714,76 @@ def get_admin_prototype_source_tables(target_schema: str, request: Request):
         raise HTTPException(status_code=500, detail=f"Не удалось получить таблицы: {exc}") from exc
 
 
+def get_admin_prototype_source_table_details(target_schema: str, target_table: str, request: Request):
+    """Return reusable load metadata for an existing STG target.
+
+    Physical columns come from DEV; the entity, source server and key fields
+    come from the canonical YAML in main.  This means choosing an existing
+    target does not require the user to retype its loading metadata.
+    """
+    user = _require_authenticated(request)
+    try:
+        tables = list_target_tables(dev_engine, target_schema)
+        selected = next(
+            (row for row in tables if str(row.get("table_name") or "").lower() == str(target_table or "").strip().strip('"').lower()),
+            None,
+        )
+        if not selected:
+            raise ValueError("Таблица target не найдена в DEV")
+
+        with engine.connect() as conn:
+            meta_row = conn.execute(text(f"""
+                SELECT t.entity_id, e.entity_name
+                FROM {TABLE_TABLES_META} t
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE lower(t.table_schema) = lower(:schema_name)
+                  AND lower(t.table_name) = lower(:table_name)
+                ORDER BY t.table_id DESC
+                LIMIT 1
+            """), {
+                "schema_name": target_schema,
+                "table_name": selected["table_name"],
+            }).mappings().first()
+
+        entity_name = str((meta_row or {}).get("entity_name") or "").strip()
+        metadata: dict[str, Any] = {}
+        if entity_name:
+            try:
+                bundle = read_meta_workspace_branch_gp_bundle(
+                    git_repo_value=ENTITY_META_GIT_REPO,
+                    entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                    workspace_root_value=META_WORKSPACE_ROOT,
+                    workspace_owner=user.email,
+                    branch_name=PROTOTYPE_ETL_BASE_BRANCH,
+                    base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+                    entity_name=entity_name,
+                    schema_name=target_schema,
+                    table_name=selected["table_name"],
+                )
+                raw_metadata = yaml.safe_load(bundle.get("yaml_content") or "") or {}
+                if isinstance(raw_metadata, dict):
+                    metadata = raw_metadata
+                    entity_name = str(metadata.get("entity_name") or entity_name).strip()
+            except MetaWorkspaceObjectNotFoundError:
+                # The physical table can predate the Git metadata.  Keep the
+                # picker usable and let the run endpoint show its protection
+                # message if an update would be unsafe.
+                pass
+
+        return {
+            "table_name": selected["table_name"],
+            "fields": selected.get("fields") or "ALL",
+            "primary_key": selected.get("primary_key") or "",
+            "entity_id": (meta_row or {}).get("entity_id"),
+            "entity_name": entity_name,
+            "metadata": metadata,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось получить метаданные таблицы: {exc}") from exc
+
+
 def run_admin_prototype_source_load(payload, request: Request):
     user = _require_authenticated(request)
     try:
@@ -14980,6 +15050,7 @@ prototype_review_router = build_prototype_review_router(
         release_slots=get_admin_prototype_release_slots,
         source_servers=get_admin_prototype_source_servers,
         source_tables=get_admin_prototype_source_tables,
+        source_table_details=get_admin_prototype_source_table_details,
         run_source_load=run_admin_prototype_source_load,
         create_source_load_issue=create_admin_prototype_source_load_issue,
     )

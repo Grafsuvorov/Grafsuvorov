@@ -75,9 +75,22 @@ from api.services.prototype_review_item import (
     PrototypeReviewItemDependencies,
     resolve_prototype_review_item,
 )
+from api.services.stg_source_loader import _primary_key_expression
 
 
 class PrototypeReviewWorkflowTests(unittest.TestCase):
+    def test_source_loader_normalizes_compound_primary_key(self) -> None:
+        self.assertEqual(
+            _primary_key_expression('"VBELN" || "MANDT"'),
+            '"VBELN" || "MANDT"',
+        )
+        self.assertEqual(
+            _primary_key_expression("VBELN, MANDT"),
+            '"VBELN" || "MANDT"',
+        )
+        with self.assertRaisesRegex(ValueError, "Первичный ключ"):
+            _primary_key_expression("")
+
     def test_builds_warning_result_for_deleted_file_without_dev_execution(self) -> None:
         captured = {}
 

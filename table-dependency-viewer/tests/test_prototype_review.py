@@ -75,7 +75,7 @@ from api.services.prototype_review_item import (
     PrototypeReviewItemDependencies,
     resolve_prototype_review_item,
 )
-from api.services.stg_source_loader import _primary_key_expression, source_loader_parameters_from_sql
+from api.services.stg_source_loader import _parse_output, _primary_key_expression, source_loader_parameters_from_sql
 
 
 class PrototypeReviewWorkflowTests(unittest.TestCase):
@@ -105,6 +105,18 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
         self.assertEqual(params["source_table_name"], "/RUSAL/LEPORT")
         self.assertEqual(params["distribution_field"], "RN")
         self.assertEqual(params["primary_key"], '"CONTAINER" || "MANDT"')
+
+    def test_source_loader_uses_function_call_not_temporary_ddl_for_recreate_sql(self) -> None:
+        parsed = _parse_output([
+            'DDL CREATE TABLE: DROP TABLE IF EXISTS STG."LIKP"; create table STG."LIKP" (...);',
+            'DML INSERT QUERY: INSERT INTO STG."LIKP" SELECT * FROM RAW_EXT."LIKP_READ";',
+            'QUERY CREATE WITH FIELDS: select tech_etl.etl_source_to_greenplum_new(v_source_schema_name := \'SAPSR3\');',
+        ], "stg", "LIKP")
+        self.assertEqual(
+            parsed["recreate_sql"],
+            "select tech_etl.etl_source_to_greenplum_new(v_source_schema_name := 'SAPSR3');",
+        )
+        self.assertEqual(parsed["insert_sql"], 'INSERT INTO STG."LIKP" SELECT * FROM RAW_EXT."LIKP_READ";')
 
     def test_builds_warning_result_for_deleted_file_without_dev_execution(self) -> None:
         captured = {}

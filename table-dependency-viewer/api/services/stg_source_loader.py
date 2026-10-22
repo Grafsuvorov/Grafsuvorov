@@ -178,9 +178,10 @@ def _notice_value(notices: list[str], marker: str, stop_markers: tuple[str, ...]
 
 def _parse_output(notices: list[str], schema_name: str, table_name: str) -> dict[str, str]:
     all_fields = _notice_value(notices, "ALL FIELDS", ("GARBAGE:", "QUERY TO GET DDL:"))
-    recreate_sql = _notice_value(notices, "DDL CREATE TABLE:", ("STATUS:", "QUERY TO GET COLUMNS:"))
-    if not recreate_sql:
-        recreate_sql = _notice_value(notices, "QUERY DDL:", ("DDL CREATE TABLE:", "STATUS:"))
+    # The function logs a temporary physical DDL as ``DDL CREATE TABLE``.
+    # It must not be committed as recreate SQL: the canonical source file is
+    # the final ``QUERY CREATE WITH FIELDS`` call to etl_source_to_greenplum_new.
+    recreate_sql = _notice_value(notices, "QUERY CREATE WITH FIELDS:", ())
     insert_sql = _notice_value(notices, "DML INSERT QUERY:", ("VALUE:", "STATUS:", "QUERY CREATE WITH FIELDS:"))
     target = f'{schema_name.lower()}."{table_name}"'
     return {

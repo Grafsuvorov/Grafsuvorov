@@ -169,7 +169,11 @@ def _notice_value(notices: list[str], marker: str, stop_markers: tuple[str, ...]
         chunks = [value]
         for tail in notices[index + 1:]:
             tail_text = str(tail or "")
-            if any(tail_text.upper().startswith(item.upper()) for item in stop_markers):
+            # psycopg2 may retain PostgreSQL's ``NOTICE:`` prefix.  Compare
+            # the actual notice body so a following ``NOTICE: Value:`` or
+            # ``NOTICE: Status:`` ends the SQL block as intended.
+            notice_body = re.sub(r"^\s*NOTICE:\s*", "", tail_text, flags=re.IGNORECASE)
+            if any(notice_body.upper().startswith(item.upper()) for item in stop_markers):
                 break
             chunks.append(tail_text)
         return "\n".join(chunks).strip()

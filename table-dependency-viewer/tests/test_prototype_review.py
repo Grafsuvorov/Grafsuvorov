@@ -108,9 +108,11 @@ class PrototypeReviewWorkflowTests(unittest.TestCase):
 
     def test_source_loader_uses_function_call_not_temporary_ddl_for_recreate_sql(self) -> None:
         parsed = _parse_output([
-            'DDL CREATE TABLE: DROP TABLE IF EXISTS STG."LIKP"; create table STG."LIKP" (...);',
-            'DML INSERT QUERY: INSERT INTO STG."LIKP" SELECT * FROM RAW_EXT."LIKP_READ";',
-            'QUERY CREATE WITH FIELDS: select tech_etl.etl_source_to_greenplum_new(v_source_schema_name := \'SAPSR3\');',
+            'NOTICE: DDL CREATE TABLE: DROP TABLE IF EXISTS STG."LIKP"; create table STG."LIKP" (...);',
+            'NOTICE: DML INSERT QUERY: INSERT INTO STG."LIKP" SELECT * FROM RAW_EXT."LIKP_READ";',
+            'NOTICE: Value: 28549856',
+            'NOTICE: Status: data was inserted to the target table',
+            'NOTICE: QUERY CREATE WITH FIELDS: select tech_etl.etl_source_to_greenplum_new(v_source_schema_name := \'SAPSR3\');',
         ], "stg", "LIKP")
         self.assertEqual(
             parsed["recreate_sql"],

@@ -73,6 +73,20 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
         self.assertIn('filter: "is_active is true"', content)
         self.assertIn("#Актуально только для scd_type: scd2", content)
 
+    def test_registry_includes_all_entities(self) -> None:
+        build = self.functions["_prototype_review_build_dbt_registry_yaml"]
+
+        content = build({
+            "target_fqn": "dds.account_debt_1c",
+            "key_attributes": ["dt_report", "unit_balance_code"],
+            "entity_name": "BI_FI\nMANAGEMENT_REPORTING_1, BI_FI",
+        })
+
+        self.assertIn(
+            "  entity:\n    - BI_FI\n    - MANAGEMENT_REPORTING_1\n",
+            content,
+        )
+
     def test_registry_preserves_source_table_name_case(self) -> None:
         build = self.functions["_prototype_review_build_dbt_registry_yaml"]
 

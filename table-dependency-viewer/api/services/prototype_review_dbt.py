@@ -140,11 +140,25 @@ def build_registry_yaml(item: dict[str, Any]) -> str:
     version_key = [str(value).strip() for value in (item.get("version_key") or []) if str(value).strip()]
     if scd_type == "scd2" and not version_key:
         raise ValueError(f"Для SCD2-объекта {target_fqn} не заполнен version_key")
+    raw_entities = item.get("entity_names") or item.get("entity_name") or []
+    if isinstance(raw_entities, str):
+        entity_candidates = re.split(r"[,;\n]+", raw_entities)
+    else:
+        entity_candidates = [
+            part
+            for value in raw_entities
+            for part in re.split(r"[,;\n]+", str(value or ""))
+        ]
+    entities = list(dict.fromkeys(
+        str(value).strip() for value in entity_candidates if str(value).strip()
+    ))
     dq_filter = str(item.get("filter") or "").strip()
     if not dq_filter:
         legacy_filters = [str(value).strip() for value in (item.get("filters") or []) if str(value).strip()]
         dq_filter = legacy_filters[0] if legacy_filters else ""
     lines = ["relation:", "  # наименование схемы", f"  schema_name: {schema_name}", "  # наименование таблицы", f"  table_name: {table_name}", "  # тип scd (scd1, scd2)", f"  scd_type: {scd_type}", "  unique_key: # список полей уникального ключа", *[f"    - {value}" for value in unique_key]]
+    if entities:
+        lines.extend(["  entity:", *[f"    - {value}" for value in entities]])
     if scd_type == "scd2":
         lines.extend(["  version_key: #Актуально только для scd_type: scd2, в остальных случаях блок не создавать", *[f"    - {value}" for value in version_key]])
     lines.extend(["dq:", '  - check_type: "duplicates"', "    detail_store_flag: true", "    detail_store_limit: null"])

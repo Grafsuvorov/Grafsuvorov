@@ -192,6 +192,8 @@ def create_prototype_review_issue(
         or parsed_task.get("summary")
         or f"[Prototype Review] {bundle.get('mr', {}).get('source_branch') or 'prototype'}"
     )
+    source_load = getattr(payload, "source_load", None)
+    source_load_data = source_load.model_dump() if hasattr(source_load, "model_dump") else dict(source_load or {})
     description = dependencies.build_description(
         mr=bundle.get("mr") or {},
         task_context=task_context,
@@ -199,6 +201,12 @@ def create_prototype_review_issue(
         review_items=review_items,
         deleted_files=bundle.get("deleted_files") or [],
     )
+    if source_load_data:
+        description += "\n\n## Загрузка из источника в STG\n\n" + "\n".join([
+            f'**Таблица target:** {source_load_data.get("target_schema")}."{source_load_data.get("target_table")}";',
+            f'**Источник:** {source_load_data.get("source_schema")}.{source_load_data.get("source_table")};',
+            f'**Расписание:** {source_load_data.get("entity_name")};',
+        ])
     issue_result = dependencies.create_issue(
         base_url=dependencies.youtrack_url,
         project_id=dependencies.youtrack_project_id,
@@ -280,6 +288,7 @@ def create_prototype_review_issue(
         bundle=bundle,
         user=user,
         dependencies=dependencies.delivery,
+        source_load=source_load_data or None,
     )
     if issue_result.get("issue_id"):
         issue_result["link"] = dependencies.build_issue_link(issue_result["issue_id"])

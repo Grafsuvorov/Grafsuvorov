@@ -44,6 +44,7 @@ def deliver_prototype_issue(
     bundle: dict[str, Any],
     user: Any,
     dependencies: PrototypeIssueDeliveryDependencies,
+    source_load: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     author = getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review"
     meta_branch = None
@@ -127,6 +128,50 @@ def deliver_prototype_issue(
             except Exception as exc:
                 meta_error = str(exc)
                 break
+        # Unlike regular prototype-review objects, the source loader already
+        # produced the canonical recreate/insert/truncate scripts.  Put those
+        # files into the same task branch so one engineer MR contains both the
+        # SQL diff metadata and the STG source-load change.
+        if not meta_error and source_load:
+            schema_name = str(source_load.get("target_schema") or "").strip().lower()
+            table_name = str(source_load.get("target_table") or "").strip()
+            entity_name = str(source_load.get("entity_name") or "").strip()
+            yaml_content = str(source_load.get("yaml_content") or "").strip()
+            if not all((schema_name, table_name, entity_name, yaml_content)):
+                meta_error = "Для загрузки из источника не заполнены схема, таблица, сущность или YAML"
+            elif f"{schema_name}.{table_name}".lower() in active_targets:
+                meta_error = f"STG-объект {schema_name}.{table_name} уже присутствует в diff"
+            else:
+                try:
+                    source_result = dependencies.save_gp_bundle(
+                        git_repo_value=dependencies.entity_git_repo,
+                        entity_git_root_value=dependencies.entity_git_root,
+                        workspace_root_value=dependencies.workspace_root,
+                        workspace_owner=author,
+                        branch_name=branch_name,
+                        base_branch=dependencies.base_branch,
+                        entity_name=entity_name,
+                        schema_name=schema_name,
+                        table_name=table_name,
+                        yaml_content=yaml_content,
+                        recreate_sql=str(source_load.get("recreate_sql") or ""),
+                        insert_sql=str(source_load.get("insert_sql") or ""),
+                        truncate_sql=str(source_load.get("truncate_sql") or ""),
+                        task_id=issue_id,
+                        author=author,
+                    )
+                    meta_files.append({
+                        "target_fqn": f"{schema_name}.{table_name}",
+                        "entity_name": entity_name,
+                        "file_path": source_result.get("path"),
+                        "branch_name": source_result.get("branch_name"),
+                        "committed": bool(source_result.get("committed")),
+                        "action": "source_load",
+                        "changed_files": source_result.get("changed_files") or [],
+                    })
+                    meta_branch = source_result.get("branch_name") or meta_branch
+                except Exception as exc:
+                    meta_error = str(exc)
         if not meta_error:
             for target_fqn in sorted(deleted_table_targets):
                 schema_name, table_name = target_fqn.split(".", 1)

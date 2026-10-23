@@ -1933,9 +1933,62 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
             base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=issue_id,
             parent_issue_id=parent_issue, ssl_verify=YOUTRACK_SSL_VERIFY,
         )
+        meta_files: list[dict[str, Any]] = []
+        meta_mr = None
+        meta_error = None
+        if issue_id:
+            try:
+                save_result = save_meta_workspace_branch_gp_bundle(
+                    git_repo_value=ENTITY_META_GIT_REPO,
+                    entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                    workspace_root_value=META_WORKSPACE_ROOT,
+                    workspace_owner=user.email,
+                    branch_name=f"feature/{issue_id}",
+                    base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+                    entity_name=payload.entity_name,
+                    schema_name=payload.target_schema,
+                    table_name=payload.target_table,
+                    yaml_content=payload.yaml_content,
+                    recreate_sql=payload.recreate_sql,
+                    insert_sql=payload.insert_sql,
+                    truncate_sql=payload.truncate_sql,
+                    task_id=issue_id,
+                    author=user.email,
+                )
+                meta_files = save_result.get("changed_files") or []
+                meta_mr = create_meta_workspace_mr(
+                    engine=engine,
+                    base_dir=BASE_DIR,
+                    entity_dev_root_value=DEV_ENTITY_META_DIR,
+                    click_dev_root_value=DEV_CLICK_META_DIR,
+                    git_repo_value=ENTITY_META_GIT_REPO,
+                    entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                    click_git_root_value=CLICK_META_GIT_ROOT,
+                    gitlab_token=GITLAB_TOKEN,
+                    gitlab_project=GITLAB_PROJECT,
+                    gitlab_api_url=GITLAB_API_URL,
+                    gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+                    task_id=issue_id,
+                    release_branch=PROTOTYPE_ETL_TARGET_BRANCH,
+                    branch_name=save_result.get("branch_name"),
+                    mr_title=f"{issue_id}: STG source load",
+                    author=user.email,
+                )
+                if meta_mr.get("mr_url"):
+                    add_ytrack_issue_comment(
+                        base_url=YOUTRACK_URL, token=YOUTRACK_TOKEN, issue_id=issue_id,
+                        ssl_verify=YOUTRACK_SSL_VERIFY,
+                        text=f"MR с YAML и SQL загрузки из источника создан.\nСсылка: {meta_mr['mr_url']}",
+                    )
+            except Exception as exc:
+                meta_error = str(exc)
         if issue_id:
             _notify_user_about_completion(user, f"🎉 Задача {issue_id} создана: {issue_link}")
-        return {"issue": {**issue, "link": issue_link}, "issue_links": issue_links, "parent_link": parent_link}
+        return {
+            "issue": {**issue, "link": issue_link}, "issue_links": issue_links,
+            "parent_link": parent_link, "meta_files": meta_files,
+            "meta_mr": meta_mr, "meta_error": meta_error,
+        }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

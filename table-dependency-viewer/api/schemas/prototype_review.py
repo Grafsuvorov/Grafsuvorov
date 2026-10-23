@@ -84,6 +84,7 @@ class PrototypeReviewCreateIssuePayload(BaseModel):
     business_key_changed: Optional[bool] = None
     parent_issue: Optional[str] = None
     diff_comment: Optional[str] = None
+    source_load: Optional["PrototypeReviewSourceLoadIssuePayload"] = None
     review_items: List[PrototypeReviewItemPayload]
 
 

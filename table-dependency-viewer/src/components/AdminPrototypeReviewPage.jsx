@@ -130,6 +130,8 @@ export default function AdminPrototypeReviewPage() {
   const [releaseSlotsLoading, setReleaseSlotsLoading] = useState(false);
   const [releaseSlotsError, setReleaseSlotsError] = useState("");
   const [selectedReleaseSlot, setSelectedReleaseSlot] = useState("");
+  const [sourceLoad, setSourceLoad] = useState(null);
+  const [includeSourceLoad, setIncludeSourceLoad] = useState(true);
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -447,6 +449,7 @@ export default function AdminPrototypeReviewPage() {
         direction: String(form.direction || "").trim(),
         parent_issue: String(form.parent_issue || "").trim() || null,
         diff_comment: String(form.diff_comment || "").trim() || null,
+        source_load: includeSourceLoad && sourceLoad ? sourceLoad : null,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           path: item.path,
@@ -552,7 +555,7 @@ export default function AdminPrototypeReviewPage() {
 
       <BusinessDqPanel />
 
-      <PrototypeSourceLoadPanel />
+      <PrototypeSourceLoadPanel onSourceLoadReady={(value) => { setSourceLoad(value); setIncludeSourceLoad(true); }} />
 
       {error ? <div className="page-error">{error}</div> : null}
 
@@ -1006,6 +1009,12 @@ export default function AdminPrototypeReviewPage() {
                 {creatingIssue ? "Ищем зависимости и создаём задачу…" : "Создать задачу"}
               </button>
             </div>
+            {sourceLoad ? (
+              <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 14, cursor: "pointer" }}>
+                <input type="checkbox" checked={includeSourceLoad} onChange={(event) => setIncludeSourceLoad(event.target.checked)} />
+                Добавить загрузку из источника <span className="mono">{sourceLoad.target_schema}.{sourceLoad.target_table}</span> в эту задачу и тот же инженерный MR
+              </label>
+            ) : null}
             {creatingIssue ? (
               <div className="card" style={{ marginTop: 14 }}>
                 <div className="section-title">Подготавливаем задачу</div>

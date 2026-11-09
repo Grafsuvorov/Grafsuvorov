@@ -1849,7 +1849,10 @@ def run_admin_prototype_source_load(payload, request: Request):
             "primary_key": str(payload.primary_key).strip(),
             "distribution_field": str(payload.distribution_field or "RN").strip(),
             "table_schema": str(payload.target_schema).lower(),
-            "table_name": str(payload.target_table).lower(),
+            # Greenplum keeps quoted STG relation names case-sensitive.  The
+            # Git directory is normalized separately, but YAML must retain
+            # the exact name provided by the analyst (e.g. ZMK_TRACK_ECP04).
+            "table_name": str(payload.target_table).strip(),
             "entity_name": payload.entity_name,
         })
         if result.get("status") == "ok":

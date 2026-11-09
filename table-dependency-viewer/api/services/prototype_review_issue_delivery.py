@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from posixpath import join as posix_join
 from typing import Any, Callable
 
 from .prototype_review import infer_removed_table_targets
@@ -69,10 +70,43 @@ def deliver_prototype_issue(
             active_targets=active_targets,
         )
         for item in review_items:
+            target_fqn = str(item.get("target_fqn") or "").strip().lower()
+            if item.get("is_clickhouse_view"):
+                if "." not in target_fqn:
+                    continue
+                _schema_name, table_name = target_fqn.split(".", 1)
+                paths = {str(path or "").strip() for path in (item.get("paths") or []) if str(path or "").strip()}
+                click_sql = "\n\n".join(
+                    str(file_item.get("sql") or "").strip()
+                    for file_item in (bundle.get("files") or [])
+                    if str(file_item.get("path") or "").strip() in paths
+                    and str(file_item.get("sql") or "").strip()
+                )
+                if not click_sql:
+                    meta_error = f"Не найден SQL ClickHouse view для `{target_fqn}`"
+                    break
+                try:
+                    save_result = dependencies.save_file(
+                        git_repo_value=dependencies.entity_git_repo,
+                        workspace_root_value=dependencies.workspace_root,
+                        workspace_owner=author,
+                        branch_name=branch_name,
+                        base_branch=dependencies.base_branch,
+                        file_path=posix_join(str(dependencies.click_git_root).strip("/"), "dm_view", f"{table_name}.sql"),
+                        content=click_sql + "\n",
+                        task_id=issue_id,
+                        author=author,
+                        expected_revision=None,
+                    )
+                    meta_files.append({"target_fqn": target_fqn, "entity_name": None, "file_path": save_result.get("file_path") or save_result.get("path"), "branch_name": save_result.get("branch_name"), "committed": bool(save_result.get("committed")), "action": "clickhouse_view", "changed_files": save_result.get("changed_files") or []})
+                    meta_branch = save_result.get("branch_name") or meta_branch
+                except Exception as exc:
+                    meta_error = str(exc)
+                    break
+                continue
             yaml_content = str(item.get("yaml_content") or "").strip()
             if not yaml_content:
                 continue
-            target_fqn = str(item.get("target_fqn") or "").strip().lower()
             entity_name = str(item.get("entity_name") or "").strip()
             if "." not in target_fqn or not entity_name:
                 continue

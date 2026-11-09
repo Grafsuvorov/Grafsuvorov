@@ -16,6 +16,7 @@ from .entity_dev_meta import (
     ENTITY_LOCK_SCHEMA,
     _ensure_git_identity,
     _load_yaml_text,
+    _object_directory_name,
     _gitlab_json_request,
     _list_task_entity_object_keys,
     _object_dir_from_key,
@@ -65,7 +66,11 @@ def _resolve_gp_object_dir(
     """Resolve the Git tree path without treating identifier case as significant."""
     current = worktree_dir / Path(entity_git_root_value)
     relative = Path(entity_git_root_value)
-    for segment in (entity_name, schema_name, table_name):
+    # A Greenplum relation may itself contain `/`, e.g. ``/RUSAL/BP_SCHEDP``.
+    # In the ETL Git tree it is stored as a single directory without those
+    # separators (``rusalbp_schedp``), never as a nested or absolute path.
+    table_directory = _object_directory_name(table_name) or str(table_name or "").strip().strip("/")
+    for segment in (entity_name, schema_name, table_directory):
         child = _find_child_case_insensitive(current, segment)
         if child is None:
             current = current / segment
@@ -1244,7 +1249,8 @@ def save_meta_workspace_branch_gp_bundle(
         raise ValueError("Укажите сущность, схему и таблицу")
 
     git_repo_root = Path(git_repo_value).resolve()
-    object_rel = Path(entity_git_root_value) / entity_name_norm / schema_name_norm / table_name_norm
+    table_directory = _object_directory_name(table_name_norm) or table_name_norm.strip().strip("/")
+    object_rel = Path(entity_git_root_value) / entity_name_norm / schema_name_norm / table_directory
     branch_ref, worktree_dir = _ensure_branch_workspace(
         git_repo_root=git_repo_root,
         workspace_root_value=workspace_root_value,
@@ -1280,7 +1286,7 @@ def save_meta_workspace_branch_gp_bundle(
                 continue
             replica_yaml_path = (
                 worktree_dir / Path(entity_git_root_value) / replica_entity_name_norm
-                / schema_name_norm / table_name_norm / "meta_data_file.yaml"
+                / schema_name_norm / table_directory / "meta_data_file.yaml"
             ).resolve()
             if not str(replica_yaml_path).startswith(str(worktree_dir.resolve())):
                 raise ValueError("Некорректный путь YAML реплики")
@@ -1288,7 +1294,7 @@ def save_meta_workspace_branch_gp_bundle(
             replica_yaml_path.write_text(str(replica_yaml or ""), encoding="utf-8")
 
         replica_rels = [
-            Path(entity_git_root_value) / str(replica_entity_name).strip() / schema_name_norm / table_name_norm / "meta_data_file.yaml"
+            Path(entity_git_root_value) / str(replica_entity_name).strip() / schema_name_norm / table_directory / "meta_data_file.yaml"
             for replica_entity_name in (replica_yaml_contents or {})
             if str(replica_entity_name or "").strip()
             and str(replica_entity_name).strip().lower() != entity_name_norm.lower()
@@ -1381,7 +1387,8 @@ def save_meta_workspace_branch_gp_depends_batch(
             yaml_content = str(item.get("yaml_content") or "")
             if not entity_name or not schema_name or not table_name or not yaml_content:
                 raise ValueError("Для каждого объекта укажите сущность, схему, таблицу и YAML")
-            object_rel = Path(entity_git_root_value) / entity_name / schema_name / table_name
+            table_directory = _object_directory_name(table_name) or table_name.strip().strip("/")
+            object_rel = Path(entity_git_root_value) / entity_name / schema_name / table_directory
             yaml_rel = object_rel / "meta_data_file.yaml"
             yaml_rel_text = yaml_rel.as_posix()
             if yaml_rel_text in seen:
@@ -1470,7 +1477,8 @@ def validate_meta_workspace_branch(
                 }
             )
             continue
-        object_rel = Path(entity_git_root_value) / item["entity_name"] / item["schema_name"] / item["table_name"]
+        table_directory = _object_directory_name(item["table_name"]) or str(item["table_name"]).strip().strip("/")
+        object_rel = Path(entity_git_root_value) / item["entity_name"] / item["schema_name"] / table_directory
         object_dir = worktree_dir / object_rel
         yaml_content = (object_dir / "meta_data_file.yaml").read_text(encoding="utf-8") if (object_dir / "meta_data_file.yaml").exists() else ""
         yaml_payload = _load_yaml_text(yaml_content)

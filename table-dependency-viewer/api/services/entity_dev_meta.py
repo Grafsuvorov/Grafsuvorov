@@ -76,6 +76,7 @@ def _standard_sql_query_paths(
     entity_name: str,
     schema_name: str,
     table_name: str,
+    object_type: str = "",
 ) -> dict[str, str]:
     table_directory = _object_directory_name(table_name) or _normalize_name(table_name)
     base_path = (
@@ -83,11 +84,12 @@ def _standard_sql_query_paths(
         f"{entity_name}/{schema_name}/{table_directory}/"
     )
     recreate_path = base_path + SQL_FILE_NAMES["recreate_sql"]
+    is_view = _normalize_name(schema_name) == "dm_view" or _normalize_name(object_type) == "view"
     return {
         "sql_query_recreate_init": recreate_path,
         "sql_query_insert_init": (
             recreate_path
-            if _normalize_name(schema_name) == "dm_view"
+            if is_view
             else base_path + SQL_FILE_NAMES["insert_sql"]
         ),
         "sql_query_truncate": base_path + SQL_FILE_NAMES["truncate_sql"],
@@ -239,6 +241,7 @@ def _normalize_yaml_payload_fields(
             entity_name=entity_name,
             schema_name=schema_name,
             table_name=table_name,
+            object_type=str(normalized_payload.get("object_type") or ""),
         )
     )
     normalized_keys = _normalize_key_attributes(key_attributes)
@@ -654,6 +657,7 @@ def _build_generated_yaml(
             entity_name=entity_name,
             schema_name=schema_name,
             table_name=table_name,
+            object_type=str(payload.get("object_type") or ""),
         )
     )
     return payload
@@ -884,6 +888,7 @@ def _apply_bundle_identity(
             entity_name=sql_owner_entity,
             schema_name=schema_name,
             table_name=table_name,
+            object_type=str(payload.get("object_type") or ""),
         )
     )
     return _dump_yaml(payload)
@@ -1319,6 +1324,13 @@ def validate_entity_dev_meta_bundle(
     # depends_on from SQL for the autofill draft; comparing after that step made
     # every missing dependency look valid.
     original_depends_on = _flatten_depends_on(payload.get("depends_on"))
+    created_object = _extract_created_object(recreate_sql) if recreate_sql.strip() else None
+    inferred_view = bool(created_object and created_object[0] == "view")
+    if inferred_view:
+        # Recreate SQL is authoritative: a view has no separate insert block,
+        # even when it is placed outside the conventional dm_view schema.
+        payload["object_type"] = "VIEW"
+        payload["flag_has_views"] = True
     requested_object_type = _normalize_name(payload.get("object_type"))
     dependency_sql = recreate_sql if requested_object_type == "view" else insert_sql
     normalized_keys = _normalize_key_attributes(key_attributes)

@@ -31,6 +31,7 @@ from api.services import meta_workspace as meta_workspace_module
 
 meta_workspace_module.yaml = yaml_stub
 _find_gp_object_dir_by_fqn = meta_workspace_module._find_gp_object_dir_by_fqn
+_resolve_gp_object_dir = meta_workspace_module._resolve_gp_object_dir
 
 
 class MetaWorkspaceDeleteTests(unittest.TestCase):
@@ -100,6 +101,23 @@ class MetaWorkspaceDeleteTests(unittest.TestCase):
                     schema_name="dds",
                     table_name="target",
                 )
+
+    def test_resolves_slash_named_relation_to_flattened_etl_directory(self) -> None:
+        with TemporaryDirectory() as raw_root:
+            worktree = Path(raw_root)
+            object_dir = worktree / "meta/root" / "TRANSPORTATION" / "STG" / "rusalbp_schedp"
+            object_dir.mkdir(parents=True)
+
+            resolved, relative = _resolve_gp_object_dir(
+                worktree_dir=worktree,
+                entity_git_root_value="meta/root",
+                entity_name="transportation",
+                schema_name="stg",
+                table_name="/RUSAL/BP_SCHEDP",
+            )
+
+            self.assertEqual(resolved, object_dir.resolve())
+            self.assertEqual(relative.as_posix(), "meta/root/TRANSPORTATION/STG/rusalbp_schedp")
 
 
 if __name__ == "__main__":

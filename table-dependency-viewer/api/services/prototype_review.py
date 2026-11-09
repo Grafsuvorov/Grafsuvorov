@@ -396,6 +396,17 @@ def _is_clickhouse_sql_path(path_value: str) -> bool:
     return "/clickhouse/" in normalized or normalized.startswith("clickhouse/")
 
 
+def _is_clickhouse_view_sql(sql_text: str) -> bool:
+    """Recognize ClickHouse view DDL even when its MR path is generic."""
+    return bool(re.search(r"\bcluster\b", _strip_sql_comments(str(sql_text or "")), re.IGNORECASE))
+
+
+def _clickhouse_view_target(target_fqn: str) -> str:
+    """ClickHouse views are stored under the shared ``dm_view`` config layer."""
+    _schema_name, table_name = str(target_fqn or "").split(".", 1)
+    return f"dm_view.{table_name}"
+
+
 def _infer_direct_sql_file_target(path_value: str) -> tuple[str, str] | None:
     normalized = str(path_value or "").replace("\\", "/").strip("/")
     if not normalized:
@@ -670,6 +681,7 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         path_value = str(item.get("path") or "").strip()
         sql_text = str(item.get("sql") or "")
         statements = item.get("statements") or []
+        is_clickhouse_view = _is_clickhouse_view_sql(sql_text)
         target_sequence: list[tuple[str, str]] = []
         seen_targets: set[tuple[str, str]] = set()
         file_target_flags: dict[str, dict[str, Any]] = {}
@@ -684,12 +696,17 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
+                        if is_clickhouse_view:
+                            normalized = _clickhouse_view_target(normalized)
                         statement_targets.append((normalized, "TABLE", False, False))
             for pattern in CREATE_OBJECT_PATTERNS:
                 for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
+                        if is_clickhouse_view:
+                            normalized = _clickhouse_view_target(normalized)
                         object_type = (
+                            "VIEW" if is_clickhouse_view else
                             "VIEW"
                             if " view " in statement_lower
                             or statement_lower.lstrip().startswith("create view")
@@ -701,6 +718,8 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 for match in pattern.finditer(statement_without_comments):
                     normalized = _normalize_fqn(match.group(1))
                     if normalized:
+                        if is_clickhouse_view:
+                            normalized = _clickhouse_view_target(normalized)
                         object_type = "VIEW" if "drop view" in statement_lower else "TABLE"
                         statement_targets.append((normalized, object_type, False, True))
 
@@ -772,9 +791,11 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
             group["has_create"] = bool(group.get("has_create") or flags.get("has_create"))
             group["has_drop"] = bool(group.get("has_drop") or flags.get("has_drop"))
             group["has_self_mutation"] = bool(group.get("has_self_mutation") or has_self_mutation or flags.get("has_self_mutation"))
-            if not _is_clickhouse_sql_path(path_value):
+            if not (_is_clickhouse_sql_path(path_value) or is_clickhouse_view):
                 group["execution_paths"].append(path_value)
                 group["skip_dev_execution"] = False
+            if is_clickhouse_view:
+                group["is_clickhouse_view"] = True
     result: list[dict[str, Any]] = []
     for group_key in order:
         group = grouped[group_key]
@@ -800,6 +821,7 @@ def infer_review_targets(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "requires_pretruncate": requires_pretruncate,
                 "execution_paths": execution_paths,
                 "skip_dev_execution": bool(group.get("skip_dev_execution")),
+                "is_clickhouse_view": bool(group.get("is_clickhouse_view")),
             }
         )
     return result

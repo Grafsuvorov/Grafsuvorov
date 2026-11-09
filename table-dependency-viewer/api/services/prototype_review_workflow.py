@@ -81,7 +81,7 @@ def build_prototype_review_result(
     }
     preparation_rows: list[dict[str, Any]] = []
     execution_rows: list[dict[str, Any]] = []
-    if not validation_errors:
+    if not validation_errors and any(not item.get("skip_dev_execution") for item in review_targets):
         preparation_rows, execution_rows = dependencies.execute_review(
             dev_database_url=dependencies.dev_database_url,
             files=files,
@@ -153,6 +153,11 @@ def build_prototype_review_result(
         item_result["item_id"] = item_id
         item_result["paths"] = related_paths
         item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()
+        item_result["is_clickhouse_view"] = bool(target_item.get("is_clickhouse_view"))
+        if item_result["is_clickhouse_view"]:
+            item_result["object_type"] = "VIEW"
+            item_result["requires_user_input"] = False
+            item_result["missing_fields"] = []
         item_result["preparation"] = prep_by_item_id.get(item_id) or {"status": "skipped"}
         item_result["dependencies"] = table_dependencies
         requires_user_input = requires_user_input or bool(item_result.get("requires_user_input"))
@@ -188,6 +193,7 @@ def build_prototype_review_result(
         )
         item_result["item_id"] = f"{target_fqn}::{object_type}"
         item_result["object_type"] = object_type
+        item_result["is_clickhouse_view"] = bool(target_item.get("is_clickhouse_view"))
         item_result["paths"] = [path_value]
         item_result["preparation"] = {"status": "skipped"}
         item_result["dependencies"] = table_dependencies

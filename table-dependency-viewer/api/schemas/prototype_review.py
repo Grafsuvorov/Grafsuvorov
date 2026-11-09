@@ -37,6 +37,7 @@ class PrototypeReviewYamlRefreshPayload(BaseModel):
     entity_name: str
     key_attributes: Optional[List[str]] = None
     object_type: Optional[str] = None
+    is_clickhouse_view: Optional[bool] = False
     yaml_content: Optional[str] = None
 
 

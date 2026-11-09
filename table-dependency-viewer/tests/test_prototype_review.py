@@ -1119,6 +1119,22 @@ class ExtractSqlDependenciesTests(unittest.TestCase):
 
 
 class PrototypeReviewExecutionPlanTests(unittest.TestCase):
+    def test_cluster_sql_is_clickhouse_view_and_is_not_scheduled_in_dev(self) -> None:
+        files = [{
+            "path": "views/sales_summary.sql",
+            "sql": "create view analytics.sales_summary on cluster company_cluster as select 1;",
+            "statements": ["create view analytics.sales_summary on cluster company_cluster as select 1"],
+        }]
+
+        review_targets = infer_review_targets(files)
+
+        self.assertEqual(len(review_targets), 1)
+        self.assertEqual(review_targets[0]["target_fqn"], "dm_view.sales_summary")
+        self.assertEqual(review_targets[0]["object_type"], "VIEW")
+        self.assertTrue(review_targets[0]["is_clickhouse_view"])
+        self.assertTrue(review_targets[0]["skip_dev_execution"])
+        self.assertEqual(review_targets[0]["execution_paths"], [])
+
     def test_keeps_temp_table_preparation_for_single_file_target(self) -> None:
         statements = [
             "drop table if exists pg_temp.shipdata1",
@@ -1501,6 +1517,32 @@ class EntityMetaDependenciesTests(unittest.TestCase):
 
         self.assertTrue(any("dm.material_alumina_balance" in error for error in result["errors"]))
         self.assertFalse(any("INSERT INTO" in error or "DROP TABLE/VIEW" in error for error in result["errors"]))
+
+    def test_create_view_sets_insert_path_to_recreate_outside_dm_view(self) -> None:
+        yaml_payload = {
+            "table_name": "sales_summary",
+            "table_schema": "dm",
+            "table_id": 6587,
+            "entity_name": "SALES_MARGIN",
+            "object_type": "TABLE",
+            "table_load_mode": "TRUNCATE_INIT",
+            "depends_on": {},
+        }
+        recreate_sql = "create or replace view dm.sales_summary as select * from ods.sales;"
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", return_value=yaml_payload),
+            patch.object(entity_dev_meta, "_dump_yaml", side_effect=json.dumps),
+        ):
+            result = validate_entity_dev_meta_bundle(
+                base_dir=Path.cwd(), prod_root_value="missing-prod-root", dev_root_value="missing-dev-root",
+                entity_name="SALES_MARGIN", schema_name="dm", table_name="sales_summary",
+                key_attributes=[], source_object_key=None, yaml_content="placeholder", recreate_sql=recreate_sql,
+                insert_sql="", truncate_sql="", dev_database_url="",
+            )
+
+        normalized = json.loads(result["normalized"]["yaml_content"])
+        self.assertEqual(normalized["object_type"], "VIEW")
+        self.assertEqual(normalized["sql_query_insert_init"], normalized["sql_query_recreate_init"])
 
     def test_keeps_qualified_sources_when_schema_is_absent_from_local_catalog(self) -> None:
         sql = """

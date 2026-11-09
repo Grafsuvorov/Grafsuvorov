@@ -1249,7 +1249,10 @@ def _prototype_review_refresh_yaml_identity(
         else:
             result.pop(field_name, None)
 
-    if preserve_submitted_table_id:
+    # A submitted ID belongs to the entity selected when the review item was
+    # first resolved.  A replica that does not yet exist must retain the new
+    # ID allocated for *its* entity, rather than inheriting the primary ID.
+    if preserve_submitted_table_id and bundle.get("exists"):
         try:
             submitted_table_id = int(submitted_payload.get("table_id"))
         except Exception:
@@ -1260,10 +1263,13 @@ def _prototype_review_refresh_yaml_identity(
         if submitted_table_id and submitted_table_id > 0:
             result["table_id"] = submitted_table_id
 
-    existing_object = item.get("is_new") is False or bool(item.get("table_id"))
+    # ``item.table_id`` can describe the primary entity.  The bundle lookup is
+    # entity-specific, so it is the only reliable indication that this exact
+    # entity/schema/table already has a catalog identity.
+    existing_object = bool(bundle.get("exists"))
     if existing_object:
         with engine.connect() as conn:
-            catalog_table_id = get_table_id_by_fqn(conn, schema_name, table_name)
+            catalog_table_id = get_table_id_by_fqn(conn, schema_name, table_name, entity_name)
         if not catalog_table_id:
             raise ValueError(
                 f"Для существующего объекта `{target_fqn}` не найден table_id в {TABLE_TABLES_META}. "
@@ -12332,18 +12338,29 @@ def get_entity_table_info(entity_id: int):
 
 
 
-def get_table_id_by_fqn(conn, schema: str, table: str):
+def get_table_id_by_fqn(conn, schema: str, table: str, entity_name: Optional[str] = None):
+    entity_filter = ""
+    if entity_name:
+        entity_filter = f"""
+          AND EXISTS (
+              SELECT 1
+              FROM {TABLE_ENTITIES_META} e
+              WHERE e.entity_id = t.entity_id
+                AND lower(e.entity_name) = lower(:entity_name)
+          )
+        """
     q = text(
         f"""
-        SELECT table_id
-        FROM {TABLE_TABLES_META}
-        WHERE lower(table_schema) = lower(:schema)
-          AND lower(table_name) = lower(:table)
-        ORDER BY table_id
+        SELECT t.table_id
+        FROM {TABLE_TABLES_META} t
+        WHERE lower(t.table_schema) = lower(:schema)
+          AND lower(t.table_name) = lower(:table)
+          {entity_filter}
+        ORDER BY t.table_id
         LIMIT 1
     """
     )
-    return conn.execute(q, {"schema": schema, "table": table}).scalar()
+    return conn.execute(q, {"schema": schema, "table": table, "entity_name": entity_name}).scalar()
 
 
 def build_impact(table_fqn: str, deps: list, sla_resp):

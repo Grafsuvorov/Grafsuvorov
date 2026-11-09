@@ -134,6 +134,13 @@ def create_prototype_review_issue(
         item["_related_files"] = related_files
     reserved_table_ids: set[int] = set()
     for item in review_items:
+        if item.get("is_clickhouse_view"):
+            # ClickHouse view DDL is delivered verbatim to config_files/meta;
+            # it has no Greenplum YAML identity or DEV execution step.
+            item["object_type"] = "VIEW"
+            item["yaml_content"] = ""
+            item["replica_yaml_contents"] = {}
+            continue
         entity_names = _split_entity_names(item.get("entity_name"))
         if not entity_names:
             entity_names = [""]
@@ -162,6 +169,8 @@ def create_prototype_review_issue(
 
     incomplete: list[str] = []
     for item in review_items:
+        if item.get("is_clickhouse_view"):
+            continue
         needs_attention, missing = dependencies.item_needs_attention(item)
         if needs_attention:
             incomplete.append(f"{item.get('target_fqn')}: {', '.join(missing)}")

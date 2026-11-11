@@ -965,6 +965,7 @@ def _gitlab_json_request(
     method: str = "GET",
     payload: Optional[dict[str, Any]] = None,
     query: Optional[dict[str, Any]] = None,
+    extra_headers: Optional[dict[str, str]] = None,
     timeout: int = 30,
 ) -> Any:
     if not api_url:
@@ -986,6 +987,7 @@ def _gitlab_json_request(
             "Content-Type": "application/json",
             "Accept": "application/json",
             "PRIVATE-TOKEN": token,
+            **(extra_headers or {}),
         },
         method=method,
     )

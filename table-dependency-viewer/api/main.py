@@ -4410,12 +4410,13 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
         git_sync = {"status": "error", "error": str(exc), "target_branch": "develop"}
     else:
         logger.info(
-            "DEV Meta GitLab sync finished: status=%s source=%s target=%s mr=%s file=%s",
+            "DEV Meta GitLab sync finished: status=%s source=%s target=%s mr=%s file=%s merge_method=%s",
             git_sync.get("status"),
             git_sync.get("source_branch") or "—",
             git_sync.get("target_branch") or "develop",
             git_sync.get("mr_url") or "—",
             git_sync.get("file_path") or payload.file_name,
+            git_sync.get("merge_method") or "—",
         )
     return {"status": "ok", "response": data, "git_sync": git_sync}
 

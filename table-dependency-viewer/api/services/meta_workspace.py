@@ -2006,15 +2006,36 @@ def publish_dev_click_meta_to_branch(
                 "remove_source_branch": False,
             },
         )
-        merge_result = _gitlab_json_request(
-            api_url=gitlab_api_url,
-            project=project_ref,
-            token=gitlab_token,
-            ssl_verify=ssl_verify,
-            path=f"merge_requests/{mr_data.get('iid')}/merge",
-            method="PUT",
-            payload={"should_remove_source_branch": False, "merge_when_pipeline_succeeds": False},
-        )
+        merge_payload = {"should_remove_source_branch": False, "merge_when_pipeline_succeeds": False}
+        merge_method = "PUT"
+        try:
+            # This is GitLab's documented API method for accepting an MR.
+            merge_result = _gitlab_json_request(
+                api_url=gitlab_api_url,
+                project=project_ref,
+                token=gitlab_token,
+                ssl_verify=ssl_verify,
+                path=f"merge_requests/{mr_data.get('iid')}/merge",
+                method="PUT",
+                payload=merge_payload,
+            )
+        except ValueError as exc:
+            if "GitLab вернул 405" not in str(exc):
+                raise
+            # Some corporate reverse proxies deny PUT before the request reaches
+            # GitLab.  Keep the GitLab semantics while sending POST through that
+            # proxy; Rack/GitLab applies the method-override header.
+            merge_method = "POST + X-HTTP-Method-Override: PUT"
+            merge_result = _gitlab_json_request(
+                api_url=gitlab_api_url,
+                project=project_ref,
+                token=gitlab_token,
+                ssl_verify=ssl_verify,
+                path=f"merge_requests/{mr_data.get('iid')}/merge",
+                method="POST",
+                payload=merge_payload,
+                extra_headers={"X-HTTP-Method-Override": "PUT"},
+            )
         return {
             "status": "merged",
             "file_path": relative_path,
@@ -2023,6 +2044,7 @@ def publish_dev_click_meta_to_branch(
             "mr_iid": mr_data.get("iid"),
             "mr_url": mr_data.get("web_url"),
             "merge_commit_sha": merge_result.get("merge_commit_sha"),
+            "merge_method": merge_method,
         }
     finally:
         try:

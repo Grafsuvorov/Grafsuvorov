@@ -1,19 +1,31 @@
-relation:
-  # наименование схемы
-  schema_name: dict_dds
-  # наименование таблицы
-  table_name: toro_technical_place
-  scd_type: scd2
-  unique_key:
-  # тип scd (scd1, scd2)
-  scd_type: scd1
-  unique_key: # список полей уникального ключа
-    - technical_place_code
-  entity:
-    - TORO
-dq:
-  - check_type: "duplicates"
-    detail_store_flag: true
-    detail_store_limit: 30
-    detail_store_limit: null
-    filter: "deleted_flag is false"
+ en_without_proxy
+table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in                               open
+table-dependency-viewer-api-1  |     response = meth(req, response)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in                               http_response
+table-dependency-viewer-api-1  |     response = self.parent.error(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in                               error
+table-dependency-viewer-api-1  |     return self._call_chain(*args)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in                               _call_chain
+table-dependency-viewer-api-1  |     result = func(*args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in                               http_error_default
+table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exceptio                              n:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4388, in run_admin_dev_meta_dag
+table-dependency-viewer-api-1  |     git_sync = publish_dev_click_meta_to_branch(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2009, in publis                              h_dev_click_meta_to_branch
+table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 998, in _gitla                              b_json_request
+table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
+table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed" 

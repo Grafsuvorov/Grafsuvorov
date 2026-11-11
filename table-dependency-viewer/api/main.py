@@ -6,6 +6,7 @@ from typing import List, Dict, Tuple, Set, Union, Any
 from collections import Counter, deque, defaultdict
 from pydantic import BaseModel
 import os
+import logging
 import yaml
 
 from datetime import datetime
@@ -38,6 +39,9 @@ from urllib import parse as urlparse
 from PIL import Image, ImageDraw, ImageFont
 
 from fastapi import APIRouter, HTTPException
+
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -4398,7 +4402,21 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
     except Exception as exc:
         # The DAG has already been triggered successfully.  Keep the existing
         # DEV workflow intact and expose Git delivery failure to the operator.
+        logger.exception(
+            "DEV Meta GitLab sync failed after DAG launch: schema=%s file=%s target=develop",
+            payload.schema_name,
+            payload.file_name,
+        )
         git_sync = {"status": "error", "error": str(exc), "target_branch": "develop"}
+    else:
+        logger.info(
+            "DEV Meta GitLab sync finished: status=%s source=%s target=%s mr=%s file=%s",
+            git_sync.get("status"),
+            git_sync.get("source_branch") or "—",
+            git_sync.get("target_branch") or "develop",
+            git_sync.get("mr_url") or "—",
+            git_sync.get("file_path") or payload.file_name,
+        )
     return {"status": "ok", "response": data, "git_sync": git_sync}
 
 

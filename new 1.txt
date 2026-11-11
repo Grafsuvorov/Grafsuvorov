@@ -1,31 +1,18 @@
- en_without_proxy
-table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in                               open
-table-dependency-viewer-api-1  |     response = meth(req, response)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in                               http_response
-table-dependency-viewer-api-1  |     response = self.parent.error(
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in                               error
-table-dependency-viewer-api-1  |     return self._call_chain(*args)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in                               _call_chain
-table-dependency-viewer-api-1  |     result = func(*args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in                               http_error_default
-table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
-table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | The above exception was the direct cause of the following exceptio                              n:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4388, in run_admin_dev_meta_dag
-table-dependency-viewer-api-1  |     git_sync = publish_dev_click_meta_to_branch(
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2009, in publis                              h_dev_click_meta_to_branch
-table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 998, in _gitla                              b_json_request
-table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
-table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed" 
+Цепочка ORACLE-GG-KAFKA-NIFI-S3 работает независимо от связки AIRFLOW-GP.
+
+Файлы из ORACLE складываются в S3 по мере их поступленияв KAFKA и никак не завязаны на рассписание AIRFLOW. Т.е. если AIRFLOW будет простаивать, то в S3 накопится какое-то количество файлов. Т.е. чем дольше будет простой AIRFLOW, тем дольше потом джобы будут вычитывать файлы потому, что DAG при запуске обрабатывает все ордера в статусе 1. Для больших таблиц это может приводить к тому, что время работы джоба превысит требуемые 20 минут.
+
+NIFI читает из кафки сообщения от ГГ, преобразует все типы полей схемы parquet-файла в строки для исключения ошибок с некорректным типом полей (тип поля сообщения из кафки в NIFI при автоматическом формировании схемы parquet определяется по содержимому поля. Одно и тоже поле может быть как типа int, так и float, что ломает пакетную загрузку через PXF).
+После приведения всех типов к строкам NIFI складывает данные в S3 в паркеты.
+
+Расписание AIRFLOW раз в несколько минут (зависит от расписания) запускает загрузку данных из паркета в DWH.
+
+Загрузка паркетов в гринплам осуществляется через ордерную систему.
+Каждый запуск DAGa формирует ордера (на каждый новый файл по одному ордеру для шаблона INCREMENT и раз в день на всю папку для шаблона DAILY).
+Метаданные по таблицам так же берутся из ордерной системы.
+Действия над ордером логируются.
+
+Ордерная система 
+goldengate.load_manager_jobs - метаданные джоба.
+goldengate.load_manager_orders_{table_name} - ордера на загрузку по конкретной таблице.
+goldengate.load_manager_log - логи загрузки всех ордеров.

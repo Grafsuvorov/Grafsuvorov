@@ -1,41 +1,19 @@
-Прошу создать таблицу "LIKP" в схеме stg на DEV и PROD
-
-Таблица нужна для загрузки данных из oracle_sap_erp_prod
-
-Направление: test;
-
-Источник: oracle_sap_erp_prod;
-
-Название схемы на источнике: SAPSR3;
-
-Название таблицы на источнике: LIKP;
-
-Название таблицы в таргете: stg."LIKP";
-
-Ключ распределения: DISTRIBUTED BY ("RN");
-
-Условие при загрузке: грузим без условий;
-
-Расписание загрузки: TRANSPORTATION;
-
-Стенд: DEV и PROD;
-
-Доступ к таблице на источнике: Предоставлен;
-
-Дата релиза: 2026-10-23;
-
-
 relation:
-  schema_name: dds
-  table_name: account_debt_1c
+  # наименование схемы
+  schema_name: dict_dds
+  # наименование таблицы
+  table_name: toro_technical_place
   scd_type: scd2
   unique_key:
-    - dt_report
-    - unit_balance_code
-    - posting_uid_code_1c
+  # тип scd (scd1, scd2)
+  scd_type: scd1
+  unique_key: # список полей уникального ключа
+    - technical_place_code
   entity:
-    - BI_FI
+    - TORO
 dq:
   - check_type: "duplicates"
     detail_store_flag: true
     detail_store_limit: 30
+    detail_store_limit: null
+    filter: "deleted_flag is false"

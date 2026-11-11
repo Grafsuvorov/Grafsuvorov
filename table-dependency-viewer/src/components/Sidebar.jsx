@@ -26,6 +26,9 @@ export default function Sidebar({
     ...(authEnabled && userProfile?.role === "admin"
       ? [{ path: "/admin/users", label: "Админка", action: () => onChangeView("/admin/users") }]
       : []),
+    ...(authEnabled && userProfile?.role === "admin"
+      ? [{ path: "/admin/feedback/inbox", label: "Отзывы", action: () => onChangeView("/admin/feedback/inbox") }]
+      : []),
     ...(authEnabled && userProfile ? [{ path: "/admin/dev-meta", label: "DEV Meta", action: () => onChangeView("/admin/dev-meta") }] : []),
     ...(authEnabled && (userProfile?.role === "admin" || userProfile?.role === "engineer")
       ? [{ path: "/admin/meta-workspace", label: "Meta Workspace", action: () => onChangeView("/admin/meta-workspace") }]

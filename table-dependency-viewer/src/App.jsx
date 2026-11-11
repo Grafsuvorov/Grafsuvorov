@@ -33,6 +33,7 @@ const AdminEngineeringPage = lazy(() => import("./components/AdminEngineeringPag
 const AdminArchitecturePage = lazy(() => import("./components/AdminArchitecturePage.jsx"));
 const AdminArchitectureBlockPage = lazy(() => import("./components/AdminArchitectureBlockPage.jsx"));
 const AdminFeedbackPage = lazy(() => import("./components/AdminFeedbackPage.jsx"));
+const AdminFeedbackInboxPage = lazy(() => import("./components/AdminFeedbackInboxPage.jsx"));
 const AdminPrototypeReviewPage = lazy(() => import("./components/AdminPrototypeReviewPage.jsx"));
 const AccountPage = lazy(() => import("./components/AccountPage.jsx"));
 const ReleasesPage = lazy(() => import("./components/ReleasesPage.jsx"));
@@ -237,6 +238,10 @@ export default function App() {
       }
       if (target === "/admin/feedback") {
         navigate("/admin/feedback", { state: { from: location.pathname + location.search } });
+        return;
+      }
+      if (target === "/admin/feedback/inbox") {
+        navigate("/admin/feedback/inbox");
         return;
       }
       if (target === "/admin/prototype-review") {
@@ -601,6 +606,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : (
               <AdminFeedbackPage userProfile={userProfile} />
+            )
+          }
+        />
+        <Route
+          path="/admin/feedback/inbox"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminFeedbackInboxPage />
+            ) : (
+              <Navigate to="/" replace />
             )
           }
         />

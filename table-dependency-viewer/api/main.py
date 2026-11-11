@@ -240,6 +240,7 @@ from .services.prototype_review_dbt import (
     _prototype_review_dbt_nulls_path,
     _prototype_review_dbt_registry_path,
     _prototype_review_dbt_key_list,
+    _prototype_review_parse_duplicates_filter,
     _prototype_review_parse_null_conditions,
     _prototype_review_update_dbt_dq_model,
     _prototype_review_yaml_repo_path,
@@ -1342,6 +1343,7 @@ def _prototype_review_item_dependencies() -> PrototypeReviewItemDependencies:
         impact_summary=_prototype_impact_summary,
         query_table_checks=query_dev_table_checks,
         existing_null_conditions=_prototype_review_existing_null_conditions,
+        existing_duplicate_filter=_prototype_review_existing_duplicate_filter,
         item_needs_attention=_prototype_item_needs_attention,
         engine=engine,
         base_dir=BASE_DIR,
@@ -1371,6 +1373,21 @@ def _prototype_review_existing_null_conditions(schema_name: str, table_name: str
         ref=str(DBT_GITLAB_TARGET_BRANCH or "main").strip() or "main",
     )
     return _prototype_review_parse_null_conditions(content)
+
+
+def _prototype_review_existing_duplicate_filter(schema_name: str, table_name: str) -> str:
+    if not DBT_GITLAB_TOKEN:
+        return ""
+    project_ref = _parse_gitlab_project(DBT_GITLAB_PROJECT)
+    if not project_ref:
+        return ""
+    content = _prototype_gitlab_file_content(
+        project=project_ref,
+        token=DBT_GITLAB_TOKEN,
+        file_path=_prototype_review_dbt_registry_path(schema_name, table_name),
+        ref=str(DBT_GITLAB_TARGET_BRANCH or "main").strip() or "main",
+    )
+    return _prototype_review_parse_duplicates_filter(content)
 
 
 def _load_business_dq_checks(mr_input: str, business_area_code: Optional[str] = None):

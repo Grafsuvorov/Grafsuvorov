@@ -65,6 +65,7 @@ from api.services.prototype_review_dbt import (
     dbt_duplicates_path,
     dbt_nulls_path,
     dbt_registry_path,
+    parse_duplicates_filter,
     yaml_repo_path,
 )
 from api.services.prototype_review_issue_workflow import (
@@ -79,6 +80,19 @@ from api.services.stg_source_loader import _parse_output, _primary_key_expressio
 
 
 class PrototypeReviewWorkflowTests(unittest.TestCase):
+    def test_parses_existing_duplicates_filter_from_registry(self) -> None:
+        content = '''
+relation:
+  schema_name: dict_dds
+  table_name: toro_technical_place
+dq:
+  - check_type: "duplicates"
+    detail_store_flag: true
+    detail_store_limit: null
+    filter: "deleted_flag is false"
+'''
+        self.assertEqual(parse_duplicates_filter(content), "deleted_flag is false")
+
     def test_source_loader_normalizes_compound_primary_key(self) -> None:
         self.assertEqual(
             _primary_key_expression('"VBELN" || "MANDT"'),
@@ -585,6 +599,7 @@ class PrototypeReviewItemTests(unittest.TestCase):
             impact_summary=lambda _fqn: {"tables": [], "count": 0},
             query_table_checks=lambda **_kwargs: {"row_count": 1, "duplicate_groups": 0},
             existing_null_conditions=lambda _schema, _table: [],
+            existing_duplicate_filter=lambda _schema, _table: "deleted_flag is false",
             item_needs_attention=lambda _item: (False, []),
             engine=None,
             base_dir=Path("."),
@@ -602,6 +617,7 @@ class PrototypeReviewItemTests(unittest.TestCase):
 
         self.assertIsNone(result["yaml_bundle"])
         self.assertEqual(result["key_attributes"], ["order_id"])
+        self.assertEqual(result["filter"], "deleted_flag is false")
 
     def test_orders_entities_by_sql_owner_and_prefills_all_variants(self) -> None:
         def must_not_run(*_args, **_kwargs):

@@ -82,6 +82,32 @@ def parse_null_conditions(content: Optional[str]) -> list[str]:
     return [str(value).strip() for value in values if str(value).strip()]
 
 
+def parse_duplicates_filter(content: Optional[str]) -> str:
+    """Extract the optional filter from the ``duplicates`` DQ registry entry."""
+    in_duplicates = False
+    for line in str(content or "").splitlines():
+        check_match = re.match(r'^\s*-\s*check_type\s*:\s*["\']?([^"\'#\s]+)', line)
+        if check_match:
+            in_duplicates = check_match.group(1).strip().lower() == "duplicates"
+            continue
+        if not in_duplicates:
+            continue
+        filter_match = re.match(r"^\s*filter\s*:\s*(.*?)\s*$", line)
+        if not filter_match:
+            continue
+        value = filter_match.group(1).strip()
+        if not value or value.lower() in {"null", "none", "~"}:
+            return ""
+        if value.startswith('"'):
+            try:
+                decoded = json.loads(value)
+                return str(decoded).strip() if decoded is not None else ""
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+        return value.strip("'").strip()
+    return ""
+
+
 def dbt_key_list(key_attributes: list[Any]) -> str:
     values = [str(value).strip() for value in key_attributes if str(value).strip()]
     if not values:
@@ -176,6 +202,7 @@ _prototype_review_dbt_registry_path = dbt_registry_path
 _prototype_review_dbt_dq_path = dbt_duplicates_path
 _prototype_review_dbt_nulls_path = dbt_nulls_path
 _prototype_review_parse_null_conditions = parse_null_conditions
+_prototype_review_parse_duplicates_filter = parse_duplicates_filter
 _prototype_review_dbt_key_list = dbt_key_list
 _prototype_review_build_dbt_dq_model = build_duplicates_model
 _prototype_review_build_dbt_nulls_model = build_nulls_model

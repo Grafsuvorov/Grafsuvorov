@@ -26,6 +26,7 @@ class PrototypeReviewItemDependencies:
     entity_meta_dir: Any
     dev_entity_meta_dir: Any
     dev_database_url: str
+    existing_duplicate_filter: Callable[[str, str], str] = lambda _schema, _table: ""
 
 
 def _variant_owns_sql(variant: dict[str, Any]) -> bool:
@@ -114,11 +115,16 @@ def resolve_prototype_review_item(
             checks_error = str(exc)
     item_warnings: list[str] = []
     null_conditions: list[str] = []
+    duplicate_filter = ""
     if item_object_type == "TABLE":
         try:
             null_conditions = resolver.existing_null_conditions(schema_name, table_name)
         except Exception as exc:
             item_warnings.append(f"Не удалось загрузить существующие DQ nulls: {exc}")
+        try:
+            duplicate_filter = resolver.existing_duplicate_filter(schema_name, table_name)
+        except Exception as exc:
+            item_warnings.append(f"Не удалось загрузить существующий DQ filter: {exc}")
     if item_object_type == "TABLE" and not detected_keys:
         item_warnings.append("Ключевые поля не найдены автоматически")
     if current_execution.get("status") == "error":
@@ -147,7 +153,7 @@ def resolve_prototype_review_item(
         "auto_detected_key_attributes": detected_keys,
         "scd_type": "scd1",
         "version_key": [],
-        "filter": "",
+        "filter": duplicate_filter,
         "null_conditions": null_conditions,
         "clickhouse_keys": clickhouse_keys,
         "dependencies": dependencies,

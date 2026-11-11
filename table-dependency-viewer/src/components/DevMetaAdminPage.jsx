@@ -363,7 +363,18 @@ export default function DevMetaAdminPage({
         dag_is_paused: Boolean(data?.response?.was_paused),
       });
       setMessageType("success");
-      setMessage(`DEV DAG запущен: ${data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, "")}`);
+      const dagLabel = data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, "");
+      const gitSync = data?.git_sync || {};
+      if (gitSync.status === "merged") {
+        setMessage(`DEV DAG запущен: ${dagLabel}. YAML автоматически принят в develop${gitSync.mr_url ? `: ${gitSync.mr_url}` : ""}`);
+      } else if (gitSync.status === "unchanged") {
+        setMessage(`DEV DAG запущен: ${dagLabel}. В develop уже находится актуальная версия YAML.`);
+      } else if (gitSync.status === "error") {
+        setMessageType("warning");
+        setMessage(`DEV DAG запущен: ${dagLabel}. Не удалось синхронизировать YAML в develop: ${gitSync.error || "неизвестная ошибка"}`);
+      } else {
+        setMessage(`DEV DAG запущен: ${dagLabel}`);
+      }
     } catch (err) {
       setError(err.message || "Не удалось запустить DEV DAG");
     } finally {

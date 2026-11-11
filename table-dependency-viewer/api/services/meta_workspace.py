@@ -6,6 +6,7 @@ import re
 import shutil
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -1916,6 +1917,112 @@ def create_meta_workspace_mr(
             "removed_paths": [*entity_sync["removed_paths"], *click_sync["removed_paths"]],
             "mr_url": mr_data.get("web_url"),
             "mr_iid": mr_data.get("iid"),
+        }
+    finally:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(worktree_dir, ignore_errors=True)
+
+
+def publish_dev_click_meta_to_branch(
+    *,
+    base_dir: Path,
+    dev_root_value: str,
+    git_repo_value: str,
+    click_git_root_value: str,
+    gitlab_token: str,
+    gitlab_project: str,
+    gitlab_api_url: str,
+    gitlab_ssl_verify: str,
+    schema_name: str,
+    file_name: str,
+    author: str,
+    target_branch: str = "develop",
+) -> dict[str, Any]:
+    """Publish one tested DEV Click YAML through a merged GitLab MR.
+
+    The DEV Meta flow keeps its existing deployment and DAG run intact.  This
+    helper only mirrors the exact YAML to Git after the run has been started.
+    """
+    schema_norm = str(schema_name or "").strip().lower()
+    file_name_norm = str(file_name or "").strip()
+    target_branch_norm = str(target_branch or "develop").strip() or "develop"
+    if not re.fullmatch(r"[a-z0-9_]+", schema_norm):
+        raise ValueError("Некорректная схема ClickHouse")
+    if Path(file_name_norm).name != file_name_norm or not file_name_norm.endswith((".yaml", ".yml")):
+        raise ValueError("Некорректное имя YAML-файла ClickHouse")
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    if not gitlab_token:
+        raise ValueError("Не настроен GITLAB_TOKEN")
+
+    dev_root = _resolve_root(base_dir, dev_root_value)
+    source_path = (dev_root / schema_norm / file_name_norm).resolve()
+    if not str(source_path).startswith(str(dev_root.resolve())) or not source_path.is_file():
+        raise ValueError(f"DEV YAML `{schema_norm}/{file_name_norm}` не найден")
+
+    git_repo_root = Path(git_repo_value).resolve()
+    project_ref = _parse_gitlab_project(gitlab_project) or _parse_gitlab_project(
+        _run_git(git_repo_root, ["remote", "get-url", "origin"])
+    )
+    if not project_ref:
+        raise ValueError("Не удалось определить GitLab project")
+    ssl_verify = str(gitlab_ssl_verify or "true").strip().lower() not in {"0", "false", "no", "off"}
+    _run_git(git_repo_root, ["fetch", "origin"])
+    if not _run_git(git_repo_root, ["ls-remote", "--heads", "origin", target_branch_norm]):
+        raise ValueError(f"Ветка `{target_branch_norm}` не найдена в origin")
+
+    file_stem = Path(file_name_norm).stem
+    branch_suffix = re.sub(r"[^a-z0-9_-]+", "-", f"{schema_norm}-{file_stem}".lower()).strip("-")
+    source_branch = f"auto/dev-meta/{branch_suffix}-{uuid.uuid4().hex[:8]}"
+    worktree_dir = Path(tempfile.mkdtemp(prefix="dev-meta-git-"))
+    try:
+        _run_git(git_repo_root, ["worktree", "add", "-B", source_branch, str(worktree_dir), f"origin/{target_branch_norm}"])
+        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+        destination = worktree_dir / Path(click_git_root_value) / schema_norm / file_name_norm
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        relative_path = destination.relative_to(worktree_dir).as_posix()
+        if not _run_git(git_repo_root, ["status", "--porcelain", "--", relative_path], cwd=worktree_dir):
+            return {"status": "unchanged", "target_branch": target_branch_norm, "file_path": relative_path}
+        _run_git(git_repo_root, ["add", "--", relative_path], cwd=worktree_dir)
+        _run_git(git_repo_root, ["commit", "-m", f"DEV Meta: sync {schema_norm}/{file_name_norm}"], cwd=worktree_dir)
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(source_branch)}"], cwd=worktree_dir)
+
+        mr_data = _gitlab_json_request(
+            api_url=gitlab_api_url,
+            project=project_ref,
+            token=gitlab_token,
+            ssl_verify=ssl_verify,
+            path="merge_requests",
+            method="POST",
+            payload={
+                "source_branch": source_branch,
+                "target_branch": target_branch_norm,
+                "title": f"DEV Meta: {schema_norm}/{file_name_norm}",
+                "description": f"Автоматическая синхронизация DEV Meta после запуска DEV DAG.\\nАвтор: {author}",
+                "remove_source_branch": False,
+            },
+        )
+        merge_result = _gitlab_json_request(
+            api_url=gitlab_api_url,
+            project=project_ref,
+            token=gitlab_token,
+            ssl_verify=ssl_verify,
+            path=f"merge_requests/{mr_data.get('iid')}/merge",
+            method="PUT",
+            payload={"should_remove_source_branch": False, "merge_when_pipeline_succeeds": False},
+        )
+        return {
+            "status": "merged",
+            "file_path": relative_path,
+            "source_branch": source_branch,
+            "target_branch": target_branch_norm,
+            "mr_iid": mr_data.get("iid"),
+            "mr_url": mr_data.get("web_url"),
+            "merge_commit_sha": merge_result.get("merge_commit_sha"),
         }
     finally:
         try:

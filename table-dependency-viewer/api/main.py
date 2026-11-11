@@ -178,6 +178,7 @@ from .services.meta_workspace import (
     BranchRevisionConflictError,
     MetaWorkspaceObjectNotFoundError,
     create_meta_workspace_branch,
+    publish_dev_click_meta_to_branch,
     _build_branch_catalog,
     build_meta_workspace_branch_tree,
     create_meta_workspace_mr,
@@ -4378,7 +4379,27 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"status": "ok", "response": data}
+    git_sync: dict[str, Any]
+    try:
+        git_sync = publish_dev_click_meta_to_branch(
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_CLICK_META_DIR,
+            git_repo_value=ENTITY_META_GIT_REPO,
+            click_git_root_value=CLICK_META_GIT_ROOT,
+            gitlab_token=GITLAB_TOKEN,
+            gitlab_project=GITLAB_PROJECT,
+            gitlab_api_url=GITLAB_API_URL,
+            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+            author=user.email,
+            target_branch="develop",
+        )
+    except Exception as exc:
+        # The DAG has already been triggered successfully.  Keep the existing
+        # DEV workflow intact and expose Git delivery failure to the operator.
+        git_sync = {"status": "error", "error": str(exc), "target_branch": "develop"}
+    return {"status": "ok", "response": data, "git_sync": git_sync}
 
 
 @router.post("/api/admin/dev-meta/dag-status")

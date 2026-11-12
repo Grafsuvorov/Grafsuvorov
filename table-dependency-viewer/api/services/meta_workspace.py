@@ -1964,9 +1964,12 @@ def publish_dev_click_meta_to_branch(
         raise ValueError(f"DEV YAML `{schema_norm}/{file_name_norm}` не найден")
 
     git_repo_root = Path(git_repo_value).resolve()
-    project_ref = _parse_gitlab_project(gitlab_project) or _parse_gitlab_project(
-        _run_git(git_repo_root, ["remote", "get-url", "origin"])
-    )
+    # The branch below is pushed to origin, so the MR must be created in that
+    # exact GitLab project.  A stale GITLAB_PROJECT used to make us create the
+    # MR in another project, where GitLab quite correctly could not find the
+    # source branch.
+    origin_url = _run_git(git_repo_root, ["remote", "get-url", "origin"])
+    project_ref = _parse_gitlab_project(origin_url) or _parse_gitlab_project(gitlab_project)
     if not project_ref:
         raise ValueError("Не удалось определить GitLab project")
     ssl_verify = str(gitlab_ssl_verify or "true").strip().lower() not in {"0", "false", "no", "off"}
@@ -1990,6 +1993,8 @@ def publish_dev_click_meta_to_branch(
         _run_git(git_repo_root, ["add", "--", relative_path], cwd=worktree_dir)
         _run_git(git_repo_root, ["commit", "-m", f"DEV Meta: sync {schema_norm}/{file_name_norm}"], cwd=worktree_dir)
         _run_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(source_branch)}"], cwd=worktree_dir)
+        if not _run_git(git_repo_root, ["ls-remote", "--heads", "origin", _push_branch_ref(source_branch)]):
+            raise ValueError(f"После push ветка `{source_branch}` не найдена в origin")
 
         mr_data = _gitlab_json_request(
             api_url=gitlab_api_url,

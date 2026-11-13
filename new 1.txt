@@ -1,31 +1,63 @@
 
-table-dependency-viewer-api-1  | DEV Meta GitLab sync finished: status=merged reason=— source=auto/dev-meta/dm-dict_dds_counter                          party_credit_rating_score_history_meta-96ba370e target=develop mr=https://prod.gitlab.dwh.rusal.com/dwh/etl/-/merge_requests/55                          10 file=config_files/meta/dm/dict_dds_counterparty_credit_rating_score_history_meta.yaml merge_method=GraphQL mergeRequestAccep                          t (after 5s wait)
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39334 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39384 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39392 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39420 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39448 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39474 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39496 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39524 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39552 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39580 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39606 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39632 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39790 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39796 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39808 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | DEV Meta GitLab sync finished: status=merged reason=— source=auto/dev-meta/dm-dict_dds_counter                          party_credit_rating_score_history_meta-3770feba target=develop mr=https://prod.gitlab.dwh.rusal.com/dwh/etl/-/merge_requests/55                          11 file=config_files/meta/dm/dict_dds_counterparty_credit_rating_score_history_meta.yaml merge_method=GraphQL mergeRequestAccep                          t (after 5s wait)
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39834 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39880 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39888 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39918 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39946 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:39974 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:40002 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:40022 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:40054 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:40080 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:40106 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:40200 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-[root@rgm-s-dwhapp01 table-dependency-viewer]#
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 1361, in do_open
+table-dependency-viewer-api-1  |     h.request(req.get_method(), req.selector, req.data, headers,
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1351, in request
+table-dependency-viewer-api-1  |     self._send_request(method, url, body, headers, encode_chunked)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1397, in _send_request
+table-dependency-viewer-api-1  |     self.endheaders(body, encode_chunked=encode_chunked)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1346, in endheaders
+table-dependency-viewer-api-1  |     self._send_output(message_body, encode_chunked=encode_chunked)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1106, in _send_output
+table-dependency-viewer-api-1  |     self.send(msg)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1044, in send
+table-dependency-viewer-api-1  |     self.connect()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1516, in connect
+table-dependency-viewer-api-1  |     super().connect()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1010, in connect
+table-dependency-viewer-api-1  |     self.sock = self._create_connection(
+table-dependency-viewer-api-1  |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/socket.py", line 863, in create_connection
+table-dependency-viewer-api-1  |     raise exceptions[0]
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/socket.py", line 848, in create_connection
+table-dependency-viewer-api-1  |     sock.connect(sa)
+table-dependency-viewer-api-1  | ConnectionRefusedError: [Errno 111] Connection refused
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 842, in _airflow_json_request
+table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout) as resp:
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 820, in _urlopen_without_proxy
+table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 519, in open
+table-dependency-viewer-api-1  |     response = self._open(req, data)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 536, in _open
+table-dependency-viewer-api-1  |     result = self._call_chain(self.handle_open, protocol, protocol +
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+table-dependency-viewer-api-1  |     result = func(*args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 1404, in https_open
+table-dependency-viewer-api-1  |     return self.do_open(http.client.HTTPSConnection, req,
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 1364, in do_open
+table-dependency-viewer-api-1  |     raise URLError(err)
+table-dependency-viewer-api-1  | urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4396, in _launch
+table-dependency-viewer-api-1  |     data = trigger_airflow_dev_dag(engine=engine, airflow_base_url=AIRFLOW_DEV_BASE_URL, dag_id=AIRFLOW_DEV_DAG_ID, username=AIRFLOW_DEV_USERNAME, password=AIRFLOW_DEV_PASSWORD, schema_name=payload.schema_name, file_name=payload.file_name, author=user.email)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 1293, in trigger_airflow_dev_dag
+table-dependency-viewer-api-1  |     dag_info = _airflow_json_request(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 849, in _airflow_json_request
+table-dependency-viewer-api-1  |     raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
+table-dependency-viewer-api-1  | ValueError: Не удалось вызвать Airflow: <urlopen error [Errno 111] Connection refused>
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59520 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK

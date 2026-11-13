@@ -1,44 +1,10 @@
+dbt_greenplum_elt/models_metadata
 
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59494 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59496 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59502 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59514 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59516 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59518 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59536 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59548 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59560 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59566 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59616 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59624 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59658 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59678 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59714 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59736 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59764 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59790 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59814 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59848 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59868 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60044 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60046 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60048 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60054 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60068 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60070 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60072 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60090 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60096 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60114 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60122 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60168 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60178 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60212 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60232 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60264 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60288 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60308 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60344 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60366 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60394 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:60422 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+там все по папкам пример для ддс 
+dbt_greenplum_elt/models_metadata/dds
+
+dbt_greenplum_elt/models_metadata/dds/dds.toro_order_operations.sql
+
+Если происходит добавление для инкрементальной загрузки пользователь прикладывает файлики тогда прикладывать инструкцию 
+это инструкция для добавления релизных планов
+https://yt.rusal.ru/articles/DWH-A-1524/Avtomaticheskoe-vypolnenie-ruchnyh-instrukcij-v-relize

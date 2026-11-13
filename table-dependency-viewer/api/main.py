@@ -4379,6 +4379,17 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
             file_name=payload.file_name,
             author=user.email,
         )
+        dag_run_id = str(((data.get("response") or {}).get("dag_run_id") or "")).strip()
+        if dag_run_id:
+            _watch_airflow_completion(
+                user=user,
+                dag_id=str(data.get("dag_id") or AIRFLOW_DEV_DAG_ID or Path(payload.file_name).stem),
+                dag_run_id=dag_run_id,
+                message=(
+                    f"✨ DEV DAG завершён: {payload.schema_name}/{payload.file_name}. "
+                    "Можно проверять результат загрузки."
+                ),
+            )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
@@ -4407,7 +4418,10 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
             payload.schema_name,
             payload.file_name,
         )
-        git_sync = {"status": "error", "error": str(exc), "target_branch": "develop"}
+        # Git publication is an auxiliary operation after the DAG was accepted
+        # by Airflow. Keep its details in server logs and never make the DEV
+        # user-facing flow look failed.
+        git_sync = {"status": "background_error", "target_branch": "develop"}
     else:
         logger.info(
             "DEV Meta GitLab sync finished: status=%s source=%s target=%s mr=%s file=%s merge_method=%s",

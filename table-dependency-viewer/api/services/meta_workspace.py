@@ -2034,30 +2034,48 @@ def publish_dev_click_meta_to_branch(
             mr_sha = str(mr_data.get("sha") or "").strip()
             if not mr_sha:
                 raise ValueError("GitLab не вернул SHA созданного MR для автоматического merge") from exc
+            def _graphql_merge_attempt() -> dict[str, Any]:
+                graphql_data = _gitlab_graphql_request(
+                    api_url=gitlab_api_url,
+                    token=gitlab_token,
+                    ssl_verify=ssl_verify,
+                    query="""
+                        mutation AcceptMergeRequest($input: MergeRequestAcceptInput!) {
+                          mergeRequestAccept(input: $input) {
+                            errors
+                            mergeRequest { iid state mergeCommitSha }
+                          }
+                        }
+                    """,
+                    variables={
+                        "input": {
+                            "projectPath": project_ref,
+                            "iid": str(mr_data.get("iid")),
+                            "sha": mr_sha,
+                            "shouldRemoveSourceBranch": False,
+                        }
+                    },
+                )
+                return (graphql_data.get("mergeRequestAccept") or {}) if isinstance(graphql_data, dict) else {}
+
             merge_method = "GraphQL mergeRequestAccept"
-            graphql_data = _gitlab_graphql_request(
-                api_url=gitlab_api_url,
-                token=gitlab_token,
-                ssl_verify=ssl_verify,
-                query="""
-                    mutation AcceptMergeRequest($input: MergeRequestAcceptInput!) {
-                      mergeRequestAccept(input: $input) {
-                        errors
-                        mergeRequest { iid state mergeCommitSha }
-                      }
-                    }
-                """,
-                variables={
-                    "input": {
-                        "projectPath": project_ref,
-                        "iid": str(mr_data.get("iid")),
-                        "sha": mr_sha,
-                        "shouldRemoveSourceBranch": False,
-                    }
-                },
-            )
-            graphql_result = (graphql_data.get("mergeRequestAccept") or {}) if isinstance(graphql_data, dict) else {}
+            graphql_result = _graphql_merge_attempt()
             graphql_errors = graphql_result.get("errors") or []
+            # Right after MR creation GitLab may still calculate its merge
+            # status. The UI exposes the Merge button only after that check,
+            # which normally takes about a minute on this instance.
+            retry_count = 0
+            while (
+                graphql_errors
+                and any("cannot be merged" in str(item).lower() for item in graphql_errors)
+                and retry_count < 18
+            ):
+                time.sleep(5)
+                retry_count += 1
+                graphql_result = _graphql_merge_attempt()
+                graphql_errors = graphql_result.get("errors") or []
+            if retry_count:
+                merge_method = f"GraphQL mergeRequestAccept (after {retry_count * 5}s wait)"
             if graphql_errors:
                 raise ValueError(f"GitLab не принял MR через GraphQL: {', '.join(map(str, graphql_errors))}")
             graphql_mr = graphql_result.get("mergeRequest") or {}

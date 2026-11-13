@@ -1,54 +1,44 @@
 
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/21/e3q8)
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54594 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54598 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54596 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54604 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54612 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54614 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54616 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54640 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54646 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:54658 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | DEV Meta GitLab sync failed after DAG launch: schema=dm file=dict_dds_counterparty_credit_rating_score_history_meta.yaml target=develop
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 995, in _gitlab_json_request
-table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp:
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 955, in _urlopen_without_proxy
-table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
-table-dependency-viewer-api-1  |     response = meth(req, response)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
-table-dependency-viewer-api-1  |     response = self.parent.error(
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
-table-dependency-viewer-api-1  |     return self._call_chain(*args)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-table-dependency-viewer-api-1  |     result = func(*args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
-table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
-table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2019, in publish_dev_click_meta_to_branch
-table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
-table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
-table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4399, in run_admin_dev_meta_dag
-table-dependency-viewer-api-1  |     git_sync = publish_dev_click_meta_to_branch(
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2062, in publish_dev_click_meta_to_branch
-table-dependency-viewer-api-1  |     raise ValueError(f"GitLab не принял MR через GraphQL: {', '.join(map(str, graphql_errors))}")
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59494 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59496 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59502 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59514 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59516 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59518 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59536 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59548 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59560 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59566 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59616 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59624 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59658 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59678 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59714 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59736 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59764 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59790 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59814 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59848 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:59868 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60044 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60046 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60048 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60054 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60068 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60070 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60072 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60090 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60096 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60114 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60122 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60168 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60178 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60212 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60232 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60264 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60288 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60308 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60344 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60366 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60394 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:60422 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK

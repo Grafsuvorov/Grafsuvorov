@@ -18,6 +18,7 @@ from .entity_dev_meta import (
     _ensure_git_identity,
     _load_yaml_text,
     _object_directory_name,
+    _gitlab_graphql_request,
     _gitlab_json_request,
     _list_task_entity_object_keys,
     _object_dir_from_key,
@@ -2027,20 +2028,40 @@ def publish_dev_click_meta_to_branch(
         except ValueError as exc:
             if "GitLab вернул 405" not in str(exc):
                 raise
-            # Some corporate reverse proxies deny PUT before the request reaches
-            # GitLab.  Keep the GitLab semantics while sending POST through that
-            # proxy; Rack/GitLab applies the method-override header.
-            merge_method = "POST + X-HTTP-Method-Override: PUT"
-            merge_result = _gitlab_json_request(
+            # The corporate proxy blocks the REST /merge path altogether.  The
+            # same GitLab operation is available through GraphQL over a regular
+            # POST /api/graphql request.
+            mr_sha = str(mr_data.get("sha") or "").strip()
+            if not mr_sha:
+                raise ValueError("GitLab не вернул SHA созданного MR для автоматического merge") from exc
+            merge_method = "GraphQL mergeRequestAccept"
+            graphql_data = _gitlab_graphql_request(
                 api_url=gitlab_api_url,
-                project=project_ref,
                 token=gitlab_token,
                 ssl_verify=ssl_verify,
-                path=f"merge_requests/{mr_data.get('iid')}/merge",
-                method="POST",
-                payload=merge_payload,
-                extra_headers={"X-HTTP-Method-Override": "PUT"},
+                query="""
+                    mutation AcceptMergeRequest($input: MergeRequestAcceptInput!) {
+                      mergeRequestAccept(input: $input) {
+                        errors
+                        mergeRequest { iid state mergeCommitSha }
+                      }
+                    }
+                """,
+                variables={
+                    "input": {
+                        "projectPath": project_ref,
+                        "iid": str(mr_data.get("iid")),
+                        "sha": mr_sha,
+                        "shouldRemoveSourceBranch": False,
+                    }
+                },
             )
+            graphql_result = (graphql_data.get("mergeRequestAccept") or {}) if isinstance(graphql_data, dict) else {}
+            graphql_errors = graphql_result.get("errors") or []
+            if graphql_errors:
+                raise ValueError(f"GitLab не принял MR через GraphQL: {', '.join(map(str, graphql_errors))}")
+            graphql_mr = graphql_result.get("mergeRequest") or {}
+            merge_result = {"merge_commit_sha": graphql_mr.get("mergeCommitSha")}
         return {
             "status": "merged",
             "file_path": relative_path,

@@ -1002,6 +1002,45 @@ def _gitlab_json_request(
         raise ValueError(f"Не удалось вызвать GitLab API: {exc}") from exc
 
 
+def _gitlab_graphql_request(
+    *,
+    api_url: str,
+    token: str,
+    ssl_verify: bool,
+    query: str,
+    variables: dict[str, Any],
+    timeout: int = 30,
+) -> dict[str, Any]:
+    """Execute a GitLab GraphQL request using the same authentication as REST."""
+    api_base = re.sub(r"/api/v\d+/?$", "", str(api_url or "").rstrip("/"))
+    if not api_base:
+        raise ValueError("Не настроен GITLAB_API_URL")
+    req = urlrequest.Request(
+        f"{api_base}/api/graphql",
+        data=json.dumps({"query": query, "variables": variables}).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "PRIVATE-TOKEN": token,
+        },
+        method="POST",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp:
+            body = resp.read().decode("utf-8")
+            response = json.loads(body) if body else {}
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"GitLab GraphQL вернул {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось вызвать GitLab GraphQL API: {exc}") from exc
+    if not isinstance(response, dict):
+        raise ValueError("GitLab GraphQL вернул некорректный ответ")
+    if response.get("errors"):
+        raise ValueError(f"GitLab GraphQL вернул ошибки: {response['errors']}")
+    return response.get("data") or {}
+
+
 def _parse_gitlab_project(value: str) -> Optional[str]:
     text_value = str(value or "").strip()
     if not text_value:

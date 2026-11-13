@@ -1,10 +1,31 @@
-dbt_greenplum_elt/models_metadata
 
-там все по папкам пример для ддс 
-dbt_greenplum_elt/models_metadata/dds
-
-dbt_greenplum_elt/models_metadata/dds/dds.toro_order_operations.sql
-
-Если происходит добавление для инкрементальной загрузки пользователь прикладывает файлики тогда прикладывать инструкцию 
-это инструкция для добавления релизных планов
-https://yt.rusal.ru/articles/DWH-A-1524/Avtomaticheskoe-vypolnenie-ruchnyh-instrukcij-v-relize
+table-dependency-viewer-api-1  | DEV Meta GitLab sync finished: status=merged reason=— source=auto/dev-meta/dm-dict_dds_counter                          party_credit_rating_score_history_meta-96ba370e target=develop mr=https://prod.gitlab.dwh.rusal.com/dwh/etl/-/merge_requests/55                          10 file=config_files/meta/dm/dict_dds_counterparty_credit_rating_score_history_meta.yaml merge_method=GraphQL mergeRequestAccep                          t (after 5s wait)
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39334 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39384 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39392 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39420 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39448 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39474 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39496 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39524 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39552 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39580 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39606 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39632 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39790 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39796 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39808 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | DEV Meta GitLab sync finished: status=merged reason=— source=auto/dev-meta/dm-dict_dds_counter                          party_credit_rating_score_history_meta-3770feba target=develop mr=https://prod.gitlab.dwh.rusal.com/dwh/etl/-/merge_requests/55                          11 file=config_files/meta/dm/dict_dds_counterparty_credit_rating_score_history_meta.yaml merge_method=GraphQL mergeRequestAccep                          t (after 5s wait)
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39834 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39880 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39888 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39918 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39946 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:39974 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:40002 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:40022 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:40054 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:40080 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:40106 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:40200 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+[root@rgm-s-dwhapp01 table-dependency-viewer]#

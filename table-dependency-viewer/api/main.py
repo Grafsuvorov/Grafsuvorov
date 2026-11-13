@@ -1026,6 +1026,14 @@ def _prototype_multi_issue_description(
         if str(item.get("manual_script_name") or "").strip() or manual_scripts:
             lines.append(f"**Ручной скрипт:** {str(item.get('manual_script_name') or '').strip() or 'требуется выполнить'}")
             lines.extend(f"- Файл: `{script.get('filename')}`" for script in manual_scripts)
+            if (
+                "инкрем" in str(task_context.get("load_mode") or "").lower()
+                or str(task_context.get("pseudo_increment_steps") or "").strip()
+            ):
+                lines.append(
+                    "**Инструкция для релизного плана:** "
+                    "https://yt.rusal.ru/articles/DWH-A-1524/Avtomaticheskoe-vypolnenie-ruchnyh-instrukcij-v-relize"
+                )
         if item.get("copy_to_clickhouse"):
             lines.append("**ClickHouse:** требуется")
             lines.append(

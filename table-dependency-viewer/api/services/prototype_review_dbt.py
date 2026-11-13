@@ -34,6 +34,17 @@ def dbt_registry_path(schema_name: str, table_name: str) -> str:
     return posix_join(str(DBT_REGISTRY_ROOT or "dbt_greenplum_elt/models_metadata").strip("/"), schema_name_norm, f"{schema_name_norm}.{table_name_norm}.yml")
 
 
+def dbt_model_sql_path(schema_name: str, table_name: str) -> str:
+    """Path of the SQL model stored alongside the dbt metadata registry."""
+    schema_name_norm = str(schema_name or "").strip().lower()
+    table_name_norm = _object_directory_name(table_name) or str(table_name or "").strip().lower()
+    return posix_join(
+        str(DBT_REGISTRY_ROOT or "dbt_greenplum_elt/models_metadata").strip("/"),
+        schema_name_norm,
+        f"{schema_name_norm}.{table_name_norm}.sql",
+    )
+
+
 def dbt_duplicates_path(schema_name: str, table_name: str) -> str:
     schema_name_norm = str(schema_name or "").strip().lower()
     table_name_norm = _object_directory_name(table_name) or str(table_name or "").strip().lower()
@@ -199,6 +210,7 @@ def build_registry_yaml(item: dict[str, Any]) -> str:
 # Compatibility aliases while callers are migrated away from main.py names.
 _prototype_review_yaml_repo_path = yaml_repo_path
 _prototype_review_dbt_registry_path = dbt_registry_path
+_prototype_review_dbt_model_sql_path = dbt_model_sql_path
 _prototype_review_dbt_dq_path = dbt_duplicates_path
 _prototype_review_dbt_nulls_path = dbt_nulls_path
 _prototype_review_parse_null_conditions = parse_null_conditions

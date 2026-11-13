@@ -121,6 +121,12 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
             "dbt_greenplum_elt/models_metadata/dds/dds.accounting_documents.yml",
         )
 
+    def test_model_sql_path_is_scoped_by_schema(self) -> None:
+        self.assertEqual(
+            prototype_review_dbt.dbt_model_sql_path("DDS", "Toro_Order_Operations"),
+            "dbt_greenplum_elt/models_metadata/dds/dds.toro_order_operations.sql",
+        )
+
     def test_dq_path_uses_schema_table_mask(self) -> None:
         build_path = self.functions["_prototype_review_dbt_dq_path"]
 

@@ -7,12 +7,13 @@ from urllib import parse as urlparse
 
 from .entity_dev_meta import _gitlab_json_request, _parse_gitlab_project
 from .gitlab_delivery import file_content, resource_exists
-from .prototype_review import infer_removed_table_targets
+from .prototype_review import build_review_execution_plan, infer_removed_table_targets
 from .prototype_review_dbt import (
     build_duplicates_model,
     build_nulls_model,
     build_registry_yaml,
     dbt_duplicates_path,
+    dbt_model_sql_path,
     dbt_nulls_path,
     dbt_registry_path,
     update_duplicates_model,
@@ -38,6 +39,21 @@ def publish_dbt_registry(
         raise ValueError("Не настроен DBT_GITLAB_PROJECT")
 
     dbt_files: dict[str, dict[str, Any]] = {}
+    sql_review_targets = [
+        {
+            **item,
+            "execution_paths": item.get("execution_paths") or item.get("paths") or [item.get("path")],
+        }
+        for item in review_items
+    ]
+    sql_by_target = {
+        str(plan_item.get("target_fqn") or "").strip().lower(): str(plan_item.get("sql_text") or "").strip()
+        for plan_item in build_review_execution_plan(
+            files=changed_files or [],
+            review_targets=sql_review_targets,
+        )
+        if str(plan_item.get("target_fqn") or "").strip()
+    }
     active_targets: set[str] = set()
     for item in review_items:
         if str(item.get("object_type") or "TABLE").strip().upper() != "TABLE":
@@ -48,8 +64,12 @@ def publish_dbt_registry(
         schema_name, table_name = target_fqn.split(".", 1)
         active_targets.add(target_fqn.lower())
         registry_path = dbt_registry_path(schema_name, table_name)
+        model_sql_path = dbt_model_sql_path(schema_name, table_name)
         duplicates_path = dbt_duplicates_path(schema_name, table_name)
         dbt_files[registry_path] = {"target_fqn": target_fqn, "file_path": registry_path, "file_kind": "registry", "content": build_registry_yaml(item)}
+        model_sql = sql_by_target.get(target_fqn.lower())
+        if model_sql:
+            dbt_files[model_sql_path] = {"target_fqn": target_fqn, "file_path": model_sql_path, "file_kind": "model_sql", "content": model_sql + "\n"}
         dbt_files[duplicates_path] = {"target_fqn": target_fqn, "file_path": duplicates_path, "file_kind": "dq_model", "key_attributes": item.get("key_attributes") or []}
         null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
         nulls_path = dbt_nulls_path(schema_name, table_name)
@@ -92,7 +112,12 @@ def publish_dbt_registry(
 
     for target_fqn in sorted(deleted_targets):
         schema_name, table_name = target_fqn.split(".", 1)
-        for file_kind, file_path in (("registry", dbt_registry_path(schema_name, table_name)), ("dq_model", dbt_duplicates_path(schema_name, table_name)), ("nulls_model", dbt_nulls_path(schema_name, table_name))):
+        for file_kind, file_path in (
+            ("registry", dbt_registry_path(schema_name, table_name)),
+            ("model_sql", dbt_model_sql_path(schema_name, table_name)),
+            ("dq_model", dbt_duplicates_path(schema_name, table_name)),
+            ("nulls_model", dbt_nulls_path(schema_name, table_name)),
+        ):
             if file_content(project=project_ref, token=token, file_path=file_path, ref=content_ref) is None:
                 continue
             actions.append({"action": "delete", "file_path": file_path})
@@ -101,7 +126,7 @@ def publish_dbt_registry(
     if not actions:
         return {"status": "skipped", "reason": "Ключи и DQ-модели уже актуальны", "branch_name": branch_name, "target_branch": target_branch, "files": result_files}
 
-    commit_payload: dict[str, Any] = {"branch": branch_name, "commit_message": f"{task_id_norm}: sync DQ registry and duplicate checks", "actions": actions}
+    commit_payload: dict[str, Any] = {"branch": branch_name, "commit_message": f"{task_id_norm}: sync dbt metadata, SQL and DQ", "actions": actions}
     if not branch_exists:
         commit_payload["start_branch"] = target_branch
     request_args = {"api_url": api_url, "project": project_ref, "token": token, "ssl_verify": ssl_verify}
@@ -119,8 +144,8 @@ def publish_dbt_registry(
         payload={
             "source_branch": branch_name,
             "target_branch": target_branch,
-            "title": f"{task_id_norm}: DQ registry and duplicate checks",
-            "description": "\n".join([f"Task: {task_id_norm}", f"Author: {author}", "", "dbt DQ files:", *[f"- {item['action']}: {item['file_path']}" for item in result_files]]),
+            "title": f"{task_id_norm}: dbt metadata, SQL and DQ",
+            "description": "\n".join([f"Task: {task_id_norm}", f"Author: {author}", "", "dbt files:", *[f"- {item['action']}: {item['file_path']}" for item in result_files]]),
             "remove_source_branch": False,
         },
     )

@@ -1,13 +1,11 @@
 
-table-dependency-viewer-api-1  | ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1018)
-table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 842, in _airflow_json_request
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 847, in _airflow_json_request
 table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout) as resp:
 table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 820, in _urlopen_without_proxy
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 825, in _urlopen_without_proxy
 table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
 table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 519, in open
@@ -32,10 +30,10 @@ table-dependency-viewer-api-1  | Traceback (most recent call last):
 table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4396, in _launch
 table-dependency-viewer-api-1  |     data = trigger_airflow_dev_dag(engine=engine, airflow_base_url=AIRFLOW_DEV_BASE_URL, dag_id=AIRFLOW_DEV_DAG_ID, username=AIRFLOW_DEV_USERNAME, password=AIRFLOW_DEV_PASSWORD, schema_name=payload.schema_name, file_name=payload.file_name, author=user.email)
 table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 1293, in trigger_airflow_dev_dag
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 1298, in trigger_airflow_dev_dag
 table-dependency-viewer-api-1  |     dag_info = _airflow_json_request(
 table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 849, in _airflow_json_request
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 854, in _airflow_json_request
 table-dependency-viewer-api-1  |     raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
 table-dependency-viewer-api-1  | ValueError: Не удалось вызвать Airflow: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1018)>
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34756 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:36424 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK

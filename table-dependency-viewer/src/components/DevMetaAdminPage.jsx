@@ -20,8 +20,8 @@ const DEV_META_RUNBOOK = [
     items: [
       "Нажмите «Сгенерировать черновик». Новый файл откроется в редакторе.",
       "Нажмите «Проверить» и дождитесь успешной валидации.",
-      "Нажмите «Сохранить и отправить на DEV». После этого Airflow нужно время, чтобы подхватить изменения.",
-      "Нажмите «Запустить DEV DAG». Если DAG еще не готов, подождите и повторите запуск.",
+      "Нажмите «Сохранить и запустить DEV DAG». Приложение создаст MR в `develop` и примет его.",
+      "После CI/CD-доставки приложение дождётся появления DAG в Airflow и запустит его.",
       "Следите за статусом запуска, пока он не станет Success.",
     ],
   },
@@ -343,37 +343,62 @@ export default function DevMetaAdminPage({
   };
 
   const handleRunDag = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || branchMode) return;
+    if (externalTaskId !== undefined && !taskId) {
+      setMessageType("warning");
+      setError(null);
+      setMessage("Перед сохранением укажите номер задачи в формате DWH-12345.");
+      return;
+    }
+    if (!isValidationFresh) {
+      setMessageType("warning");
+      setError(null);
+      setMessage("Перед сохранением и запуском нужно успешно проверить текущую версию файла.");
+      return;
+    }
+    setDeploying(true);
     setRunningDag(true);
     setError(null);
     setMessage(null);
     setMessageType("info");
     try {
+      const saved = await devMetaApi.save({
+        schema_name: schemaName,
+        file_name: selectedFile,
+        content,
+        task_id: taskId,
+      });
+      setValidation(saved?.validation || null);
+      setValidatedContent(content);
+      await refreshFiles();
+      setDeploying(false);
       const data = await devMetaApi.runDag({
         schema_name: schemaName,
         file_name: selectedFile,
       });
       const dagRun = data?.response?.response || data?.response || {};
       setDagStatus({
+        launch_job_id: data?.response?.launch_job_id || null,
         dag_id: data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, ""),
         dag_run_id: dagRun?.dag_run_id,
-        dag_run_state: dagRun?.state || "queued",
+        dag_run_state: dagRun?.state || dagRun?.dag_run_state || "syncing",
+        message: dagRun?.message || "Создаём MR и ожидаем CI/CD.",
         failed_tasks: [],
         auto_unpaused: Boolean(data?.response?.auto_unpaused),
         dag_is_paused: Boolean(data?.response?.was_paused),
       });
       setMessageType("success");
-      const dagLabel = data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, "");
-      setMessage(`DEV DAG запущен: ${dagLabel}. По завершении придёт уведомление в Pulse.`);
+      setMessage("YAML сохранён. Создаём MR и ожидаем CI/CD; статус обновляется автоматически.");
     } catch (err) {
       setError(err.message || "Не удалось запустить DEV DAG");
     } finally {
+      setDeploying(false);
       setRunningDag(false);
     }
   };
 
   useEffect(() => {
-    if (!dagStatus?.dag_id || !dagStatus?.dag_run_id) {
+    if (!dagStatus?.launch_job_id && (!dagStatus?.dag_id || !dagStatus?.dag_run_id)) {
       return undefined;
     }
     const isTerminal = ["success", "failed"].includes(String(dagStatus.dag_run_state || "").toLowerCase());
@@ -388,6 +413,7 @@ export default function DevMetaAdminPage({
           file_name: selectedFile,
           dag_id: dagStatus.dag_id,
           dag_run_id: dagStatus.dag_run_id,
+          launch_job_id: dagStatus.launch_job_id || null,
           auto_unpaused: Boolean(dagStatus.auto_unpaused),
         });
         if (!cancelled) {
@@ -729,23 +755,19 @@ export default function DevMetaAdminPage({
                 <button className="btn btn-secondary" onClick={handleValidate} disabled={!selectedFile || validating}>
                   {validating ? "Проверяем..." : "Проверить"}
                 </button>
-                <button
+                {branchMode ? <button
                   className="btn btn-primary"
                   onClick={handleSaveAndDeploy}
-                  disabled={
-                    branchMode
-                      ? (!selectedFile || deploying || !isValidationFresh)
-                      : (!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured || !isValidationFresh)
-                  }
+                  disabled={!selectedFile || deploying || !isValidationFresh}
                 >
-                  {deploying ? "Сохраняем..." : branchMode ? "Сохранить в ветку" : "Сохранить и отправить на DEV"}
-                </button>
+                  {deploying ? "Сохраняем..." : "Сохранить в ветку"}
+                </button> : null}
                 <button
-                  className="btn btn-secondary"
+                  className="btn btn-primary"
                   onClick={handleRunDag}
-                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured || branchMode}
+                  disabled={!selectedFile || deploying || runningDag || isLockedByAnother || !isValidationFresh || !status?.airflow?.configured || branchMode}
                 >
-                  {runningDag ? "Запускаем DAG..." : "Запустить DEV DAG"}
+                  {deploying ? "Сохраняем..." : runningDag ? "Ждём CI/CD и запускаем..." : "Сохранить и запустить DEV DAG"}
                 </button>
               </div>
             </div>

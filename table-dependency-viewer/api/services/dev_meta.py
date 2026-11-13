@@ -8,6 +8,7 @@ import re
 import shlex
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -1279,26 +1280,32 @@ def trigger_airflow_dev_dag(
     base_dir: Path | None = None,
     dev_root_value: str = "",
     remote_base_dir: str = "",
+    wait_for_dag_seconds: int = 0,
 ) -> dict[str, Any]:
     if not airflow_base_url:
         raise ValueError("Airflow DEV не настроен")
     resolved_dag_id = dag_id or _dag_id_from_file_name(file_name)
     remote_path = f"{remote_base_dir.rstrip('/')}/{schema_name}/{file_name}" if remote_base_dir else None
     dag_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}"
-    try:
-        dag_info = _airflow_json_request(
-            url=dag_url,
-            username=username,
-            password=password,
-            timeout=20,
-        )
-    except ValueError as exc:
-        if "Airflow вернул 404" in str(exc):
-            raise ValueError(
-                f"DAG {resolved_dag_id} пока не появился в Airflow DEV. "
-                "Подождите, пока Airflow подхватит новый файл, и повторите запуск."
-            ) from exc
-        raise
+    wait_deadline = time.monotonic() + max(0, int(wait_for_dag_seconds or 0))
+    while True:
+        try:
+            dag_info = _airflow_json_request(
+                url=dag_url,
+                username=username,
+                password=password,
+                timeout=20,
+            )
+            break
+        except ValueError as exc:
+            if "Airflow вернул 404" not in str(exc):
+                raise
+            if time.monotonic() >= wait_deadline:
+                raise ValueError(
+                    f"DAG {resolved_dag_id} не появился в Airflow DEV за {wait_for_dag_seconds} сек. "
+                    "Проверьте CI/CD-доставку и импорт DAG в Airflow."
+                ) from exc
+            time.sleep(min(5, max(0.1, wait_deadline - time.monotonic())))
     was_paused = bool(dag_info.get("is_paused"))
     auto_unpaused = False
     if was_paused:

@@ -182,7 +182,6 @@ from .services.meta_workspace import (
     BranchRevisionConflictError,
     MetaWorkspaceObjectNotFoundError,
     create_meta_workspace_branch,
-    publish_dev_click_meta_to_branch,
     _build_branch_catalog,
     build_meta_workspace_branch_tree,
     create_meta_workspace_mr,
@@ -194,6 +193,7 @@ from .services.meta_workspace import (
     save_meta_workspace_branch_gp_bundle,
     save_meta_workspace_branch_file,
     sync_meta_workspace_branch,
+    publish_dev_click_meta_to_branch,
     validate_meta_workspace_branch,
 )
 from .services.corp_ai import enhance_assistant_response
@@ -302,6 +302,8 @@ app.include_router(auth_router)
 
 _prototype_review_jobs: dict[str, dict[str, Any]] = {}
 _prototype_review_jobs_lock = threading.Lock()
+_dev_meta_launch_jobs: dict[str, dict[str, Any]] = {}
+_dev_meta_launch_jobs_lock = threading.Lock()
 
 
 def _botx_ssl_verify() -> bool:
@@ -375,7 +377,8 @@ class DevMetaDagStatusPayload(BaseModel):
     schema_name: str
     file_name: str
     dag_id: Optional[str] = None
-    dag_run_id: str
+    dag_run_id: Optional[str] = None
+    launch_job_id: Optional[str] = None
     auto_unpaused: bool = False
 
 
@@ -4377,80 +4380,62 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
             file_name=payload.file_name,
             author=user.email,
         )
-        data = trigger_airflow_dev_dag(
-            engine=engine,
-            airflow_base_url=AIRFLOW_DEV_BASE_URL,
-            dag_id=AIRFLOW_DEV_DAG_ID,
-            username=AIRFLOW_DEV_USERNAME,
-            password=AIRFLOW_DEV_PASSWORD,
-            schema_name=payload.schema_name,
-            file_name=payload.file_name,
-            author=user.email,
-        )
-        dag_run_id = str(((data.get("response") or {}).get("dag_run_id") or "")).strip()
-        if dag_run_id:
-            _watch_airflow_completion(
-                user=user,
-                dag_id=str(data.get("dag_id") or AIRFLOW_DEV_DAG_ID or Path(payload.file_name).stem),
-                dag_run_id=dag_run_id,
-                message=(
-                    f"✨ DEV DAG завершён: {payload.schema_name}/{payload.file_name}. "
-                    "Можно проверять результат загрузки."
-                ),
-            )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    git_sync: dict[str, Any]
-    try:
-        git_sync = publish_dev_click_meta_to_branch(
-            base_dir=BASE_DIR,
-            dev_root_value=DEV_CLICK_META_DIR,
-            git_repo_value=ENTITY_META_GIT_REPO,
-            click_git_root_value=CLICK_META_GIT_ROOT,
-            gitlab_token=GITLAB_TOKEN,
-            gitlab_project=GITLAB_PROJECT,
-            gitlab_api_url=GITLAB_API_URL,
-            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
-            schema_name=payload.schema_name,
-            file_name=payload.file_name,
-            author=user.email,
-            target_branch="develop",
-        )
-    except Exception as exc:
-        # The DAG has already been triggered successfully.  Keep the existing
-        # DEV workflow intact and expose Git delivery failure to the operator.
-        logger.exception(
-            "DEV Meta GitLab sync failed after DAG launch: schema=%s file=%s target=develop",
-            payload.schema_name,
-            payload.file_name,
-        )
-        # Git publication is an auxiliary operation after the DAG was accepted
-        # by Airflow. Keep its details in server logs and never make the DEV
-        # user-facing flow look failed.
-        git_sync = {"status": "background_error", "target_branch": "develop"}
-    else:
-        # The service log level may suppress INFO, while this outcome is useful
-        # to support operators. In particular, `unchanged` explains why no MR
-        # was created at all.
-        logger.warning(
-            "DEV Meta GitLab sync finished: status=%s reason=%s source=%s target=%s mr=%s file=%s merge_method=%s",
-            git_sync.get("status"),
-            git_sync.get("reason") or "—",
-            git_sync.get("source_branch") or "—",
-            git_sync.get("target_branch") or "develop",
-            git_sync.get("mr_url") or "—",
-            git_sync.get("file_path") or payload.file_name,
-            git_sync.get("merge_method") or "—",
-        )
-    return {"status": "ok", "response": data, "git_sync": git_sync}
+    job_id = uuid4().hex
+    with _dev_meta_launch_jobs_lock:
+        _dev_meta_launch_jobs[job_id] = {"launch_job_id": job_id, "status": "syncing", "dag_run_state": "syncing", "message": "Создаём и принимаем MR в develop."}
+
+    def _launch() -> None:
+        try:
+            git_sync = publish_dev_click_meta_to_branch(base_dir=BASE_DIR, dev_root_value=DEV_CLICK_META_DIR, git_repo_value=ENTITY_META_GIT_REPO, click_git_root_value=CLICK_META_GIT_ROOT, gitlab_token=GITLAB_TOKEN, gitlab_project=GITLAB_PROJECT, gitlab_api_url=GITLAB_API_URL, gitlab_ssl_verify=GITLAB_SSL_VERIFY, schema_name=payload.schema_name, file_name=payload.file_name, author=user.email, target_branch="develop")
+            for attempt in range(1, 61):
+                with _dev_meta_launch_jobs_lock:
+                    _dev_meta_launch_jobs[job_id].update({"status": "waiting_airflow", "dag_run_state": "waiting_airflow", "message": f"MR принят. Ожидаем CI/CD и DAG в Airflow (попытка {attempt}).", "git_sync": git_sync})
+                try:
+                    data = trigger_airflow_dev_dag(engine=engine, airflow_base_url=AIRFLOW_DEV_BASE_URL, dag_id=AIRFLOW_DEV_DAG_ID, username=AIRFLOW_DEV_USERNAME, password=AIRFLOW_DEV_PASSWORD, schema_name=payload.schema_name, file_name=payload.file_name, author=user.email)
+                    dag_run = data.get("response") or {}
+                    with _dev_meta_launch_jobs_lock:
+                        _dev_meta_launch_jobs[job_id].update({"status": "running", "dag_run_state": dag_run.get("state") or "queued", "message": "DAG запущен.", "dag_id": data.get("dag_id"), "dag_run_id": dag_run.get("dag_run_id"), "auto_unpaused": data.get("auto_unpaused", False)})
+                    _watch_airflow_completion(user=user, dag_id=str(data.get("dag_id")), dag_run_id=str(dag_run.get("dag_run_id")), message=f"✨ DEV DAG завершён: {payload.schema_name}/{payload.file_name}. Можно проверять результат загрузки.")
+                    return
+                except ValueError as exc:
+                    if "Airflow вернул 404" not in str(exc):
+                        raise
+                    time.sleep(10)
+            raise ValueError("DAG не появился в Airflow после 10 минут ожидания CI/CD")
+        except Exception as exc:
+            logger.exception("DEV Meta background launch failed: schema=%s file=%s", payload.schema_name, payload.file_name)
+            with _dev_meta_launch_jobs_lock:
+                _dev_meta_launch_jobs[job_id].update({"status": "error", "dag_run_state": "failed", "message": str(exc)})
+    threading.Thread(target=_launch, name=f"dev-meta-launch-{job_id[:8]}", daemon=True).start()
+    return {"status": "ok", "response": {"launch_job_id": job_id, "dag_run_state": "syncing"}}
 
 
 @router.post("/api/admin/dev-meta/dag-status")
 def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Request):
     _require_dev_meta_role(request)
+    if payload.launch_job_id:
+        with _dev_meta_launch_jobs_lock:
+            job = dict(_dev_meta_launch_jobs.get(payload.launch_job_id) or {})
+        if not job:
+            raise HTTPException(status_code=404, detail="Статус фонового запуска не найден")
+        if job.get("dag_id") and job.get("dag_run_id"):
+            try:
+                job.update(get_airflow_dev_dag_status(
+                    airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                    username=AIRFLOW_DEV_USERNAME,
+                    password=AIRFLOW_DEV_PASSWORD,
+                    dag_id=str(job["dag_id"]),
+                    dag_run_id=str(job["dag_run_id"]),
+                    auto_unpaused=bool(job.get("auto_unpaused")),
+                ))
+            except Exception:
+                pass
+        return {"status": "ok", "response": job}
     try:
+        if not payload.dag_run_id:
+            raise ValueError("Не указан dag_run_id")
         dag_id = payload.dag_id or AIRFLOW_DEV_DAG_ID or Path(payload.file_name).stem
         data = get_airflow_dev_dag_status(
             airflow_base_url=AIRFLOW_DEV_BASE_URL,

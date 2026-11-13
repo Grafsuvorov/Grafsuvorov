@@ -1,6 +1,45 @@
 
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+table-dependency-viewer-api-1  |     result = func(*args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_defaul          t
 table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
-table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 400: Bad Request
+table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2018, in publish_dev_click_meta_t          o_branch
+table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
+table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
+table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 995, in _gitlab_json_request
+table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp          :
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 955, in _urlopen_without_proxy
+table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
+table-dependency-viewer-api-1  |     response = meth(req, response)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
+table-dependency-viewer-api-1  |     response = self.parent.error(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
+table-dependency-viewer-api-1  |     return self._call_chain(*args)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+table-dependency-viewer-api-1  |     result = func(*args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_defaul          t
+table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
 table-dependency-viewer-api-1  |
@@ -8,18 +47,9 @@ table-dependency-viewer-api-1  | Traceback (most recent call last):
 table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4388, in run_admin_dev_meta_dag
 table-dependency-viewer-api-1  |     git_sync = publish_dev_click_meta_to_branch(
 table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 1994, in publish_dev_click_meta_to_branch
-table-dependency-viewer-api-1  |     mr_data = _gitlab_json_request(
-table-dependency-viewer-api-1  |               ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2034, in publish_dev_click_meta_t          o_branch
+table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
 table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
 table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
-table-dependency-viewer-api-1  | ValueError: GitLab вернул 400: {"message":{"source_branch":["does not exist"]}}
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34366 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34400 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34408 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34430 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34458 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34476 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34480 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34482 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:34486 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}

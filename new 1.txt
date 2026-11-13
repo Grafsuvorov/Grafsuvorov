@@ -1,55 +1,28 @@
+Airflow вернул 404: { "detail": "DAG with dag_id: 'dm_contract_supervisor_rating_contract_metrics_meta' not found", "status": 404, "title": "DAG not found", "type": "https://airflow.apache.org/docs/apache-airflow/2.7.3/stable-rest-api-ref.html#section/Errors/NotFound" }
 
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-table-dependency-viewer-api-1  |     result = func(*args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_defaul          t
-table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
-table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2018, in publish_dev_click_meta_t          o_branch
-table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
-table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
-table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 995, in _gitlab_json_request
-table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp          :
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 955, in _urlopen_without_proxy
-table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
-table-dependency-viewer-api-1  |     response = meth(req, response)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
-table-dependency-viewer-api-1  |     response = self.parent.error(
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
-table-dependency-viewer-api-1  |     return self._call_chain(*args)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-table-dependency-viewer-api-1  |     result = func(*args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_defaul          t
-table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
-table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4388, in run_admin_dev_meta_dag
-table-dependency-viewer-api-1  |     git_sync = publish_dev_click_meta_to_branch(
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2034, in publish_dev_click_meta_t          o_branch
-table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
-table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
-table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}
+
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37508 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37516 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 400 Bad Request
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37536 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37564 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37580 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37582 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37584 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37588 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37604 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37630 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37654 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37688 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37710 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37736 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37764 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37784 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37786 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37788 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37796 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37828 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37840 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37852 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37864 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37872 - "POST /api/admin/dev-copy/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:37876 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 400 Bad Request

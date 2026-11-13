@@ -1963,6 +1963,7 @@ def publish_dev_click_meta_to_branch(
     source_path = (dev_root / schema_norm / file_name_norm).resolve()
     if not str(source_path).startswith(str(dev_root.resolve())) or not source_path.is_file():
         raise ValueError(f"DEV YAML `{schema_norm}/{file_name_norm}` не найден")
+    source_content = source_path.read_text(encoding="utf-8")
 
     git_repo_root = Path(git_repo_value).resolve()
     # The branch below is pushed to origin, so the MR must be created in that
@@ -1987,11 +1988,20 @@ def publish_dev_click_meta_to_branch(
         _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
         destination = worktree_dir / Path(click_git_root_value) / schema_norm / file_name_norm
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        target_content = destination.read_text(encoding="utf-8") if destination.is_file() else None
         relative_path = destination.relative_to(worktree_dir).as_posix()
-        if not _run_git(git_repo_root, ["status", "--porcelain", "--", relative_path], cwd=worktree_dir):
-            return {"status": "unchanged", "target_branch": target_branch_norm, "file_path": relative_path}
-        _run_git(git_repo_root, ["add", "--", relative_path], cwd=worktree_dir)
+        if source_content == target_content:
+            return {
+                "status": "unchanged",
+                "reason": "DEV YAML is identical to origin/develop",
+                "target_branch": target_branch_norm,
+                "file_path": relative_path,
+            }
+        destination.write_text(source_content, encoding="utf-8")
+        # Do not rely on `git status`: index flags or an ignore rule may hide
+        # an edited metadata file. The direct content comparison above is the
+        # source of truth, and -f stages the exact selected YAML only.
+        _run_git(git_repo_root, ["add", "-f", "--", relative_path], cwd=worktree_dir)
         _run_git(git_repo_root, ["commit", "-m", f"DEV Meta: sync {schema_norm}/{file_name_norm}"], cwd=worktree_dir)
         _run_git(git_repo_root, ["push", "origin", f"HEAD:{_push_branch_ref(source_branch)}"], cwd=worktree_dir)
         if not _run_git(git_repo_root, ["ls-remote", "--heads", "origin", _push_branch_ref(source_branch)]):

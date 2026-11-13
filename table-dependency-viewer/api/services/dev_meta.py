@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shlex
+import ssl
 import subprocess
 import tempfile
 import time
@@ -816,7 +817,11 @@ def _dag_id_from_file_name(file_name: str) -> str:
 
 
 def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
-    opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
+    handlers: list[Any] = [urlrequest.ProxyHandler({})]
+    ssl_verify = str(os.getenv("AIRFLOW_DEV_SSL_VERIFY", "true")).strip().lower() not in {"0", "false", "no", "off"}
+    if not ssl_verify:
+        handlers.append(urlrequest.HTTPSHandler(context=ssl._create_unverified_context()))
+    opener = urlrequest.build_opener(*handlers)
     return opener.open(req, timeout=timeout)
 
 

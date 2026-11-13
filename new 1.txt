@@ -1,27 +1,5 @@
 
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 1361, in do_open
-table-dependency-viewer-api-1  |     h.request(req.get_method(), req.selector, req.data, headers,
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1351, in request
-table-dependency-viewer-api-1  |     self._send_request(method, url, body, headers, encode_chunked)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1397, in _send_request
-table-dependency-viewer-api-1  |     self.endheaders(body, encode_chunked=encode_chunked)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1346, in endheaders
-table-dependency-viewer-api-1  |     self._send_output(message_body, encode_chunked=encode_chunked)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1106, in _send_output
-table-dependency-viewer-api-1  |     self.send(msg)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1044, in send
-table-dependency-viewer-api-1  |     self.connect()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1516, in connect
-table-dependency-viewer-api-1  |     super().connect()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/http/client.py", line 1010, in connect
-table-dependency-viewer-api-1  |     self.sock = self._create_connection(
-table-dependency-viewer-api-1  |                 ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/socket.py", line 863, in create_connection
-table-dependency-viewer-api-1  |     raise exceptions[0]
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/socket.py", line 848, in create_connection
-table-dependency-viewer-api-1  |     sock.connect(sa)
-table-dependency-viewer-api-1  | ConnectionRefusedError: [Errno 111] Connection refused
+table-dependency-viewer-api-1  | ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1018)
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
 table-dependency-viewer-api-1  |
@@ -46,7 +24,7 @@ table-dependency-viewer-api-1  |     return self.do_open(http.client.HTTPSConnec
 table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 1364, in do_open
 table-dependency-viewer-api-1  |     raise URLError(err)
-table-dependency-viewer-api-1  | urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+table-dependency-viewer-api-1  | urllib.error.URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1018)>
 table-dependency-viewer-api-1  |
 table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
 table-dependency-viewer-api-1  |
@@ -59,5 +37,5 @@ table-dependency-viewer-api-1  |     dag_info = _airflow_json_request(
 table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^
 table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 849, in _airflow_json_request
 table-dependency-viewer-api-1  |     raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
-table-dependency-viewer-api-1  | ValueError: Не удалось вызвать Airflow: <urlopen error [Errno 111] Connection refused>
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:59520 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | ValueError: Не удалось вызвать Airflow: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1018)>
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:34756 - "POST /api/admin/dev-meta/dag-status HTTP/1.1" 200 OK

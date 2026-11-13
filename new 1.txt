@@ -1,38 +1,72 @@
- => ERROR [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/ap  9.4s
- => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                                    0.6s
- => CANCELED [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1  8.4s
-------
- > [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*:
-#26 0.490 Hit:1 http://deb.debian.org/debian trixie InRelease
-#26 0.492 Err:1 http://deb.debian.org/debian trixie InRelease
-#26 0.492   Splitting up /var/lib/apt/lists/deb.debian.org_debian_dists_trixie_InRelease into data and signature failed
-#26 0.583 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#26 0.584 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#26 0.736 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#26 0.736 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#26 1.935 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#26 1.935 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#26 2.085 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#26 2.085 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#26 4.245 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#26 4.245 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#26 4.396 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#26 4.396 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#26 8.588 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#26 8.589 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
-#26 8.589   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#26 8.737 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#26 8.737 Err:2 http://deb.debian.org/debian trixie-updates InRelease
-#26 8.737   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#26 8.742 Reading package lists...
-#26 8.750 W: An error occurred during the signature verification. The repository is not updated and the previous index files will be used. OpenPGP signature verification failed: http://deb.debian.org/debian trixie InRelease: Splitting up /var/lib/apt/lists/deb.debian.org_debian_dists_trixie_InRelease into data and signature failed
-#26 8.750 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Splitting up /var/lib/apt/lists/deb.debian.org_debian_dists_trixie_InRelease into data and signature failed
-#26 8.750 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#26 8.750 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#26 8.750 W: Some index files failed to download. They have been ignored, or old ones used instead.
-#26 8.758 Reading package lists...
-#26 8.765 Building dependency tree...
-#26 8.766 Reading state information...
-#26 8.767 E: Unable to locate package git
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+table-dependency-viewer-api-1  | DEV Meta GitLab sync failed after DAG launch: schema=dm file=dm_contract_supervisor_rating_contract_metrics_meta.yaml target=develop
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 995, in _gitlab_json_request
+table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp:
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 955, in _urlopen_without_proxy
+table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
+table-dependency-viewer-api-1  |     response = meth(req, response)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
+table-dependency-viewer-api-1  |     response = self.parent.error(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
+table-dependency-viewer-api-1  |     return self._call_chain(*args)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+table-dependency-viewer-api-1  |     result = func(*args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
+table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2018, in publish_dev_click_meta_to_branch
+table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
+table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
+table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | During handling of the above exception, another exception occurred:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 995, in _gitlab_json_request
+table-dependency-viewer-api-1  |     with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp:
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 955, in _urlopen_without_proxy
+table-dependency-viewer-api-1  |     return opener.open(req, timeout=timeout)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
+table-dependency-viewer-api-1  |     response = meth(req, response)
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
+table-dependency-viewer-api-1  |     response = self.parent.error(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
+table-dependency-viewer-api-1  |     return self._call_chain(*args)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+table-dependency-viewer-api-1  |     result = func(*args)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
+table-dependency-viewer-api-1  |     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+table-dependency-viewer-api-1  | urllib.error.HTTPError: HTTP Error 405: Method Not Allowed
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4388, in run_admin_dev_meta_dag
+table-dependency-viewer-api-1  |     git_sync = publish_dev_click_meta_to_branch(
+table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", line 2034, in publish_dev_click_meta_to_branch
+table-dependency-viewer-api-1  |     merge_result = _gitlab_json_request(
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/entity_dev_meta.py", line 1000, in _gitlab_json_request
+table-dependency-viewer-api-1  |     raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
+table-dependency-viewer-api-1  | ValueError: GitLab вернул 405: {"message":"405 Method Not Allowed"}
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:48444 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 200 OK

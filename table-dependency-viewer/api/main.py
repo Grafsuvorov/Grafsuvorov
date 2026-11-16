@@ -100,6 +100,7 @@ from .config import (
     GITLAB_SSL_VERIFY,
     GITLAB_TOKEN,
     AIRFLOW_DEV_BASE_URL,
+    AIRFLOW_DEV_OLD_BASE_URL,
     AIRFLOW_DEV_DAG_ID,
     AIRFLOW_DEV_USERNAME,
     AIRFLOW_DEV_PASSWORD,
@@ -292,6 +293,7 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter()
 print("BOOT FILE:", __file__)
 DEV_COPY_DAG_ID = "load_from_prod_to_dev"
+DEV_COPY_AIRFLOW_BASE_URL = AIRFLOW_DEV_OLD_BASE_URL or AIRFLOW_DEV_BASE_URL
 DEV_COPY_TZ = ZoneInfo("Europe/Moscow")
 DEV_COPY_ALLOWED_HOUR_START = 8
 DEV_COPY_ALLOWED_HOUR_END = 21
@@ -324,14 +326,14 @@ def _notify_user_about_completion(user: Any, message: str) -> None:
         print(f"BotX completion notification for {email or 'unknown user'}: {status}")
 
 
-def _watch_airflow_completion(*, user: Any, dag_id: str, dag_run_id: str, message: str) -> None:
+def _watch_airflow_completion(*, user: Any, dag_id: str, dag_run_id: str, message: str, airflow_base_url: str | None = None) -> None:
     """Wait independently from the browser; failures are deliberately silent."""
     def _watch() -> None:
         for _ in range(1_440):  # up to six hours, every 15 seconds
             time.sleep(15)
             try:
                 status = get_airflow_dev_dag_status(
-                    airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                    airflow_base_url=airflow_base_url or AIRFLOW_DEV_BASE_URL,
                     username=AIRFLOW_DEV_USERNAME,
                     password=AIRFLOW_DEV_PASSWORD,
                     dag_id=dag_id,
@@ -4400,8 +4402,11 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
                     _watch_airflow_completion(user=user, dag_id=str(data.get("dag_id")), dag_run_id=str(dag_run.get("dag_run_id")), message=f"✨ DEV DAG завершён: {payload.schema_name}/{payload.file_name}. Можно проверять результат загрузки.")
                     return
                 except ValueError as exc:
-                    if "Airflow вернул 404" not in str(exc):
+                    transient_airflow_errors = ("Airflow вернул 404", "Не удалось вызвать Airflow")
+                    if not any(marker in str(exc) for marker in transient_airflow_errors):
                         raise
+                    with _dev_meta_launch_jobs_lock:
+                        _dev_meta_launch_jobs[job_id].update({"message": f"Airflow пока недоступен: {exc}. Повторяем через 10 сек."})
                     time.sleep(10)
             raise ValueError("DAG не появился в Airflow после 10 минут ожидания CI/CD")
         except Exception as exc:
@@ -4456,14 +4461,14 @@ def get_admin_dev_copy_status(request: Request):
     window = _get_dev_copy_window_status()
     return {
         "airflow": {
-            "base_url": AIRFLOW_DEV_BASE_URL,
+            "base_url": DEV_COPY_AIRFLOW_BASE_URL,
             "dag_id": DEV_COPY_DAG_ID,
-            "configured": bool(AIRFLOW_DEV_BASE_URL),
+            "configured": bool(DEV_COPY_AIRFLOW_BASE_URL),
         },
         "schema_sync": {
-            "base_url": AIRFLOW_DEV_BASE_URL,
+            "base_url": DEV_COPY_AIRFLOW_BASE_URL,
             "dag_id": DEV_COPY_SCHEMA_SYNC_DAG_ID,
-            "configured": bool(AIRFLOW_DEV_BASE_URL),
+            "configured": bool(DEV_COPY_AIRFLOW_BASE_URL),
         },
         "window": window,
         "restrictions": {
@@ -4489,7 +4494,7 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
             raise ValueError("Нужно заполнить все параметры запуска DAG")
         _assert_dev_copy_target_schema_allowed(values["target_table_schema"])
         data = trigger_airflow_parametrized_dag(
-            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             dag_id=DEV_COPY_DAG_ID,
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
@@ -4508,6 +4513,7 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
                     "✨ Копирование PROD → DEV завершено для "
                     f"{values['source_table_schema']}.{values['source_table_name']}. Можно идти проверять."
                 ),
+                airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -4519,7 +4525,7 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
     _require_authenticated(request)
     try:
         data = get_airflow_dev_dag_status(
-            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
             dag_id=DEV_COPY_DAG_ID,
@@ -4532,7 +4538,7 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
             and str(data.get("dag_run_state") or "").lower() in {"queued", "running"}
         ):
             stop_airflow_dag_run(
-                airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
                 username=AIRFLOW_DEV_USERNAME,
                 password=AIRFLOW_DEV_PASSWORD,
                 dag_id=DEV_COPY_DAG_ID,
@@ -4540,7 +4546,7 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
                 state="failed",
             )
             data = get_airflow_dev_dag_status(
-                airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
                 username=AIRFLOW_DEV_USERNAME,
                 password=AIRFLOW_DEV_PASSWORD,
                 dag_id=DEV_COPY_DAG_ID,
@@ -4578,7 +4584,7 @@ def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, reques
                 raise ValueError("Нужно заполнить author, check_table_schema и check_table_name")
 
         data = trigger_airflow_parametrized_dag(
-            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
@@ -4592,6 +4598,7 @@ def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, reques
                 dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
                 dag_run_id=dag_run_id,
                 message=f"✨ Сверка metadata завершена для {object_label}. Можно идти смотреть результат.",
+                airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -4603,7 +4610,7 @@ def get_admin_dev_copy_schema_sync_dag_status(payload: DevCopySchemaSyncDagStatu
     _require_authenticated(request)
     try:
         data = get_airflow_dev_dag_status(
-            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
             dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,

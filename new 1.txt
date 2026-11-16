@@ -1,4 +1,2 @@
-
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:46096 - "GET /api/admin/prototype-review/run-status/27630c77d59c439f94003b0d425b41a9 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:46098 - "POST /api/admin/dev-copy/run-dag HTTP/1.1" 400 Bad Request
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:46110 - "GET /api/admin/prototype-review/run-status/27630c77d59c439f94003b0d425b41a9 HTTP/1.1" 200 OK
+Операция не выполнена
+Airflow вернул 401: { "detail": null, "status": 401, "title": "Unauthorized", "type": "https://airflow.apache.org/docs/apache-airflow/2.7.3/stable-rest-api-ref.html#section/Errors/Unauthenticated" }

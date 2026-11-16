@@ -101,6 +101,8 @@ from .config import (
     GITLAB_TOKEN,
     AIRFLOW_DEV_BASE_URL,
     AIRFLOW_DEV_OLD_BASE_URL,
+    AIRFLOW_DEV_OLD_USERNAME,
+    AIRFLOW_DEV_OLD_PASSWORD,
     AIRFLOW_DEV_DAG_ID,
     AIRFLOW_DEV_USERNAME,
     AIRFLOW_DEV_PASSWORD,
@@ -294,6 +296,8 @@ router = APIRouter()
 print("BOOT FILE:", __file__)
 DEV_COPY_DAG_ID = "load_from_prod_to_dev"
 DEV_COPY_AIRFLOW_BASE_URL = AIRFLOW_DEV_OLD_BASE_URL or AIRFLOW_DEV_BASE_URL
+DEV_COPY_AIRFLOW_USERNAME = AIRFLOW_DEV_OLD_USERNAME or AIRFLOW_DEV_USERNAME
+DEV_COPY_AIRFLOW_PASSWORD = AIRFLOW_DEV_OLD_PASSWORD or AIRFLOW_DEV_PASSWORD
 DEV_COPY_TZ = ZoneInfo("Europe/Moscow")
 DEV_COPY_ALLOWED_HOUR_START = 8
 DEV_COPY_ALLOWED_HOUR_END = 21
@@ -326,7 +330,7 @@ def _notify_user_about_completion(user: Any, message: str) -> None:
         print(f"BotX completion notification for {email or 'unknown user'}: {status}")
 
 
-def _watch_airflow_completion(*, user: Any, dag_id: str, dag_run_id: str, message: str, airflow_base_url: str | None = None) -> None:
+def _watch_airflow_completion(*, user: Any, dag_id: str, dag_run_id: str, message: str, airflow_base_url: str | None = None, airflow_username: str | None = None, airflow_password: str | None = None) -> None:
     """Wait independently from the browser; failures are deliberately silent."""
     def _watch() -> None:
         for _ in range(1_440):  # up to six hours, every 15 seconds
@@ -334,8 +338,8 @@ def _watch_airflow_completion(*, user: Any, dag_id: str, dag_run_id: str, messag
             try:
                 status = get_airflow_dev_dag_status(
                     airflow_base_url=airflow_base_url or AIRFLOW_DEV_BASE_URL,
-                    username=AIRFLOW_DEV_USERNAME,
-                    password=AIRFLOW_DEV_PASSWORD,
+                    username=airflow_username or AIRFLOW_DEV_USERNAME,
+                    password=airflow_password or AIRFLOW_DEV_PASSWORD,
                     dag_id=dag_id,
                     dag_run_id=dag_run_id,
                 )
@@ -4496,8 +4500,8 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
         data = trigger_airflow_parametrized_dag(
             airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             dag_id=DEV_COPY_DAG_ID,
-            username=AIRFLOW_DEV_USERNAME,
-            password=AIRFLOW_DEV_PASSWORD,
+            username=DEV_COPY_AIRFLOW_USERNAME,
+            password=DEV_COPY_AIRFLOW_PASSWORD,
             conf={
                 **values,
                 "author": user.email,
@@ -4514,6 +4518,8 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
                     f"{values['source_table_schema']}.{values['source_table_name']}. Можно идти проверять."
                 ),
                 airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
+                airflow_username=DEV_COPY_AIRFLOW_USERNAME,
+                airflow_password=DEV_COPY_AIRFLOW_PASSWORD,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -4526,8 +4532,8 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
     try:
         data = get_airflow_dev_dag_status(
             airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
-            username=AIRFLOW_DEV_USERNAME,
-            password=AIRFLOW_DEV_PASSWORD,
+            username=DEV_COPY_AIRFLOW_USERNAME,
+            password=DEV_COPY_AIRFLOW_PASSWORD,
             dag_id=DEV_COPY_DAG_ID,
             dag_run_id=payload.dag_run_id,
             auto_unpaused=payload.auto_unpaused,
@@ -4539,16 +4545,16 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
         ):
             stop_airflow_dag_run(
                 airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
-                username=AIRFLOW_DEV_USERNAME,
-                password=AIRFLOW_DEV_PASSWORD,
+                username=DEV_COPY_AIRFLOW_USERNAME,
+                password=DEV_COPY_AIRFLOW_PASSWORD,
                 dag_id=DEV_COPY_DAG_ID,
                 dag_run_id=payload.dag_run_id,
                 state="failed",
             )
             data = get_airflow_dev_dag_status(
                 airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
-                username=AIRFLOW_DEV_USERNAME,
-                password=AIRFLOW_DEV_PASSWORD,
+                username=DEV_COPY_AIRFLOW_USERNAME,
+                password=DEV_COPY_AIRFLOW_PASSWORD,
                 dag_id=DEV_COPY_DAG_ID,
                 dag_run_id=payload.dag_run_id,
                 auto_unpaused=payload.auto_unpaused,
@@ -4586,8 +4592,8 @@ def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, reques
         data = trigger_airflow_parametrized_dag(
             airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
             dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
-            username=AIRFLOW_DEV_USERNAME,
-            password=AIRFLOW_DEV_PASSWORD,
+            username=DEV_COPY_AIRFLOW_USERNAME,
+            password=DEV_COPY_AIRFLOW_PASSWORD,
             conf=values,
         )
         dag_run_id = str(((data.get("response") or {}).get("dag_run_id") or "")).strip()
@@ -4599,6 +4605,8 @@ def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, reques
                 dag_run_id=dag_run_id,
                 message=f"✨ Сверка metadata завершена для {object_label}. Можно идти смотреть результат.",
                 airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
+                airflow_username=DEV_COPY_AIRFLOW_USERNAME,
+                airflow_password=DEV_COPY_AIRFLOW_PASSWORD,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -4611,8 +4619,8 @@ def get_admin_dev_copy_schema_sync_dag_status(payload: DevCopySchemaSyncDagStatu
     try:
         data = get_airflow_dev_dag_status(
             airflow_base_url=DEV_COPY_AIRFLOW_BASE_URL,
-            username=AIRFLOW_DEV_USERNAME,
-            password=AIRFLOW_DEV_PASSWORD,
+            username=DEV_COPY_AIRFLOW_USERNAME,
+            password=DEV_COPY_AIRFLOW_PASSWORD,
             dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
             dag_run_id=payload.dag_run_id,
             auto_unpaused=payload.auto_unpaused,

@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from api.services.team_workload import build_team_workload, parse_origin
+from api.services.team_workload import build_team_workload, load_team_workload, parse_origin
 
 NOW = datetime(2026, 11, 17, 12)
 USERS = [
@@ -40,6 +40,103 @@ def report(issues=None, logs=None, users=None):
 
 
 class TeamWorkloadTests(unittest.TestCase):
+    def test_all_supplied_states_without_resolved_timestamp(self):
+        completed = ["Done", "Fixed", "Завершена"]
+        cancelled = ["Duplicate", "Отклонено"]
+        opened = ["DEV. Подготовлено к релизу", "New", "Open", "To do", "В работе", "Визуализация",
+                  "Зарегистрирована", "Интеграция", "Ожидание релиза", "Отложена / в ожидании",
+                  "Подлежит обсуждению", "Проверка / Тест", "ПРОД. Подлежит проверке",
+                  "Системный анализ", "Требуется уточнение"]
+        for state in completed + cancelled + opened:
+            with self.subTest(state=state):
+                task = issue(); task["current_state"] = f"  {state}  "
+                data = report([task])
+                expected = "completed" if state in completed else "cancelled" if state in cancelled else "open"
+                self.assertEqual(data["tasks"][0]["status_group"], expected)
+                self.assertEqual(data["summary"]["open_count"], int(expected == "open"))
+                self.assertEqual(data["summary"]["closed_total"], int(expected != "open"))
+
+    def test_reopened_state_overrides_old_resolved_date(self):
+        task = issue(); task.update(current_state="В работе", resolved_at="2026-11-01")
+        data = report([task])
+        self.assertEqual(data["summary"]["open_count"], 1)
+        self.assertEqual(data["summary"]["closed_count"], 0)
+        self.assertIsNone(data["tasks"][0]["resolved_at"])
+
+    def test_closed_without_date_is_visible_but_not_falsely_attributed_to_period(self):
+        task = issue(); task.update(current_state="Done", updated_at="2026-11-16")
+        data = report([task])
+        self.assertEqual(data["summary"]["closed_total"], 1)
+        self.assertEqual(data["summary"]["closed_count"], 0)
+        self.assertEqual(data["summary"]["closed_without_date"], 1)
+        self.assertIsNone(data["tasks"][0]["cycle_days"])
+
+    def test_closure_date_from_transition_not_updated_at(self):
+        task = issue(); task.update(current_state="Fixed", updated_at="2026-11-17")
+        events = [dict(issue_id="DWH-1", event_type="State change", value_to="Fixed", ts="2026-11-01")]
+        data = build_team_workload(USERS, [task], [], timelines=events, days=30, now=NOW)
+        self.assertEqual(data["summary"]["closed_count"], 1)
+        self.assertEqual(data["tasks"][0]["resolved_at"], "2026-11-01T00:00:00")
+        self.assertEqual(data["tasks"][0]["closed_at_source"], "state_history")
+        self.assertEqual(data["tasks"][0]["cycle_days"], 61)
+
+    def test_cancelled_tasks_excluded_from_delivery_averages(self):
+        task = issue(); task.update(current_state="Duplicate", resolved_at="2026-11-10")
+        data = report([task], [work()])
+        self.assertEqual(data["summary"]["closed_count"], 1)
+        self.assertEqual(data["summary"]["cancelled_total"], 1)
+        self.assertEqual(data["summary"]["hours"], 2)
+        self.assertIsNone(data["summary"]["avg_task_hours"])
+        self.assertIsNone(data["engineers"][0]["avg_cycle_days"])
+
+    def test_executor_fallback_without_any_worklog_for_task(self):
+        task = issue(); task["assignee"] = None
+        events = [dict(issue_id="DWH-1", event_type="State change", value_to="В работе", author="YT Person", ts="2026-11-10")]
+        data = build_team_workload(USERS, [task], [], identity_links=[dict(user_id=1, author="YT Person")],
+                                   timelines=events, now=NOW)
+        self.assertEqual(data["summary"]["open_count"], 1)
+        self.assertEqual(data["tasks"][0]["owner_id"], 1)
+        self.assertEqual(data["tasks"][0]["assignment_source"], "state_author")
+
+    def test_explicit_assignee_is_not_replaced_by_old_state_author(self):
+        events = [dict(issue_id="DWH-1", event_type="State change", value_to="В работе", author="admin", ts="2026-11-10")]
+        data = build_team_workload(USERS, [issue()], [], timelines=events, now=NOW)
+        self.assertEqual(data["tasks"][0]["owner_id"], 1)
+
+    def test_unassignment_does_not_restore_old_executor(self):
+        task = issue(); task["assignee"] = None
+        events = [dict(issue_id="DWH-1", event_type="Assignee change", value_to=None, ts="2026-11-11"),
+                  dict(issue_id="DWH-1", event_type="State change", value_to="В работе", author="ivan", ts="2026-11-10")]
+        data = build_team_workload(USERS, [task], [], timelines=events, now=NOW)
+        self.assertIsNone(data["tasks"][0]["owner_id"])
+
+    def test_custom_field_assignee_without_logs(self):
+        task = issue(); task["assignee"] = None
+        data = build_team_workload(USERS, [task], [], now=NOW,
+            custom_fields=[dict(issue_id="DWH-1", field_name="Исполнитель", field_value="admin")])
+        self.assertEqual(data["tasks"][0]["owner_id"], 2)
+        self.assertEqual(data["tasks"][0]["assignment_source"], "custom_field")
+
+    def test_database_identity_join_uses_only_email_not_issue(self):
+        task = issue(); task["assignee"] = "Person From Another Task"
+        results = [USERS, [dict(user_id=1, author=task["assignee"])], [task], [], [], []]
+        queries = []
+        class Result:
+            def __init__(self, rows): self.rows = rows
+            def mappings(self): return self
+            def all(self): return self.rows
+        class Connection:
+            def execute(self, sql):
+                queries.append(sql)
+                return Result(results[len(queries) - 1])
+        data = load_team_workload(Connection(), text=lambda s: s, snapshot_table="snapshot", worklog_table="worklog",
+                                 timeline_table="timeline", custom_table="custom", days=30, issue_url="https://yt/{id}")
+        self.assertIn("INNER JOIN tech_etl.app_users", queries[1])
+        self.assertIn("lower(trim(w.author_email)) = lower(trim(u.email))", queries[1])
+        self.assertNotIn("issue_id", queries[1])
+        self.assertEqual(data["tasks"][0]["owner_id"], 1)
+        self.assertEqual(data["summary"]["open_count"], 1)
+
     def test_template_plain_and_bold_and_distinct_objects(self):
         for description in (DESCRIPTION, DESCRIPTION.replace("Витрина:", "**Витрина:**").replace("Email инициатора:", "**Email инициатора:**")):
             origin = parse_origin(dict(description=description, created_by="service"))

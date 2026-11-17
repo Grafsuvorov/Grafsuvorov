@@ -17,7 +17,28 @@ def _dt(value):
 
 
 def _norm(value):
-    return str(value or "").strip().casefold()
+    return " ".join(str(value or "").split()).casefold()
+
+
+COMPLETED_STATES = {"done", "fixed", "завершена"}
+CANCELLED_STATES = {"duplicate", "отклонено"}
+OPEN_STATES = {
+    "dev. подготовлено к релизу", "new", "open", "to do", "в работе", "визуализация",
+    "зарегистрирована", "интеграция", "ожидание релиза", "отложена / в ожидании",
+    "подлежит обсуждению", "проверка / тест", "прод. подлежит проверке",
+    "системный анализ", "требуется уточнение",
+}
+
+
+def status_group(state, resolved_at):
+    state = _norm(state)
+    if state in COMPLETED_STATES:
+        return "completed"
+    if state in CANCELLED_STATES:
+        return "cancelled"
+    if state in OPEN_STATES:
+        return "open"
+    return "completed" if resolved_at else "open"
 
 
 def parse_origin(issue):
@@ -43,7 +64,8 @@ def parse_origin(issue):
     }
 
 
-def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url="https://yt.rusal.ru/issue/{id}"):
+def build_team_workload(users, issues, worklogs, *, identity_links=None, timelines=(), custom_fields=(),
+                        days=30, now=None, issue_url="https://yt.rusal.ru/issue/{id}"):
     now = _dt(now or datetime.now())
     start = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
     weekdays = sum((start + timedelta(days=i)).weekday() < 5 for i in range(days))
@@ -59,10 +81,18 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
     for u in users:
         emails[_norm(u.get("email"))].add(u["id"])
     worklogs = [dict(w) for w in worklogs if not w.get("deleted_flag")]
-    for w in worklogs:
-        ids = emails.get(_norm(w.get("author_email")), set())
-        if len(ids) == 1 and _norm(w.get("author")):
-            aliases[_norm(w["author"])].update(ids)
+    # In production these rows come from a separate email INNER JOIN without
+    # issue_id. A log on any task identifies the person for all their tasks.
+    if identity_links is None:
+        identity_links = [
+            {"user_id": uid, "author": w.get("author")}
+            for w in worklogs for uid in emails.get(_norm(w.get("author_email")), set())
+        ]
+    matched_ids = set()
+    for link in identity_links:
+        if link["user_id"] in by_id and _norm(link.get("author")):
+            aliases[_norm(link["author"])].add(link["user_id"])
+            matched_ids.add(link["user_id"])
     def resolve(value):
         ids = aliases.get(_norm(value), set())
         return next(iter(ids)) if len(ids) == 1 else None
@@ -82,6 +112,14 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
         previous = latest.get(key)
         if previous is None or rank > previous[0]:
             latest[key] = (rank, issue)
+    history = defaultdict(list)
+    for event in timelines:
+        history[event["issue_id"]].append(dict(event))
+    for events in history.values():
+        events.sort(key=lambda event: _dt(event.get("ts")) or datetime.min, reverse=True)
+    custom = defaultdict(dict)
+    for field in custom_fields:
+        custom[field["issue_id"]][_norm(field.get("field_name"))] = field.get("field_value")
     logs = defaultdict(list)
     for w in worklogs:
         logs[w["issue_id"]].append(w)
@@ -97,9 +135,36 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
         created = _dt(issue.get("created_at"))
         resolved = _dt(issue.get("resolved_at"))
         updated = _dt(issue.get("updated_at"))
-        closed_in_period = bool(resolved and start <= resolved <= now)
-        open_task = resolved is None
-        owner = resolve(issue.get("assignee"))
+        events = history[issue["issue_id"]]
+        state = issue.get("current_state") or next((e.get("value_to") for e in events
+                if e.get("event_type") == "State change" and e.get("value_to")), None)
+        group = status_group(state, resolved)
+        open_task = group == "open"
+        closed_at = None if open_task else resolved
+        closed_at_source = "resolved_at" if closed_at else None
+        if not open_task and closed_at is None:
+            closed_at = next((_dt(e.get("ts")) for e in events
+                if e.get("event_type") == "State change" and _norm(e.get("value_to")) == _norm(state)
+                and e.get("ts")), None)
+            closed_at_source = "state_history" if closed_at else None
+        closed_in_period = bool(closed_at and start <= closed_at <= now)
+        fields = custom[issue["issue_id"]]
+        assignee = str(issue.get("assignee") or "").strip()
+        assignment_source = "assignee" if assignee else None
+        if not assignee:
+            assignee = fields.get("исполнитель") or fields.get("assignee")
+            assignment_source = "custom_field" if assignee else None
+        last_assignment = next((e for e in events if e.get("event_type") == "Assignee change"), None)
+        if not assignee and last_assignment:
+            assignee = last_assignment.get("value_to")
+            assignment_source = "assignee_history"
+        if not assignee and last_assignment is None:
+            # Same fallback as the existing release and YouTrack reports.
+            executor = next((e for e in events if e.get("event_type") == "State change"
+                and _norm(e.get("value_to")) in {"в работе", "ожидание релиза"}), None)
+            assignee = executor.get("author") if executor else None
+            assignment_source = "state_author" if assignee else None
+        owner = resolve(assignee)
         origin = parse_origin(issue)
         personal = defaultdict(lambda: {"hours": 0, "lifetime_hours": 0})
         period_hours = 0
@@ -119,21 +184,21 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
                 else:
                     personal[uid]["hours"] += hours
                     daily[(when.date().isoformat(), uid)][origin["category"]] += hours
-        # Keep all open tasks, recent completions and tasks with work in the window.
-        if not (open_task or closed_in_period or period_hours):
-            continue
+        # All snapshots remain inspectable, including closed tasks with no date.
         tasks.append({
             "issue_id": issue["issue_id"], "summary": issue.get("summary") or issue["issue_id"],
             "url": issue_url.replace("{id}", issue["issue_id"]),
-            "state": issue.get("current_state") or "Не указан", "assignee": issue.get("assignee"),
+            "state": state or "Не указан", "assignee": assignee,
+            "assignment_source": assignment_source, "status_group": group,
             "owner_id": owner, "owner_name": by_id[owner]["username"] if owner is not None else None,
             "created_by": issue.get("created_by"), **origin,
             "created_at": created.isoformat() if created else None,
             "updated_at": updated.isoformat() if updated else None,
-            "resolved_at": resolved.isoformat() if resolved else None,
+            "resolved_at": closed_at.isoformat() if closed_at else None,
+            "closed_at_source": closed_at_source,
             "is_open": open_task, "closed_in_period": closed_in_period,
             "age_days": max((now - created).total_seconds() / 86400, 0) if created and open_task else None,
-            "cycle_days": max((resolved - created).total_seconds() / 86400, 0) if created and resolved else None,
+            "cycle_days": max((closed_at - created).total_seconds() / 86400, 0) if created and closed_at else None,
             "stale_days": max((now - (updated or created)).total_seconds() / 86400, 0) if open_task and (updated or created) else None,
             "hours": period_hours, "lifetime_hours": lifetime_hours,
             "contributions": [{"user_id": uid, **values} for uid, values in personal.items()],
@@ -143,15 +208,19 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
         owned = [t for t in tasks if t["owner_id"] == u["id"]]
         opened = [t for t in owned if t["is_open"]]
         closed = [t for t in owned if t["closed_in_period"]]
+        completed = [t for t in closed if t["status_group"] == "completed"]
         contributions = [(t, c) for t in tasks for c in t["contributions"] if c["user_id"] == u["id"]]
-        tracked_closed = [t for t in closed if t["lifetime_hours"] > 0]
-        cycles = [t["cycle_days"] for t in closed if t["cycle_days"] is not None]
+        tracked_closed = [t for t in completed if t["lifetime_hours"] > 0]
+        cycles = [t["cycle_days"] for t in completed if t["cycle_days"] is not None]
         hours = sum(c["hours"] for _, c in contributions)
         rows.append({
             "user_id": u["id"], "engineer": u["username"], "email": u["email"],
             "role": u["role"], "is_active": u["is_active"],
             "open_count": len(opened), "tech_etl_open": sum(t["category"] == "tech_etl" for t in opened),
             "other_open": sum(t["category"] == "other" for t in opened), "closed_count": len(closed),
+            "closed_total": sum(not t["is_open"] for t in owned),
+            "closed_without_date": sum(not t["is_open"] and not t["resolved_at"] for t in owned),
+            "cancelled_total": sum(t["status_group"] == "cancelled" for t in owned),
             "stale_count": sum(t["stale_days"] is not None and t["stale_days"] >= 14 for t in opened),
             "oldest_days": max((t["age_days"] or 0 for t in opened), default=0),
             "hours": hours,
@@ -168,7 +237,7 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
     loaded = [_dt(s.get("dttm_loaded")) for _, s in latest.values() if s.get("dttm_loaded")]
     owned_tasks = [t for t in tasks if t["owner_id"] is not None]
     completed = [t for t in owned_tasks if t["closed_in_period"]]
-    measured = [t for t in completed if t["lifetime_hours"] > 0]
+    measured = [t for t in completed if t["status_group"] == "completed" and t["lifetime_hours"] > 0]
     return {
         "days": days, "period_start": start.isoformat(), "period_end": now.isoformat(),
         "working_days": weekdays, "snapshot_loaded_at": max(loaded).isoformat() if loaded else None,
@@ -176,6 +245,11 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
         "summary": {
             "employees": len(users), "open_count": sum(t["is_open"] for t in owned_tasks),
             "closed_count": len(completed), "hours": sum(u["hours"] for u in rows),
+            "closed_total": sum(not t["is_open"] for t in owned_tasks),
+            "closed_without_date": sum(not t["is_open"] and not t["resolved_at"] for t in owned_tasks),
+            "cancelled_total": sum(t["status_group"] == "cancelled" for t in owned_tasks),
+            "users_matched_by_email": len(matched_ids),
+            "state_author_tasks": sum(t["assignment_source"] == "state_author" for t in owned_tasks),
             "tech_etl_open": sum(t["is_open"] and t["category"] == "tech_etl" for t in owned_tasks),
             "other_open": sum(t["is_open"] and t["category"] == "other" for t in owned_tasks),
             "avg_task_hours": mean(t["lifetime_hours"] for t in measured) if measured else None,
@@ -188,12 +262,21 @@ def build_team_workload(users, issues, worklogs, *, days=30, now=None, issue_url
     }
 
 
-def load_team_workload(conn, *, text, snapshot_table, worklog_table, days, issue_url):
+def load_team_workload(conn, *, text, snapshot_table, worklog_table, timeline_table, custom_table, days, issue_url):
     users = conn.execute(text("""
         SELECT id, email, username, role, is_active FROM tech_etl.app_users
         WHERE role IN ('engineer', 'admin')
     """)).mappings().all()
-    # row_to_json keeps compatibility with older worklog tables without email/deleted_flag.
+    identity_links = conn.execute(text(f"""
+        SELECT DISTINCT u.id AS user_id, w.author
+        FROM {worklog_table} w
+        INNER JOIN tech_etl.app_users u
+          ON lower(trim(w.author_email)) = lower(trim(u.email))
+        WHERE u.role IN ('engineer', 'admin')
+          AND NULLIF(trim(w.author), '') IS NOT NULL
+          AND COALESCE((row_to_json(w)->>'deleted_flag')::boolean, false) = false
+    """)).mappings().all()
+    # Snapshot selection is independent of both worklogs and the email join.
     issues = conn.execute(text(f"""
         SELECT DISTINCT ON (issue_id) issue_id, summary, description, assignee,
                created_by, current_state, created_at, updated_at, resolved_at, dttm_loaded
@@ -206,4 +289,17 @@ def load_team_workload(conn, *, text, snapshot_table, worklog_table, days, issue
         FROM {worklog_table} w
         WHERE COALESCE((row_to_json(w)->>'deleted_flag')::boolean, false) = false
     """)).mappings().all()
-    return build_team_workload(users, issues, worklogs, days=days, issue_url=issue_url)
+    timelines = conn.execute(text(f"""
+        SELECT DISTINCT ON (issue_id, event_type, value_to)
+               issue_id, ts, author, event_type, value_to FROM {timeline_table}
+        WHERE event_type IN ('Assignee change', 'State change')
+        ORDER BY issue_id, event_type, value_to, ts DESC NULLS LAST
+    """)).mappings().all()
+    custom_fields = conn.execute(text(f"""
+        SELECT DISTINCT ON (issue_id, lower(trim(field_name)))
+               issue_id, field_name, field_value FROM {custom_table}
+        WHERE lower(trim(field_name)) IN ('assignee', 'исполнитель')
+        ORDER BY issue_id, lower(trim(field_name)), dttm_loaded DESC NULLS LAST
+    """)).mappings().all()
+    return build_team_workload(users, issues, worklogs, identity_links=identity_links,
+        timelines=timelines, custom_fields=custom_fields, days=days, issue_url=issue_url)

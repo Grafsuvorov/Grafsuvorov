@@ -2108,6 +2108,7 @@ def get_admin_engineering_efficiency(
             return load_team_workload(
                 conn, text=text, snapshot_table=TABLE_YT_ISSUE_SNAPSHOT,
                 worklog_table=TABLE_YT_ISSUE_WORKLOG, days=days, issue_url=YTRACK_ISSUE_URL,
+                timeline_table=TABLE_YT_ISSUE_TIMELINE, custom_table=TABLE_YT_ISSUE_CUSTOM,
             )
     except Exception:
         logger.exception("Failed to load team workload")

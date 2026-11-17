@@ -1,23 +1,76 @@
--- tech_etl.yt_issue_worklog определение
+## MR
+Email инициатора: Lada.Slabozhanova@rusal.com
+MR: https://prod.gitlab.dwh.rusal.com/dwhanalyst/sqlqueriesstorage/-/mergerequests/2507
+Ветка: Slabozhanovalv-DWH-18035 -> main
+Автор MR: Слабожанова Лада Викторовна (SlabozhanovaLV)
 
--- Drop table
+## Общие параметры
+Git ref: https://prod.gitlab.dwh.rusal.com/dwhanalyst/sqlqueriesstorage/-/mergerequests/2507/diffs
+Родительская задача: DWH-18035
 
--- DROP TABLE tech_etl.yt_issue_worklog;
+### Комментарий ко всему diff
+Таблицы сохраняют историю. Не дропать и не транкейтить.
 
-CREATE TABLE tech_etl.yt_issue_worklog (
-	issue_id text NOT NULL,
-	author text NULL,
-	creator text NULL,
-	work_date timestamp NULL,
-	minutes int4 NULL,
-	work_type text NULL,
-	work_text text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL,
-	author_email varchar NULL,
-	dttm_inserted timestamp DEFAULT now() NOT NULL,
-	dttm_updated timestamp DEFAULT now() NOT NULL,
-	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
-	deleted_flag bool DEFAULT false NOT NULL
-)
-DISTRIBUTED BY (issue_id);
-issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded, author_email, dttm_inserted, dttm_updated, job_name, deleted_flag
+## Объект 1
+Витрина: dm.salescontractpricingtermschangehistory
+Тип объекта: TABLE
+Сущность: BISBWUC
+Статус объекта: новый объект
+Ключевые поля: dtreport, reportrecordtypecode, salescontractcode, salescontractpositioncode
+SCD: scd1
+Version key: —
+DQ filter: —
+Количество строк: 134 215
+Кол-во дублей: 0
+Время выполнения SQL: 15.315 сек
+Стенды: DEV, PROD
+ClickHouse: требуется
+Поля сортировки для загрузки в ClickHouse: dtreport, reportrecordtypecode, salescontractcode, salescontractpositioncode
+
+## Объект 2
+Витрина: dm.salesquotacontractchangehistory
+Тип объекта: TABLE
+Сущность: BISBWUC
+Статус объекта: новый объект
+Ключевые поля: dtreport, reportrecordtypecode, contractquotacode, contractquotapositioncode
+SCD: scd1
+Version key: —
+DQ filter: —
+Количество строк: 41 798
+Кол-во дублей: —
+Время выполнения SQL: 8.083 сек
+Стенды: DEV, PROD
+ClickHouse: требуется
+Поля сортировки для загрузки в ClickHouse: dtreport, reportrecordtypecode, contractquotacode, contractquotapositioncode
+
+## Объект 3
+Витрина: dmview.salescontractpricingtermschangehistory
+Тип объекта: VIEW
+Сущность: BISBWUC
+Статус объекта: новый объект
+Ключевые поля: —
+SCD: scd1
+Version key: —
+DQ filter: —
+Количество строк: 134 215
+Кол-во дублей: —
+Время выполнения SQL: 0.104 сек
+Стенды: DEV, PROD
+ClickHouse: требуется
+Поля сортировки для загрузки в ClickHouse: dtreport, reportrecordtypecode, salescontractcode, salescontractpositioncode
+
+## Объект 4
+Витрина: dmview.salesquotacontractchangehistory
+Тип объекта: VIEW
+Сущность: BISBWUC
+Статус объекта: новый объект
+Ключевые поля: —
+SCD: scd1
+Version key: —
+DQ filter: —
+Количество строк: 41 798
+Кол-во дублей: —
+Время выполнения SQL: 0.069 сек
+Стенды: DEV, PROD
+ClickHouse: требуется
+Поля сортировки для загрузки в ClickHouse: dtreport, reportrecordtypecode, contractquotacode, contractquotapositioncode

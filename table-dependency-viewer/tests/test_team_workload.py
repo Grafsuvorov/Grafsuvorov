@@ -41,6 +41,70 @@ def report(issues=None, logs=None, users=None):
 
 
 class TeamWorkloadTests(unittest.TestCase):
+    def test_shkretov_four_tasks_from_custom_fields_with_and_without_snapshot(self):
+        user = dict(id=10, email="Dmitriy.Shkretov@rusal.com", username="Shkretov", role="engineer", is_active=True)
+        states = {"DWH-18285": "Зарегистрирована", "DWH-18275": "Зарегистрирована",
+                  "DWH-17608": "Ожидание релиза", "DWH-18284": "Зарегистрирована"}
+        fields = [dict(issue_id=key, field_name=name, field_value=value, dttm_loaded="2026-11-16 20:01:44")
+                  for key, state in states.items() for name, value in [("Assignee", "Shkretov Dmitriy"), ("State", state)]]
+        snapshots = [dict(issue_id=key, summary=key, assignee=None, current_state=None) for key in states]
+        for rows in (snapshots, []):
+            with self.subTest(has_snapshot=bool(rows)):
+                data = build_team_workload([user], rows, [], custom_fields=fields, now=NOW)
+                person = data["engineers"][0]
+                self.assertEqual(person["open_count"], 4)
+                self.assertEqual(person["closed_total"], 0)
+                self.assertEqual({t["issue_id"]: t["state"] for t in data["tasks"]}, states)
+                self.assertTrue(all(t["owner_id"] == 10 for t in data["tasks"]))
+                self.assertTrue(all(t["identity_source"] == "person_name" for t in data["tasks"]))
+                if not rows:
+                    self.assertEqual(person["unknown_open"], 4)
+                    self.assertTrue(all(t["category"] == "unknown" for t in data["tasks"]))
+
+    def test_two_part_name_match_refuses_ambiguity_and_single_surname(self):
+        users = [dict(id=i, email=email, username="user"+str(i), role="engineer", is_active=True)
+                 for i, email in [(10, "Dmitriy.Shkretov@rusal.com"), (11, "Shkretov.Dmitriy@other.com")]]
+        task = issue(); task["assignee"] = "Shkretov Dmitriy"
+        data = build_team_workload(users, [task], [], now=NOW)
+        self.assertIsNone(data["tasks"][0]["owner_id"])
+        task["assignee"] = "Shkretov"
+        data = build_team_workload(users[:1], [task], [], now=NOW)
+        self.assertIsNone(data["tasks"][0]["owner_id"])
+
+    def test_exact_worklog_identity_has_priority_over_inferred_name(self):
+        users = [dict(id=i, email=email, username="user"+str(i), role="engineer", is_active=True)
+                 for i, email in [(10, "Dmitriy.Shkretov@rusal.com"), (11, "Shkretov.Dmitriy@other.com")]]
+        task = issue(); task["assignee"] = "Shkretov Dmitriy"
+        data = build_team_workload(users, [task], [], now=NOW,
+            identity_links=[dict(user_id=10, author="Shkretov Dmitriy")])
+        self.assertEqual(data["tasks"][0]["owner_id"], 10)
+        self.assertEqual(data["tasks"][0]["identity_source"], "exact")
+
+    def test_newer_custom_state_and_assignee_override_stale_snapshot(self):
+        task = issue(); task.update(current_state="Done", resolved_at="2026-11-01", dttm_loaded="2026-11-02")
+        fields = [dict(issue_id="DWH-1", field_name="State", field_value="В работе", dttm_loaded="2026-11-16"),
+                  dict(issue_id="DWH-1", field_name="Assignee", field_value="admin", dttm_loaded="2026-11-16")]
+        data = build_team_workload(USERS, [task], [], now=NOW, custom_fields=fields)
+        self.assertTrue(data["tasks"][0]["is_open"])
+        self.assertEqual(data["tasks"][0]["owner_id"], 2)
+        self.assertEqual(data["summary"]["closed_total"], 0)
+
+    def test_older_custom_values_do_not_override_newer_snapshot(self):
+        task = issue(); task.update(current_state="В работе", dttm_loaded="2026-11-17")
+        fields = [dict(issue_id="DWH-1", field_name="State", field_value="Done", dttm_loaded="2026-11-01"),
+                  dict(issue_id="DWH-1", field_name="Assignee", field_value="admin", dttm_loaded="2026-11-01")]
+        data = build_team_workload(USERS, [task], [], now=NOW, custom_fields=fields)
+        self.assertTrue(data["tasks"][0]["is_open"])
+        self.assertEqual(data["tasks"][0]["owner_id"], 1)
+
+    def test_closed_task_from_custom_fields_does_not_require_snapshot_or_worklog(self):
+        fields = [dict(issue_id="DWH-1", field_name="State", field_value="Done"),
+                  dict(issue_id="DWH-1", field_name="Assignee", field_value="ivan")]
+        data = build_team_workload(USERS, [], [], now=NOW, custom_fields=fields)
+        self.assertEqual(data["summary"]["closed_total"], 1)
+        self.assertEqual(data["summary"]["closed_without_date"], 1)
+        self.assertEqual(data["summary"]["open_count"], 0)
+
     def test_previous_call_signature_and_configured_tables(self):
         for env in ({}, {"TABLE_YT_ISSUE_TIMELINE": "custom.history", "TABLE_YT_ISSUE_CUSTOM": "custom.fields"}):
             with self.subTest(env=env), patch.dict("os.environ", env, clear=True):
@@ -239,7 +303,7 @@ class TeamWorkloadTests(unittest.TestCase):
     def test_work_date_drives_daily_and_future_work_excluded(self):
         data = report([issue()], [work(), work(when="2026-12-01"), work(when=None)])
         self.assertEqual(data["summary"]["hours"], 2)
-        self.assertEqual(data["daily"], [dict(day="2026-11-16", user_id=1, tech_etl=2, other=0)])
+        self.assertEqual(data["daily"], [dict(day="2026-11-16", user_id=1, tech_etl=2, other=0, unknown=0)])
 
     def test_zero_activity_users_and_empty_data(self):
         data = report()

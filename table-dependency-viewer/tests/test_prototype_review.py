@@ -1354,7 +1354,100 @@ class CreateYTrackIssueTests(unittest.TestCase):
         })
 
 
+class PrototypeYamlFlagTests(unittest.TestCase):
+    def test_refresh_preserves_explicit_or_existing_flag(self) -> None:
+        source = ast.parse(Path("api/main.py").read_text())
+        node = next(n for n in source.body if isinstance(n, ast.FunctionDef) and n.name == "_prototype_review_refresh_yaml_identity")
+        for existing, submitted, generated_flag, expected in (
+            (True, {}, True, True),
+            (True, {"flag_has_views": False}, True, False),
+            (False, {"flag_has_views": False}, True, False),
+            (False, {}, True, False),
+        ):
+            with self.subTest(existing=existing, submitted=submitted):
+                generated = {
+                    "table_name": "sales", "table_schema": "dm", "table_id": 7,
+                    "entity_name": "SALES", "object_type": "TABLE", "flag_has_views": generated_flag,
+                }
+                namespace = {
+                    "yaml": SimpleNamespace(safe_load=json.loads), "_dump_yaml": json.dumps,
+                    "engine": SimpleNamespace(connect=lambda: __import__("contextlib").nullcontext(None)),
+                    "BASE_DIR": Path.cwd(), "ENTITY_META_DIR": "prod", "DEV_ENTITY_META_DIR": "dev",
+                    "TABLE_TABLES_META": "tech_etl.tables_meta",
+                    "init_entity_dev_meta_bundle": lambda **kwargs: {"exists": existing, "yaml_content": json.dumps(generated)},
+                    "get_table_id_by_fqn": lambda *args: 7,
+                }
+                exec(compile(ast.Module(body=[node], type_ignores=[]), "api/main.py", "exec"), namespace)
+                result = json.loads(namespace[node.name](item={
+                    "target_fqn": "dm.sales", "entity_name": "SALES", "object_type": "TABLE",
+                    "yaml_content": json.dumps(submitted),
+                }))
+                self.assertIs(result["flag_has_views"], expected)
+                self.assertEqual(result["object_type"], "TABLE")
+
+
 class EntityMetaDependenciesTests(unittest.TestCase):
+    def test_new_table_does_not_inherit_neighbour_view_flags(self) -> None:
+        with (
+            TemporaryDirectory() as prod_dir,
+            TemporaryDirectory() as dev_dir,
+            patch.object(entity_dev_meta, "_find_template_payload", return_value={
+                "object_type": "VIEW", "flag_has_views": True, "entity_id": 65,
+            }),
+            patch.object(entity_dev_meta, "_collect_used_table_ids", return_value={200}),
+        ):
+            payload = _build_generated_yaml(
+                engine=None, prod_root=Path(prod_dir), dev_root=Path(dev_dir),
+                entity_name="ENTITY", schema_name="dm", table_name="new_table",
+            )
+        self.assertEqual(payload["object_type"], "TABLE")
+        self.assertIs(payload["flag_has_views"], False)
+        self.assertEqual(payload["entity_id"], 65)
+        self.assertTrue(payload["sql_query_insert_init"].endswith("sql_query_insert_init.sql"))
+
+    def test_target_ddl_overrides_stale_view_type_without_using_helper_view(self) -> None:
+        payload = {
+            "table_name": "sales", "table_schema": "dm", "table_id": 6587,
+            "entity_name": "SALES", "object_type": "VIEW", "flag_has_views": False,
+            "table_load_mode": "TRUNCATE_INIT", "depends_on": {},
+        }
+        sql = "create view dm.helper as select 1; create table dm.sales (id int);"
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", return_value=payload),
+            patch.object(entity_dev_meta, "_dump_yaml", side_effect=json.dumps),
+        ):
+            result = validate_entity_dev_meta_bundle(
+                base_dir=Path.cwd(), prod_root_value="missing-prod-root", dev_root_value="missing-dev-root",
+                entity_name="SALES", schema_name="dm", table_name="sales", key_attributes=["id"],
+                source_object_key=None, yaml_content="placeholder", recreate_sql=sql,
+                insert_sql="insert into dm.sales select 1;", truncate_sql="truncate table dm.sales;",
+            )
+        normalized = json.loads(result["normalized"]["yaml_content"])
+        self.assertEqual(normalized["object_type"], "TABLE")
+        self.assertIs(normalized["flag_has_views"], False)
+        self.assertNotEqual(normalized["sql_query_insert_init"], normalized["sql_query_recreate_init"])
+        self.assertFalse(any("dm.helper" in error for error in result["errors"]))
+
+    def test_view_validation_preserves_explicit_has_views_setting(self) -> None:
+        payload = {
+            "table_name": "sales", "table_schema": "dm", "table_id": 6587,
+            "entity_name": "SALES", "object_type": "VIEW", "flag_has_views": False,
+            "table_load_mode": "TRUNCATE_INIT", "depends_on": {},
+        }
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", return_value=payload),
+            patch.object(entity_dev_meta, "_dump_yaml", side_effect=json.dumps),
+        ):
+            result = validate_entity_dev_meta_bundle(
+                base_dir=Path.cwd(), prod_root_value="missing-prod-root", dev_root_value="missing-dev-root",
+                entity_name="SALES", schema_name="dm", table_name="sales", key_attributes=[],
+                source_object_key=None, yaml_content="placeholder",
+                recreate_sql="create view dm.sales as select 1;", insert_sql="", truncate_sql="",
+            )
+        normalized = json.loads(result["normalized"]["yaml_content"])
+        self.assertEqual(normalized["object_type"], "VIEW")
+        self.assertIs(normalized["flag_has_views"], False)
+
     def test_ignores_ctes_and_aliases_in_depends_on(self) -> None:
         sql = """
         with t as (select * from dm_calc.source_data)

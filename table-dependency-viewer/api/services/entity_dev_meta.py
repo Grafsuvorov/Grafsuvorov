@@ -597,7 +597,12 @@ def _build_generated_yaml(
         payload = _build_default_yaml(entity_name, schema_name, table_name)
     else:
         merged_default = _build_default_yaml(entity_name, schema_name, table_name)
-        merged_default.update(payload)
+        # These fields describe the neighbour, not the new object. In a mixed
+        # schema the first template can be a VIEW while we are creating a TABLE.
+        merged_default.update({
+            key: value for key, value in payload.items()
+            if key not in {"object_type", "flag_has_views"}
+        })
         payload = merged_default
 
     payload["table_name"] = table_norm
@@ -663,17 +668,19 @@ def _build_generated_yaml(
     return payload
 
 
-def _extract_created_object(sql: str) -> tuple[str, str] | None:
+def _extract_created_object(sql: str, target_fqn: str | None = None) -> tuple[str, str] | None:
     normalized = _normalize_sql(sql)
-    match = re.search(
+    matches = re.finditer(
         r"\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?(view|table)\s+"
         r"(?:if\s+not\s+exists\s+)?"
         r"((?:\"[^\"]+\"|[a-z0-9_]+)\s*\.\s*(?:\"[^\"]+\"|[a-z0-9_./]+))",
         normalized,
     )
-    if not match:
-        return None
-    return match.group(1), re.sub(r"\s+", "", match.group(2).replace('"', "").lower())
+    for match in matches:
+        fqn = re.sub(r"\s+", "", match.group(2).replace('"', "").lower())
+        if target_fqn is None or fqn == target_fqn.lower():
+            return match.group(1), fqn
+    return None
 
 
 def _extract_insert_targets(sql: str) -> list[str]:
@@ -1365,13 +1372,15 @@ def validate_entity_dev_meta_bundle(
     # depends_on from SQL for the autofill draft; comparing after that step made
     # every missing dependency look valid.
     original_depends_on = _flatten_depends_on(payload.get("depends_on"))
-    created_object = _extract_created_object(recreate_sql) if recreate_sql.strip() else None
-    inferred_view = bool(created_object and created_object[0] == "view")
-    if inferred_view:
-        # Recreate SQL is authoritative: a view has no separate insert block,
-        # even when it is placed outside the conventional dm_view schema.
-        payload["object_type"] = "VIEW"
-        payload["flag_has_views"] = True
+    target_fqn = f"{normalized_schema}.{normalized_table}"
+    created_object = _extract_created_object(recreate_sql, target_fqn) if recreate_sql.strip() else None
+    if created_object:
+        # Only the selected object's DDL is authoritative. A helper VIEW in
+        # this file must not turn a TABLE into a VIEW (or vice versa).
+        payload["object_type"] = created_object[0].upper()
+        # This is an independent ETL setting: TABLE metadata can legitimately
+        # have flag_has_views=true. Do not rewrite an explicit value.
+        payload.setdefault("flag_has_views", created_object[0] == "view")
     requested_object_type = _normalize_name(payload.get("object_type"))
     dependency_sql = recreate_sql if requested_object_type == "view" else insert_sql
     normalized_keys = _normalize_key_attributes(key_attributes)
@@ -1464,8 +1473,8 @@ def validate_entity_dev_meta_bundle(
     if not recreate_sql.strip():
         errors.append("Recreate SQL не должен быть пустым")
     elif not is_stg_schema:
-        created = _extract_created_object(recreate_sql)
         expected_fqn = f"{normalized_schema}.{effective_normalized_table}"
+        created = _extract_created_object(recreate_sql, expected_fqn) or _extract_created_object(recreate_sql)
         if not created:
             warnings.append("В recreate SQL не найден `CREATE TABLE` или `CREATE VIEW`")
         else:

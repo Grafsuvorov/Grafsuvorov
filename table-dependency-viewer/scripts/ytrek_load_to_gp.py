@@ -27,13 +27,13 @@ RELEASE_LOOKBACK_DAYS = int(os.getenv("YT_RELEASE_LOOKBACK_DAYS", "14"))
 
 ISSUE_FIELDS = (
     "id,idReadable,summary,description,project(name,key),"
-    "customFields(id,name,$type,value(id,name,login,fullName,text,presentation)),"
-    "reporter(login,name),assignee(login,name),"
+    "customFields(id,name,$type,value(id,name,login,email,fullName,text,presentation)),"
+    "reporter(login,name),"
     "created,updated,resolved"
 )
 ACTIVITY_FIELDS = "author(name,login),timestamp,field(name),added(name,login),removed(name,login),to(name,login)"
 ACTIVITY_CATEGORIES = "CustomFieldCategory,CommentsCategory,WorkItemCategory"
-WORKITEM_FIELDS = "author(name,login),creator(name,login),date,duration(minutes),text,workType(name)"
+WORKITEM_FIELDS = "author(name,login,email),creator(name,login),date,duration(minutes),text,workType(name)"
 COMMENT_FIELDS = "author(name,login),created,text"
 
 
@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS tech_etl.yt_issue_timeline (
 CREATE TABLE IF NOT EXISTS tech_etl.yt_issue_worklog (
   issue_id text not null,
   author text,
+  author_email varchar,
   creator text,
   work_date timestamp,
   minutes int,
@@ -116,6 +117,11 @@ def parse_args():
         description="Загрузка и обновление задач YouTrack в таблицы tech_etl.yt_issue_*"
     )
     parser.add_argument(
+        "--query",
+        default="",
+        help="Запрос YouTrack вместо отбора по релизам, например 'project: DWH'. Ранее открытые задачи также обновляются.",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=RELEASE_LOOKBACK_DAYS,
@@ -137,7 +143,35 @@ def parse_args():
         action="store_true",
         help="Полностью очистить таблицы yt_issue_* перед загрузкой",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.query and args.manual_only:
+        parser.error("--query и --manual-only нельзя использовать вместе")
+    return args
+
+
+def api_get_all(url, params):
+    """YouTrack collection endpoints are paginated, including work items."""
+    result = []
+    skip = 0
+    while True:
+        batch = api_get(url, {**params, "$top": 100, "$skip": skip}) or []
+        if not isinstance(batch, list):
+            raise ValueError(f"Expected a collection from {url}")
+        result.extend(batch)
+        if len(batch) < 100:
+            return result
+        skip += len(batch)
+
+
+def get_assignee(issue):
+    for field in issue.get("customFields") or []:
+        if str(field.get("name") or "").lower() in ("assignee", "исполнитель"):
+            value = field.get("value")
+            if isinstance(value, list):
+                # Do not attribute a multi-assignee task to an arbitrary person.
+                value = value[0] if len(value) == 1 else None
+            return value if isinstance(value, dict) else {}
+    return issue.get("assignee") or {}
 
 
 def fmt_ts(value):
@@ -323,17 +357,17 @@ def load_issue(engine, issue_readable):
     issue_id = issue.get("id")
     project = issue.get("project", {})
     reporter = issue.get("reporter") or {}
-    assignee = issue.get("assignee") or {}
+    assignee = get_assignee(issue)
 
-    activities = api_get(
+    activities = api_get_all(
         f"{YOUTRACK_URL}/api/issues/{issue_id}/activities",
         {"fields": ACTIVITY_FIELDS, "categories": ACTIVITY_CATEGORIES},
     ) or []
-    workitems = api_get(
+    workitems = api_get_all(
         f"{YOUTRACK_URL}/api/issues/{issue_id}/timeTracking/workItems",
         {"fields": WORKITEM_FIELDS},
     ) or []
-    comments = api_get(
+    comments = api_get_all(
         f"{YOUTRACK_URL}/api/issues/{issue_id}/comments",
         {"fields": COMMENT_FIELDS},
     ) or []
@@ -342,11 +376,12 @@ def load_issue(engine, issue_readable):
     snapshot_row = {
         "issue_id": issue.get("idReadable"),
         "summary": clean_text(issue.get("summary")),
-        "description": clean_text(issue.get("description")),
+        # Keep markdown links and underscores in object names for report parsing.
+        "description": str(issue.get("description") or "").strip(),
         "project_name": project.get("name"),
         "project_key": project.get("key"),
         "created_by": reporter.get("login") or reporter.get("name"),
-        "assignee": assignee.get("login") or assignee.get("name"),
+        "assignee": assignee.get("email") or assignee.get("login") or assignee.get("name"),
         "created_at": fmt_ts(issue.get("created")),
         "updated_at": fmt_ts(issue.get("updated")),
         "resolved_at": fmt_ts(issue.get("resolved")),
@@ -430,6 +465,7 @@ def load_issue(engine, issue_readable):
             {
                 "issue_id": issue.get("idReadable"),
                 "author": (wi.get("author") or {}).get("login") or (wi.get("author") or {}).get("name"),
+                "author_email": (wi.get("author") or {}).get("email"),
                 "creator": (wi.get("creator") or {}).get("login") or (wi.get("creator") or {}).get("name"),
                 "work_date": fmt_ts(wi.get("date")),
                 "minutes": (wi.get("duration") or {}).get("minutes") if isinstance(wi.get("duration"), dict) else None,
@@ -500,9 +536,9 @@ def load_issue(engine, issue_readable):
                 text(
                     """
                     INSERT INTO tech_etl.yt_issue_worklog (
-                      issue_id, author, creator, work_date, minutes, work_type, work_text
+                      issue_id, author, author_email, creator, work_date, minutes, work_type, work_text
                     )
-                    VALUES (:issue_id, :author, :creator, :work_date, :minutes, :work_type, :work_text)
+                    VALUES (:issue_id, :author, :author_email, :creator, :work_date, :minutes, :work_type, :work_text)
                     """
                 ),
                 worklog_rows,
@@ -529,10 +565,14 @@ def main():
         raise SystemExit("Set PG_DSN in script or env")
     engine = create_engine(PG_DSN)
 
-    manual_issue_ids = parse_issue_ids(args.issues) or list(ISSUE_IDS)
+    manual_issue_ids = parse_issue_ids(args.issues) or ([] if args.query else list(ISSUE_IDS))
     issue_ids = []
 
-    if not args.manual_only and ONLY_RELEASE_TASKS:
+    if args.query:
+        issue_ids = [issue["idReadable"] for issue in api_get_all(
+            f"{YOUTRACK_URL}/api/issues", {"fields": "idReadable", "query": args.query}
+        )]
+    elif not args.manual_only and ONLY_RELEASE_TASKS:
         issue_ids, latest_point, window_start, source = fetch_release_tasks(engine, args.days)
         if latest_point and window_start:
             print(
@@ -547,14 +587,26 @@ def main():
 
     ISSUE_IDS[:] = issue_ids
 
-    if not ISSUE_IDS:
-        raise SystemExit("No ISSUE_IDS found")
-
     with engine.begin() as conn:
         for stmt in DDL.strip().split(";"):
             sql = stmt.strip()
             if sql:
                 conn.execute(text(sql))
+        has_email = conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'tech_etl' AND table_name = 'yt_issue_worklog'
+              AND column_name = 'author_email'
+        """)).first()
+        if not has_email:
+            conn.execute(text("ALTER TABLE tech_etl.yt_issue_worklog ADD COLUMN author_email varchar"))
+        if args.query:
+            previously_open = conn.execute(text("""
+                SELECT DISTINCT issue_id FROM tech_etl.yt_issue_snapshot WHERE resolved_at IS NULL
+            """)).scalars().all()
+            ISSUE_IDS[:] = sorted(set(ISSUE_IDS) | set(previously_open))
+
+    if not ISSUE_IDS:
+        raise SystemExit("No ISSUE_IDS found")
 
     if TRUNCATE_BEFORE_LOAD or args.truncate:
         with engine.begin() as conn:

@@ -7,6 +7,7 @@ from posixpath import join as posix_join
 from typing import Any, Callable
 
 from .prototype_review import infer_removed_table_targets
+from .stg_source_loader import source_load_entity_names, source_load_replica_yaml_contents
 
 
 @dataclass(frozen=True)
@@ -169,7 +170,8 @@ def deliver_prototype_issue(
         if not meta_error and source_load:
             schema_name = str(source_load.get("target_schema") or "").strip().lower()
             table_name = str(source_load.get("target_table") or "").strip()
-            entity_name = str(source_load.get("entity_name") or "").strip()
+            entity_names = source_load_entity_names(source_load.get("entity_name"))
+            entity_name = entity_names[0] if entity_names else ""
             yaml_content = str(source_load.get("yaml_content") or "").strip()
             if not all((schema_name, table_name, entity_name, yaml_content)):
                 meta_error = "Для загрузки из источника не заполнены схема, таблица, сущность или YAML"
@@ -191,12 +193,14 @@ def deliver_prototype_issue(
                         recreate_sql=str(source_load.get("recreate_sql") or ""),
                         insert_sql=str(source_load.get("insert_sql") or ""),
                         truncate_sql=str(source_load.get("truncate_sql") or ""),
+                        replica_yaml_contents=source_load_replica_yaml_contents(yaml_content, entity_names),
                         task_id=issue_id,
                         author=author,
                     )
                     meta_files.append({
                         "target_fqn": f"{schema_name}.{table_name}",
                         "entity_name": entity_name,
+                        "entity_names": entity_names,
                         "file_path": source_result.get("path"),
                         "branch_name": source_result.get("branch_name"),
                         "committed": bool(source_result.get("committed")),

@@ -205,6 +205,8 @@ from .services.stg_source_loader import (
     list_source_servers,
     list_target_tables,
     run_source_loader,
+    source_load_entity_names,
+    source_load_replica_yaml_contents,
     source_loader_parameters_from_sql,
     target_table_exists,
 )
@@ -1844,6 +1846,10 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
 def run_admin_prototype_source_load(payload, request: Request):
     user = _require_authenticated(request)
     try:
+        entity_names = source_load_entity_names(payload.entity_name)
+        if not entity_names:
+            raise ValueError("Заполните обязательное поле «Сущность / расписание»")
+        primary_entity_name = entity_names[0]
         # Metadata identity comes from the canonical Git main branch.  Do this
         # before executing the database function: an existing physical table
         # must never be updated under a newly allocated table_id.
@@ -1856,7 +1862,7 @@ def run_admin_prototype_source_load(payload, request: Request):
                 workspace_owner=user.email,
                 branch_name=PROTOTYPE_ETL_BASE_BRANCH,
                 base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-                entity_name=payload.entity_name,
+                entity_name=primary_entity_name,
                 schema_name=payload.target_schema,
                 table_name=payload.target_table,
             )
@@ -1871,12 +1877,14 @@ def run_admin_prototype_source_load(payload, request: Request):
                 base_dir=BASE_DIR,
                 prod_root_value=ENTITY_META_DIR,
                 dev_root_value=DEV_ENTITY_META_DIR,
-                entity_name=payload.entity_name,
+                entity_name=primary_entity_name,
                 schema_name=payload.target_schema,
                 table_name=payload.target_table,
             )
 
-        result = run_source_loader(dev_engine, payload.model_dump())
+        source_payload = payload.model_dump()
+        source_payload["entity_name"] = primary_entity_name
+        result = run_source_loader(dev_engine, source_payload)
         yaml_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
         yaml_payload.update({
             "source_id": int(payload.server_id),
@@ -1892,12 +1900,13 @@ def run_admin_prototype_source_load(payload, request: Request):
             # Git directory is normalized separately, but YAML must retain
             # the exact name provided by the analyst (e.g. ZMK_TRACK_ECP04).
             "table_name": str(payload.target_table).strip(),
-            "entity_name": payload.entity_name,
+            "entity_name": primary_entity_name,
         })
         if result.get("status") == "ok":
             yaml_payload["depends_on"] = {"raw_ext": [f'{payload.target_table}_READ']}
         result["yaml_content"] = _dump_yaml(yaml_payload)
         result["target_fqn"] = f"{str(payload.target_schema).lower()}.{payload.target_table}"
+        result["entity_names"] = entity_names
         return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1910,6 +1919,11 @@ def run_admin_prototype_source_load(payload, request: Request):
 def create_admin_prototype_source_load_issue(payload, request: Request):
     user = _require_authenticated(request)
     try:
+        entity_names = source_load_entity_names(payload.entity_name)
+        if not entity_names:
+            raise ValueError("Заполните обязательное поле «Сущность / расписание»")
+        primary_entity_name = entity_names[0]
+        replica_yaml_contents = source_load_replica_yaml_contents(payload.yaml_content, entity_names)
         parent_issue = str(payload.parent_issue or "").strip().upper()
         direction = str(payload.direction or "").strip()
         if parent_issue:
@@ -1993,13 +2007,14 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
                     workspace_owner=user.email,
                     branch_name=f"feature/{issue_id}",
                     base_branch=PROTOTYPE_ETL_BASE_BRANCH,
-                    entity_name=payload.entity_name,
+                    entity_name=primary_entity_name,
                     schema_name=payload.target_schema,
                     table_name=payload.target_table,
                     yaml_content=payload.yaml_content,
                     recreate_sql=payload.recreate_sql,
                     insert_sql=payload.insert_sql,
                     truncate_sql=payload.truncate_sql,
+                    replica_yaml_contents=replica_yaml_contents,
                     task_id=issue_id,
                     author=user.email,
                 )

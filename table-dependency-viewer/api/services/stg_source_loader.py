@@ -6,6 +6,7 @@ PXF objects.  This module deliberately does not try to reproduce its logic.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -14,6 +15,45 @@ from sqlalchemy import text
 
 ALLOWED_SCHEMAS = {"stg", "dict_stg"}
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$#/]*$")
+
+
+def source_load_entity_names(value: Any) -> list[str]:
+    """Return ordered unique schedules entered as a comma-separated value."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for part in str(value or "").split(","):
+        entity_name = part.strip()
+        key = entity_name.lower()
+        if entity_name and key not in seen:
+            seen.add(key)
+            result.append(entity_name)
+    return result
+
+
+def source_load_replica_yaml_contents(yaml_content: str, entity_names: list[str]) -> dict[str, str]:
+    """Build YAML files for additional schedules that share the primary SQL.
+
+    ``save_meta_workspace_branch_gp_bundle`` writes SQL only in the primary
+    entity directory.  The source-loader YAML already contains the primary
+    SQL paths, so replicas must preserve those values and differ only by
+    ``entity_name``.
+    """
+    normalized_entities = source_load_entity_names(",".join(entity_names))
+    if len(normalized_entities) < 2:
+        return {}
+    _primary_entity, *replica_entities = normalized_entities
+    primary_yaml = str(yaml_content or "")
+    entity_field = re.compile(r"(?m)^(\s*entity_name:\s*).*?\s*$")
+    if not entity_field.search(primary_yaml):
+        raise ValueError("В YAML загрузки из источника не найдено поле entity_name")
+    return {
+        entity_name: entity_field.sub(
+            lambda match: f"{match.group(1)}{json.dumps(entity_name, ensure_ascii=False)}",
+            primary_yaml,
+            count=1,
+        )
+        for entity_name in replica_entities
+    }
 
 
 def source_loader_parameters_from_sql(sql: str) -> dict[str, str]:

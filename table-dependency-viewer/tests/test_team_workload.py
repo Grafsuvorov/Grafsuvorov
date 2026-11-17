@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from api.services.team_workload import build_team_workload, load_team_workload, parse_origin
+from api.services.team_workload import add_dispatch_object_links, build_team_workload, load_team_workload, parse_origin
 
 NOW = datetime(2026, 11, 17, 12)
 USERS = [
@@ -41,6 +41,67 @@ def report(issues=None, logs=None, users=None):
 
 
 class TeamWorkloadTests(unittest.TestCase):
+    def test_ivanov_numeric_email_suffix_matches_full_assignee(self):
+        user = dict(id=10, email="Vasiliy.Ivanov5@rusal.com", username="Ivanov", role="engineer", is_active=True)
+        fields = [dict(issue_id="DWH-12407", field_name="Assignee", field_value="Ivanov Vasiliy"),
+                  dict(issue_id="DWH-12407", field_name="State", field_value="В работе"),
+                  dict(issue_id="DWH-12407", field_name="Оценка (чел./час.)", field_value="0")]
+        data = build_team_workload([user], [], [], custom_fields=fields, now=NOW)
+        self.assertEqual(data["engineers"][0]["open_count"], 1)
+        task = data["tasks"][0]
+        self.assertEqual(task["owner_id"], 10)
+        self.assertEqual(task["state"], "В работе")
+        self.assertIsNone(task["remaining_hours"])
+
+    def test_numeric_suffix_cannot_resolve_two_matching_people(self):
+        users = [dict(id=i, email=f"Vasiliy.Ivanov{n}@rusal.com", username=f"Ivanov{n}", role="engineer", is_active=True)
+                 for i, n in [(10, 5), (11, 6)]]
+        task = issue(); task["assignee"] = "Ivanov Vasiliy"
+        data = build_team_workload(users, [task], [], now=NOW)
+        self.assertIsNone(data["tasks"][0]["owner_id"])
+
+    def test_estimate_remaining_is_lifetime_not_analysis_period(self):
+        fields = [dict(issue_id="DWH-1", field_name="Оценка (чел./час.)", field_value="30")]
+        data = build_team_workload(USERS, [issue()], [work(minutes=120, when="2026-09-01")],
+                                   custom_fields=fields, now=NOW)
+        self.assertEqual(data["tasks"][0]["estimate_hours"], 30)
+        self.assertEqual(data["tasks"][0]["remaining_hours"], 28)
+        self.assertEqual(data["summary"]["hours"], 0)
+
+    def test_exhausted_estimate_is_explicit(self):
+        fields = [dict(issue_id="DWH-1", field_name="Оценка (чел./час.)", field_value="1ч30м")]
+        data = build_team_workload(USERS, [issue()], [work()], custom_fields=fields, now=NOW)
+        self.assertEqual(data["tasks"][0]["remaining_hours"], 0)
+        self.assertTrue(data["tasks"][0]["estimate_exhausted"])
+
+    def test_metadata_links_touch_current_objects_and_deduplicate(self):
+        payload = {"tasks": [dict(is_open=True, objects=["dds.sales"]), dict(is_open=False, objects=["dm.closed"])]}
+        meta = [dict(table_schema="dm", table_name="report", depends_on={"dds": ["sales", "sales"]}),
+                dict(table_schema="dm", table_name="other", depends_on={"dds": ["unrelated"]}),
+                dict(table_schema="dm", table_name="closed", depends_on={"dds": ["history"]})]
+        add_dispatch_object_links(payload, meta)
+        self.assertEqual(payload["object_links"], [dict(source="dds.sales", target="dm.report")])
+        self.assertTrue(payload["object_links_available"])
+
+    def test_release_objects_enrich_description_objects_without_duplicates(self):
+        results = [USERS, [], [issue()], [], [], [], [
+            dict(task_id="DWH-1", schema_name="dds", table_name="sales"),
+            dict(task_id="DWH-1", schema_name="dds", table_name="sales"),
+        ]]
+        queries = []
+        class Result:
+            def __init__(self, rows): self.rows = rows
+            def mappings(self): return self
+            def all(self): return self.rows
+        class Connection:
+            def execute(self, sql):
+                queries.append(sql)
+                return Result(results[len(queries) - 1])
+        data = load_team_workload(Connection(), text=lambda s: s, snapshot_table="snap", worklog_table="logs",
+            timeline_table="timeline", custom_table="custom", object_table="release_objects", days=30, issue_url="https://yt/{id}")
+        self.assertEqual(data["tasks"][0]["objects"], ["dds.sales", "dm.table_one", "dm.table_two"])
+        self.assertIn("FROM release_objects", queries[6])
+
     def test_shkretov_four_tasks_from_custom_fields_with_and_without_snapshot(self):
         user = dict(id=10, email="Dmitriy.Shkretov@rusal.com", username="Shkretov", role="engineer", is_active=True)
         states = {"DWH-18285": "Зарегистрирована", "DWH-18275": "Зарегистрирована",

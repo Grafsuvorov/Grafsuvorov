@@ -27,6 +27,26 @@ def _person_name(value):
     return tuple(sorted(parts)) if len(parts) == 2 and all(p.isalpha() for p in parts) else None
 
 
+def _email_person_name(email):
+    local = _norm(email).split("@", 1)[0]
+    # Corporate accounts may carry a numeric suffix: Vasiliy.Ivanov5.
+    # Only strip trailing digits from otherwise alphabetic name components.
+    parts = re.split(r"[._]", local)
+    if len(parts) != 2:
+        return None
+    return _person_name(" ".join(re.sub(r"\d+$", "", part) for part in parts))
+
+
+def _estimate_hours(value):
+    value = _norm(value).replace(",", ".")
+    if re.fullmatch(r"\d+(?:\.\d+)?", value):
+        return float(value) or None
+    match = re.fullmatch(r"(?:(\d+(?:\.\d+)?)\s*(?:ч|h))?\s*(?:(\d+)\s*(?:м|мин|m))?", value)
+    if match and any(match.groups()):
+        return (float(match[1] or 0) + float(match[2] or 0) / 60) or None
+    return None
+
+
 COMPLETED_STATES = {"done", "fixed", "завершена"}
 CANCELLED_STATES = {"duplicate", "отклонено"}
 OPEN_STATES = {
@@ -84,8 +104,7 @@ def build_team_workload(users, issues, worklogs, *, identity_links=None, timelin
         for alias in (u.get("email"), u.get("username")):
             if _norm(alias):
                 aliases[_norm(alias)].add(u["id"])
-        local = _norm(u.get("email")).split("@", 1)[0]
-        person = _person_name(re.sub(r"[._]", " ", local))
+        person = _email_person_name(u.get("email"))
         if person:
             person_aliases[person].add(u["id"])
     # Worklog is an explicit bridge between YouTrack login and application email.
@@ -144,7 +163,7 @@ def build_team_workload(users, issues, worklogs, *, identity_links=None, timelin
     # Current custom fields are also useful when the ETL did not load a snapshot
     # for that task yet. Do not drop these assigned tasks from the portfolio.
     for key, fields in custom.items():
-        if key not in latest:
+        if key not in latest and set(fields) & {"state", "состояние", "статус", "assignee", "исполнитель"}:
             loaded = max((_dt(f.get("dttm_loaded")) or datetime.min for f in fields.values()), default=datetime.min)
             latest[key] = ((loaded, datetime.min), {
                 "issue_id": key, "snapshot_missing": True,
@@ -208,6 +227,8 @@ def build_team_workload(users, issues, worklogs, *, identity_links=None, timelin
         if issue.get("snapshot_missing"):
             origin.update(category="unknown", origin_evidence="Описание задачи не загружено")
         identity_source = "exact" if aliases.get(_norm(assignee)) else "person_name" if owner is not None else None
+        estimate = next((hours for key in ("оценка (чел./час.)", "оценка трудозатрат, ч", "оценка трудозатрат", "оценка")
+                         if key in fields and (hours := _estimate_hours(fields[key].get("field_value"))) is not None), None)
         personal = defaultdict(lambda: {"hours": 0, "lifetime_hours": 0})
         period_hours = 0
         lifetime_hours = 0
@@ -233,6 +254,13 @@ def build_team_workload(users, issues, worklogs, *, identity_links=None, timelin
             "state": state or "Не указан", "assignee": assignee,
             "assignment_source": assignment_source, "status_group": group,
             "identity_source": identity_source, "snapshot_missing": bool(issue.get("snapshot_missing")),
+            "estimate_hours": estimate,
+            "remaining_hours": max(estimate - lifetime_hours, 0) if estimate is not None else None,
+            "estimate_exhausted": bool(estimate is not None and lifetime_hours >= estimate and open_task),
+            "priority": (fields.get("priority") or {}).get("field_value"),
+            "direction": (fields.get("направление") or {}).get("field_value"),
+            "dashboard": (fields.get("дашборд кхд/направление") or {}).get("field_value"),
+            "release_date": (fields.get("дата релиза") or {}).get("field_value"),
             "owner_id": owner, "owner_name": by_id[owner]["username"] if owner is not None else None,
             "created_by": issue.get("created_by"), **origin,
             "created_at": created.isoformat() if created else None,
@@ -310,7 +338,7 @@ def build_team_workload(users, issues, worklogs, *, identity_links=None, timelin
 
 
 def load_team_workload(conn, *, text, snapshot_table, worklog_table, days, issue_url,
-                       timeline_table=None, custom_table=None):
+                       timeline_table=None, custom_table=None, object_table=None):
     # Keep the previous call signature working during deployment. Respect the
     # same environment settings as api.config when the caller omits new options.
     if timeline_table is None:
@@ -352,8 +380,37 @@ def load_team_workload(conn, *, text, snapshot_table, worklog_table, days, issue
     custom_fields = conn.execute(text(f"""
         SELECT DISTINCT ON (issue_id, lower(trim(field_name)))
                issue_id, field_name, field_value, dttm_loaded FROM {custom_table}
-        WHERE lower(trim(field_name)) IN ('assignee', 'исполнитель', 'state', 'состояние', 'статус')
+        WHERE lower(trim(field_name)) IN ('assignee', 'исполнитель', 'state', 'состояние', 'статус',
+            'оценка (чел./час.)', 'оценка трудозатрат, ч', 'оценка трудозатрат', 'оценка',
+            'priority', 'направление', 'дашборд кхд/направление', 'дата релиза')
         ORDER BY issue_id, lower(trim(field_name)), dttm_loaded DESC NULLS LAST
     """)).mappings().all()
-    return build_team_workload(users, issues, worklogs, identity_links=identity_links,
+    payload = build_team_workload(users, issues, worklogs, identity_links=identity_links,
         timelines=timelines, custom_fields=custom_fields, days=days, issue_url=issue_url)
+    if object_table:
+        rows = conn.execute(text(f"""
+            SELECT DISTINCT task_id, schema_name, table_name FROM {object_table}
+            WHERE task_id IS NOT NULL AND schema_name IS NOT NULL AND table_name IS NOT NULL
+        """)).mappings().all()
+        objects = defaultdict(set)
+        for row in rows:
+            objects[row["task_id"]].add(f'{row["schema_name"]}.{row["table_name"]}'.lower())
+        for task in payload["tasks"]:
+            task["objects"] = sorted(set(task["objects"]) | objects[task["issue_id"]])
+    return payload
+
+
+def add_dispatch_object_links(payload, metadata):
+    """Send direct catalog relations touching open task objects, not guessed links."""
+    objects = {obj.lower() for task in payload["tasks"] if task["is_open"] for obj in task["objects"]}
+    links = set()
+    for item in metadata:
+        target = f'{item.get("table_schema", "")}.{item.get("table_name", "")}'.lower()
+        for schema, tables in (item.get("depends_on") or {}).items():
+            for table in tables or []:
+                source = f"{schema}.{table}".lower()
+                if source in objects or target in objects:
+                    links.add((source, target))
+    payload["object_links"] = [{"source": source, "target": target} for source, target in sorted(links)]
+    payload["object_links_available"] = True
+    return payload

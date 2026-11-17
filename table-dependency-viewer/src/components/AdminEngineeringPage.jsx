@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import TeamDispatchBoard from "./TeamDispatchBoard.jsx";
 import TeamWorkloadReport from "./TeamWorkloadReport.jsx";
 import { adminApi } from "../api/admin.js";
 import { formatLocalDateTime, formatRuDateTime } from "../utils/datetime.js";
@@ -183,6 +184,7 @@ export default function AdminEngineeringPage() {
   const [teamLoading, setTeamLoading] = useState(false);
   const [teamError, setTeamError] = useState(null);
   const [teamRefresh, setTeamRefresh] = useState(0);
+  const [teamView, setTeamView] = useState("board");
 
   useEffect(() => {
     if (activeTab !== "releases") return;
@@ -261,7 +263,7 @@ export default function AdminEngineeringPage() {
             <h1>Репорты</h1>
             <div className="muted">Операционная аналитика по релизам, трудозатратам и изменяемости объектов.</div>
           </div>
-          <div className="engineering-toolbar reports-toolbar">
+          {(activeTab !== "team" || teamView === "history") && <div className="engineering-toolbar reports-toolbar">
             <span className="muted">Окно анализа</span>
             {DAY_OPTIONS.map((option) => (
               <button
@@ -281,7 +283,7 @@ export default function AdminEngineeringPage() {
             >
               {pdfExporting ? "Готовим PDF..." : "Экспорт в PDF"}
             </button>}
-          </div>
+          </div>}
         </div>
 
         <div className="reports-tabs">
@@ -322,12 +324,19 @@ export default function AdminEngineeringPage() {
             }}
           />
         ) : (
-          <TeamWorkloadReport
-            data={teamData}
-            loading={teamLoading}
-            error={teamError}
-            onRefresh={() => setTeamRefresh((value) => value + 1)}
-          />
+          <>
+            <div className="td-view-switch" aria-label="Режим команды">
+              <button className={teamView === "board" ? "active" : ""} aria-pressed={teamView === "board"} onClick={() => setTeamView("board")}>Доска · сейчас</button>
+              <button className={teamView === "history" ? "active" : ""} aria-pressed={teamView === "history"} onClick={() => setTeamView("history")}>Аналитика за период</button>
+            </div>
+            {teamView === "board" ? <TeamDispatchBoard
+              data={teamData} loading={teamLoading} error={teamError}
+              onRefresh={() => setTeamRefresh((value) => value + 1)}
+            /> : <TeamWorkloadReport
+              data={teamData} loading={teamLoading} error={teamError}
+              onRefresh={() => setTeamRefresh((value) => value + 1)}
+            />}
+          </>
         )}
       </section>
     </div>

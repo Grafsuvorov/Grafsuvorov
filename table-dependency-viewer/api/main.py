@@ -2101,15 +2101,23 @@ def get_admin_engineering_efficiency(
     days: int = Query(30, ge=1, le=3650),
 ):
     _require_meta_workspace_role(request)
-    from .services.team_workload import load_team_workload
+    from .services.team_workload import add_dispatch_object_links, load_team_workload
 
     try:
         with engine.connect() as conn:
-            return load_team_workload(
+            payload = load_team_workload(
                 conn, text=text, snapshot_table=TABLE_YT_ISSUE_SNAPSHOT,
                 worklog_table=TABLE_YT_ISSUE_WORKLOG, days=days, issue_url=YTRACK_ISSUE_URL,
                 timeline_table=TABLE_YT_ISSUE_TIMELINE, custom_table=TABLE_YT_ISSUE_CUSTOM,
+                object_table=TABLE_RELEASE_OBJECTS,
             )
+        try:
+            metadata, _ = get_cached_meta_and_index()
+            add_dispatch_object_links(payload, metadata)
+        except Exception:
+            logger.exception("Could not enrich workload with object dependencies")
+            payload.update(object_links=[], object_links_available=False)
+        return payload
     except Exception:
         logger.exception("Failed to load team workload")
         raise HTTPException(status_code=500, detail="Не удалось загрузить нагрузку команды. Проверьте таблицы YouTrack и их загрузку.")

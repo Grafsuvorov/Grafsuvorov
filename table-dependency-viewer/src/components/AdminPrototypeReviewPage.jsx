@@ -998,7 +998,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь diff. ETL YAML, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи.
+                Одна задача будет создана на весь diff. ETL YAML, SQL объектов, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи.
               </div>
               <button
                 type="button"
@@ -1100,7 +1100,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
             {Array.isArray(result?.dbt_registry?.files) && result.dbt_registry.files.length > 0 ? (
               <div className="muted" style={{ marginTop: 12 }}>
-                dbt registry и DQ-модели:
+                SQL объектов, dbt registry и DQ-модели:
                 {" "}
                 {result.dbt_registry.files.map((item) => item.file_path).join(", ")}
               </div>
@@ -1126,7 +1126,7 @@ export default function AdminPrototypeReviewPage() {
             ) : null}
             {result?.dbt_registry_error ? (
               <div className="page-error" style={{ marginTop: 12 }}>
-                Registry/DQ-файлы в dbt-проект не записаны: {result.dbt_registry_error}
+                SQL/Registry/DQ-файлы в dbt-проект не записаны: {result.dbt_registry_error}
               </div>
             ) : null}
           </section>

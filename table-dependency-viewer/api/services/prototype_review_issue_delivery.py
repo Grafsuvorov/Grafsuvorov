@@ -295,7 +295,7 @@ def deliver_prototype_issue(
                     issue_id=issue_id,
                     ssl_verify=dependencies.youtrack_ssl_verify,
                     text=(
-                        "MR с ключами и DQ-настройками создан в dbt-проекте.\n"
+                        "MR с SQL объектов, ключами и DQ-настройками создан в dbt-проекте.\n"
                         f"Ссылка: {dbt_registry.get('mr_url')}\n"
                         f"Ветка: {dbt_registry.get('branch_name')} -> {dbt_registry.get('target_branch')}"
                     ),

@@ -16,7 +16,9 @@
 - создаёт YouTrack-задачу;
 - создаёт ветку и MR в ETL-репозитории с `meta_data_file.yaml`;
 - создаёт отдельный YAML для каждой указанной сущности;
-- создаёт MR в dbt-проекте с настройками registry и DQ.
+- создаёт MR в dbt-проекте с SQL таблиц и Greenplum VIEW, настройками registry и DQ для таблиц.
+
+SQL представлений публикуется даже без изменений DQ, по пути `dbt_greenplum_elt/models_metadata/<schema>/<schema>.<view>.sql`. Для VIEW не создаются registry с unique_key и DQ duplicates/nulls. Пропуск выполнения в DEV не отменяет публикацию SQL. ClickHouse views остаются в своём контуре и не публикуются как Greenplum SQL в dbt. Если SQL выбранного Greenplum VIEW не найден в diff, публикация dbt возвращает явную ошибку вместо пропуска объекта.
 
 Prototype Review передаёт в ETL MR только YAML. Скрипты `recreate`, `insert` и `truncate` автоматически не публикуются: их создаёт и сопровождает инженер.
 

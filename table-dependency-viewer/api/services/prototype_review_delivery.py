@@ -1,4 +1,4 @@
-"""Publish Prototype Review registry and technical DQ changes to dbt GitLab."""
+"""Publish Prototype Review SQL, registry and technical DQ to dbt GitLab."""
 
 import os
 import re
@@ -43,8 +43,11 @@ def publish_dbt_registry(
         {
             **item,
             "execution_paths": item.get("execution_paths") or item.get("paths") or [item.get("path")],
+            # Publication is independent of whether SQL was executed in DEV.
+            "skip_dev_execution": False,
         }
         for item in review_items
+        if not item.get("is_clickhouse_view")
     ]
     sql_by_target = {
         str(plan_item.get("target_fqn") or "").strip().lower(): str(plan_item.get("sql_text") or "").strip()
@@ -56,20 +59,25 @@ def publish_dbt_registry(
     }
     active_targets: set[str] = set()
     for item in review_items:
-        if str(item.get("object_type") or "TABLE").strip().upper() != "TABLE":
+        object_type = str(item.get("object_type") or "TABLE").strip().upper()
+        if object_type not in {"TABLE", "VIEW"} or item.get("is_clickhouse_view"):
             continue
         target_fqn = str(item.get("target_fqn") or "").strip()
         if "." not in target_fqn:
             continue
         schema_name, table_name = target_fqn.split(".", 1)
         active_targets.add(target_fqn.lower())
-        registry_path = dbt_registry_path(schema_name, table_name)
         model_sql_path = dbt_model_sql_path(schema_name, table_name)
-        duplicates_path = dbt_duplicates_path(schema_name, table_name)
-        dbt_files[registry_path] = {"target_fqn": target_fqn, "file_path": registry_path, "file_kind": "registry", "content": build_registry_yaml(item)}
         model_sql = sql_by_target.get(target_fqn.lower())
+        if object_type == "VIEW" and not model_sql:
+            raise ValueError(f"Не найден SQL представления `{target_fqn}` для публикации в dbt")
         if model_sql:
             dbt_files[model_sql_path] = {"target_fqn": target_fqn, "file_path": model_sql_path, "file_kind": "model_sql", "content": model_sql + "\n"}
+        if object_type == "VIEW":
+            continue
+        registry_path = dbt_registry_path(schema_name, table_name)
+        duplicates_path = dbt_duplicates_path(schema_name, table_name)
+        dbt_files[registry_path] = {"target_fqn": target_fqn, "file_path": registry_path, "file_kind": "registry", "content": build_registry_yaml(item)}
         dbt_files[duplicates_path] = {"target_fqn": target_fqn, "file_path": duplicates_path, "file_kind": "dq_model", "key_attributes": item.get("key_attributes") or []}
         null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
         nulls_path = dbt_nulls_path(schema_name, table_name)
@@ -77,7 +85,7 @@ def publish_dbt_registry(
 
     deleted_targets = infer_removed_table_targets(files=changed_files or [], deleted_files=deleted_files or [], active_targets=active_targets)
     if not dbt_files and not deleted_targets:
-        return {"status": "skipped", "reason": "В review нет изменённых или удалённых табличных объектов", "files": []}
+        return {"status": "skipped", "reason": "В review нет SQL, registry или DQ для публикации", "files": []}
 
     branch_name = f"feature/{task_id_norm}"
     target_branch = os.getenv("DBT_GITLAB_TARGET_BRANCH", "main").strip() or "main"
@@ -124,7 +132,7 @@ def publish_dbt_registry(
             result_files.append({"target_fqn": target_fqn, "file_path": file_path, "file_kind": file_kind, "action": "delete"})
 
     if not actions:
-        return {"status": "skipped", "reason": "Ключи и DQ-модели уже актуальны", "branch_name": branch_name, "target_branch": target_branch, "files": result_files}
+        return {"status": "skipped", "reason": "SQL, registry и DQ-модели уже актуальны", "branch_name": branch_name, "target_branch": target_branch, "files": result_files}
 
     commit_payload: dict[str, Any] = {"branch": branch_name, "commit_message": f"{task_id_norm}: sync dbt metadata, SQL and DQ", "actions": actions}
     if not branch_exists:

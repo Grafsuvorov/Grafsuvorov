@@ -30,6 +30,7 @@ dotenv_stub.load_dotenv = lambda *args, **kwargs: None
 sys.modules.setdefault("dotenv", dotenv_stub)
 
 import api.services.entity_dev_meta as entity_dev_meta
+import api.services.prototype_review_delivery as prototype_review_delivery
 import api.services.prototype_review as prototype_review
 import api.services.prototype_review_workflow as prototype_review_workflow
 from api.services.entity_dev_meta import (
@@ -283,7 +284,7 @@ class PrototypeIssueDeliveryTests(unittest.TestCase):
         self.assertEqual(published[0]["author"], "engineer@example.com")
         self.assertTrue(result["dbt_registry"]["task_link_attached"])
         self.assertEqual(comments[0]["issue_id"], "DWH-17")
-        self.assertIn("MR с ключами", comments[0]["text"])
+        self.assertIn("MR с SQL объектов", comments[0]["text"])
 
     def test_new_object_delivery_writes_only_yaml_files(self) -> None:
         saved_files = []
@@ -1352,6 +1353,101 @@ class CreateYTrackIssueTests(unittest.TestCase):
             "query": "relates to DWH-1",
             "issues": [{"idReadable": "KHD-10"}],
         })
+
+
+class PrototypeViewDbtDeliveryTests(unittest.TestCase):
+    @staticmethod
+    def publish(items, files, existing=None):
+        requests = []
+        def request(**kwargs):
+            requests.append(kwargs)
+            if kwargs["path"] == "repository/commits":
+                return {"id": "commit-123"}
+            if kwargs["method"] == "GET":
+                return []
+            return {"iid": 12, "web_url": "https://git.example/dbt/merge_requests/12"}
+        with (
+            patch.dict("os.environ", {"DBT_GITLAB_TOKEN": "test-token", "DBT_GITLAB_PROJECT": "dwh/dbt"}),
+            patch.object(prototype_review_delivery, "resource_exists", return_value=False),
+            patch.object(prototype_review_delivery, "file_content", side_effect=lambda **kwargs: (existing or {}).get(kwargs["file_path"])),
+            patch.object(prototype_review_delivery, "_gitlab_json_request", side_effect=request),
+        ):
+            result = prototype_review_delivery.publish_dbt_registry(
+                task_id="DWH-12345", author="engineer@example.com", review_items=items, changed_files=files,
+            )
+        commits = [r["payload"] for r in requests if r["path"] == "repository/commits"]
+        return result, commits
+
+    @staticmethod
+    def view(name="dm_view.sales", **extra):
+        return dict(target_fqn=name, object_type="VIEW", paths=["views.sql"], key_attributes=[], **extra)
+
+    def test_view_only_review_creates_sql_and_mr_without_dq(self):
+        result, commits = self.publish([self.view()], [dict(path="views.sql", statements=[
+            "create or replace view dm_view.sales as select * from dm.sales;",
+        ])])
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["mr_url"])
+        actions = commits[0]["actions"]
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0]["file_path"], "dbt_greenplum_elt/models_metadata/dm_view/dm_view.sales.sql")
+        self.assertIn("create or replace view dm_view.sales", actions[0]["content"])
+        self.assertEqual(result["files"][0]["file_kind"], "model_sql")
+
+    def test_existing_view_sql_is_updated(self):
+        path = "dbt_greenplum_elt/models_metadata/dm_view/dm_view.sales.sql"
+        _, commits = self.publish([self.view()], [dict(path="views.sql", statements=[
+            "create view dm_view.sales as select 2;",
+        ])], existing={path: "create view dm_view.sales as select 1;\n"})
+        self.assertEqual(commits[0]["actions"][0]["action"], "update")
+
+    def test_unchanged_view_sql_does_not_create_an_empty_commit(self):
+        files = [dict(path="views.sql", statements=["create view dm_view.sales as select 1;"])]
+        _, commits = self.publish([self.view()], files)
+        action = commits[0]["actions"][0]
+        result, commits = self.publish([self.view()], files, existing={action["file_path"]: action["content"]})
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["files"][0]["action"], "unchanged")
+        self.assertEqual(commits, [])
+
+    def test_multiple_views_in_one_file_publish_only_their_own_sql(self):
+        _, commits = self.publish([self.view("dm_view.first"), self.view("dm_view.second")], [
+            dict(path="views.sql", statements=["create view dm_view.first as select 1;", "create view dm_view.second as select 2;"]),
+        ])
+        self.assertEqual(len(commits[0]["actions"]), 2)
+        first = commits[0]["actions"][0]["content"]
+        self.assertIn("create view dm_view.first", first)
+        self.assertNotIn("create view dm_view.second", first)
+
+    def test_skipped_dev_execution_does_not_skip_greenplum_sql_publication(self):
+        result, commits = self.publish([self.view(skip_dev_execution=True)], [
+            dict(path="views.sql", statements=["create view dm_view.sales as select 1;"]),
+        ])
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(len(commits[0]["actions"]), 1)
+
+    def test_clickhouse_views_stay_out_of_greenplum_dbt(self):
+        result, commits = self.publish([self.view(is_clickhouse_view=True, skip_dev_execution=True)], [
+            dict(path="views.sql", statements=["create view dm_view.sales as select 1;"]),
+        ])
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(commits, [])
+
+    def test_view_without_sql_is_reported_instead_of_silently_dropped(self):
+        with self.assertRaisesRegex(ValueError, "Не найден SQL представления"):
+            self.publish([self.view()], [])
+
+    def test_table_registry_and_dq_are_kept_in_mixed_review(self):
+        table = dict(target_fqn="dm.sales", object_type="TABLE", paths=["table.sql"], key_attributes=["id"])
+        result, commits = self.publish([table, self.view()], [
+            dict(path="table.sql", statements=["create table dm.sales (id int);"]),
+            dict(path="views.sql", statements=["create view dm_view.sales as select * from dm.sales;"]),
+        ])
+        kinds = [f["file_kind"] for f in result["files"]]
+        self.assertEqual(kinds.count("model_sql"), 2)
+        self.assertEqual(kinds.count("registry"), 1)
+        self.assertEqual(kinds.count("dq_model"), 1)
+        self.assertEqual(len(commits[0]["actions"]), 4)
 
 
 class PrototypeYamlFlagTests(unittest.TestCase):

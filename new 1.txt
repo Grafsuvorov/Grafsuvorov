@@ -1,2 +1,23 @@
-Операция не выполнена
-Airflow вернул 401: { "detail": null, "status": 401, "title": "Unauthorized", "type": "https://airflow.apache.org/docs/apache-airflow/2.7.3/stable-rest-api-ref.html#section/Errors/Unauthenticated" }
+-- tech_etl.yt_issue_worklog определение
+
+-- Drop table
+
+-- DROP TABLE tech_etl.yt_issue_worklog;
+
+CREATE TABLE tech_etl.yt_issue_worklog (
+	issue_id text NOT NULL,
+	author text NULL,
+	creator text NULL,
+	work_date timestamp NULL,
+	minutes int4 NULL,
+	work_type text NULL,
+	work_text text NULL,
+	dttm_loaded timestamp DEFAULT now() NULL,
+	author_email varchar NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+DISTRIBUTED BY (issue_id);
+issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded, author_email, dttm_inserted, dttm_updated, job_name, deleted_flag

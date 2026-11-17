@@ -1,20 +1,202 @@
-DEV. Подготовлено к релизу
-Done
-Duplicate
-Fixed
-New
-Open
-To do
-В работе
-Визуализация
-Завершена
-Зарегистрирована
-Интеграция
-Ожидание релиза
-Отклонено
-Отложена / в ожидании
-Подлежит обсуждению
-Проверка / Тест
-ПРОД. Подлежит проверке
-Системный анализ
-Требуется уточнение
+
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=200 api
+table-dependency-viewer-api-1  |               AND pso.subtype = 'TABLE'
+table-dependency-viewer-api-1  |             GROUP BY pso.schemaname, pso.objname
+table-dependency-viewer-api-1  |         )
+table-dependency-viewer-api-1  |         SELECT
+table-dependency-viewer-api-1  |             n.nspname AS table_schema,
+table-dependency-viewer-api-1  |             c.relname AS table_name,
+table-dependency-viewer-api-1  |             r.rolname AS owner_name,
+table-dependency-viewer-api-1  |             pg_total_relation_size(c.oid)::bigint AS size_bytes,
+table-dependency-viewer-api-1  |             created_ops.dt_creation AS dt_creation,
+table-dependency-viewer-api-1  |             CASE
+table-dependency-viewer-api-1  |                 WHEN created_ops.dt_creation IS NULL THEN NULL
+table-dependency-viewer-api-1  |                 ELSE EXTRACT(DAY FROM now() - created_ops.dt_creation)::int
+table-dependency-viewer-api-1  |             END AS days_old
+table-dependency-viewer-api-1  |         FROM pg_catalog.pg_class c
+table-dependency-viewer-api-1  |         JOIN pg_catalog.pg_namespace n
+table-dependency-viewer-api-1  |           ON n.oid = c.relnamespace
+table-dependency-viewer-api-1  |         JOIN pg_catalog.pg_roles r
+table-dependency-viewer-api-1  |           ON r.oid = c.relowner
+table-dependency-viewer-api-1  |         LEFT JOIN created_ops
+table-dependency-viewer-api-1  |           ON created_ops.table_schema = n.nspname
+table-dependency-viewer-api-1  |          AND created_ops.table_name = c.relname
+table-dependency-viewer-api-1  |         WHERE c.relkind IN ('r', 'p', 'm')
+table-dependency-viewer-api-1  |           AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+table-dependency-viewer-api-1  |           AND n.nspname NOT LIKE 'pg_toast%%%%'
+table-dependency-viewer-api-1  |           -- Leaf partitions are physical relations; show only the parent table.
+table-dependency-viewer-api-1  |           AND NOT EXISTS (
+table-dependency-viewer-api-1  |               SELECT 1
+table-dependency-viewer-api-1  |               FROM pg_catalog.pg_inherits parent_relation
+table-dependency-viewer-api-1  |               WHERE parent_relation.inhrelid = c.oid
+table-dependency-viewer-api-1  |           )
+table-dependency-viewer-api-1  |         ORDER BY size_bytes DESC NULLS LAST, n.nspname, c.relname
+table-dependency-viewer-api-1  |     ]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/21/e3q8)
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1977, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | psycopg2.errors.LockNotAvailable: canceling statement due to lock timeout
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4897, in _refresh_table_sizes_cache
+table-dependency-viewer-api-1  |     payload = _build_table_sizes_cache()
+table-dependency-viewer-api-1  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4845, in _build_table_sizes_cache
+table-dependency-viewer-api-1  |     rows = conn.execute(text(query)).mappings().all()
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1494, in execute
+table-dependency-viewer-api-1  |     return meth(
+table-dependency-viewer-api-1  |            ^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 534, in _execute_on_connection
+table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1714, in _execute_clauseelement
+table-dependency-viewer-api-1  |     ret = self._execute_context(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1868, in _execute_context
+table-dependency-viewer-api-1  |     return self._exec_single_context(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1996, in _exec_single_context
+table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2351, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1977, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 1192, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.errors.LockNotAvailable) canceling statement due to lock timeout
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |         WITH created_ops AS (
+table-dependency-viewer-api-1  |             SELECT
+table-dependency-viewer-api-1  |                 pso.schemaname AS table_schema,
+table-dependency-viewer-api-1  |                 pso.objname AS table_name,
+table-dependency-viewer-api-1  |                 MAX(pso.statime) AS dt_creation
+table-dependency-viewer-api-1  |             FROM pg_catalog.pg_stat_operations pso
+table-dependency-viewer-api-1  |             WHERE pso.actionname = 'CREATE'
+table-dependency-viewer-api-1  |               AND pso.subtype = 'TABLE'
+table-dependency-viewer-api-1  |             GROUP BY pso.schemaname, pso.objname
+table-dependency-viewer-api-1  |         )
+table-dependency-viewer-api-1  |         SELECT
+table-dependency-viewer-api-1  |             n.nspname AS table_schema,
+table-dependency-viewer-api-1  |             c.relname AS table_name,
+table-dependency-viewer-api-1  |             r.rolname AS owner_name,
+table-dependency-viewer-api-1  |             pg_total_relation_size(c.oid)::bigint AS size_bytes,
+table-dependency-viewer-api-1  |             created_ops.dt_creation AS dt_creation,
+table-dependency-viewer-api-1  |             CASE
+table-dependency-viewer-api-1  |                 WHEN created_ops.dt_creation IS NULL THEN NULL
+table-dependency-viewer-api-1  |                 ELSE EXTRACT(DAY FROM now() - created_ops.dt_creation)::int
+table-dependency-viewer-api-1  |             END AS days_old
+table-dependency-viewer-api-1  |         FROM pg_catalog.pg_class c
+table-dependency-viewer-api-1  |         JOIN pg_catalog.pg_namespace n
+table-dependency-viewer-api-1  |           ON n.oid = c.relnamespace
+table-dependency-viewer-api-1  |         JOIN pg_catalog.pg_roles r
+table-dependency-viewer-api-1  |           ON r.oid = c.relowner
+table-dependency-viewer-api-1  |         LEFT JOIN created_ops
+table-dependency-viewer-api-1  |           ON created_ops.table_schema = n.nspname
+table-dependency-viewer-api-1  |          AND created_ops.table_name = c.relname
+table-dependency-viewer-api-1  |         WHERE c.relkind IN ('r', 'p', 'm')
+table-dependency-viewer-api-1  |           AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+table-dependency-viewer-api-1  |           AND n.nspname NOT LIKE 'pg_toast%%%%'
+table-dependency-viewer-api-1  |           -- Leaf partitions are physical relations; show only the parent table.
+table-dependency-viewer-api-1  |           AND NOT EXISTS (
+table-dependency-viewer-api-1  |               SELECT 1
+table-dependency-viewer-api-1  |               FROM pg_catalog.pg_inherits parent_relation
+table-dependency-viewer-api-1  |               WHERE parent_relation.inhrelid = c.oid
+table-dependency-viewer-api-1  |           )
+table-dependency-viewer-api-1  |         ORDER BY size_bytes DESC NULLS LAST, n.nspname, c.relname
+table-dependency-viewer-api-1  |     ]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/21/e3q8)
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | ❌ cache warm-up error (table_sizes): (psycopg2.errors.LockNotAvailable) canceling statement due to lock timeout
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |         WITH created_ops AS (
+table-dependency-viewer-api-1  |             SELECT
+table-dependency-viewer-api-1  |                 pso.schemaname AS table_schema,
+table-dependency-viewer-api-1  |                 pso.objname AS table_name,
+table-dependency-viewer-api-1  |                 MAX(pso.statime) AS dt_creation
+table-dependency-viewer-api-1  |             FROM pg_catalog.pg_stat_operations pso
+table-dependency-viewer-api-1  |             WHERE pso.actionname = 'CREATE'
+table-dependency-viewer-api-1  |               AND pso.subtype = 'TABLE'
+table-dependency-viewer-api-1  |             GROUP BY pso.schemaname, pso.objname
+table-dependency-viewer-api-1  |         )
+table-dependency-viewer-api-1  |         SELECT
+table-dependency-viewer-api-1  |             n.nspname AS table_schema,
+table-dependency-viewer-api-1  |             c.relname AS table_name,
+table-dependency-viewer-api-1  |             r.rolname AS owner_name,
+table-dependency-viewer-api-1  |             pg_total_relation_size(c.oid)::bigint AS size_bytes,
+table-dependency-viewer-api-1  |             created_ops.dt_creation AS dt_creation,
+table-dependency-viewer-api-1  |             CASE
+table-dependency-viewer-api-1  |                 WHEN created_ops.dt_creation IS NULL THEN NULL
+table-dependency-viewer-api-1  |                 ELSE EXTRACT(DAY FROM now() - created_ops.dt_creation)::int
+table-dependency-viewer-api-1  |             END AS days_old
+table-dependency-viewer-api-1  |         FROM pg_catalog.pg_class c
+table-dependency-viewer-api-1  |         JOIN pg_catalog.pg_namespace n
+table-dependency-viewer-api-1  |           ON n.oid = c.relnamespace
+table-dependency-viewer-api-1  |         JOIN pg_catalog.pg_roles r
+table-dependency-viewer-api-1  |           ON r.oid = c.relowner
+table-dependency-viewer-api-1  |         LEFT JOIN created_ops
+table-dependency-viewer-api-1  |           ON created_ops.table_schema = n.nspname
+table-dependency-viewer-api-1  |          AND created_ops.table_name = c.relname
+table-dependency-viewer-api-1  |         WHERE c.relkind IN ('r', 'p', 'm')
+table-dependency-viewer-api-1  |           AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+table-dependency-viewer-api-1  |           AND n.nspname NOT LIKE 'pg_toast%%%%'
+table-dependency-viewer-api-1  |           -- Leaf partitions are physical relations; show only the parent table.
+table-dependency-viewer-api-1  |           AND NOT EXISTS (
+table-dependency-viewer-api-1  |               SELECT 1
+table-dependency-viewer-api-1  |               FROM pg_catalog.pg_inherits parent_relation
+table-dependency-viewer-api-1  |               WHERE parent_relation.inhrelid = c.oid
+table-dependency-viewer-api-1  |           )
+table-dependency-viewer-api-1  |         ORDER BY size_bytes DESC NULLS LAST, n.nspname, c.relname
+table-dependency-viewer-api-1  |     ]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/21/e3q8)
+table-dependency-viewer-api-1  | Failed to load team workload
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2108, in get_admin_engineering_efficiency
+table-dependency-viewer-api-1  |     return load_team_workload(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | TypeError: load_team_workload() missing 2 required keyword-only arguments: 'timeline_table' and 'custom_table'
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47902 - "GET /api/admin/engineering-efficiency?days=30 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47904 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | Failed to load team workload
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2108, in get_admin_engineering_efficiency
+table-dependency-viewer-api-1  |     return load_team_workload(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | TypeError: load_team_workload() missing 2 required keyword-only arguments: 'timeline_table' and 'custom_table'
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47914 - "GET /api/admin/engineering-efficiency?days=30 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47920 - "GET /api/orderbreaches HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47924 - "GET /api/graph/diagnostics?include_any=true HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47936 - "GET /api/incidents/timeline?days=7 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47926 - "GET /api/incidents/history?days=7&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47944 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47948 - "GET /api/click/summary?days=7&limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47952 - "GET /api/click/slow-stages?days=7&limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47922 - "GET /api/metrics HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47940 - "GET /api/dq/summary?days=7&delta=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47918 - "GET /api/incidents/active HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47946 - "GET /api/dq/alerts?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47928 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | Failed to load team workload
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2108, in get_admin_engineering_efficiency
+table-dependency-viewer-api-1  |     return load_team_workload(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | TypeError: load_team_workload() missing 2 required keyword-only arguments: 'timeline_table' and 'custom_table'
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47972 - "GET /api/admin/engineering-efficiency?days=30 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47974 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47980 - "GET /api/admin/reports/incidents?days=30 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | Failed to load team workload
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2108, in get_admin_engineering_efficiency
+table-dependency-viewer-api-1  |     return load_team_workload(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | TypeError: load_team_workload() missing 2 required keyword-only arguments: 'timeline_table' and 'custom_table'
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:47988 - "GET /api/admin/engineering-efficiency?days=30 HTTP/1.1" 500 Internal Server Error

@@ -1,6 +1,7 @@
 """Team workload: ownership and personal work logs are counted independently."""
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -262,7 +263,14 @@ def build_team_workload(users, issues, worklogs, *, identity_links=None, timelin
     }
 
 
-def load_team_workload(conn, *, text, snapshot_table, worklog_table, timeline_table, custom_table, days, issue_url):
+def load_team_workload(conn, *, text, snapshot_table, worklog_table, days, issue_url,
+                       timeline_table=None, custom_table=None):
+    # Keep the previous call signature working during deployment. Respect the
+    # same environment settings as api.config when the caller omits new options.
+    if timeline_table is None:
+        timeline_table = os.getenv("TABLE_YT_ISSUE_TIMELINE", "tech_etl.yt_issue_timeline")
+    if custom_table is None:
+        custom_table = os.getenv("TABLE_YT_ISSUE_CUSTOM", "tech_etl.yt_issue_custom_field")
     users = conn.execute(text("""
         SELECT id, email, username, role, is_active FROM tech_etl.app_users
         WHERE role IN ('engineer', 'admin')

@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 from api.services.team_workload import build_team_workload, load_team_workload, parse_origin
 
@@ -40,6 +41,24 @@ def report(issues=None, logs=None, users=None):
 
 
 class TeamWorkloadTests(unittest.TestCase):
+    def test_previous_call_signature_and_configured_tables(self):
+        for env in ({}, {"TABLE_YT_ISSUE_TIMELINE": "custom.history", "TABLE_YT_ISSUE_CUSTOM": "custom.fields"}):
+            with self.subTest(env=env), patch.dict("os.environ", env, clear=True):
+                queries = []
+                class EmptyResult:
+                    def mappings(self): return self
+                    def all(self): return []
+                class Connection:
+                    def execute(self, sql):
+                        queries.append(sql)
+                        return EmptyResult()
+                # This is the exact older call shape shown in the server logs.
+                data = load_team_workload(Connection(), text=lambda s: s, snapshot_table="snap",
+                    worklog_table="logs", days=30, issue_url="https://yt/{id}")
+                self.assertIn("FROM " + env.get("TABLE_YT_ISSUE_TIMELINE", "tech_etl.yt_issue_timeline"), queries[4])
+                self.assertIn("FROM " + env.get("TABLE_YT_ISSUE_CUSTOM", "tech_etl.yt_issue_custom_field"), queries[5])
+                self.assertEqual(data["tasks"], [])
+
     def test_all_supplied_states_without_resolved_timestamp(self):
         completed = ["Done", "Fixed", "Завершена"]
         cancelled = ["Duplicate", "Отклонено"]

@@ -103,6 +103,7 @@ class PrototypeReviewSourceLoadPayload(BaseModel):
 
 class PrototypeReviewSourceLoadIssuePayload(PrototypeReviewSourceLoadPayload):
     yaml_content: str
+    yaml_contents: Optional[Dict[str, str]] = None
     recreate_sql: str = ""
     insert_sql: str = ""
     truncate_sql: str = ""

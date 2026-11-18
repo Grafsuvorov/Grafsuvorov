@@ -206,7 +206,7 @@ from .services.stg_source_loader import (
     list_target_tables,
     run_source_loader,
     source_load_entity_names,
-    source_load_replica_yaml_contents,
+    prepare_source_load_yaml_contents,
     source_loader_parameters_from_sql,
     target_table_exists,
 )
@@ -1666,6 +1666,7 @@ def _prototype_issue_delivery_dependencies() -> PrototypeIssueDeliveryDependenci
         create_meta_mr=create_meta_workspace_mr,
         publish_dbt=_prototype_review_publish_dbt_registry,
         add_comment=add_ytrack_issue_comment,
+        prepare_source_load=_prototype_prepare_source_load_yamls,
         yaml_repo_path=_prototype_review_yaml_repo_path,
         engine=engine,
         base_dir=BASE_DIR,
@@ -1848,6 +1849,27 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
         raise HTTPException(status_code=500, detail=f"Не удалось получить метаданные таблицы: {exc}") from exc
 
 
+def _prototype_prepare_source_load_yamls(*, source_load: dict[str, Any], author: str) -> dict[str, str]:
+    def read_existing(entity_name):
+        try:
+            bundle = read_meta_workspace_branch_gp_bundle(
+                git_repo_value=ENTITY_META_GIT_REPO, entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+                workspace_root_value=META_WORKSPACE_ROOT, workspace_owner=author,
+                branch_name=PROTOTYPE_ETL_BASE_BRANCH, base_branch=PROTOTYPE_ETL_BASE_BRANCH,
+                entity_name=entity_name, schema_name=source_load["target_schema"],
+                table_name=source_load["target_table"],
+            )
+            return bundle.get("yaml_content")
+        except MetaWorkspaceObjectNotFoundError:
+            return None
+    return prepare_source_load_yaml_contents(
+        engine=engine, yaml_content=source_load["yaml_content"],
+        entity_names=source_load_entity_names(source_load["entity_name"]),
+        schema_name=source_load["target_schema"], table_name=source_load["target_table"],
+        yaml_contents=source_load.get("yaml_contents"), read_existing_yaml=read_existing,
+    )
+
+
 def run_admin_prototype_source_load(payload, request: Request):
     user = _require_authenticated(request)
     try:
@@ -1889,8 +1911,11 @@ def run_admin_prototype_source_load(payload, request: Request):
 
         source_payload = payload.model_dump()
         source_payload["entity_name"] = primary_entity_name
+        prepared_yamls = _prototype_prepare_source_load_yamls(
+            source_load={**payload.model_dump(), "yaml_content": bundle.get("yaml_content") or ""}, author=user.email,
+        )
         result = run_source_loader(dev_engine, source_payload)
-        yaml_payload = yaml.safe_load(bundle.get("yaml_content") or "") or {}
+        yaml_payload = yaml.safe_load(prepared_yamls[primary_entity_name]) or {}
         yaml_payload.update({
             "source_id": int(payload.server_id),
             "source_type": str((result.get("server") or {}).get("source_type") or "").upper() or None,
@@ -1909,7 +1934,13 @@ def run_admin_prototype_source_load(payload, request: Request):
         })
         if result.get("status") == "ok":
             yaml_payload["depends_on"] = {"raw_ext": [f'{payload.target_table}_READ']}
-        result["yaml_content"] = _dump_yaml(yaml_payload)
+        result["yaml_contents"] = {}
+        for name, prepared_yaml in prepared_yamls.items():
+            identity = yaml.safe_load(prepared_yaml)
+            entity_payload = dict(yaml_payload)
+            entity_payload.update(entity_name=name, entity_id=identity["entity_id"], table_id=identity["table_id"])
+            result["yaml_contents"][name] = _dump_yaml(entity_payload)
+        result["yaml_content"] = result["yaml_contents"][primary_entity_name]
         result["target_fqn"] = f"{str(payload.target_schema).lower()}.{payload.target_table}"
         result["entity_names"] = entity_names
         return result
@@ -1928,7 +1959,9 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
         if not entity_names:
             raise ValueError("Заполните обязательное поле «Сущность / расписание»")
         primary_entity_name = entity_names[0]
-        replica_yaml_contents = source_load_replica_yaml_contents(payload.yaml_content, entity_names)
+        yaml_contents = _prototype_prepare_source_load_yamls(source_load=payload.model_dump(), author=user.email)
+        yaml_content = yaml_contents[primary_entity_name]
+        replica_yaml_contents = {name: yaml_contents[name] for name in entity_names[1:]}
         parent_issue = str(payload.parent_issue or "").strip().upper()
         direction = str(payload.direction or "").strip()
         if parent_issue:
@@ -2015,7 +2048,7 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
                     entity_name=primary_entity_name,
                     schema_name=payload.target_schema,
                     table_name=payload.target_table,
-                    yaml_content=payload.yaml_content,
+                    yaml_content=yaml_content,
                     recreate_sql=payload.recreate_sql,
                     insert_sql=payload.insert_sql,
                     truncate_sql=payload.truncate_sql,

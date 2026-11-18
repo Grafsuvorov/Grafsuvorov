@@ -31,6 +31,7 @@ sys.modules.setdefault("dotenv", dotenv_stub)
 
 import api.services.entity_dev_meta as entity_dev_meta
 import api.services.prototype_review_delivery as prototype_review_delivery
+import api.services.stg_source_loader as stg_source_loader
 import api.services.prototype_review as prototype_review
 import api.services.prototype_review_workflow as prototype_review_workflow
 from api.services.entity_dev_meta import (
@@ -1353,6 +1354,152 @@ class CreateYTrackIssueTests(unittest.TestCase):
             "query": "relates to DWH-1",
             "issues": [{"idReadable": "KHD-10"}],
         })
+
+
+class SourceLoadEntityIdentityTests(unittest.TestCase):
+    @staticmethod
+    def yaml_text(entity="FIRST", table_id=101, entity_id=11):
+        return (f"table_schema: stg\ntable_name: target\nentity_name: {entity}\n"
+                f"table_id: {table_id}\nentity_id: {entity_id}\n"
+                "sql_query_insert_init: meta/FIRST/stg/target/insert.sql\n")
+
+    @staticmethod
+    def parse_yaml(source):
+        result = {}
+        for line in str(source or "").splitlines():
+            if ":" in line and not line.startswith(" "):
+                key, value = line.split(":", 1)
+                value = value.strip().strip('"').strip("'")
+                result[key] = int(value) if value.isdigit() else value
+        return result
+
+    class Engine:
+        def __init__(self, existing=None, owners=None):
+            self.existing = existing or {}
+            self.owners = owners or {}
+        def connect(self): return self
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def execute(self, query, params):
+            value = self.existing.get(params.get("entity_id"))
+            owner = self.owners.get(params.get("table_id"))
+            return SimpleNamespace(scalar=lambda: value, mappings=lambda: SimpleNamespace(first=lambda: owner))
+
+    def prepare(self, names=None, **kwargs):
+        return stg_source_loader.prepare_source_load_yaml_contents(
+            engine=kwargs.pop("engine", self.Engine()), yaml_content=kwargs.pop("yaml_content", self.yaml_text()),
+            entity_names=names or ["FIRST", "SECOND", "THIRD"], schema_name="stg", table_name="target", **kwargs,
+        )
+
+    def test_each_entity_has_own_ids_and_plain_name(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, n: {"FIRST": 11, "SECOND": 22, "THIRD": 33}[n]),
+            patch.object(entity_dev_meta, "_reserve_next_table_id", side_effect=[102, 103]) as reserve,
+        ):
+            result = self.prepare()
+        self.assertEqual(reserve.call_count, 2)
+        self.assertEqual([self.parse_yaml(t)["table_id"] for t in result.values()], [101, 102, 103])
+        self.assertEqual([self.parse_yaml(t)["entity_id"] for t in result.values()], [11, 22, 33])
+        for name, content in result.items():
+            self.assertIn(f"entity_name: {name}\n", content)
+            self.assertNotIn(f'entity_name: "{name}"', content)
+            self.assertIn("sql_query_insert_init: meta/FIRST/stg/target/insert.sql", content)
+
+    def test_preview_ids_are_reused_on_issue_creation(self):
+        drafts = {name: self.yaml_text(name, tid, eid) for name, tid, eid in
+                  [("FIRST", 101, 11), ("SECOND", 102, 22), ("THIRD", 103, 33)]}
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, n: {"FIRST": 11, "SECOND": 22, "THIRD": 33}[n]),
+            patch.object(entity_dev_meta, "_reserve_next_table_id", side_effect=AssertionError("must not allocate again")),
+        ):
+            result = self.prepare(yaml_contents=drafts)
+        self.assertEqual(result, drafts)
+
+    def test_existing_entity_specific_catalog_ids_are_preserved(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, n: {"FIRST": 11, "SECOND": 22}[n]),
+            patch.object(entity_dev_meta, "_reserve_next_table_id", side_effect=AssertionError("existing IDs must survive")),
+        ):
+            result = self.prepare(names=["FIRST", "SECOND"], engine=self.Engine(existing={11: 501, 22: 702}))
+        self.assertEqual(self.parse_yaml(result["FIRST"])["table_id"], 501)
+        self.assertEqual(self.parse_yaml(result["SECOND"])["table_id"], 702)
+
+    def test_git_identity_survives_when_object_not_yet_loaded_into_catalog(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, n: {"FIRST": 11, "SECOND": 22}[n]),
+            patch.object(entity_dev_meta, "_reserve_next_table_id", side_effect=AssertionError("Git ID must survive")),
+        ):
+            result = self.prepare(names=["FIRST", "SECOND"],
+                read_existing_yaml=lambda n: self.yaml_text(n, 801, 22) if n == "SECOND" else None)
+        self.assertEqual(self.parse_yaml(result["SECOND"])["table_id"], 801)
+
+    def test_duplicate_draft_ids_stop_publication(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, n: {"FIRST": 11, "SECOND": 22}[n]),
+            self.assertRaisesRegex(ValueError, "Одинаковый table_id"),
+        ):
+            self.prepare(names=["FIRST", "SECOND"], yaml_contents={"FIRST": self.yaml_text(), "SECOND": self.yaml_text("SECOND", 101, 22)})
+
+    def test_id_owned_by_another_object_is_rejected(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", return_value=11),
+            self.assertRaisesRegex(ValueError, "принадлежит другому объекту"),
+        ):
+            self.prepare(names=["FIRST"], engine=self.Engine(owners={101: dict(entity_id=99, table_schema="stg", table_name="target")}))
+
+    def test_changed_target_requires_regeneration(self):
+        with patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml), self.assertRaisesRegex(ValueError, "изменились"):
+            self.prepare(yaml_content=self.yaml_text().replace("table_name: target", "table_name: other"))
+
+    def test_digit_prefixed_schedule_name_stays_plain(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", return_value=11),
+        ):
+            result = self.prepare(names=["1C_FI"], yaml_content=self.yaml_text("1C_FI"))
+        self.assertIn("entity_name: 1C_FI\n", result["1C_FI"])
+
+    def test_unknown_entity_stops_without_allocating_another_id(self):
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, n: 11 if n == "FIRST" else None),
+            patch.object(entity_dev_meta, "_reserve_next_table_id") as reserve,
+            self.assertRaisesRegex(ValueError, "Не найден entity_id"),
+        ):
+            self.prepare(names=["FIRST", "MISSING"])
+        reserve.assert_not_called()
+
+    def test_changed_entity_list_requires_regeneration(self):
+        with patch.object(entity_dev_meta.yaml, "safe_load", side_effect=self.parse_yaml), self.assertRaisesRegex(ValueError, "Список сущностей изменился"):
+            self.prepare(yaml_contents={"FIRST": self.yaml_text()})
+
+    def test_embedded_source_delivery_passes_entity_specific_yaml_to_git(self):
+        prepared = {"FIRST": self.yaml_text(), "SECOND": self.yaml_text("SECOND", 102, 22)}
+        saved = []
+        def save(**kwargs):
+            saved.append(kwargs)
+            return dict(branch_name="feature/DWH-17", changed_files=[])
+        params = {f.name: "" for f in fields(PrototypeIssueDeliveryDependencies)}
+        params.update(
+            engine=None, collect_target_sql=lambda **kwargs: {}, save_gp_bundle=save,
+            prepare_source_load=lambda **kwargs: prepared, create_meta_mr=lambda **kwargs: {},
+            publish_dbt=lambda **kwargs: {},
+        )
+        result = deliver_prototype_issue(
+            issue_result={"issue_id": "DWH-17", "raw": {"id": "2-17"}}, review_items=[],
+            bundle={"files": [], "deleted_files": []}, user=SimpleNamespace(email="engineer@example.com"),
+            source_load=dict(target_schema="stg", target_table="target", entity_name="FIRST, SECOND", yaml_content=self.yaml_text()),
+            dependencies=PrototypeIssueDeliveryDependencies(**params),
+        )
+        self.assertIsNone(result["meta_error"])
+        self.assertEqual(saved[0]["yaml_content"], prepared["FIRST"])
+        self.assertEqual(saved[0]["replica_yaml_contents"], {"SECOND": prepared["SECOND"]})
 
 
 class PrototypeViewDbtDeliveryTests(unittest.TestCase):

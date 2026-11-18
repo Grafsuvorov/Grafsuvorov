@@ -7,7 +7,7 @@ from posixpath import join as posix_join
 from typing import Any, Callable
 
 from .prototype_review import infer_removed_table_targets
-from .stg_source_loader import source_load_entity_names, source_load_replica_yaml_contents
+from .stg_source_loader import source_load_entity_names
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,7 @@ class PrototypeIssueDeliveryDependencies:
     youtrack_url: str
     youtrack_token: str
     youtrack_ssl_verify: bool
+    prepare_source_load: Callable[..., dict[str, str]] | None = None
 
 
 def deliver_prototype_issue(
@@ -179,6 +180,9 @@ def deliver_prototype_issue(
                 meta_error = f"STG-объект {schema_name}.{table_name} уже присутствует в diff"
             else:
                 try:
+                    if dependencies.prepare_source_load is None:
+                        raise ValueError("Не настроено определение идентификаторов сущностей загрузки")
+                    yaml_contents = dependencies.prepare_source_load(source_load=source_load, author=author)
                     source_result = dependencies.save_gp_bundle(
                         git_repo_value=dependencies.entity_git_repo,
                         entity_git_root_value=dependencies.entity_git_root,
@@ -189,11 +193,11 @@ def deliver_prototype_issue(
                         entity_name=entity_name,
                         schema_name=schema_name,
                         table_name=table_name,
-                        yaml_content=yaml_content,
+                        yaml_content=yaml_contents[entity_name],
                         recreate_sql=str(source_load.get("recreate_sql") or ""),
                         insert_sql=str(source_load.get("insert_sql") or ""),
                         truncate_sql=str(source_load.get("truncate_sql") or ""),
-                        replica_yaml_contents=source_load_replica_yaml_contents(yaml_content, entity_names),
+                        replica_yaml_contents={name: yaml_contents[name] for name in entity_names[1:]},
                         task_id=issue_id,
                         author=author,
                     )

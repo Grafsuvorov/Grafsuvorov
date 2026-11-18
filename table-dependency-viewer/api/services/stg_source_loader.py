@@ -6,7 +6,6 @@ PXF objects.  This module deliberately does not try to reproduce its logic.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -30,30 +29,102 @@ def source_load_entity_names(value: Any) -> list[str]:
     return result
 
 
-def source_load_replica_yaml_contents(yaml_content: str, entity_names: list[str]) -> dict[str, str]:
-    """Build YAML files for additional schedules that share the primary SQL.
+def prepare_source_load_yaml_contents(
+    *, engine, yaml_content: str, entity_names: list[str], schema_name: str,
+    table_name: str, yaml_contents: dict[str, str] | None = None, read_existing_yaml=None,
+) -> dict[str, str]:
+    """Resolve each entity's own catalog identity, keeping preview IDs stable."""
+    from .entity_dev_meta import _lookup_entity_id, _reserve_next_table_id
+    from ..config import TABLE_TABLES_META
+    import yaml
 
-    ``save_meta_workspace_branch_gp_bundle`` writes SQL only in the primary
-    entity directory.  The source-loader YAML already contains the primary
-    SQL paths, so replicas must preserve those values and differ only by
-    ``entity_name``.
-    """
-    normalized_entities = source_load_entity_names(",".join(entity_names))
-    if len(normalized_entities) < 2:
-        return {}
-    _primary_entity, *replica_entities = normalized_entities
-    primary_yaml = str(yaml_content or "")
-    entity_field = re.compile(r"(?m)^(\s*entity_name:\s*).*?\s*$")
-    if not entity_field.search(primary_yaml):
-        raise ValueError("В YAML загрузки из источника не найдено поле entity_name")
-    return {
-        entity_name: entity_field.sub(
-            lambda match: f"{match.group(1)}{json.dumps(entity_name, ensure_ascii=False)}",
-            primary_yaml,
-            count=1,
+    names = source_load_entity_names(",".join(entity_names))
+    if not names:
+        raise ValueError("Не заполнены сущности загрузки")
+    primary = yaml.safe_load(yaml_content) or {}
+    if not isinstance(primary, dict):
+        raise ValueError("YAML загрузки должен быть объектом")
+    if (str(primary.get("entity_name") or "").lower() != names[0].lower()
+        or str(primary.get("table_schema") or "").lower() != schema_name.lower()
+        or str(primary.get("table_name") or "").lower() != table_name.lower()):
+        raise ValueError("Сущность, схема или таблица изменились после генерации YAML; повторите генерацию")
+    drafts = dict(yaml_contents or {})
+    if drafts and any(name not in drafts for name in names):
+        raise ValueError("Список сущностей изменился после генерации YAML; повторите генерацию")
+    drafts[names[0]] = yaml_content
+    identities = {}
+    used_ids = {}
+    for name in names:
+        entity_id = _lookup_entity_id(engine, name)
+        if not entity_id:
+            raise ValueError(f"Не найден entity_id для сущности `{name}`")
+        with engine.connect() as conn:
+            existing = conn.execute(text(f"""
+                SELECT table_id FROM {TABLE_TABLES_META}
+                WHERE entity_id = :entity_id
+                  AND lower(table_schema) = lower(:schema_name)
+                  AND lower(table_name) = lower(:table_name)
+                ORDER BY table_id LIMIT 1
+            """), {"entity_id": entity_id, "schema_name": schema_name, "table_name": table_name}).scalar()
+        canonical_text = read_existing_yaml(name) if read_existing_yaml and not existing else None
+        canonical = yaml.safe_load(canonical_text) if canonical_text else {}
+        draft = yaml.safe_load(drafts.get(name) or "") or {}
+        if not isinstance(draft, dict) or not isinstance(canonical, dict):
+            raise ValueError(f"YAML сущности `{name}` должен быть объектом")
+        own_draft = (
+            str(draft.get("entity_name") or "").strip().lower() == name.lower()
+            and str(draft.get("table_schema") or "").strip().lower() == schema_name.lower()
+            and str(draft.get("table_name") or "").strip().lower() == table_name.lower()
         )
-        for entity_name in replica_entities
-    }
+        table_id = existing or canonical.get("table_id") or (draft.get("table_id") if own_draft else None)
+        if not table_id:
+            table_id = _reserve_next_table_id(engine)
+        try:
+            table_id = int(table_id)
+        except (ValueError, TypeError):
+            raise ValueError(f"Некорректный table_id для сущности `{name}`") from None
+        if table_id <= 0:
+            raise ValueError(f"Некорректный table_id для сущности `{name}`")
+        with engine.connect() as conn:
+            owner = conn.execute(text(f"""
+                SELECT entity_id, table_schema, table_name FROM {TABLE_TABLES_META}
+                WHERE table_id = :table_id
+            """), {"table_id": table_id}).mappings().first()
+        if owner and (int(owner["entity_id"]) != int(entity_id)
+                      or str(owner["table_schema"]).lower() != schema_name.lower()
+                      or str(owner["table_name"]).lower() != table_name.lower()):
+            raise ValueError(f"table_id {table_id} принадлежит другому объекту; сущность `{name}`")
+        if table_id in used_ids:
+            raise ValueError(f"Одинаковый table_id {table_id} у сущностей `{used_ids[table_id]}` и `{name}`")
+        used_ids[table_id] = name
+        identities[name] = {"table_id": table_id, "entity_id": int(entity_id)}
+
+    def replace_field(content, key, value):
+        pattern = re.compile(rf"(?m)^{key}:[^\r\n]*$")
+        line = f"{key}: {value}"
+        return pattern.sub(lambda _: line, content, count=1) if pattern.search(content) else content.rstrip() + "\n" + line + "\n"
+
+    result = {}
+    for name in names:
+        # Ordinary schedule identifiers stay plain YAML, without JSON quotes.
+        plain_name = re.fullmatch(r"[A-Za-z0-9_]+", name) and not name.isdigit() and name.lower() not in {"null", "true", "false", "yes", "no", "on", "off"}
+        scalar = name if plain_name else yaml.safe_dump(name, allow_unicode=True).strip().removesuffix("...").strip()
+        content = replace_field(str(yaml_content), "entity_name", scalar)
+        for key, value in identities[name].items():
+            content = replace_field(content, key, value)
+        result[name] = content.rstrip() + "\n"
+    return result
+
+
+def source_load_replica_yaml_contents(yaml_content: str, entity_names: list[str], **identity_context) -> dict[str, str]:
+    """Compatibility entry point; never copy primary IDs into another entity."""
+    names = source_load_entity_names(",".join(entity_names))
+    if len(names) < 2:
+        return {}
+    if not identity_context:
+        raise ValueError("Для YAML нескольких сущностей нужно отдельно определить entity_id и table_id")
+    contents = prepare_source_load_yaml_contents(yaml_content=yaml_content, entity_names=names, **identity_context)
+    return {name: contents[name] for name in names[1:]}
 
 
 def source_loader_parameters_from_sql(sql: str) -> dict[str, str]:

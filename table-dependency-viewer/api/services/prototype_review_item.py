@@ -63,12 +63,19 @@ def resolve_prototype_review_item(
     fallback_entity_name: str = "",
     key_attributes_override: Optional[list[str]] = None,
     object_type_hint: str = "",
+    sql_variant_mode: str = "",
     reserved_table_ids: Optional[set[int]] = None,
     resolver: PrototypeReviewItemDependencies,
 ) -> dict[str, Any]:
     meta = resolver.find_meta(target_fqn)
     meta_variants = _order_meta_variants(resolver.find_meta_variants(target_fqn))
-    if meta_variants:
+    if sql_variant_mode == "separate":
+        requested_order = [n.strip().lower() for n in str(fallback_entity_name).split(",") if n.strip()]
+        requested = set(requested_order)
+        meta_variants = [m for m in meta_variants if str(m.get("entity_name") or "").lower() in requested]
+        meta_variants.sort(key=lambda m: requested_order.index(str(m.get("entity_name") or "").lower()))
+        meta = meta_variants[0] if meta_variants else None
+    elif meta_variants:
         meta = {**(meta or {}), **meta_variants[0]}
     schema_name, table_name = target_fqn.split(".", 1)
     table_name = _physical_table_name(

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminApi } from "../api/admin.js";
 import { accountApi } from "../api/account.js";
+import PrototypeSqlVariantMapping, { variantMappingPayload } from "./PrototypeSqlVariantMapping.jsx";
 import BusinessDqPanel from "./BusinessDqPanel.jsx";
 import PrototypeSourceLoadPanel from "./PrototypeSourceLoadPanel.jsx";
 
@@ -131,6 +132,9 @@ export default function AdminPrototypeReviewPage() {
   const [releaseSlotsError, setReleaseSlotsError] = useState("");
   const [selectedReleaseSlot, setSelectedReleaseSlot] = useState("");
   const [sourceLoad, setSourceLoad] = useState(null);
+  const [mappingGroups, setMappingGroups] = useState([]);
+  const [mappingChoices, setMappingChoices] = useState({});
+  useEffect(() => { setMappingGroups([]); setMappingChoices({}); }, [mrInput]);
   const [includeSourceLoad, setIncludeSourceLoad] = useState(true);
 
   useEffect(() => {
@@ -334,7 +338,18 @@ export default function AdminPrototypeReviewPage() {
     setResult(null);
     setRunProgress({ status: "queued", current: 0, total: 0, current_target: null, current_file: null });
     try {
+      const sqlMappings = mappingGroups.length ? variantMappingPayload(mappingGroups, mappingChoices) : null;
+      for (const mapping of sqlMappings || []) {
+        for (const variant of mapping.variants || []) {
+          const draft = reviewItemsDraft.find((item) => item.sql_variant_mode === "separate"
+            && String(item.entity_name || "").toLowerCase() === variant.entity_name.toLowerCase()
+            && variant.paths.every((path) => (item.paths || []).includes(path)));
+          if (draft) variant.key_attributes = splitItems(draft.key_attributes_text);
+        }
+      }
+      if (sqlMappings?.some((m) => m.mode === "shared" && !m.entity_name.trim())) throw new Error("Укажите сущности общего алгоритма");
       const startPayload = await adminApi.prototypeReviewRunStart({
+        sql_variant_mappings: sqlMappings,
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
@@ -361,6 +376,11 @@ export default function AdminPrototypeReviewPage() {
 
       const payload = statusPayload?.result || null;
       setResult(payload);
+      if (payload?.mapping_required) {
+        setMappingGroups(payload.mapping_groups || []);
+        setRunProgress(null);
+        return;
+      }
       const firstTarget = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.target_fqn : "";
       const totalSec = Array.isArray(payload?.execution)
         ? payload.execution.reduce((acc, item) => acc + Number(item?.duration_sec || 0), 0)
@@ -433,6 +453,10 @@ export default function AdminPrototypeReviewPage() {
   const handleCreateIssue = async () => {
     const trimmedMr = String(mrInput || "").trim();
     if (!trimmedMr || creatingIssue) return;
+    if (reviewItemsDraft.some((item) => item.sql_variant_mode === "separate" && item.checks_stale)) {
+      setError("Ключи алгоритма изменились. Повторите review: каждый алгоритм должен быть проверен отдельно.");
+      return;
+    }
     if (!hasDashboardDirection) {
       setError("Заполните обязательное поле «Дашборд КХД/Направление»");
       return;
@@ -452,6 +476,8 @@ export default function AdminPrototypeReviewPage() {
         source_load: includeSourceLoad && sourceLoad ? sourceLoad : null,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
+          sql_variant_mode: item.sql_variant_mode || null,
+          variant_key: item.variant_key || null,
           path: item.path,
           paths: item.paths || [],
           target_fqn: item.target_fqn,
@@ -559,7 +585,9 @@ export default function AdminPrototypeReviewPage() {
 
       {error ? <div className="page-error">{error}</div> : null}
 
-      {result ? (
+      {mappingGroups.length > 0 && <PrototypeSqlVariantMapping groups={mappingGroups} choices={mappingChoices} disabled={loading} onChange={(value) => { setMappingChoices(value); setResult(null); setReviewItemsDraft([]); }} />}
+
+      {result && !result.mapping_required ? (
         <>
           <section className="slow-summary">
             <div className={`slow-summary-card ${result.status === "ok" ? "success" : result.status === "warning" ? "warn" : "danger"}`}>
@@ -725,7 +753,7 @@ export default function AdminPrototypeReviewPage() {
                         <div className="prototype-object-subtitle">{item.path || "—"}</div>
                       </div>
                       <div className="prototype-chip-row">
-                        <span className="prototype-badge">{item.object_type || "TABLE"}</span>
+                        <span className="prototype-badge">{item.object_type || "TABLE"}</span>{item.sql_variant_mode === "separate" && <span className="prototype-badge">Отдельный алгоритм</span>}
                         {item.is_new ? <span className="prototype-badge">Новый объект</span> : null}
                         {needsAttention ? <span className="prototype-badge warning">Нужно заполнить</span> : null}
                       </div>
@@ -769,9 +797,11 @@ export default function AdminPrototypeReviewPage() {
                         <input
                           className="slow-entity-select"
                           value={item.entity_name || ""}
+                          readOnly={item.sql_variant_mode === "separate"}
                           onChange={(event) => handleReviewItemChange(item.item_id, "entity_name", event.target.value)}
                           placeholder="MANAGEMENT_REPORTING_1, MANAGEMENT_REPORTING_2"
                         />
+                        {item.sql_variant_mode === "separate" && <span className="muted">Сущности этого алгоритма задаются в сопоставлении SQL выше. После изменения запустите review заново.</span>}
                         </div>
                         {isTableObject ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -787,10 +817,10 @@ export default function AdminPrototypeReviewPage() {
                             <button
                               type="button"
                               className="btn btn-ghost"
-                              onClick={() => handleRecheckTable(item.item_id)}
-                              disabled={item.rechecking || !splitItems(item.key_attributes_text).length}
+                              onClick={() => item.sql_variant_mode === "separate" ? handleRun() : handleRecheckTable(item.item_id)}
+                              disabled={loading || item.rechecking || !splitItems(item.key_attributes_text).length}
                             >
-                              {item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
+                              {item.sql_variant_mode === "separate" ? "Перепроверить алгоритмы" : item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
                             </button>
                           </div>
                           </div>

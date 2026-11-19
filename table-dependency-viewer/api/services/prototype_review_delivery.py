@@ -8,12 +8,14 @@ from urllib import parse as urlparse
 from .entity_dev_meta import _gitlab_json_request, _parse_gitlab_project
 from .gitlab_delivery import file_content, resource_exists
 from .prototype_review import build_review_execution_plan, infer_removed_table_targets
+from .prototype_review_variants import validate_common_variant_settings, entity_names
 from .prototype_review_dbt import (
     build_duplicates_model,
     build_nulls_model,
     build_registry_yaml,
     dbt_duplicates_path,
     dbt_model_sql_path,
+    dbt_variant_sql_path,
     dbt_nulls_path,
     dbt_registry_path,
     update_duplicates_model,
@@ -50,13 +52,26 @@ def publish_dbt_registry(
         if not item.get("is_clickhouse_view")
     ]
     sql_by_target = {
-        str(plan_item.get("target_fqn") or "").strip().lower(): str(plan_item.get("sql_text") or "").strip()
+        str(plan_item.get("item_id") or plan_item.get("target_fqn") or "").strip().lower(): str(plan_item.get("sql_text") or "").strip()
         for plan_item in build_review_execution_plan(
             files=changed_files or [],
             review_targets=sql_review_targets,
         )
         if str(plan_item.get("target_fqn") or "").strip()
     }
+    # A physical table has one DQ registry; algorithms keep separate SQL files.
+    merged_entities = {}
+    validate_common_variant_settings(review_items)
+    for item in review_items:
+        fqn = str(item.get("target_fqn") or "").lower()
+        if item.get("sql_variant_mode") != "separate":
+            continue
+        values = item.get("entity_names") or str(item.get("entity_name") or "").split(",")
+        merged_entities.setdefault(fqn, [])
+        for name in values:
+            name = str(name).strip()
+            if name and name not in merged_entities[fqn]:
+                merged_entities[fqn].append(name)
     active_targets: set[str] = set()
     for item in review_items:
         object_type = str(item.get("object_type") or "TABLE").strip().upper()
@@ -67,8 +82,9 @@ def publish_dbt_registry(
             continue
         schema_name, table_name = target_fqn.split(".", 1)
         active_targets.add(target_fqn.lower())
-        model_sql_path = dbt_model_sql_path(schema_name, table_name)
-        model_sql = sql_by_target.get(target_fqn.lower())
+        model_sql_path = (dbt_variant_sql_path(schema_name, table_name, entity_names(item.get("entity_name"))[0])
+                          if item.get("sql_variant_mode") == "separate" else dbt_model_sql_path(schema_name, table_name))
+        model_sql = sql_by_target.get(str(item.get("item_id") or target_fqn).lower())
         if object_type == "VIEW" and not model_sql:
             raise ValueError(f"Не найден SQL представления `{target_fqn}` для публикации в dbt")
         if model_sql:
@@ -77,7 +93,7 @@ def publish_dbt_registry(
             continue
         registry_path = dbt_registry_path(schema_name, table_name)
         duplicates_path = dbt_duplicates_path(schema_name, table_name)
-        dbt_files[registry_path] = {"target_fqn": target_fqn, "file_path": registry_path, "file_kind": "registry", "content": build_registry_yaml(item)}
+        dbt_files[registry_path] = {"target_fqn": target_fqn, "file_path": registry_path, "file_kind": "registry", "content": build_registry_yaml({**item, "entity_names": merged_entities.get(target_fqn.lower()) or item.get("entity_names")})}
         dbt_files[duplicates_path] = {"target_fqn": target_fqn, "file_path": duplicates_path, "file_kind": "dq_model", "key_attributes": item.get("key_attributes") or []}
         null_conditions = [str(value).strip() for value in (item.get("null_conditions") or []) if str(value).strip()]
         nulls_path = dbt_nulls_path(schema_name, table_name)

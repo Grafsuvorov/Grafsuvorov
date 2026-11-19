@@ -10,9 +10,13 @@ from .prototype_review import (
     _infer_target_from_path,
     _is_clickhouse_sql_path,
     infer_review_targets,
+    build_review_execution_plan,
+    _split_sql_statements,
     parse_prototype_task_text,
     validate_prototype_sql,
 )
+
+from .prototype_review_variants import variant_groups, apply_variant_mappings
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,16 @@ def build_prototype_review_result(
                 f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; проверьте влияние удаления на объект и зависимости"
             )
     review_targets = infer_review_targets(files)
+    groups = variant_groups(files, review_targets, all_meta)
+    mappings = getattr(payload, "sql_variant_mappings", None)
+    if groups and not mappings:
+        return {"status": "mapping_required", "mapping_required": True,
+                "status_reason": "Сопоставьте SQL-алгоритмы сущностям до выполнения в DEV",
+                "mapping_groups": groups, "mr": bundle.get("mr") or {},
+                "review_items": [], "execution": [], "preparation": []}
+    if groups or mappings:
+        review_targets = apply_variant_mappings(files, review_targets, groups, mappings)
+    checked_items = {}
     if files and not any(item.get("target_fqn") for item in review_targets):
         validation_errors.append("Не удалось определить целевые таблицы по SQL-файлам MR")
 
@@ -82,12 +96,40 @@ def build_prototype_review_result(
     preparation_rows: list[dict[str, Any]] = []
     execution_rows: list[dict[str, Any]] = []
     if not validation_errors and any(not item.get("skip_dev_execution") for item in review_targets):
-        preparation_rows, execution_rows = dependencies.execute_review(
-            dev_database_url=dependencies.dev_database_url,
-            files=files,
-            review_targets=review_targets,
-            progress_callback=progress_callback,
-        )
+        if any(t.get("sql_variant_mode") == "separate" for t in review_targets):
+            # Check each result while its own algorithm is still in the table.
+            # The next variant can overwrite the same physical relation.
+            ordered = build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
+            by_id = {t["item_id"]: t for t in review_targets}
+            for index, unit in enumerate(ordered):
+                target = by_id[unit["item_id"]]
+                path = unit["primary_path"]
+                scoped_files = [{"path": path, "sql": unit["sql_text"],
+                                 "statements": _split_sql_statements(unit["sql_text"])}]
+                prep, executed = dependencies.execute_review(
+                    dev_database_url=dependencies.dev_database_url, files=scoped_files,
+                    review_targets=[{**target, "execution_paths": [path]}], progress_callback=progress_callback,
+                )
+                preparation_rows.extend(prep)
+                execution_rows.extend(executed)
+                status = "error" if any(r.get("status") == "error" for r in executed) else "ok" if any(r.get("status") == "ok" for r in executed) else "skipped"
+                related = [f for f in files if f.get("path") in target["paths"]]
+                checked_items[target["item_id"]] = dependencies.resolve_item(
+                    target_fqn=target["target_fqn"], path_value=target["path"],
+                    execution_row={"status": status, "duration_sec": sum(float(r.get("duration_sec") or 0) for r in executed)},
+                    known_schemas=known_schemas, file_item=related[0] if related else {}, related_files=related,
+                    fallback_entity_name=target.get("mapped_entity_name") or str(payload.entity_name or ""),
+                    object_type_hint=target["object_type"], reserved_table_ids=set(),
+                    key_attributes_override=target.get("mapped_key_attributes"),
+                    sql_variant_mode=target.get("sql_variant_mode", ""),
+                )
+                if callable(progress_callback):
+                    progress_callback({"current": index + 1, "total": len(ordered), "path": path, "target_fqn": target["target_fqn"]})
+        else:
+            preparation_rows, execution_rows = dependencies.execute_review(
+                dev_database_url=dependencies.dev_database_url, files=files,
+                review_targets=review_targets, progress_callback=progress_callback,
+            )
 
     exec_by_path = {str(item.get("path") or "").strip(): item for item in execution_rows if str(item.get("path") or "").strip()}
     exec_by_item_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -139,17 +181,25 @@ def build_prototype_review_result(
         related_files = [row for row in files if str(row.get("path") or "") in set(related_paths)]
         file_item = related_files[0] if related_files else {}
         table_dependencies: list[str] = []
-        item_result = dependencies.resolve_item(
+        item_result = checked_items.get(item_id) or dependencies.resolve_item(
             target_fqn=target_fqn,
             path_value=path_value,
             execution_row=execution_row,
             known_schemas=known_schemas,
             file_item=file_item,
             related_files=related_files,
-            fallback_entity_name=str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
+            fallback_entity_name=target_item.get("mapped_entity_name") or str(payload.entity_name or parsed_task.get("entity_name") or "").strip(),
             object_type_hint=str(target_item.get("object_type") or ""),
             reserved_table_ids=reserved_table_ids,
+            sql_variant_mode=target_item.get("sql_variant_mode", ""),
+            key_attributes_override=target_item.get("mapped_key_attributes"),
         )
+        item_result["sql_variant_mode"] = target_item.get("sql_variant_mode")
+        if target_item.get("mapped_entity_name"):
+            names = [n.strip() for n in target_item["mapped_entity_name"].split(",") if n.strip()]
+            item_result["entity_name"] = ", ".join(names)
+            item_result["entity_names"] = names
+        item_result["variant_key"] = target_item.get("variant_key")
         item_result["item_id"] = item_id
         item_result["paths"] = related_paths
         item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()

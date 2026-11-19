@@ -32,6 +32,7 @@ sys.modules.setdefault("dotenv", dotenv_stub)
 import api.services.entity_dev_meta as entity_dev_meta
 import api.services.prototype_review_delivery as prototype_review_delivery
 import api.services.stg_source_loader as stg_source_loader
+from api.services.prototype_review_variants import variant_groups, apply_variant_mappings, validate_issue_variants
 import api.services.prototype_review as prototype_review
 import api.services.prototype_review_workflow as prototype_review_workflow
 from api.services.entity_dev_meta import (
@@ -1354,6 +1355,212 @@ class CreateYTrackIssueTests(unittest.TestCase):
             "query": "relates to DWH-1",
             "issues": [{"idReadable": "KHD-10"}],
         })
+
+
+class PrototypeSqlAlgorithmTests(unittest.TestCase):
+    @staticmethod
+    def files():
+        return [dict(path=path, sql=sql, statements=[sql]) for path, sql in [
+            ("dm.sb_wuc.sql", "insert into dm.sb_wuc select 1;"),
+            ("dm_update.sb_wuc.sql", "insert into dm.sb_wuc select 2;"),
+        ]]
+
+    @staticmethod
+    def mappings():
+        return [dict(target_fqn="dm.sb_wuc", mode="separate", variants=[
+            dict(entity_name="SB_WUC", paths=["dm.sb_wuc.sql"]),
+            dict(entity_name="2HOURS", paths=["dm_update.sb_wuc.sql"]),
+        ])]
+
+    def targets(self):
+        files = self.files()
+        targets = infer_review_targets(files)
+        return apply_variant_mappings(files, targets, variant_groups(files, targets), self.mappings())
+
+    def test_same_physical_target_yields_two_execution_units_without_mixing_sql(self):
+        targets = self.targets()
+        plan = build_review_execution_plan(files=self.files(), review_targets=targets)
+        self.assertEqual(len(plan), 2)
+        self.assertEqual(len({p["item_id"] for p in plan}), 2)
+        self.assertIn("select 1", plan[0]["sql_text"])
+        self.assertNotIn("select 2", plan[0]["sql_text"])
+        self.assertIn("select 2", plan[1]["sql_text"])
+        self.assertTrue(all(t["requires_pretruncate"] for t in targets))
+
+    def test_shared_choice_keeps_one_algorithm_for_multiple_entities(self):
+        files = self.files(); targets = infer_review_targets(files)
+        mapped = apply_variant_mappings(files, targets, variant_groups(files, targets),
+            [dict(target_fqn="dm.sb_wuc", mode="shared", entity_name="SB_WUC, 2HOURS")])
+        plan = build_review_execution_plan(files=files, review_targets=mapped)
+        self.assertEqual(len(plan), 1)
+        self.assertIn("select 1", plan[0]["sql_text"])
+        self.assertIn("select 2", plan[0]["sql_text"])
+        self.assertEqual(mapped[0]["mapped_entity_name"], "SB_WUC, 2HOURS")
+
+    def test_recreate_insert_truncate_files_are_not_two_algorithms(self):
+        files = [dict(path=p, sql=s, statements=[s]) for p, s in [
+            ("recreate.sql", "create table dm.sb_wuc (id int);"),
+            ("insert.sql", "insert into dm.sb_wuc select 1;"),
+            ("truncate.sql", "truncate table dm.sb_wuc;"),
+        ]]
+        self.assertEqual(variant_groups(files, infer_review_targets(files)), [])
+
+    def test_shared_ddl_is_included_in_each_separate_execution(self):
+        files = self.files() + [dict(path="recreate.sql", sql="create table dm.sb_wuc (id int);", statements=["create table dm.sb_wuc (id int);"])]
+        targets = infer_review_targets(files)
+        mapped = apply_variant_mappings(files, targets, variant_groups(files, targets), self.mappings())
+        self.assertTrue(all("recreate.sql" in t["paths"] for t in mapped))
+        self.assertTrue(all(not t["requires_pretruncate"] for t in mapped))
+
+    def test_missing_file_assignment_and_overlapping_entity_are_rejected(self):
+        for error in ("missing", "same_entity", "same_file"):
+            mappings = self.mappings()
+            if error == "missing": mappings[0]["variants"][1]["paths"] = []
+            if error == "same_entity": mappings[0]["variants"][1]["entity_name"] = "sb_wuc"
+            if error == "same_file": mappings[0]["variants"][1]["paths"] = ["dm.sb_wuc.sql"]
+            files = self.files(); targets = infer_review_targets(files)
+            with self.subTest(error=error), self.assertRaises(ValueError):
+                apply_variant_mappings(files, targets, variant_groups(files, targets), mappings)
+
+    def test_create_rejects_dropped_or_implicit_algorithm(self):
+        items = [{**t, "entity_name": t["mapped_entity_name"]} for t in self.targets()]
+        validate_issue_variants(items, self.files())
+        with self.assertRaisesRegex(ValueError, "Не все алгоритмы"):
+            validate_issue_variants(items[:1], self.files())
+        with self.assertRaises(ValueError):
+            validate_issue_variants([{**items[0], "sql_variant_mode": None}, items[1]], self.files())
+
+    def test_duplicate_unit_ids_fail_instead_of_hanging_execution_plan(self):
+        targets = self.targets(); targets[1]["item_id"] = targets[0]["item_id"]
+        with self.assertRaisesRegex(ValueError, "Повторный item_id"):
+            build_review_execution_plan(files=self.files(), review_targets=targets)
+
+    def workflow(self, mappings=None):
+        events = []; current = {"rows": None}
+        def execute(**kwargs):
+            sql = kwargs["files"][0]["sql"]
+            current["rows"] = 10 if "select 1" in sql else 20
+            events.append(("execute", current["rows"]))
+            target = kwargs["review_targets"][0]
+            return [], [dict(item_id=target["item_id"], path=kwargs["files"][0]["path"], status="ok", duration_sec=1)]
+        def resolve(**kwargs):
+            events.append(("check", current["rows"]))
+            return dict(target_fqn=kwargs["target_fqn"], entity_name=kwargs["fallback_entity_name"],
+                        checks={"row_count": current["rows"], "duplicate_groups": 0}, warnings=[], key_attributes=["id"])
+        deps = PrototypeReviewWorkflowDependencies(load_bundle=lambda **k: {"files": self.files(), "mr": {}},
+            get_meta_and_index=lambda: ([dict(table_schema="dm")], {}), resolve_item=resolve, execute_review=execute,
+            gitlab_api_url="", gitlab_project="", gitlab_token="", gitlab_ssl_verify=True,
+            analyst_gitlab_project="", dev_database_url="fixture")
+        payload = SimpleNamespace(mr_input="1", task_text="", issue_summary="", dependent_views=[], linked_issues=[],
+            release_date="", direction="", business_key_changed=None, entity_name="", sql_variant_mappings=mappings)
+        result = build_prototype_review_result(payload, SimpleNamespace(email="fixture"), dependencies=deps)
+        return result, events
+
+    def test_ambiguous_review_requires_mapping_before_any_dev_execution(self):
+        result, events = self.workflow()
+        self.assertTrue(result["mapping_required"])
+        self.assertEqual(events, [])
+
+    def test_each_algorithm_is_checked_before_next_overwrites_same_table(self):
+        result, events = self.workflow(self.mappings())
+        self.assertEqual(events, [("execute", 10), ("check", 10), ("execute", 20), ("check", 20)])
+        self.assertEqual([i["checks"]["row_count"] for i in result["review_items"]], [10, 20])
+        self.assertEqual([i["entity_name"] for i in result["review_items"]], ["SB_WUC", "2HOURS"])
+
+    def test_dbt_stores_each_variant_sql_but_one_common_registry(self):
+        items = [{**t, "entity_name": t["mapped_entity_name"], "key_attributes": ["id"], "scd_type": "scd1"} for t in self.targets()]
+        result, commits = PrototypeViewDbtDeliveryTests.publish(items, self.files())
+        actions = commits[0]["actions"]
+        models = [a for a in actions if "/_variants/" in a["file_path"]]
+        self.assertEqual(len(models), 2)
+        night = next(m for m in models if "/SB_WUC/" in m["file_path"])
+        day = next(m for m in models if "/2HOURS/" in m["file_path"])
+        self.assertIn("select 1", night["content"]); self.assertNotIn("select 2", night["content"])
+        self.assertIn("select 2", day["content"]); self.assertNotIn("select 1", day["content"])
+        registry = [a for a in actions if a["file_path"].endswith(".yml")]
+        self.assertEqual(len(registry), 1)
+        self.assertIn("    - SB_WUC", registry[0]["content"])
+        self.assertIn("    - 2HOURS", registry[0]["content"])
+
+    def test_conflicting_variant_dq_settings_do_not_silently_overwrite_registry(self):
+        items = [{**t, "entity_name": t["mapped_entity_name"], "key_attributes": ["id"]} for t in self.targets()]
+        items[1]["key_attributes"] = ["different_key"]
+        with self.assertRaisesRegex(ValueError, "Разные DQ/SCD"):
+            PrototypeViewDbtDeliveryTests.publish(items, self.files())
+        with self.assertRaisesRegex(ValueError, "Разные DQ/SCD"):
+            validate_issue_variants(items, self.files())
+
+    def test_variant_resolver_uses_metadata_of_selected_entity(self):
+        metas = [dict(table_schema="dm", table_name="sb_wuc", entity_name=name, table_id=tid,
+                      key_attributes=[key], table_load_mode=mode)
+                 for name, tid, key, mode in [("SB_WUC", 101, "night_key", "TRUNCATE_INIT"),
+                                              ("2HOURS", 202, "day_key", "INCREMENT")]]
+        checked = []
+        resolver = SimpleNamespace(
+            find_meta=lambda _: metas[0], find_meta_variants=lambda _: metas,
+            get_click_meta_index=lambda: {"meta": {}}, clean_table_name=lambda n: n,
+            impact_summary=lambda _: {}, item_needs_attention=lambda _: (False, []),
+            existing_null_conditions=lambda *a: [], existing_duplicate_filter=lambda *a: "",
+            query_table_checks=lambda **kw: checked.append(kw) or {"row_count": 1, "duplicate_groups": 0},
+            dev_database_url="fixture",
+        )
+        results = [resolve_prototype_review_item(target_fqn="dm.sb_wuc", fallback_entity_name=name,
+            sql_variant_mode="separate", execution_row={"status": "ok"}, resolver=resolver)
+            for name in ("SB_WUC", "2HOURS")]
+        self.assertEqual([r["table_id"] for r in results], [101, 202])
+        self.assertEqual([r["entity_names"] for r in results], [["SB_WUC"], ["2HOURS"]])
+        self.assertEqual([r["key_attributes"] for r in checked], [["night_key"], ["day_key"]])
+
+    def test_insert_only_variant_preserves_existing_shared_ddl_links(self):
+        module = ast.parse(Path("api/main.py").read_text())
+        node = next(n for n in module.body if isinstance(n, ast.FunctionDef)
+                    and n.name == "_prototype_review_prepare_yaml_for_issue")
+        original = {"sql_query_recreate_init": "meta/SB_WUC/recreate.sql",
+                    "sql_query_truncate": "meta/SB_WUC/truncate.sql",
+                    "sql_query_insert_init": "meta/SB_WUC/insert.sql"}
+        own = {key: value.replace("SB_WUC", "2HOURS") for key, value in original.items()}
+        namespace = {"Any": object, "Optional": __import__('typing').Optional,
+                     "yaml": SimpleNamespace(safe_load=json.loads), "_dump_yaml": json.dumps,
+                     "_prototype_review_refresh_yaml_identity": lambda **kw: json.dumps(original),
+                     "_prototype_review_collect_target_sql": _load_collect_target_sql(),
+                     "validate_entity_dev_meta_bundle": lambda **kw: {"normalized": {"yaml_content": json.dumps(own)}}}
+        namespace.update({key: None for key in ("engine", "BASE_DIR", "ENTITY_META_DIR", "DEV_ENTITY_META_DIR", "DEV_DATABASE_URL")})
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "api/main.py", "exec"), namespace)
+        result = json.loads(namespace[node.name](
+            item={"target_fqn": "dm.sb_wuc", "entity_name": "2HOURS", "sql_variant_mode": "separate"},
+            related_files=[self.files()[1]]))
+        self.assertEqual(result["sql_query_insert_init"], "meta/2HOURS/insert.sql")
+        self.assertEqual(result["sql_query_recreate_init"], original["sql_query_recreate_init"])
+        self.assertEqual(result["sql_query_truncate"], original["sql_query_truncate"])
+
+    def test_engineering_mr_receives_own_insert_sql_for_each_entity(self):
+        saved = []
+        def save(**kwargs):
+            saved.append(kwargs); return dict(branch_name="feature/DWH-17", changed_files=[])
+        params = {f.name: "" for f in fields(PrototypeIssueDeliveryDependencies)}
+        params.update(collect_target_sql=_load_collect_target_sql(), save_file=save,
+            yaml_repo_path=lambda entity, schema, table: f"meta/{entity}/{schema}/{table}/meta_data_file.yaml",
+            create_meta_mr=lambda **k: {}, publish_dbt=lambda **k: {})
+        items = [{**t, "entity_name": t["mapped_entity_name"], "yaml_content": "fixture"} for t in self.targets()]
+        result = deliver_prototype_issue(issue_result={"issue_id": "DWH-17", "raw": {"id": "2-17"}}, review_items=items,
+            bundle={"files": self.files(), "deleted_files": []}, user=SimpleNamespace(email="fixture"),
+            dependencies=PrototypeIssueDeliveryDependencies(**params))
+        self.assertIsNone(result["meta_error"])
+        inserts = [f for f in saved if f["file_path"].endswith("sql_query_insert_init.sql")]
+        self.assertEqual(len(inserts), 2)
+        self.assertIn("select 1", inserts[0]["content"])
+        self.assertIn("/SB_WUC/", inserts[0]["file_path"])
+        self.assertNotIn("select 2", inserts[0]["content"])
+        self.assertIn("select 2", inserts[1]["content"])
+        self.assertIn("/2HOURS/", inserts[1]["file_path"])
+
+    def test_variant_scripts_preserve_statement_separators_after_mr_parsing(self):
+        sql = "create temp table tmp_rows (id int); insert into tmp_rows select 1; insert into dm.sb_wuc select * from tmp_rows;"
+        result = _load_collect_target_sql()("dm.sb_wuc", [{"path": "dm.sb_wuc.sql", "sql": sql,
+            "statements": prototype_review._split_sql_statements(sql)}])
+        self.assertIn("create temp table tmp_rows (id int);", result["insert_sql"])
+        self.assertIn("insert into tmp_rows select 1;", result["insert_sql"])
+        self.assertTrue(result["insert_sql"].endswith(";"))
 
 
 class SourceLoadEntityIdentityTests(unittest.TestCase):

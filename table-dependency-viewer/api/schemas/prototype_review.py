@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class PrototypeReviewRunPayload(BaseModel):
     mr_input: str
+    sql_variant_mappings: Optional[List[Dict[str, Any]]] = None
     key_attributes: Optional[List[str]] = None
     create_issue: bool = False
     task_text: Optional[str] = None
@@ -42,6 +43,8 @@ class PrototypeReviewYamlRefreshPayload(BaseModel):
 
 
 class PrototypeReviewItemPayload(BaseModel):
+    sql_variant_mode: Optional[str] = None
+    variant_key: Optional[str] = None
     item_id: Optional[str] = None
     path: Optional[str] = None
     paths: Optional[List[str]] = None

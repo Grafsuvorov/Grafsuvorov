@@ -1114,6 +1114,9 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
         statement_insert: list[str] = []
         statement_truncate: list[str] = []
         for statement in statements or [sql_text]:
+            # MR statements are parsed without delimiters; generated SQL files
+            # must remain executable when a script has multiple statements.
+            statement = str(statement).strip().rstrip(";") + ";"
             statement_without_comments = _strip_sql_comments(statement)
             assigned = False
             normalized_targets: set[str] = set()
@@ -1360,7 +1363,17 @@ def _prototype_review_prepare_yaml_for_issue(
         truncate_sql=sql_bundle.get("truncate_sql", ""),
         dev_database_url=DEV_DATABASE_URL,
     )
-    return str((validation.get("normalized") or {}).get("yaml_content") or yaml_content)
+    normalized_yaml = str((validation.get("normalized") or {}).get("yaml_content") or yaml_content)
+    if item.get("sql_variant_mode") == "separate":
+        original = yaml.safe_load(yaml_content) or {}
+        normalized = yaml.safe_load(normalized_yaml) or {}
+        # Only changed scripts move to the variant's own directory. Existing
+        # shared DDL/truncate links remain valid when the MR contains INSERT only.
+        for field, kind in (("sql_query_recreate_init", "recreate_sql"), ("sql_query_truncate", "truncate_sql")):
+            if not str(sql_bundle.get(kind) or "").strip() and original.get(field):
+                normalized[field] = original[field]
+        normalized_yaml = _dump_yaml(normalized)
+    return normalized_yaml
 
 
 def _prototype_review_item_dependencies() -> PrototypeReviewItemDependencies:
@@ -1601,10 +1614,11 @@ def start_admin_prototype_review(payload: PrototypeReviewRunPayload, request: Re
                 total=len(result.get("review_items") or []),
                 result=result,
             )
-            _notify_user_about_completion(
-                user,
-                "✨ Prototype Review завершён. Результаты готовы — можно идти проверять таблицы.",
-            )
+            if not result.get("mapping_required"):
+                _notify_user_about_completion(
+                    user,
+                    "✨ Prototype Review завершён. Результаты готовы — можно идти проверять таблицы.",
+                )
         except Exception as exc:
             _prototype_review_job_update(job_id, status="error", error=str(exc))
 

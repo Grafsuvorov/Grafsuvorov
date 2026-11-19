@@ -114,8 +114,8 @@ def deliver_prototype_issue(
                 continue
             schema_name, table_name = target_fqn.split(".", 1)
             try:
-                # Prototype Review creates metadata only.  The engineer owns
-                # recreate/insert/truncate scripts and adds them manually.
+                # Ordinary reviews publish metadata only. Explicit alternative
+                # algorithms also deliver their own scoped SQL below.
                 save_result = dependencies.save_file(
                     git_repo_value=dependencies.entity_git_repo,
                     workspace_root_value=dependencies.workspace_root,
@@ -128,6 +128,25 @@ def deliver_prototype_issue(
                     author=author,
                     expected_revision=None,
                 )
+                if item.get("sql_variant_mode") == "separate":
+                    paths = set(item.get("paths") or [])
+                    related = [f for f in bundle.get("files") or [] if f.get("path") in paths]
+                    scripts = dependencies.collect_target_sql(target_fqn, related)
+                    parent_path = dependencies.yaml_repo_path(entity_name, schema_name, table_name).rsplit("/", 1)[0]
+                    for kind, filename in (("recreate_sql", "sql_query_recreate_init.sql"),
+                                           ("insert_sql", "sql_query_insert_init.sql"),
+                                           ("truncate_sql", "sql_query_truncate.sql")):
+                        content = str(scripts.get(kind) or "").strip()
+                        if not content:
+                            continue
+                        script_result = dependencies.save_file(
+                            git_repo_value=dependencies.entity_git_repo,
+                            workspace_root_value=dependencies.workspace_root, workspace_owner=author,
+                            branch_name=branch_name, base_branch=dependencies.base_branch,
+                            file_path=posix_join(parent_path, filename), content=content + "\n",
+                            task_id=issue_id, author=author, expected_revision=None,
+                        )
+                        save_result["changed_files"] = [*(save_result.get("changed_files") or []), *(script_result.get("changed_files") or [])]
                 for replica_entity_name, replica_yaml in (item.get("replica_yaml_contents") or {}).items():
                     replica_name = str(replica_entity_name or "").strip()
                     if not replica_name:

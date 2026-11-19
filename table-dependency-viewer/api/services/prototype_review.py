@@ -967,29 +967,29 @@ def build_review_execution_plan(
             }
         )
 
-    by_target = {str(item.get("target_fqn") or "").strip().lower(): item for item in plan_items}
-    remaining = {key: set(item.get("dependencies") or []) for key, item in by_target.items()}
-    ordered: list[dict[str, Any]] = []
-    processed: set[str] = set()
+    # Execution units, rather than physical relations, are unique. A relation
+    # can have several independently checked algorithms for different entities.
+    unit_keys = {id(item): str(item.get("item_id") or f"{item['target_fqn']}::{index}")
+                 for index, item in enumerate(plan_items)}
+    if len(set(unit_keys.values())) != len(plan_items):
+        raise ValueError("Повторный item_id в плане выполнения SQL")
+    by_target = {}
+    for item in plan_items:
+        by_target.setdefault(str(item["target_fqn"]).lower(), set()).add(unit_keys[id(item)])
+    remaining = {unit_keys[id(item)]: set().union(*(by_target.get(str(dep).lower(), set())
+        for dep in item.get("dependencies") or [])) for item in plan_items}
+    ordered, processed = [], set()
     while len(processed) < len(plan_items):
-        ready = [
-            item
-            for item in sorted(plan_items, key=lambda row: int(row.get("order_index") or 0))
-            if str(item.get("target_fqn") or "").strip().lower() not in processed
-            and not remaining.get(str(item.get("target_fqn") or "").strip().lower(), set())
-        ]
+        ready = [item for item in sorted(plan_items, key=lambda row: int(row.get("order_index") or 0))
+                 if unit_keys[id(item)] not in processed and not remaining[unit_keys[id(item)]]]
         if not ready:
-            for item in sorted(plan_items, key=lambda row: int(row.get("order_index") or 0)):
-                key = str(item.get("target_fqn") or "").strip().lower()
-                if key not in processed:
-                    ready = [item]
-                    break
+            ready = [item for item in plan_items if unit_keys[id(item)] not in processed]
         current = ready[0]
-        current_key = str(current.get("target_fqn") or "").strip().lower()
-        processed.add(current_key)
+        key = unit_keys[id(current)]
+        processed.add(key)
         ordered.append(current)
         for deps in remaining.values():
-            deps.discard(current_key)
+            deps.discard(key)
     return ordered
 
 

@@ -45,6 +45,15 @@ def dbt_model_sql_path(schema_name: str, table_name: str) -> str:
     )
 
 
+def dbt_variant_sql_path(schema_name: str, table_name: str, entity_name: str) -> str:
+    entity = str(entity_name or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", entity):
+        raise ValueError("Некорректная сущность SQL-варианта dbt")
+    base = dbt_model_sql_path(schema_name, table_name)
+    directory, filename = base.rsplit("/", 1)
+    return posix_join(directory, "_variants", entity, filename)
+
+
 def dbt_duplicates_path(schema_name: str, table_name: str) -> str:
     schema_name_norm = str(schema_name or "").strip().lower()
     table_name_norm = _object_directory_name(table_name) or str(table_name or "").strip().lower()

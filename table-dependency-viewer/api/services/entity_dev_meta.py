@@ -136,6 +136,28 @@ def _normalize_sql(sql: str) -> str:
     return re.sub(r"\s+", " ", _strip_sql_comments(sql)).strip().lower()
 
 
+def _physical_table_name(schema_name: str, table_name: str, *, sql_text: str = "", yaml_table_name=None) -> str:
+    """Keep physical identifier spelling separate from case-insensitive lookup keys."""
+    requested = str(table_name or "").strip().strip('"')
+    token = r'"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*'
+    pattern = re.compile(
+        rf"--[^\n]*|/\*.*?\*/|'(?:''|[^'])*'|(?P<schema>{token})\s*\.\s*(?P<table>{token})",
+        re.DOTALL,
+    )
+    for match in pattern.finditer(str(sql_text or "")):
+        relation = match.group("table")
+        if not relation or not relation.startswith('"'):
+            continue
+        schema = match.group("schema").strip('"')
+        physical = relation[1:-1].replace('""', '"')
+        if schema.lower() == str(schema_name).strip('"').lower() and physical.lower() == requested.lower():
+            return physical
+    if requested != requested.lower():
+        return requested
+    stored = str(yaml_table_name or "").strip().strip('"')
+    return stored if stored and stored.lower() == requested.lower() else requested
+
+
 def _find_child_case_insensitive(parent: Path, name: str) -> Optional[Path]:
     if not parent.exists():
         return None
@@ -233,6 +255,10 @@ def _normalize_yaml_payload_fields(
     dependency_sql: Optional[str] = None,
 ) -> tuple[dict[str, Any], list[str]]:
     normalized_payload = dict(payload) if isinstance(payload, dict) else {}
+    normalized_payload["table_name"] = _physical_table_name(
+        schema_name, table_name, yaml_table_name=normalized_payload.get("table_name"),
+        sql_text=insert_sql if dependency_sql is None else dependency_sql,
+    )
     automatic_source_id = _automatic_source_id(schema_name)
     if automatic_source_id is not None:
         normalized_payload["source_id"] = automatic_source_id
@@ -605,7 +631,7 @@ def _build_generated_yaml(
         })
         payload = merged_default
 
-    payload["table_name"] = table_norm
+    payload["table_name"] = str(table_name or "").strip().strip('"')
     payload["table_schema"] = schema_norm
     payload["entity_name"] = entity_name
     payload["table_id"] = _reserve_next_table_id(engine) or _next_table_id(
@@ -886,7 +912,7 @@ def _apply_bundle_identity(
     if entity_id is not None:
         payload["entity_id"] = entity_id
     payload["table_schema"] = _normalize_name(schema_name)
-    payload["table_name"] = _normalize_name(table_name)
+    payload["table_name"] = _physical_table_name(schema_name, table_name, yaml_table_name=payload.get("table_name"))
     automatic_source_id = _automatic_source_id(schema_name)
     if automatic_source_id is not None:
         payload["source_id"] = automatic_source_id
@@ -1372,6 +1398,10 @@ def validate_entity_dev_meta_bundle(
     # depends_on from SQL for the autofill draft; comparing after that step made
     # every missing dependency look valid.
     original_depends_on = _flatten_depends_on(payload.get("depends_on"))
+    payload["table_name"] = _physical_table_name(
+        schema_name, table_name, yaml_table_name=payload.get("table_name"),
+        sql_text=recreate_sql + "\n" + insert_sql,
+    )
     target_fqn = f"{normalized_schema}.{normalized_table}"
     created_object = _extract_created_object(recreate_sql, target_fqn) if recreate_sql.strip() else None
     if created_object:

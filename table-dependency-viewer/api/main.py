@@ -166,6 +166,7 @@ from .services.dev_meta import (
 )
 from .services.entity_dev_meta import (
     _dump_yaml,
+    _physical_table_name,
     _gitlab_json_request,
     _parse_gitlab_project,
     create_entity_meta_mr,
@@ -1223,11 +1224,12 @@ def _prototype_review_refresh_yaml_identity(
     reserved_table_ids: Optional[set[int]] = None,
     preserve_submitted_table_id: bool = False,
 ) -> str:
-    target_fqn = str(item.get("target_fqn") or "").strip().lower()
+    target_fqn = str(item.get("target_fqn") or "").strip()
     entity_name = str(item.get("entity_name") or "").strip()
     if "." not in target_fqn or not entity_name:
         raise ValueError(f"Не заполнены сущность или schema.table для `{target_fqn or 'объекта'}`")
     schema_name, table_name = target_fqn.split(".", 1)
+    schema_name = schema_name.lower()
     key_attributes = [
         str(value).strip()
         for value in (item.get("key_attributes") or [])
@@ -1273,6 +1275,9 @@ def _prototype_review_refresh_yaml_identity(
             result[field_name] = generated_payload[field_name]
         else:
             result.pop(field_name, None)
+    name_candidates = [generated_payload.get("table_name"), submitted_payload.get("table_name")]
+    stored_name = next((name for name in name_candidates if isinstance(name, str) and name != name.lower()), None)
+    result["table_name"] = _physical_table_name(schema_name, table_name, yaml_table_name=stored_name)
 
     # A submitted ID belongs to the entity selected when the review item was
     # first resolved.  A replica that does not yet exist must retain the new

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from .entity_dev_meta import _physical_table_name
+
 
 @dataclass(frozen=True)
 class PrototypeReviewItemDependencies:
@@ -69,6 +71,11 @@ def resolve_prototype_review_item(
     if meta_variants:
         meta = {**(meta or {}), **meta_variants[0]}
     schema_name, table_name = target_fqn.split(".", 1)
+    table_name = _physical_table_name(
+        schema_name, table_name, yaml_table_name=(meta or {}).get("table_name"),
+        sql_text="\n".join(str(file.get("sql") or "") for file in (related_files or [file_item or {}])),
+    )
+    physical_target_fqn = f"{schema_name}.{table_name}"
     detected_keys = list(key_attributes_override or []) or list((meta or {}).get("key_attributes") or [])
     entity_names = []
     entity_names_seen = set()
@@ -107,7 +114,7 @@ def resolve_prototype_review_item(
         try:
             checks = resolver.query_table_checks(
                 dev_database_url=resolver.dev_database_url,
-                target_fqn=target_fqn,
+                target_fqn=physical_target_fqn,
                 key_attributes=detected_keys if item_object_type == "TABLE" else [],
             )
         except Exception as exc:
@@ -141,7 +148,7 @@ def resolve_prototype_review_item(
     })
     return {
         "path": path_value,
-        "target_fqn": target_fqn,
+        "target_fqn": physical_target_fqn,
         # The metadata catalogue is authoritative for an existing object.
         # Carry its identity through the browser form to issue creation.
         "table_id": (meta or {}).get("table_id"),

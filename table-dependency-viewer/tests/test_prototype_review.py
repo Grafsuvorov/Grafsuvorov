@@ -1598,6 +1598,32 @@ class PrototypeViewDbtDeliveryTests(unittest.TestCase):
 
 
 class PrototypeYamlFlagTests(unittest.TestCase):
+    def test_refresh_keeps_mixed_case_and_existing_ids(self):
+        source = ast.parse(Path("api/main.py").read_text())
+        node = next(n for n in source.body if isinstance(n, ast.FunctionDef) and n.name == "_prototype_review_refresh_yaml_identity")
+        physical = "s1c_SI_AluminaRemains_AI"
+        for target in (physical, physical.lower()):
+            with self.subTest(target=target):
+                generated = dict(table_name=physical.lower(), table_schema="stg", table_id=7440,
+                                 entity_id=34, entity_name="TRANSPORTATION", object_type="TABLE")
+                namespace = {
+                    "yaml": SimpleNamespace(safe_load=json.loads), "_dump_yaml": json.dumps,
+                    "_physical_table_name": entity_dev_meta._physical_table_name,
+                    "engine": SimpleNamespace(connect=lambda: __import__("contextlib").nullcontext(None)),
+                    "BASE_DIR": Path.cwd(), "ENTITY_META_DIR": "prod", "DEV_ENTITY_META_DIR": "dev",
+                    "TABLE_TABLES_META": "tech_etl.tables_meta",
+                    "init_entity_dev_meta_bundle": lambda **kwargs: {"exists": True, "yaml_content": json.dumps(generated)},
+                    "get_table_id_by_fqn": lambda *args: 7440,
+                }
+                exec(compile(ast.Module(body=[node], type_ignores=[]), "api/main.py", "exec"), namespace)
+                result = json.loads(namespace[node.name](item={
+                    "target_fqn": f"stg.{target}", "entity_name": "TRANSPORTATION",
+                    "yaml_content": json.dumps(dict(table_name=physical, table_id=7440, entity_id=34)),
+                }))
+                self.assertEqual(result["table_name"], physical)
+                self.assertEqual(result["table_id"], 7440)
+                self.assertEqual(result["entity_id"], 34)
+
     def test_refresh_preserves_explicit_or_existing_flag(self) -> None:
         source = ast.parse(Path("api/main.py").read_text())
         node = next(n for n in source.body if isinstance(n, ast.FunctionDef) and n.name == "_prototype_review_refresh_yaml_identity")
@@ -1614,6 +1640,7 @@ class PrototypeYamlFlagTests(unittest.TestCase):
                 }
                 namespace = {
                     "yaml": SimpleNamespace(safe_load=json.loads), "_dump_yaml": json.dumps,
+                    "_physical_table_name": entity_dev_meta._physical_table_name,
                     "engine": SimpleNamespace(connect=lambda: __import__("contextlib").nullcontext(None)),
                     "BASE_DIR": Path.cwd(), "ENTITY_META_DIR": "prod", "DEV_ENTITY_META_DIR": "dev",
                     "TABLE_TABLES_META": "tech_etl.tables_meta",
@@ -1630,6 +1657,84 @@ class PrototypeYamlFlagTests(unittest.TestCase):
 
 
 class EntityMetaDependenciesTests(unittest.TestCase):
+    def test_generated_mixed_case_table_name_keeps_lowercase_git_directory(self):
+        name = "s1c_SI_AluminaRemains_AI"
+        with TemporaryDirectory() as prod, TemporaryDirectory() as dev, patch.object(entity_dev_meta, "_lookup_entity_id", return_value=34):
+            payload = _build_generated_yaml(
+                engine=None, prod_root=Path(prod), dev_root=Path(dev),
+                entity_name="TRANSPORTATION", schema_name="stg", table_name=name,
+            )
+        self.assertEqual(payload["table_name"], name)
+        self.assertIn("/stg/s1c_si_aluminaremains_ai/", payload["sql_query_recreate_init"])
+
+    def test_bundle_identity_preserves_physical_case_and_id_across_refresh(self):
+        original = {"table_name": "s1c_SI_AluminaRemains_AI", "table_id": 7440, "entity_id": 34, "object_type": "TABLE"}
+        with (
+            patch.object(entity_dev_meta, "_load_yaml_text", return_value=original),
+            patch.object(entity_dev_meta, "_dump_yaml", side_effect=json.dumps),
+        ):
+            content = entity_dev_meta._apply_bundle_identity(
+                yaml_content="fixture", entity_name="TRANSPORTATION", schema_name="stg",
+                table_name="s1c_si_aluminaremains_ai", entity_id=34,
+            )
+        payload = json.loads(content)
+        self.assertEqual(payload["table_name"], "s1c_SI_AluminaRemains_AI")
+        self.assertEqual(payload["table_id"], 7440)
+        self.assertEqual(payload["entity_id"], 34)
+
+    def test_quoted_sql_recovers_case_from_normalized_target(self):
+        name = entity_dev_meta._physical_table_name(
+            "stg", "s1c_si_aluminaremains_ai", yaml_table_name="s1c_si_aluminaremains_ai",
+            sql_text='create table "stg"."s1c_SI_AluminaRemains_AI" (id int);',
+        )
+        self.assertEqual(name, "s1c_SI_AluminaRemains_AI")
+
+    def test_case_detection_ignores_comments_and_sql_string_literals(self):
+        sql = '''-- stg."S1C_SI_ALUMINAREMAINS_AI"
+        /* stg."S1C_SI_ALUMINAREMAINS_AI" */
+        select 'stg."S1C_SI_ALUMINAREMAINS_AI"';
+        create table stg."s1c_SI_AluminaRemains_AI" (id int);
+        '''
+        self.assertEqual(entity_dev_meta._physical_table_name("stg", "s1c_si_aluminaremains_ai", sql_text=sql), "s1c_SI_AluminaRemains_AI")
+
+    def test_validation_restores_case_without_changing_identity(self):
+        original = dict(table_name="s1c_si_aluminaremains_ai", table_schema="stg", table_id=7440,
+                        entity_id=34, entity_name="TRANSPORTATION", object_type="TABLE")
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", return_value=original),
+            patch.object(entity_dev_meta, "_dump_yaml", side_effect=json.dumps),
+        ):
+            result = validate_entity_dev_meta_bundle(
+                base_dir=Path.cwd(), prod_root_value="missing-prod-root", dev_root_value="missing-dev-root",
+                entity_name="TRANSPORTATION", schema_name="stg", table_name="s1c_si_aluminaremains_ai",
+                key_attributes=["id"], source_object_key=None, yaml_content="fixture",
+                recreate_sql='create table stg."s1c_SI_AluminaRemains_AI" (id int);',
+                insert_sql='insert into stg."s1c_SI_AluminaRemains_AI" select 1;', truncate_sql="select 1;",
+            )
+        payload = json.loads(result["normalized"]["yaml_content"])
+        self.assertEqual(payload["table_name"], "s1c_SI_AluminaRemains_AI")
+        self.assertEqual(payload["table_id"], 7440)
+        self.assertEqual(payload["entity_id"], 34)
+
+    def test_review_item_preserves_quoted_target_for_yaml_refresh_and_dev_checks(self):
+        checks = []
+        def query(**kwargs):
+            checks.append(kwargs["target_fqn"])
+            return {"row_count": 1, "duplicate_groups": 0}
+        resolver = SimpleNamespace(
+            find_meta=lambda _: None, find_meta_variants=lambda _: [], get_click_meta_index=lambda: {"meta": {}},
+            clean_table_name=lambda name: name,
+            impact_summary=lambda _: {}, item_needs_attention=lambda _: (False, []),
+            existing_null_conditions=lambda *a: [], existing_duplicate_filter=lambda *a: "",
+            query_table_checks=query, dev_database_url="fixture",
+        )
+        result = resolve_prototype_review_item(
+            target_fqn="stg.s1c_si_aluminaremains_ai", execution_row={"status": "ok"},
+            related_files=[{"sql": 'create table stg."s1c_SI_AluminaRemains_AI" (id int);'}], resolver=resolver,
+        )
+        self.assertEqual(result["target_fqn"], "stg.s1c_SI_AluminaRemains_AI")
+        self.assertEqual(checks, ["stg.s1c_SI_AluminaRemains_AI"])
+
     def test_new_table_does_not_inherit_neighbour_view_flags(self) -> None:
         with (
             TemporaryDirectory() as prod_dir,

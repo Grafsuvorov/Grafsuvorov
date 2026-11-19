@@ -1435,7 +1435,7 @@ class PrototypeSqlAlgorithmTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Повторный item_id"):
             build_review_execution_plan(files=self.files(), review_targets=targets)
 
-    def workflow(self, mappings=None):
+    def workflow(self, mappings=None, selected=None):
         events = []; current = {"rows": None}
         def execute(**kwargs):
             sql = kwargs["files"][0]["sql"]
@@ -1452,7 +1452,8 @@ class PrototypeSqlAlgorithmTests(unittest.TestCase):
             gitlab_api_url="", gitlab_project="", gitlab_token="", gitlab_ssl_verify=True,
             analyst_gitlab_project="", dev_database_url="fixture")
         payload = SimpleNamespace(mr_input="1", task_text="", issue_summary="", dependent_views=[], linked_issues=[],
-            release_date="", direction="", business_key_changed=None, entity_name="", sql_variant_mappings=mappings)
+            release_date="", direction="", business_key_changed=None, entity_name="", sql_variant_mappings=mappings,
+            selected_item_ids=selected)
         result = build_prototype_review_result(payload, SimpleNamespace(email="fixture"), dependencies=deps)
         return result, events
 
@@ -1466,6 +1467,20 @@ class PrototypeSqlAlgorithmTests(unittest.TestCase):
         self.assertEqual(events, [("execute", 10), ("check", 10), ("execute", 20), ("check", 20)])
         self.assertEqual([i["checks"]["row_count"] for i in result["review_items"]], [10, 20])
         self.assertEqual([i["entity_name"] for i in result["review_items"]], ["SB_WUC", "2HOURS"])
+
+    def test_retry_runs_only_selected_algorithm_of_same_physical_table(self):
+        selected = self.targets()[1]["item_id"]
+        result, events = self.workflow(self.mappings(), selected=[selected])
+        self.assertTrue(result["partial"])
+        self.assertEqual(events, [("execute", 20), ("check", 20)])
+        self.assertEqual(len(result["review_items"]), 1)
+        self.assertEqual(len(result["source_manifest"]), 2)
+        self.assertEqual(result["review_items"][0]["entity_name"], "2HOURS")
+
+    def test_stale_or_empty_selection_rejected_before_execution(self):
+        for selection in (["old-item-id"], []):
+            with self.subTest(selection=selection), self.assertRaisesRegex(ValueError, "Состав объектов"):
+                self.workflow(self.mappings(), selected=selection)
 
     def test_dbt_stores_each_variant_sql_but_one_common_registry(self):
         items = [{**t, "entity_name": t["mapped_entity_name"], "key_attributes": ["id"], "scd_type": "scd1"} for t in self.targets()]
@@ -1561,6 +1576,80 @@ class PrototypeSqlAlgorithmTests(unittest.TestCase):
         self.assertIn("create temp table tmp_rows (id int);", result["insert_sql"])
         self.assertIn("insert into tmp_rows select 1;", result["insert_sql"])
         self.assertTrue(result["insert_sql"].endswith(";"))
+
+
+class PrototypeReviewRetryTests(unittest.TestCase):
+    def run_selected(self, files, target="dm.failed", overrides=None):
+        targets = infer_review_targets(files)
+        chosen = next(t for t in targets if t["target_fqn"] == target)
+        executed, checked = [], []
+        def execute(**kw):
+            executed.extend(kw["files"])
+            t = kw["review_targets"][0]
+            return [], [{"item_id": t["item_id"], "status": "ok", "path": t["path"]}]
+        def resolve(**kw):
+            checked.append(kw)
+            return {"target_fqn": kw["target_fqn"], "warnings": [], "checks": {}, "execution": kw["execution_row"]}
+        dependencies = PrototypeReviewWorkflowDependencies(
+            load_bundle=lambda **kw: {"files": files, "mr": {}}, get_meta_and_index=lambda: ([], {}),
+            resolve_item=resolve, execute_review=execute, gitlab_api_url="", gitlab_project="", gitlab_token="",
+            gitlab_ssl_verify=True, analyst_gitlab_project="", dev_database_url="fixture")
+        payload = SimpleNamespace(mr_input="1", task_text="", issue_summary="", dependent_views=[], linked_issues=[],
+            release_date="", direction="", business_key_changed=None, entity_name="",
+            selected_item_ids=[chosen["item_id"]], item_overrides=[{"item_id": chosen["item_id"], **(overrides or {})}])
+        result = build_prototype_review_result(payload, None, dependencies=dependencies)
+        return result, executed, checked
+
+    def test_retry_does_not_execute_successful_neighbour_in_same_file(self):
+        sql = "insert into dm.success select 1; insert into dm.failed select 2;"
+        result, executed, checked = self.run_selected([{"path": "objects.sql", "sql": sql,
+            "statements": prototype_review._split_sql_statements(sql)}], overrides={"key_attributes": ["new_key"]})
+        self.assertEqual(len(executed), 1)
+        self.assertIn("dm.failed", executed[0]["sql"])
+        self.assertNotIn("dm.success", executed[0]["sql"])
+        self.assertEqual(len(checked), 1)
+        self.assertEqual(checked[0]["key_attributes_override"], ["new_key"])
+        self.assertEqual([i["target_fqn"] for i in result["review_items"]], ["dm.failed"])
+
+    def test_validation_of_unselected_file_does_not_block_selected_object(self):
+        files = [{"path": p, "sql": s, "statements": prototype_review._split_sql_statements(s)} for p, s in [
+            ("dm.failed.sql", "insert into dm.failed select 200;"),
+            ("dm.other.sql", "insert into dm.other select * from userdata.secret;")]]
+        result, executed, _ = self.run_selected(files)
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("select 200", executed[0]["sql"])
+        self.assertNotIn("userdata", executed[0]["sql"])
+
+    def test_downstream_results_marked_stale_without_automatic_execution(self):
+        files = [{"path": p, "sql": s, "statements": prototype_review._split_sql_statements(s)} for p, s in [
+            ("dm.failed.sql", "insert into dm.failed select 200;"),
+            ("dm.downstream.sql", "insert into dm.downstream select * from dm.failed;")]]
+        result, executed, _ = self.run_selected(files)
+        self.assertEqual(len(executed), 1)
+        self.assertEqual(result["invalidated_item_ids"], ["dm.downstream::TABLE"])
+
+    def test_source_snapshot_prevents_publishing_changed_sql_with_old_checks(self):
+        from api.services.prototype_review_retry import sql_fingerprint, validate_review_sources
+        files = [{"path": "dm.failed.sql", "sql": "insert into dm.failed select 1;"}]
+        item = {"target_fqn": "dm.failed", "paths": ["dm.failed.sql"]}
+        item["sql_fingerprint"] = sql_fingerprint(item, files)
+        validate_review_sources([item], files)
+        with self.assertRaisesRegex(ValueError, "изменился после проверки"):
+            validate_review_sources([item], [{"path": "dm.failed.sql", "sql": "insert into dm.failed select 2;"}])
+
+    def test_prepare_failure_prevents_insert_execution(self):
+        sql = "insert into dm.failed select 1;"
+        files = [{"path": "dm.failed.sql", "sql": sql, "statements": [sql]}]
+        cursor = SimpleNamespace(execute=lambda *_: self.fail("INSERT must not run after failed TRUNCATE"), close=lambda: None)
+        conn = SimpleNamespace(cursor=lambda: cursor, close=lambda: None)
+        engine = SimpleNamespace(raw_connection=lambda: conn, dispose=lambda: None)
+        with patch.object(prototype_review, "create_engine", return_value=engine), patch.object(
+            prototype_review, "prepare_target_table_in_dev", side_effect=RuntimeError("lock timeout")):
+            prep, rows = prototype_review.execute_sql_review_items_in_dev(
+                dev_database_url="fixture", files=files, review_targets=infer_review_targets(files))
+        self.assertEqual(prep[0]["status"], "error")
+        self.assertEqual(rows[0]["status"], "error")
+        self.assertIn("lock timeout", rows[0]["error_message"])
 
 
 class SourceLoadEntityIdentityTests(unittest.TestCase):

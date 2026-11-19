@@ -8,6 +8,7 @@ import re
 
 from .prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 from .prototype_review_variants import validate_issue_variants
+from .prototype_review_retry import validate_review_sources
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,7 @@ def create_prototype_review_issue(
     parsed_task = dependencies.parse_task(payload.task_text or "")
     review_items = [item.model_dump() for item in payload.review_items]
     changed_files = bundle.get("files") or []
+    validate_review_sources(review_items, changed_files)
     validate_issue_variants(review_items, changed_files)
     for item in review_items:
         item_paths = {

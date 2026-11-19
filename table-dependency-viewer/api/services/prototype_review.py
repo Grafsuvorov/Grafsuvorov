@@ -1153,6 +1153,13 @@ def execute_sql_review_items_in_dev(
             path_value = str(plan_item.get("path") or "").strip()
             target_fqn = str(plan_item.get("target_fqn") or "").strip()
             item_id = str(plan_item.get("item_id") or "").strip()
+            failed_prep = next((row for row in preparation_rows if str(row.get("item_id") or "") == item_id
+                                and row.get("status") == "error"), None)
+            if failed_prep:
+                execution_rows.append({"item_id": item_id or None, "path": path_value,
+                    "target_fqn": target_fqn, "status": "error", "duration_sec": 0.0,
+                    "error_message": failed_prep.get("message") or "Ошибка подготовки объекта"})
+                continue
             sql_text = _normalize_sql_text(plan_item.get("sql_text") or "").strip()
             if callable(progress_callback):
                 progress_callback(

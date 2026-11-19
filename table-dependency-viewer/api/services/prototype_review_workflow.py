@@ -17,6 +17,7 @@ from .prototype_review import (
 )
 
 from .prototype_review_variants import variant_groups, apply_variant_mappings
+from .prototype_review_retry import sql_fingerprint
 
 
 @dataclass(frozen=True)
@@ -50,15 +51,14 @@ def build_prototype_review_result(
     )
     files = bundle.get("files") or []
     parsed_task = parse_prototype_task_text(payload.task_text or "")
-    sql_validation = validate_prototype_sql(files)
     all_meta, _ = dependencies.get_meta_and_index()
     known_schemas = {
         str(meta.get("table_schema") or "").strip().lower()
         for meta in all_meta
         if str(meta.get("table_schema") or "").strip()
     }
-    validation_errors = list(sql_validation.get("errors") or [])
-    validation_warnings = list(sql_validation.get("warnings") or [])
+    validation_errors = []
+    validation_warnings = []
     for deleted_file in bundle.get("deleted_files") or []:
         deleted_path = str(deleted_file.get("path") or "").strip()
         if deleted_path:
@@ -75,6 +75,41 @@ def build_prototype_review_result(
                 "review_items": [], "execution": [], "preparation": []}
     if groups or mappings:
         review_targets = apply_variant_mappings(files, review_targets, groups, mappings)
+    source_manifest = [{"item_id": t["item_id"], "target_fqn": t["target_fqn"],
+                        "sql_fingerprint": sql_fingerprint(t, files)} for t in review_targets]
+    selected = getattr(payload, "selected_item_ids", None)
+    selected_plan = None
+    invalidated_item_ids = set()
+    if selected is not None:
+        selected = set(selected)
+        known_ids = {t["item_id"] for t in review_targets}
+        if not selected or selected - known_ids:
+            raise ValueError("Состав объектов MR изменился. Обновите полный review и сопоставление алгоритмов.")
+        # Build with ALL targets first: multi-object files must not execute
+        # successful neighbours when only one object is selected.
+        full_plan = build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
+        selected_plan = [unit for unit in full_plan if unit["item_id"] in selected]
+        affected = {unit["target_fqn"].lower() for unit in selected_plan}
+        while True:
+            dependents = [unit for unit in full_plan if unit["item_id"] not in selected | invalidated_item_ids
+                          and affected.intersection(unit.get("dependencies") or [])]
+            if not dependents:
+                break
+            invalidated_item_ids.update(unit["item_id"] for unit in dependents)
+            affected.update(unit["target_fqn"].lower() for unit in dependents)
+        review_targets = [t for t in review_targets if t["item_id"] in selected]
+    overrides = {o.get("item_id"): o for o in getattr(payload, "item_overrides", None) or []}
+    for target in review_targets:
+        override = overrides.get(target["item_id"], {})
+        if "key_attributes" in override:
+            target["mapped_key_attributes"] = override["key_attributes"]
+        if override.get("entity_name") and target.get("sql_variant_mode") != "separate":
+            target["mapped_entity_name"] = override["entity_name"]
+    validation_files = ([{"path": u["primary_path"], "sql": u["sql_text"]} for u in selected_plan]
+                        if selected_plan is not None else files)
+    sql_validation = validate_prototype_sql(validation_files)
+    validation_errors.extend(sql_validation.get("errors") or [])
+    validation_warnings.extend(sql_validation.get("warnings") or [])
     checked_items = {}
     if files and not any(item.get("target_fqn") for item in review_targets):
         validation_errors.append("Не удалось определить целевые таблицы по SQL-файлам MR")
@@ -96,10 +131,10 @@ def build_prototype_review_result(
     preparation_rows: list[dict[str, Any]] = []
     execution_rows: list[dict[str, Any]] = []
     if not validation_errors and any(not item.get("skip_dev_execution") for item in review_targets):
-        if any(t.get("sql_variant_mode") == "separate" for t in review_targets):
+        if selected_plan is not None or any(t.get("sql_variant_mode") == "separate" for t in review_targets):
             # Check each result while its own algorithm is still in the table.
             # The next variant can overwrite the same physical relation.
-            ordered = build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
+            ordered = selected_plan if selected_plan is not None else build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
             by_id = {t["item_id"]: t for t in review_targets}
             for index, unit in enumerate(ordered):
                 target = by_id[unit["item_id"]]
@@ -116,7 +151,8 @@ def build_prototype_review_result(
                 related = [f for f in files if f.get("path") in target["paths"]]
                 checked_items[target["item_id"]] = dependencies.resolve_item(
                     target_fqn=target["target_fqn"], path_value=target["path"],
-                    execution_row={"status": status, "duration_sec": sum(float(r.get("duration_sec") or 0) for r in executed)},
+                    execution_row={"status": status, "duration_sec": sum(float(r.get("duration_sec") or 0) for r in executed),
+                                   "error_message": "; ".join(str(r.get("error_message") or "") for r in executed if r.get("status") == "error")},
                     known_schemas=known_schemas, file_item=related[0] if related else {}, related_files=related,
                     fallback_entity_name=target.get("mapped_entity_name") or str(payload.entity_name or ""),
                     object_type_hint=target["object_type"], reserved_table_ids=set(),
@@ -202,6 +238,8 @@ def build_prototype_review_result(
         item_result["variant_key"] = target_item.get("variant_key")
         item_result["item_id"] = item_id
         item_result["paths"] = related_paths
+        item_result["sql_fingerprint"] = sql_fingerprint(target_item, files)
+        item_result["validation_errors"] = validate_prototype_sql(related_files).get("errors") or []
         item_result["object_type"] = str(target_item.get("object_type") or item_result.get("object_type") or "TABLE").upper()
         item_result["is_clickhouse_view"] = bool(target_item.get("is_clickhouse_view"))
         if item_result["is_clickhouse_view"]:
@@ -260,9 +298,14 @@ def build_prototype_review_result(
                 if warning not in validation_warnings:
                     validation_warnings.append(warning)
     status = "error" if validation_errors else ("warning" if validation_warnings else "ok")
-    if not status_reason:
+    if validation_errors:
+        status_reason = "; ".join(validation_errors)
+    elif not status_reason:
         status_reason = "; ".join(validation_warnings) if validation_warnings else "Проверки завершены. Проверьте блоки по всем таблицам и затем создайте задачу."
     return {
+        "partial": selected is not None,
+        "source_manifest": source_manifest,
+        "invalidated_item_ids": sorted(invalidated_item_ids),
         "status": status,
         "mr": bundle.get("mr") or {},
         "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "../api/admin.js";
 import { accountApi } from "../api/account.js";
 import PrototypeSqlVariantMapping, { variantMappingPayload } from "./PrototypeSqlVariantMapping.jsx";
+import { mergeReviewRetry, reviewItemNeedsRetry, reviewResultWithItems } from "../utils/prototypeReviewRetry.js";
 import BusinessDqPanel from "./BusinessDqPanel.jsx";
 import PrototypeSourceLoadPanel from "./PrototypeSourceLoadPanel.jsx";
 
@@ -125,6 +126,8 @@ export default function AdminPrototypeReviewPage() {
   const [result, setResult] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [reviewItemsDraft, setReviewItemsDraft] = useState([]);
+  const reviewItemsRef = useRef(reviewItemsDraft);
+  reviewItemsRef.current = reviewItemsDraft;
   const [runProgress, setRunProgress] = useState(null);
   const [parentLoading, setParentLoading] = useState(false);
   const [releaseSlots, setReleaseSlots] = useState([]);
@@ -134,7 +137,7 @@ export default function AdminPrototypeReviewPage() {
   const [sourceLoad, setSourceLoad] = useState(null);
   const [mappingGroups, setMappingGroups] = useState([]);
   const [mappingChoices, setMappingChoices] = useState({});
-  useEffect(() => { setMappingGroups([]); setMappingChoices({}); }, [mrInput]);
+  useEffect(() => { setMappingGroups([]); setMappingChoices({}); setResult(null); setReviewItemsDraft([]); }, [mrInput]);
   const [includeSourceLoad, setIncludeSourceLoad] = useState(true);
 
   useEffect(() => {
@@ -149,11 +152,6 @@ export default function AdminPrototypeReviewPage() {
       return { ...prev, git_reference: mrValue };
     });
   }, [mrInput]);
-
-  useEffect(() => {
-    const items = Array.isArray(result?.review_items) ? result.review_items : [];
-    setReviewItemsDraft(items.map(buildDraftItem));
-  }, [result?.review_items]);
 
   useEffect(() => {
     const releaseDate = String(result?.task_context?.release_date || "").trim();
@@ -200,6 +198,7 @@ export default function AdminPrototypeReviewPage() {
 
   const hasDashboardDirection = Boolean(String(form.direction || "").trim());
   const hasDeletedFiles = Array.isArray(result?.deleted_files) && result.deleted_files.length > 0;
+  const retryItemIds = reviewItemsDraft.filter(reviewItemNeedsRetry).filter((item) => !item.is_clickhouse_view).map((item) => item.item_id);
 
   const unresolvedItemsCount = useMemo(
     () => reviewItemsDraft.filter((item) => (
@@ -217,6 +216,7 @@ export default function AdminPrototypeReviewPage() {
 
   const progressText = useMemo(() => {
     if (!runProgress) return "";
+    if (runProgress.status === "completed") return "Проверка завершена";
     const current = Number(runProgress.current || 0);
     const total = Number(runProgress.total || 0);
     const remaining = total > 0 ? Math.max(total - current, 0) : null;
@@ -330,12 +330,13 @@ export default function AdminPrototypeReviewPage() {
     )));
   };
 
-  const handleRun = async () => {
+  const handleRun = async (selection = null) => {
+    const selectedIds = Array.isArray(selection) ? selection : null;
     const trimmedMr = String(mrInput || "").trim();
-    if (!trimmedMr || loading) return;
+    if (!trimmedMr || loading || creatingIssue) return;
     setLoading(true);
     setError(null);
-    setResult(null);
+    if (!selectedIds) setResult(null);
     setRunProgress({ status: "queued", current: 0, total: 0, current_target: null, current_file: null });
     try {
       const sqlMappings = mappingGroups.length ? variantMappingPayload(mappingGroups, mappingChoices) : null;
@@ -349,6 +350,10 @@ export default function AdminPrototypeReviewPage() {
       }
       if (sqlMappings?.some((m) => m.mode === "shared" && !m.entity_name.trim())) throw new Error("Укажите сущности общего алгоритма");
       const startPayload = await adminApi.prototypeReviewRunStart({
+        selected_item_ids: selectedIds,
+        item_overrides: selectedIds ? reviewItemsDraft.filter((item) => selectedIds.includes(item.item_id)).map((item) => ({
+          item_id: item.item_id, entity_name: item.entity_name, key_attributes: splitItems(item.key_attributes_text),
+        })) : null,
         sql_variant_mappings: sqlMappings,
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
@@ -375,11 +380,20 @@ export default function AdminPrototypeReviewPage() {
       }
 
       const payload = statusPayload?.result || null;
-      setResult(payload);
       if (payload?.mapping_required) {
+        setResult(payload);
+        setReviewItemsDraft([]);
         setMappingGroups(payload.mapping_groups || []);
         setRunProgress(null);
         return;
+      }
+      if (selectedIds) {
+        const drafts = mergeReviewRetry(reviewItemsRef.current, payload, buildDraftItem);
+        setReviewItemsDraft(drafts);
+        setResult(reviewResultWithItems(result, payload, drafts, selectedIds));
+      } else {
+        setResult(payload);
+        setReviewItemsDraft((payload?.review_items || []).map(buildDraftItem));
       }
       const firstTarget = Array.isArray(payload?.review_items) && payload.review_items.length ? payload.review_items[0]?.target_fqn : "";
       const totalSec = Array.isArray(payload?.execution)
@@ -452,7 +466,15 @@ export default function AdminPrototypeReviewPage() {
 
   const handleCreateIssue = async () => {
     const trimmedMr = String(mrInput || "").trim();
-    if (!trimmedMr || creatingIssue) return;
+    if (!trimmedMr || creatingIssue || loading) return;
+    if (result?.composition_stale) {
+      setError("Состав объектов MR изменился. Запустите полный review перед созданием задачи.");
+      return;
+    }
+    if (reviewItemsDraft.some((item) => item.source_stale)) {
+      setError("SQL некоторых объектов изменился. Перезапустите отмеченные объекты перед созданием задачи.");
+      return;
+    }
     if (reviewItemsDraft.some((item) => item.sql_variant_mode === "separate" && item.checks_stale)) {
       setError("Ключи алгоритма изменились. Повторите review: каждый алгоритм должен быть проверен отдельно.");
       return;
@@ -477,6 +499,7 @@ export default function AdminPrototypeReviewPage() {
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           sql_variant_mode: item.sql_variant_mode || null,
+          sql_fingerprint: item.sql_fingerprint || null,
           variant_key: item.variant_key || null,
           path: item.path,
           paths: item.paths || [],
@@ -589,6 +612,14 @@ export default function AdminPrototypeReviewPage() {
 
       {result && !result.mapping_required ? (
         <>
+          <section className="cc-surface">
+            <div className="section-title">Повторная проверка</div>
+            <p className="muted">Исправьте SQL в исходном MR, затем перезапустите нужный объект. Приложение загрузит свежую версию SQL и сохранит успешные результаты остальных объектов.</p>
+            {reviewItemsDraft.some((i) => i.source_stale) && <p className="muted">У отмеченных объектов изменился SQL или данные зависимостей. Их результаты сохранены, но перед созданием задачи нужна повторная проверка.</p>}
+            <button type="button" className="btn btn-primary" disabled={loading || creatingIssue || !retryItemIds.length}
+              onClick={() => handleRun(retryItemIds)}>Перезапустить объекты с ошибками{retryItemIds.length ? ` (${retryItemIds.length})` : ""}</button>
+            {result.composition_stale && <p className="page-error">Состав объектов MR изменился. Нужен полный запуск review.</p>}
+          </section>
           <section className="slow-summary">
             <div className={`slow-summary-card ${result.status === "ok" ? "success" : result.status === "warning" ? "warn" : "danger"}`}>
               <div className="label">Статус</div>
@@ -756,6 +787,9 @@ export default function AdminPrototypeReviewPage() {
                         <span className="prototype-badge">{item.object_type || "TABLE"}</span>{item.sql_variant_mode === "separate" && <span className="prototype-badge">Отдельный алгоритм</span>}
                         {item.is_new ? <span className="prototype-badge">Новый объект</span> : null}
                         {needsAttention ? <span className="prototype-badge warning">Нужно заполнить</span> : null}
+                        {item.source_stale && <span className="prototype-badge warning">Результат устарел</span>}
+                        {!item.is_clickhouse_view && <button type="button" className="btn btn-ghost" disabled={loading || creatingIssue}
+                          onClick={() => handleRun([item.item_id])}>Перезапустить SQL и проверки</button>}
                       </div>
                     </div>
 
@@ -817,10 +851,10 @@ export default function AdminPrototypeReviewPage() {
                             <button
                               type="button"
                               className="btn btn-ghost"
-                              onClick={() => item.sql_variant_mode === "separate" ? handleRun() : handleRecheckTable(item.item_id)}
+                              onClick={() => item.sql_variant_mode === "separate" ? handleRun([item.item_id]) : handleRecheckTable(item.item_id)}
                               disabled={loading || item.rechecking || !splitItems(item.key_attributes_text).length}
                             >
-                              {item.sql_variant_mode === "separate" ? "Перепроверить алгоритмы" : item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
+                              {item.sql_variant_mode === "separate" ? "Перепроверить этот алгоритм" : item.rechecking ? "Проверяем дубли..." : item.checks_stale ? "Перепроверить по новым ключам" : "Проверить дубль/строки"}
                             </button>
                           </div>
                           </div>
@@ -1034,7 +1068,7 @@ export default function AdminPrototypeReviewPage() {
                 type="button"
                 className="btn btn-primary"
                 onClick={handleCreateIssue}
-                disabled={creatingIssue || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
+                disabled={loading || creatingIssue || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
                 {creatingIssue ? "Ищем зависимости и создаём задачу…" : "Создать задачу"}
               </button>

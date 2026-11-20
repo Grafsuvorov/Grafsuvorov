@@ -1,561 +1,107 @@
-Функция создаёт или пересоздаёт объект в DEV и формирует SQL для последующей загрузки.
-Схема target
+explain
+	with irc_sic as (
+	    select
+	        d_ir.invoice_realization_code,      -- VBRK-VBELN                               -- SD.000890 "Фактура реализации"                                                                           -- SD.000891 "Фактура сбыта (инвойс)"
+	        case
+	            when d_ir.invoice_realization_group_code is null            -- Если /RUSAL/VBSS_VBSK-SMART != 'Р',
+	                then d_ir.counterparty_country_code                   -- то VBPA-LAND1;
+	            else coalesce(
+	                d_ldadr2."LAND1_exp04",                          -- если SD.000577 "Страна поставки по контракту (код)" не пусто, то SD.000577 "Страна поставки по контракту (код)",
+	                d_ir.counterparty_country_code
+	            )                       -- если SD.000577 "Страна поставки по контракту (код)" пусто, то VBPA-LAND1
+	        end as country_of_destination_code,                                                                         -- SD.000892 "Страна конечной поставки (код)"
+	        case
+	            when
+	                d_i2.billing_document_code is not null                  -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK
+	                and d_i2.bank_as_counterparty_code is not null          -- и VBSK-ZZBANK не пусто,
+	                then d_i2.bank_as_counterparty_code                     -- то VBSK-ZZBANK,
+	            when
+	                d_i2.billing_document_code is not null                  -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK,
+	                and d_i2.bank_as_counterparty_code is null              -- и VBSK-ZZBANK пусто,
+	                and d_sch.sales_partner_role_code is not null                             -- и значение VBPA-PARVW присутствует в /RUSAL/ROLE_VAL-ROLE
+	                then d_sch.customer_code                              -- то VBPA-KUNNR                                                    -- иначе пусто
+	        end as sales_bank_account_code,                                                                             -- SD.000928 "Собственник банковского счёта (код)"
+	        row_number() over (
+	            partition by
+	                d_ir.invoice_realization_code
+	            order by
+	                d_ir.invoice_realization_group_code asc,
+	                d_ldadr2.invoice_code asc,
+	                d_ir.counterparty_country_code asc,
+	                d_ldadr2."LAND1_exp04" asc,
+	                d_i2.billing_document_code asc,
+	                d_sch.sales_partner_role_code asc
+	        ) as rn
+	    from
+	        pg_temp.vbrk as d_ir                                                    -- VBRK
+	    --определяем поставку по группе из VBRK
+	    left join
+	        dds.logistics_document_and_delivery_relationship as d_ldadr                     -- VBSS
+	        on d_ldadr.logistics_document_code = d_ir.invoice_realization_group_code        -- по VBSS-SAMMG = VBRK-ZZSAMMG
+	        
+		left join
+	        pg_temp.vbss_vbsk_o_prepare as d_ldadr2                    -- VBSS
+	        on d_ldadr2.delivery_code = d_ldadr.delivery_code            
+	    
+	    left join dds.invoice as d_i2 on
+	    	d_i2.billing_document_code = case
+	                						when d_ir.invoice_realization_group_code is not null and d_ldadr2.billing_document_code is not null
+												then d_ldadr2.billing_document_code
+											when d_ir.invoice_realization_group_code is null and d_ir.vgtyp = 'U'
+												then d_ir.vgbel
+											else d_ir.invoice_realization_code
+	            						end                                                                         -- SD.0000891 "Фактура сбыта (инвойс)"
+				and d_ldadr2.invoice_type_code = 'О' 
+		left join
+	        pg_temp.sales_contract_header_prepare as d_sch                                              -- VBAK
+	        on d_sch.sales_contract_code = d_i2.sales_contract_code                         -- по VBAK-VBELN = VBSK-ZZVBELN_RAM
+	
+	    where d_ir.posting_status_code in ('C', 'E')
+	)
+    select
+        irc_sic.invoice_realization_code,                   -- SD.000890 "Фактура реализации"
+        irc_sic.country_of_destination_code,                -- SD.000892 "Страна конечной поставки (код)"
+        irc_sic.sales_bank_account_code                     -- SD.000928 "Собственник банковского счёта (код)"
+    from irc_sic
+    where irc_sic.rn = 1
 
-stg
-Таблица target
-BIP_/BIC/ATR_T013000
-Совпадений нет — будет создана новая таблица.
-Выберите существующую — её поля подставятся автоматически.
-Схема источника
-SAPSR3
-Таблица источника
-/BIC/ATR_TO13000
-Сущность / расписание
-TRANSPORTATION
-Несколько сущностей: через запятую. Для каждой будет создан отдельный YAML в одном MR.
-Первичный ключ
-REQUEST, DATAPAKID, RECORD
-Несколько полей: через || или запятую.
-Поля
-ALL
-Можно добавлять и удалять поля перед повторным запуском.
-Ключ распределения
-RN
-Сервер источника
-
-oracle_sap_bi_prod · ID 2
-Сгенерировать в DEV
-Некорректное значение поля «Таблица источника»
-
-
-вот вручную нормально вызвлось 
-SELECT tech_etl.etl_source_to_greenplum_new(
-    v_source_schema_name := 'SAPSR3',
-    v_source_table_name  := '/BIC/ATR_TO13000',
-    v_fields_list        := 'ALL',
-    v_target_schema_name := 'STG',
-    v_target_table_name  := 'BIP_/BIC/ATR_T013000',
-    v_server_id          := '2',
-    v_distribution_field := 'RN',
-    v_pk                 := '"REQUEST" || "DATAPAKID" || "RECORD"');
-
-
-Status: Starting loading
-v_source_schema_name: SAPSR3
-v_source_table_name: /BIC/ATR_TO13000
-v_fields_list: ALL
-v_target_schema_name: STG
-v_target_table_name: BIP_/BIC/ATR_T013000
-v_source_server_name: oracle_sap_bi_prod
-l_script_name: BIP__BIC_ATR_T013000
-Query to get columns: select tech_etl.get_source_table_fields_oracle
- (v_source_schema_name := 'SAPSR3', 
- v_source_table_name := '/BIC/ATR_TO13000', 
- v_source_server_name := 'oracle_sap_bi_prod', 
- v_cols_table := 'tech_etl.v_all_tab_cols_ora_sap_bi_prod' 
-)
-QUERY FOR ALL COLUMNS: select string_agg(column_name,',')    from tech_etl.v_all_tab_cols_ora_sap_bi_prod WHERE true  AND table_name =  '/BIC/ATR_TO13000'  AND owner = 'SAPSR3'
-ALL COLUMNS: REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY
-ALL COLUMNS: REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY
-ALL FIELDS REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY
-Garbage: t
-Query to get ddl: select tech_etl.generate_greenplum_target_statement_ddl_oracle
- (v_source_schema_name := 'SAPSR3', 
- v_source_table_name := '/BIC/ATR_TO13000', 
- v_fields_list := 'REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY', 
- v_target_schema_name := 'STG', 
- v_target_table_name := 'BIP_/BIC/ATR_T013000', 
- v_source_server_name := 'oracle_sap_bi_prod', 
- v_cols_table := 'tech_etl.v_all_tab_cols_ora_sap_bi_prod', 
- v_distribution_field := 'RN' 
-)
-Query in tech_etl.generate_greenplum_target_statement_with_fields:  SELECT CONCAT( 'DROP TABLE IF EXISTS ' ,'STG."BIP_/BIC/ATR_T013000"'  ,' CASCADE ;'
- , REPLACE( CONCAT(chr(10), CONCAT( 'create table ','STG."BIP_/BIC/ATR_T013000"', ' (' || chr( 10 ) , string_agg(CONCAT( quote_ident(UPPER( REPLACE( column_name, '"', '' ) ) ), ' ',  CASE  WHEN (
-data_type = 'NUMBER'  AND data_precision >=19  AND (
-data_scale =0  OR data_scale IS NULL
-) )  THEN 'numeric'  WHEN (
-data_type = 'NUMBER'  AND data_precision <19  AND (
-data_scale =0  OR data_scale IS NULL
-) )  THEN 'bigint'  WHEN (
-data_type = 'NUMBER'  AND data_precision <10  AND (
-data_scale =0  OR data_scale IS NULL
-) )  THEN 'integer'  WHEN (
-data_type = 'NUMBER'  AND data_precision <5  AND (
-data_scale =0  OR data_scale IS NULL
-) )  THEN 'smallint'  WHEN data_type = 'INTEGER'  THEN 'decimal(38)'  WHEN data_type = 'SMALLINT'  THEN 'decimal(38)'  WHEN data_type = 'DOUBLE PRECISION'  THEN 'double precision'  WHEN data_type = 'FLOAT'  THEN 'double precision'  WHEN data_type = 'REAL'  THEN 'double precision'  WHEN data_type = 'NUMBER'  AND data_scale >0  THEN 'decimal(' || data_precision || chr( 44 ) || data_scale || ')'  WHEN data_type = 'NUMBER'  AND data_scale >0  THEN 'double precision'  WHEN data_type = 'NUMBER'  OR data_type = 'NUMERIC'  THEN 'numeric'  WHEN data_type = 'CHAR'  THEN 'char(' || data_length || ')'  WHEN data_type = 'CHARACTER'  THEN 'char(' || data_length || ')'  WHEN data_type = 'VARCHAR'  THEN 'varchar(' || data_length || ')'  WHEN data_type = 'VARCHAR2'  THEN 'varchar(' || data_length || ')'  WHEN data_type = 'LONG'  THEN 'text'  WHEN data_type = 'NCLOB'  THEN 'text'  WHEN data_type = 'DATE'  THEN 'date'  WHEN data_type = 'TIMESTAMP'  THEN 'timestamp'  WHEN data_type = 'RAW'  THEN 'text'  ELSE 'text'  END ,  CASE WHEN nullable = 'Y'  THEN ' NULL'  ELSE ' NULL'  END ) , ', '  ORDER BY column_id
-), ',' || ' "RN" integer NOT NULL) ' || chr( 10 ) , 'WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-) DISTRIBUTED BY("RN");'
-)
-), 'NULL,', 'NULL,' || chr( 10 )
-)
-) AS table_ddl  FROM tech_etl.v_all_tab_cols_ora_sap_bi_prod 
- WHERE true  AND table_name =  '/BIC/ATR_TO13000'  AND owner = 'SAPSR3' AND column_name = any( string_to_array( 'REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY' , ',')) 
-;
-Query ddl: DROP TABLE IF EXISTS STG."BIP_/BIC/ATR_T013000" CASCADE ;
-create table STG."BIP_/BIC/ATR_T013000" (
-"REQUEST" varchar(90) NULL,
- "DATAPAKID" varchar(18) NULL,
- "RECORD" bigint NULL,
- "RECORDMODE" varchar(3) NULL,
- "/BIC/ZDATE_S" varchar(24) NULL,
- "/BIC/ZREAL_D" varchar(24) NULL,
- "/BIC/ZMARKET" varchar(27) NULL,
- "/BIC/TRSHIPTYP" varchar(6) NULL,
- "PLANT" varchar(12) NULL,
- "/BIC/ZKNOTEGRI" varchar(30) NULL,
- "/BIC/ZKNOTEGRT" varchar(30) NULL,
- "/BIC/ZKNOTEINT" varchar(30) NULL,
- "/BIC/ZKNOTEFNL" varchar(30) NULL,
- "/BIC/ZSDABW" varchar(12) NULL,
- "/BIC/ZTREXPETY" varchar(3) NULL,
- "/BIC/TRSDABWPR" varchar(12) NULL,
- "/BIC/ZCOUNTRY2" varchar(9) NULL,
- "/BIC/ZREGION2" varchar(90) NULL,
- "/BIC/ZCOUNTRYF" varchar(9) NULL,
- "/BIC/ZREGION" varchar(90) NULL,
- "/BIC/TRDESTOUT" varchar(30) NULL,
- "/BIC/TRDESTIN" varchar(30) NULL,
- "/BIC/TRINCO1FB" varchar(9) NULL,
- "DIVISION" varchar(6) NULL,
- "/BIC/ZTRATY" varchar(12) NULL,
- "/BIC/TRDAY_2" varchar(24) NULL,
- "/BIC/TRDAY_4" varchar(24) NULL,
- "MATL_GRP_4" varchar(9) NULL,
- "/BIC/TRBORDCRP" varchar(30) NULL,
- "/BIC/TRINCO2FB" varchar(84) NULL,
- "/BIC/ZKF" varchar(27) NULL,
- "/BIC/ZTRMONTH" varchar(18) NULL,
- "/BIC/ZQUANTITY" decimal(17,3) NULL,
- "/BIC/ZWEIGHT" decimal(17,3) NULL,
- "AMOUNT" decimal(17,2) NULL,
- "CURRENCY" varchar(15) NULL,
- "/BIC/ZTRSRVTYP" varchar(3) NULL,
- "RN" integer NOT NULL) 
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-) DISTRIBUTED BY("RN");
-DDL CREATE TABLE: DROP TABLE IF EXISTS STG."BIP_/BIC/ATR_T013000" CASCADE ;
-create table STG."BIP_/BIC/ATR_T013000" (
-"REQUEST" varchar(90) NULL,
- "DATAPAKID" varchar(18) NULL,
- "RECORD" bigint NULL,
- "RECORDMODE" varchar(3) NULL,
- "/BIC/ZDATE_S" varchar(24) NULL,
- "/BIC/ZREAL_D" varchar(24) NULL,
- "/BIC/ZMARKET" varchar(27) NULL,
- "/BIC/TRSHIPTYP" varchar(6) NULL,
- "PLANT" varchar(12) NULL,
- "/BIC/ZKNOTEGRI" varchar(30) NULL,
- "/BIC/ZKNOTEGRT" varchar(30) NULL,
- "/BIC/ZKNOTEINT" varchar(30) NULL,
- "/BIC/ZKNOTEFNL" varchar(30) NULL,
- "/BIC/ZSDABW" varchar(12) NULL,
- "/BIC/ZTREXPETY" varchar(3) NULL,
- "/BIC/TRSDABWPR" varchar(12) NULL,
- "/BIC/ZCOUNTRY2" varchar(9) NULL,
- "/BIC/ZREGION2" varchar(90) NULL,
- "/BIC/ZCOUNTRYF" varchar(9) NULL,
- "/BIC/ZREGION" varchar(90) NULL,
- "/BIC/TRDESTOUT" varchar(30) NULL,
- "/BIC/TRDESTIN" varchar(30) NULL,
- "/BIC/TRINCO1FB" varchar(9) NULL,
- "DIVISION" varchar(6) NULL,
- "/BIC/ZTRATY" varchar(12) NULL,
- "/BIC/TRDAY_2" varchar(24) NULL,
- "/BIC/TRDAY_4" varchar(24) NULL,
- "MATL_GRP_4" varchar(9) NULL,
- "/BIC/TRBORDCRP" varchar(30) NULL,
- "/BIC/TRINCO2FB" varchar(84) NULL,
- "/BIC/ZKF" varchar(27) NULL,
- "/BIC/ZTRMONTH" varchar(18) NULL,
- "/BIC/ZQUANTITY" decimal(17,3) NULL,
- "/BIC/ZWEIGHT" decimal(17,3) NULL,
- "AMOUNT" decimal(17,2) NULL,
- "CURRENCY" varchar(15) NULL,
- "/BIC/ZTRSRVTYP" varchar(3) NULL,
- "RN" integer NOT NULL) 
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-) DISTRIBUTED BY("RN");
-table "BIP_/BIC/ATR_T013000" does not exist, skipping
-DDL CREATE TABLE: DROP TABLE IF EXISTS STG."BIP_/BIC/ATR_T013000" CASCADE ;
-create table STG."BIP_/BIC/ATR_T013000" (
-"REQUEST" varchar(90) NULL,
- "DATAPAKID" varchar(18) NULL,
- "RECORD" bigint NULL,
- "RECORDMODE" varchar(3) NULL,
- "/BIC/ZDATE_S" varchar(24) NULL,
- "/BIC/ZREAL_D" varchar(24) NULL,
- "/BIC/ZMARKET" varchar(27) NULL,
- "/BIC/TRSHIPTYP" varchar(6) NULL,
- "PLANT" varchar(12) NULL,
- "/BIC/ZKNOTEGRI" varchar(30) NULL,
- "/BIC/ZKNOTEGRT" varchar(30) NULL,
- "/BIC/ZKNOTEINT" varchar(30) NULL,
- "/BIC/ZKNOTEFNL" varchar(30) NULL,
- "/BIC/ZSDABW" varchar(12) NULL,
- "/BIC/ZTREXPETY" varchar(3) NULL,
- "/BIC/TRSDABWPR" varchar(12) NULL,
- "/BIC/ZCOUNTRY2" varchar(9) NULL,
- "/BIC/ZREGION2" varchar(90) NULL,
- "/BIC/ZCOUNTRYF" varchar(9) NULL,
- "/BIC/ZREGION" varchar(90) NULL,
- "/BIC/TRDESTOUT" varchar(30) NULL,
- "/BIC/TRDESTIN" varchar(30) NULL,
- "/BIC/TRINCO1FB" varchar(9) NULL,
- "DIVISION" varchar(6) NULL,
- "/BIC/ZTRATY" varchar(12) NULL,
- "/BIC/TRDAY_2" varchar(24) NULL,
- "/BIC/TRDAY_4" varchar(24) NULL,
- "MATL_GRP_4" varchar(9) NULL,
- "/BIC/TRBORDCRP" varchar(30) NULL,
- "/BIC/TRINCO2FB" varchar(84) NULL,
- "/BIC/ZKF" varchar(27) NULL,
- "/BIC/ZTRMONTH" varchar(18) NULL,
- "/BIC/ZQUANTITY" decimal(17,3) NULL,
- "/BIC/ZWEIGHT" decimal(17,3) NULL,
- "AMOUNT" decimal(17,2) NULL,
- "CURRENCY" varchar(15) NULL,
- "/BIC/ZTRSRVTYP" varchar(3) NULL,
- "RN" integer NOT NULL) 
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-) DISTRIBUTED BY("RN");
-Status: target table created
-Query to get columns: select tech_etl.generate_greenplum_readable_statement_ddl_oracle
- (v_target_schema_name := 'STG', 
- v_target_table_name := 'BIP_/BIC/ATR_T013000', 
- v_source_server_name := 'oracle_sap_bi_prod', 
- v_script_name := 'BIP__BIC_ATR_T013000' 
-)
-ALL COLUMNS: DROP EXTERNAL TABLE IF EXISTS RAW_EXT."BIP_/BIC/ATR_T013000_READ" CASCADE ;
-CREATE READABLE EXTERNAL TABLE RAW_EXT."BIP_/BIC/ATR_T013000_READ"(
-LIKE STG."BIP_/BIC/ATR_T013000"
-)
-LOCATION (
-'pxf://query:query_BIP__BIC_ATR_T013000?PROFILE=JDBC&SERVER=oracle_sap_bi_prod&FETCH_SIZE=5000&PARTITION_BY=RN:int&RANGE=1:5&INTERVAL=1'
-) ON ALL
-FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import')
-ENCODING 'UTF8';
-DDL CREATE READABLE: DROP EXTERNAL TABLE IF EXISTS RAW_EXT."BIP_/BIC/ATR_T013000_READ" CASCADE ;
-CREATE READABLE EXTERNAL TABLE RAW_EXT."BIP_/BIC/ATR_T013000_READ"(
-LIKE STG."BIP_/BIC/ATR_T013000"
-)
-LOCATION (
-'pxf://query:query_BIP__BIC_ATR_T013000?PROFILE=JDBC&SERVER=oracle_sap_bi_prod&FETCH_SIZE=5000&PARTITION_BY=RN:int&RANGE=1:5&INTERVAL=1'
-) ON ALL
-FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import')
-ENCODING 'UTF8';
-table "BIP_/BIC/ATR_T013000_READ" does not exist, skipping
-Status: readable external table created
-LOG BASH: SAPSR3
-/BIC/ATR_TO13000
-REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY
-query_BIP__BIC_ATR_T013000
-oracle_sap_bi_prod
-"REQUEST" || "DATAPAKID" || "RECORD"
-TRUE
-oracle
-COPY 1
-Syncing PXF configuration files from master host to standby master host and 6 segment hosts...
-PXF configs synced successfully on 7 out of 7 hosts
-Status: query fox PXF loaded
-DDL ALTERS: ALTER TABLE STG."BIP_/BIC/ATR_T013000" 
- ADD COLUMN  "DTTM_INSERTED" TIMESTAMP NOT NULL DEFAULT now(), 
- ADD COLUMN  "DTTM_UPDATED" TIMESTAMP NOT NULL DEFAULT now(), 
- ADD COLUMN  "JOB_NAME" varchar(60) NOT NULL DEFAULT 'airflow', 
- ADD COLUMN  "DELETED_FLAG" bool NOT NULL DEFAULT false, 
- ADD COLUMN  "IS_ACTUAL" bool NOT NULL DEFAULT true;
-No result comment
-Status:  Technical fields were added to target
-Readable schema: RAW_EXT
-Insert fields: "REQUEST",
-"DATAPAKID",
-"RECORD",
-"RECORDMODE",
-"/BIC/ZDATE_S",
-"/BIC/ZREAL_D",
-"/BIC/ZMARKET",
-"/BIC/TRSHIPTYP",
-"PLANT",
-"/BIC/ZKNOTEGRI",
-"/BIC/ZKNOTEGRT",
-"/BIC/ZKNOTEINT",
-"/BIC/ZKNOTEFNL",
-"/BIC/ZSDABW",
-"/BIC/ZTREXPETY",
-"/BIC/TRSDABWPR",
-"/BIC/ZCOUNTRY2",
-"/BIC/ZREGION2",
-"/BIC/ZCOUNTRYF",
-"/BIC/ZREGION",
-"/BIC/TRDESTOUT",
-"/BIC/TRDESTIN",
-"/BIC/TRINCO1FB",
-"DIVISION",
-"/BIC/ZTRATY",
-"/BIC/TRDAY_2",
-"/BIC/TRDAY_4",
-"MATL_GRP_4",
-"/BIC/TRBORDCRP",
-"/BIC/TRINCO2FB",
-"/BIC/ZKF",
-"/BIC/ZTRMONTH",
-"/BIC/ZQUANTITY",
-"/BIC/ZWEIGHT",
-"AMOUNT",
-"CURRENCY",
-"/BIC/ZTRSRVTYP",
-"RN",
-"DTTM_INSERTED",
-"DTTM_UPDATED",
-"JOB_NAME",
-"DELETED_FLAG",
-"IS_ACTUAL"
-Select fields: "REQUEST",
-"DATAPAKID",
-"RECORD",
-"RECORDMODE",
-"/BIC/ZDATE_S",
-"/BIC/ZREAL_D",
-"/BIC/ZMARKET",
-"/BIC/TRSHIPTYP",
-"PLANT",
-"/BIC/ZKNOTEGRI",
-"/BIC/ZKNOTEGRT",
-"/BIC/ZKNOTEINT",
-"/BIC/ZKNOTEFNL",
-"/BIC/ZSDABW",
-"/BIC/ZTREXPETY",
-"/BIC/TRSDABWPR",
-"/BIC/ZCOUNTRY2",
-"/BIC/ZREGION2",
-"/BIC/ZCOUNTRYF",
-"/BIC/ZREGION",
-"/BIC/TRDESTOUT",
-"/BIC/TRDESTIN",
-"/BIC/TRINCO1FB",
-"DIVISION",
-"/BIC/ZTRATY",
-"/BIC/TRDAY_2",
-"/BIC/TRDAY_4",
-"MATL_GRP_4",
-"/BIC/TRBORDCRP",
-"/BIC/TRINCO2FB",
-"/BIC/ZKF",
-"/BIC/ZTRMONTH",
-"/BIC/ZQUANTITY",
-"/BIC/ZWEIGHT",
-"AMOUNT",
-"CURRENCY",
-"/BIC/ZTRSRVTYP",
-"RN",
-now(),
-now(),
-'airflow',
-false,
-true
-Insert query:  INSERT INTO STG."BIP_/BIC/ATR_T013000"(
-"REQUEST",
-"DATAPAKID",
-"RECORD",
-"RECORDMODE",
-"/BIC/ZDATE_S",
-"/BIC/ZREAL_D",
-"/BIC/ZMARKET",
-"/BIC/TRSHIPTYP",
-"PLANT",
-"/BIC/ZKNOTEGRI",
-"/BIC/ZKNOTEGRT",
-"/BIC/ZKNOTEINT",
-"/BIC/ZKNOTEFNL",
-"/BIC/ZSDABW",
-"/BIC/ZTREXPETY",
-"/BIC/TRSDABWPR",
-"/BIC/ZCOUNTRY2",
-"/BIC/ZREGION2",
-"/BIC/ZCOUNTRYF",
-"/BIC/ZREGION",
-"/BIC/TRDESTOUT",
-"/BIC/TRDESTIN",
-"/BIC/TRINCO1FB",
-"DIVISION",
-"/BIC/ZTRATY",
-"/BIC/TRDAY_2",
-"/BIC/TRDAY_4",
-"MATL_GRP_4",
-"/BIC/TRBORDCRP",
-"/BIC/TRINCO2FB",
-"/BIC/ZKF",
-"/BIC/ZTRMONTH",
-"/BIC/ZQUANTITY",
-"/BIC/ZWEIGHT",
-"AMOUNT",
-"CURRENCY",
-"/BIC/ZTRSRVTYP",
-"RN",
-"DTTM_INSERTED",
-"DTTM_UPDATED",
-"JOB_NAME",
-"DELETED_FLAG",
-"IS_ACTUAL")
- SELECT 
-"REQUEST",
-"DATAPAKID",
-"RECORD",
-"RECORDMODE",
-"/BIC/ZDATE_S",
-"/BIC/ZREAL_D",
-"/BIC/ZMARKET",
-"/BIC/TRSHIPTYP",
-"PLANT",
-"/BIC/ZKNOTEGRI",
-"/BIC/ZKNOTEGRT",
-"/BIC/ZKNOTEINT",
-"/BIC/ZKNOTEFNL",
-"/BIC/ZSDABW",
-"/BIC/ZTREXPETY",
-"/BIC/TRSDABWPR",
-"/BIC/ZCOUNTRY2",
-"/BIC/ZREGION2",
-"/BIC/ZCOUNTRYF",
-"/BIC/ZREGION",
-"/BIC/TRDESTOUT",
-"/BIC/TRDESTIN",
-"/BIC/TRINCO1FB",
-"DIVISION",
-"/BIC/ZTRATY",
-"/BIC/TRDAY_2",
-"/BIC/TRDAY_4",
-"MATL_GRP_4",
-"/BIC/TRBORDCRP",
-"/BIC/TRINCO2FB",
-"/BIC/ZKF",
-"/BIC/ZTRMONTH",
-"/BIC/ZQUANTITY",
-"/BIC/ZWEIGHT",
-"AMOUNT",
-"CURRENCY",
-"/BIC/ZTRSRVTYP",
-"RN",
-now(),
-now(),
-'airflow',
-false,
-true
- FROM  RAW_EXT."BIP_/BIC/ATR_T013000_READ";
-DML INSERT QUERY:  INSERT INTO STG."BIP_/BIC/ATR_T013000"(
-"REQUEST",
-"DATAPAKID",
-"RECORD",
-"RECORDMODE",
-"/BIC/ZDATE_S",
-"/BIC/ZREAL_D",
-"/BIC/ZMARKET",
-"/BIC/TRSHIPTYP",
-"PLANT",
-"/BIC/ZKNOTEGRI",
-"/BIC/ZKNOTEGRT",
-"/BIC/ZKNOTEINT",
-"/BIC/ZKNOTEFNL",
-"/BIC/ZSDABW",
-"/BIC/ZTREXPETY",
-"/BIC/TRSDABWPR",
-"/BIC/ZCOUNTRY2",
-"/BIC/ZREGION2",
-"/BIC/ZCOUNTRYF",
-"/BIC/ZREGION",
-"/BIC/TRDESTOUT",
-"/BIC/TRDESTIN",
-"/BIC/TRINCO1FB",
-"DIVISION",
-"/BIC/ZTRATY",
-"/BIC/TRDAY_2",
-"/BIC/TRDAY_4",
-"MATL_GRP_4",
-"/BIC/TRBORDCRP",
-"/BIC/TRINCO2FB",
-"/BIC/ZKF",
-"/BIC/ZTRMONTH",
-"/BIC/ZQUANTITY",
-"/BIC/ZWEIGHT",
-"AMOUNT",
-"CURRENCY",
-"/BIC/ZTRSRVTYP",
-"RN",
-"DTTM_INSERTED",
-"DTTM_UPDATED",
-"JOB_NAME",
-"DELETED_FLAG",
-"IS_ACTUAL")
- SELECT 
-"REQUEST",
-"DATAPAKID",
-"RECORD",
-"RECORDMODE",
-"/BIC/ZDATE_S",
-"/BIC/ZREAL_D",
-"/BIC/ZMARKET",
-"/BIC/TRSHIPTYP",
-"PLANT",
-"/BIC/ZKNOTEGRI",
-"/BIC/ZKNOTEGRT",
-"/BIC/ZKNOTEINT",
-"/BIC/ZKNOTEFNL",
-"/BIC/ZSDABW",
-"/BIC/ZTREXPETY",
-"/BIC/TRSDABWPR",
-"/BIC/ZCOUNTRY2",
-"/BIC/ZREGION2",
-"/BIC/ZCOUNTRYF",
-"/BIC/ZREGION",
-"/BIC/TRDESTOUT",
-"/BIC/TRDESTIN",
-"/BIC/TRINCO1FB",
-"DIVISION",
-"/BIC/ZTRATY",
-"/BIC/TRDAY_2",
-"/BIC/TRDAY_4",
-"MATL_GRP_4",
-"/BIC/TRBORDCRP",
-"/BIC/TRINCO2FB",
-"/BIC/ZKF",
-"/BIC/ZTRMONTH",
-"/BIC/ZQUANTITY",
-"/BIC/ZWEIGHT",
-"AMOUNT",
-"CURRENCY",
-"/BIC/ZTRSRVTYP",
-"RN",
-now(),
-now(),
-'airflow',
-false,
-true
- FROM  RAW_EXT."BIP_/BIC/ATR_T013000_READ";
-Value: 1688724
-Status: data was inserted to the target table
-QUERY CREATE WITH FIELDS:
-select tech_etl.etl_source_to_greenplum_new(
-    v_source_schema_name := 'SAPSR3',
-    v_source_table_name := '/BIC/ATR_TO13000',
-    v_fields_list := 'REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD,RECORDMODE,/BIC/ZDATE_S,/BIC/ZREAL_D,/BIC/ZMARKET,/BIC/TRSHIPTYP,PLANT,/BIC/ZKNOTEGRI,/BIC/ZKNOTEGRT,/BIC/ZKNOTEINT,/BIC/ZKNOTEFNL,/BIC/ZSDABW,/BIC/ZTREXPETY,/BIC/TRSDABWPR,/BIC/ZCOUNTRY2,/BIC/ZREGION2,/BIC/ZCOUNTRYF,/BIC/ZREGION,/BIC/TRDESTOUT,/BIC/TRDESTIN,/BIC/TRINCO1FB,DIVISION,/BIC/ZTRATY,/BIC/TRDAY_2,/BIC/TRDAY_4,MATL_GRP_4,/BIC/TRBORDCRP,/BIC/TRINCO2FB,/BIC/ZKF,/BIC/ZTRMONTH,/BIC/ZQUANTITY,/BIC/ZWEIGHT,AMOUNT,CURRENCY',
-    v_target_schema_name := 'STG',
-    v_target_table_name := 'BIP_/BIC/ATR_T013000',
-    v_server_id := '2',
-    v_distribution_field := 'RN',
-    v_pk := '"REQUEST" || "DATAPAKID" || "RECORD"'
-);
+Gather Motion 8:1  (slice7; segments: 8)  (cost=0.00..1405071522.40 rows=107998023359 width=24)
+  ->  Result  (cost=0.00..1397885333.93 rows=13499752920 width=24)
+        Filter: ((row_number() OVER (?)) = 1)
+        ->  Result  (cost=0.00..1396774979.25 rows=33749382300 width=32)
+              ->  WindowAgg  (cost=0.00..1395694999.02 rows=84373455749 width=69)
+                    Partition By: vbrk.invoice_realization_code
+                    Order By: vbrk.invoice_realization_group_code, vbss_vbsk_o_prepare.invoice_code, vbrk.counterparty_country_code, vbss_vbsk_o_prepare."LAND1_exp04", invoice.billing_document_code, sales_contract_header_prepare.sales_partner_role_code
+                    ->  Sort  (cost=0.00..1357726943.93 rows=84373455749 width=75)
+                          Sort Key: vbrk.invoice_realization_code, vbrk.invoice_realization_group_code, vbss_vbsk_o_prepare.invoice_code, vbrk.counterparty_country_code, vbss_vbsk_o_prepare."LAND1_exp04", invoice.billing_document_code, sales_contract_header_prepare.sales_partner_role_code
+                          ->  Redistribute Motion 8:8  (slice6; segments: 8)  (cost=0.00..55430768.85 rows=84373455749 width=75)
+                                Hash Key: vbrk.invoice_realization_code
+                                ->  Hash Left Join  (cost=0.00..35624100.12 rows=84373455749 width=75)
+                                      Hash Cond: ((invoice.sales_contract_code)::text = (sales_contract_header_prepare.sales_contract_code)::text)
+                                      ->  Redistribute Motion 8:8  (slice5; segments: 8)  (cost=0.00..7350936.30 rows=10035757788 width=72)
+                                            Hash Key: invoice.sales_contract_code
+                                            ->  Hash Left Join  (cost=0.00..5089277.92 rows=10035757788 width=72)
+                                                  Hash Cond: ((CASE WHEN ((NOT (vbrk.invoice_realization_group_code IS NULL)) AND (NOT (vbss_vbsk_o_prepare.billing_document_code IS NULL))) THEN vbss_vbsk_o_prepare.billing_document_code WHEN ((vbrk.invoice_realization_group_code IS NULL) AND ((vbrk.vgtyp)::text = 'U'::text)) THEN vbrk.vgbel ELSE vbrk.invoice_realization_code END)::text = (invoice.billing_document_code)::text)
+                                                  Join Filter: ((vbss_vbsk_o_prepare.invoice_type_code)::text = 'О'::text)
+                                                  ->  Hash Left Join  (cost=0.00..707854.79 rows=2855066579 width=66)
+                                                        Hash Cond: ((logistics_document_and_delivery_relationship.delivery_code)::text = (vbss_vbsk_o_prepare.delivery_code)::text)
+                                                        ->  Redistribute Motion 8:8  (slice3; segments: 8)  (cost=0.00..17003.66 rows=40818185 width=49)
+                                                              Hash Key: logistics_document_and_delivery_relationship.delivery_code
+                                                              ->  Hash Right Join  (cost=0.00..10743.38 rows=40818185 width=49)
+                                                                    Hash Cond: ((logistics_document_and_delivery_relationship.logistics_document_code)::text = (vbrk.invoice_realization_group_code)::text)
+                                                                    ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..1406.03 rows=6802701 width=22)
+                                                                          Hash Key: logistics_document_and_delivery_relationship.logistics_document_code
+                                                                          ->  Seq Scan on logistics_document_and_delivery_relationship  (cost=0.00..659.23 rows=6802701 width=22)
+                                                                    ->  Hash  (cost=594.37..594.37 rows=487434 width=38)
+                                                                          ->  Redistribute Motion 8:8  (slice2; segments: 8)  (cost=0.00..594.37 rows=487434 width=38)
+                                                                                Hash Key: vbrk.invoice_realization_group_code
+                                                                                ->  Seq Scan on vbrk  (cost=0.00..536.40 rows=487434 width=38)
+                                                                                      Filter: ((posting_status_code)::text = ANY ('{C,E}'::text[]))
+                                                        ->  Hash  (cost=670.63..670.63 rows=6807594 width=39)
+                                                              ->  Seq Scan on vbss_vbsk_o_prepare  (cost=0.00..670.63 rows=6807594 width=39)
+                                                  ->  Hash  (cost=526.92..526.92 rows=356392 width=33)
+                                                        ->  Broadcast Motion 8:8  (slice4; segments: 8)  (cost=0.00..526.92 rows=356392 width=33)
+                                                              ->  Seq Scan on invoice  (cost=0.00..435.31 rows=44549 width=33)
+                                      ->  Hash  (cost=493.63..493.63 rows=2920023 width=25)
+                                            ->  Seq Scan on sales_contract_header_prepare  (cost=0.00..493.63 rows=2920023 width=25)
+Optimizer: Pivotal Optimizer (GPORCA)

@@ -1,61 +1,69 @@
--- 1. Выборка: 6000 кодов с группой + 2000 без группы
-drop table if exists t_sample;
-create temp table t_sample as
-select invoice_realization_code from (
-    select invoice_realization_code from t_vbrk
-    where invoice_realization_group_code is not null
-    order by invoice_realization_code limit 6000
-) a
-union all
-select invoice_realization_code from (
-    select invoice_realization_code from t_vbrk
-    where invoice_realization_group_code is null
-    order by invoice_realization_code limit 2000
-) b
-distributed by (invoice_realization_code);
-
--- 2. Оригинальный запрос, ограниченный выборкой.
---    Скопируйте ваш исходный запрос (без explain) и поменяйте ТОЛЬКО одну строку:
---    было:   from pg_temp.vbrk as d_ir
---    стало:  from (select * from pg_temp.vbrk
---                  where invoice_realization_code in (select invoice_realization_code from t_sample)) as d_ir
---    Результат сохраните:
 drop table if exists t_orig;
 create temp table t_orig as
--- <ваш запрос целиком с изменённым from>
-;
+with irc_sic as (
+    select
+        d_ir.invoice_realization_code,      -- VBRK-VBELN                               -- SD.000890 "Фактура реализации"                                                                           -- SD.000891 "Фактура сбыта (инвойс)"
+        case
+            when d_ir.invoice_realization_group_code is null            -- Если /RUSAL/VBSS_VBSK-SMART != 'Р',
+                then d_ir.counterparty_country_code                   -- то VBPA-LAND1;
+            else coalesce(
+                d_ldadr2."LAND1_exp04",                          -- если SD.000577 "Страна поставки по контракту (код)" не пусто, то SD.000577 "Страна поставки по контракту (код)",
+                d_ir.counterparty_country_code
+            )                       -- если SD.000577 "Страна поставки по контракту (код)" пусто, то VBPA-LAND1
+        end as country_of_destination_code,                                                                         -- SD.000892 "Страна конечной поставки (код)"
+        case
+            when
+                d_i2.billing_document_code is not null                  -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK
+                and d_i2.bank_as_counterparty_code is not null          -- и VBSK-ZZBANK не пусто,
+                then d_i2.bank_as_counterparty_code                     -- то VBSK-ZZBANK,
+            when
+                d_i2.billing_document_code is not null                  -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK,
+                and d_i2.bank_as_counterparty_code is null              -- и VBSK-ZZBANK пусто,
+                and d_sch.sales_partner_role_code is not null                             -- и значение VBPA-PARVW присутствует в /RUSAL/ROLE_VAL-ROLE
+                then d_sch.customer_code                              -- то VBPA-KUNNR                                                    -- иначе пусто
+        end as sales_bank_account_code,                                                                             -- SD.000928 "Собственник банковского счёта (код)"
+        row_number() over (
+            partition by
+                d_ir.invoice_realization_code
+            order by
+                d_ir.invoice_realization_group_code asc,
+                d_ldadr2.invoice_code asc,
+                d_ir.counterparty_country_code asc,
+                d_ldadr2."LAND1_exp04" asc,
+                d_i2.billing_document_code asc,
+                d_sch.sales_partner_role_code asc
+        ) as rn
+    from
+        (select * from pg_temp.vbrk
+         where invoice_realization_code in (select invoice_realization_code from t_sample)) as d_ir   -- ИЗМЕНЕНО: было "pg_temp.vbrk as d_ir"
+    --определяем поставку по группе из VBRK
+    left join
+        dds.logistics_document_and_delivery_relationship as d_ldadr                     -- VBSS
+        on d_ldadr.logistics_document_code = d_ir.invoice_realization_group_code        -- по VBSS-SAMMG = VBRK-ZZSAMMG
 
--- 3. Сравнение
-select 'only_orig' as src, * from (
-    select * from t_orig
-    except
-    select * from t_result where invoice_realization_code in (select invoice_realization_code from t_sample)
-) a
-union all
-select 'only_new', * from (
-    select * from t_result where invoice_realization_code in (select invoice_realization_code from t_sample)
-    except
-    select * from t_orig
-) b;
+    left join
+        pg_temp.vbss_vbsk_o_prepare as d_ldadr2                    -- VBSS
+        on d_ldadr2.delivery_code = d_ldadr.delivery_code
 
-Что может показать сравнение:
+    left join dds.invoice as d_i2 on
+        d_i2.billing_document_code = case
+                                        when d_ir.invoice_realization_group_code is not null and d_ldadr2.billing_document_code is not null
+                                            then d_ldadr2.billing_document_code
+                                        when d_ir.invoice_realization_group_code is null and d_ir.vgtyp = 'U'
+                                            then d_ir.vgbel
+                                        else d_ir.invoice_realization_code
+                                    end                                                                         -- SD.0000891 "Фактура сбыта (инвойс)"
+            and d_ldadr2.invoice_type_code = 'О'
+    left join
+        pg_temp.sales_contract_header_prepare as d_sch                                              -- VBAK
+        on d_sch.sales_contract_code = d_i2.sales_contract_code                         -- по VBAK-VBELN = VBSK-ZZVBELN_RAM
 
-Пусто — результат совпал на выборке, можно считать замену корректной.
-Расхождения только по sales_bank_account_code — вероятно, у оригинала при равных ключах сортировки порядок не был однозначным (я для этого добавил bank_as_counterparty_code и customer_code в ORDER BY). Выберите один расходящийся код и посмотрите все его строки в промежуточных таблицах, чтобы убедиться, что это именно ничья.
-Расхождения по country_of_destination_code — это уже потеря логики, пришлите несколько примеров, разберём.
-Ещё одна проверка по логике оригинала
-
-Раньше я отметил, что для строк без группы ветка vgtyp = 'U' → vgbel в оригинале не срабатывает, потому что условие invoice_type_code = 'О' в ON для них всегда ложно. Я сохранил это поведение. Узнайте, касается ли это реальных данных:
-
-sql
-select count(*) as rows_with_vgtyp_u
-from pg_temp.vbrk
-where posting_status_code in ('C','E')
-  and invoice_realization_group_code is null
-  and vgtyp = 'U';
-
-Если там ноль или мало, вопрос снят. Если много, то для этих строк sales_bank_account_code сейчас всегда NULL. Решите, так ли задумано, или в оригинале баг, который стоит исправить.
-
-Как перенести в боевой запуск
-
-Временные таблицы живут до конца сессии, поэтому в ETL эти шаги должны идти подряд в одной сессии, а финальная вставка выглядит так: insert into <целевая> select * from t_result. Если запрос раньше был вьюхой или CTE внутри другого запроса, пришлите, как он используется, подскажу, как встроить.
+    where d_ir.posting_status_code in ('C', 'E')
+)
+select
+    irc_sic.invoice_realization_code,                   -- SD.000890 "Фактура реализации"
+    irc_sic.country_of_destination_code,                -- SD.000892 "Страна конечной поставки (код)"
+    irc_sic.sales_bank_account_code                     -- SD.000928 "Собственник банковского счёта (код)"
+from irc_sic
+where irc_sic.rn = 1
+distributed by (invoice_realization_code);

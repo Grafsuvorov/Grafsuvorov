@@ -1,10 +1,3 @@
-select count(*) as rows_with_vgtyp_u
-from pg_temp.vbrk
-where posting_status_code in ('C','E')
-  and invoice_realization_group_code is null
-  and vgtyp = 'U';
- 87924
-
 drop table if exists dds.invoice_realization;
 
 create table if not exists dds.invoice_realization (
@@ -335,76 +328,167 @@ create temporary table pg_temp.sales_contract_header_prepare with (appendonly = 
 )
 distributed by (sales_contract_code);
 
-drop table if exists pg_temp.irc_sic2;
-create temporary table pg_temp.irc_sic2 with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3) as (
-	with irc_sic as (
-	    select
-	        d_ir.invoice_realization_code,      -- VBRK-VBELN                               -- SD.000890 "Фактура реализации"                                                                           -- SD.000891 "Фактура сбыта (инвойс)"
-	        case
-	            when d_ir.invoice_realization_group_code is null            -- Если /RUSAL/VBSS_VBSK-SMART != 'Р',
-	                then d_ir.counterparty_country_code                   -- то VBPA-LAND1;
-	            else coalesce(
-	                d_ldadr2."LAND1_exp04",                          -- если SD.000577 "Страна поставки по контракту (код)" не пусто, то SD.000577 "Страна поставки по контракту (код)",
-	                d_ir.counterparty_country_code
-	            )                       -- если SD.000577 "Страна поставки по контракту (код)" пусто, то VBPA-LAND1
-	        end as country_of_destination_code,                                                                         -- SD.000892 "Страна конечной поставки (код)"
-	        case
-	            when
-	                d_i2.billing_document_code is not null                  -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK
-	                and d_i2.bank_as_counterparty_code is not null          -- и VBSK-ZZBANK не пусто,
-	                then d_i2.bank_as_counterparty_code                     -- то VBSK-ZZBANK,
-	            when
-	                d_i2.billing_document_code is not null                  -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK,
-	                and d_i2.bank_as_counterparty_code is null              -- и VBSK-ZZBANK пусто,
-	                and d_sch.sales_partner_role_code is not null                             -- и значение VBPA-PARVW присутствует в /RUSAL/ROLE_VAL-ROLE
-	                then d_sch.customer_code                              -- то VBPA-KUNNR                                                    -- иначе пусто
-	        end as sales_bank_account_code,                                                                             -- SD.000928 "Собственник банковского счёта (код)"
-	        row_number() over (
-	            partition by
-	                d_ir.invoice_realization_code
-	            order by
-	                d_ir.invoice_realization_group_code asc,
-	                d_ldadr2.invoice_code asc,
-	                d_ir.counterparty_country_code asc,
-	                d_ldadr2."LAND1_exp04" asc,
-	                d_i2.billing_document_code asc,
-	                d_sch.sales_partner_role_code asc
-	        ) as rn
-	    from
-	        pg_temp.vbrk as d_ir                                                    -- VBRK
-	    --определяем поставку по группе из VBRK
-	    left join
-	        dds.logistics_document_and_delivery_relationship as d_ldadr                     -- VBSS
-	        on d_ldadr.logistics_document_code = d_ir.invoice_realization_group_code        -- по VBSS-SAMMG = VBRK-ZZSAMMG
-	        
-		left join
-	        pg_temp.vbss_vbsk_o_prepare as d_ldadr2                    -- VBSS
-	        on d_ldadr2.delivery_code = d_ldadr.delivery_code            
-	    
-	    left join dds.invoice as d_i2 on
-	    	d_i2.billing_document_code = case
-	                						when d_ir.invoice_realization_group_code is not null and d_ldadr2.billing_document_code is not null
-												then d_ldadr2.billing_document_code
-											when d_ir.invoice_realization_group_code is null and d_ir.vgtyp = 'U'
-												then d_ir.vgbel
-											else d_ir.invoice_realization_code
-	            						end                                                                         -- SD.0000891 "Фактура сбыта (инвойс)"
-				and d_ldadr2.invoice_type_code = 'О' 
-		left join
-	        pg_temp.sales_contract_header_prepare as d_sch                                              -- VBAK
-	        on d_sch.sales_contract_code = d_i2.sales_contract_code                         -- по VBAK-VBELN = VBSK-ZZVBELN_RAM
-	
-	    where d_ir.posting_status_code in ('C', 'E')
-	)
-    select
-        irc_sic.invoice_realization_code,                   -- SD.000890 "Фактура реализации"
-        irc_sic.country_of_destination_code,                -- SD.000892 "Страна конечной поставки (код)"
-        irc_sic.sales_bank_account_code                     -- SD.000928 "Собственник банковского счёта (код)"
-    from irc_sic
-    where irc_sic.rn = 1
-)
+------------------------------------------------------------------------------------------------
+-- 3.4. Расчёт country_of_destination_code и sales_bank_account_code (pg_temp.irc_sic2)
+--      Вместо одного запроса с миллиардами строк перед row_number() считаем по шагам:
+--      строки без группы и с группой отдельно, справочники схлопываем до джойнов.
+------------------------------------------------------------------------------------------------
+
+-- a. Нужные строки vbrk
+drop table if exists pg_temp.irc_vbrk;
+create temporary table pg_temp.irc_vbrk as
+select
+    invoice_realization_code,
+    invoice_realization_group_code,
+    counterparty_country_code
+from pg_temp.vbrk
+where posting_status_code in ('C', 'E')
 distributed by (invoice_realization_code);
 
+analyze pg_temp.irc_vbrk;
+
+-- b. Строки БЕЗ группы: страна контрагента, банк пусто.
+--    (invoice_realization_code в vbrk уникален, поэтому row_number не нужен;
+--     в исходном запросе для этих строк инвойс не присоединялся: условие d_ldadr2.invoice_type_code = 'О' всегда ложно)
+drop table if exists pg_temp.irc_res_nogroup;
+create temporary table pg_temp.irc_res_nogroup as
+select
+    invoice_realization_code,
+    counterparty_country_code as country_of_destination_code,
+    null::varchar as sales_bank_account_code
+from pg_temp.irc_vbrk
+where invoice_realization_group_code is null
+distributed by (invoice_realization_code);
+
+-- c. VBSS только по нужным группам
+drop table if exists pg_temp.irc_vbss;
+create temporary table pg_temp.irc_vbss as
+select
+    l.logistics_document_code,
+    l.delivery_code
+from dds.logistics_document_and_delivery_relationship as l
+where l.logistics_document_code in (
+    select invoice_realization_group_code
+    from pg_temp.irc_vbrk
+    where invoice_realization_group_code is not null
+)
+distributed by (delivery_code);
+
+analyze pg_temp.irc_vbss;
+
+-- d. Группа -> уникальные наборы значений из prepare (схлопываются дубли)
+drop table if exists pg_temp.irc_grp;
+create temporary table pg_temp.irc_grp as
+select distinct
+    l.logistics_document_code as grp,
+    p.invoice_code,
+    p."LAND1_exp04",
+    p.billing_document_code,
+    p.invoice_type_code
+from pg_temp.irc_vbss as l
+left join pg_temp.vbss_vbsk_o_prepare as p
+    on p.delivery_code = l.delivery_code
+distributed by (grp);
+
+analyze pg_temp.irc_grp;
+
+-- e. Одна строка на контракт (с минимальной ролью): убирает размножение строк из-за нескольких партнёров VBPA
+drop table if exists pg_temp.irc_sch;
+create temporary table pg_temp.irc_sch as
+select distinct on (sales_contract_code)
+    sales_contract_code,
+    sales_partner_role_code,
+    customer_code
+from pg_temp.sales_contract_header_prepare
+order by
+    sales_contract_code,
+    sales_partner_role_code asc,
+    customer_code asc
+distributed by (sales_contract_code);
+
+analyze pg_temp.irc_sch;
+
+-- f. Привязка наборов к фактурам реализации с группой
+drop table if exists pg_temp.irc_step2;
+create temporary table pg_temp.irc_step2 as
+select
+    v.invoice_realization_code,
+    v.invoice_realization_group_code,
+    v.counterparty_country_code,
+    g.invoice_code,
+    g."LAND1_exp04" as land1,
+    coalesce(g.billing_document_code, v.invoice_realization_code) as inv_key,   -- SD.0000891 "Фактура сбыта (инвойс)"
+    g.invoice_type_code
+from pg_temp.irc_vbrk as v
+left join pg_temp.irc_grp as g
+    on g.grp = v.invoice_realization_group_code
+where v.invoice_realization_group_code is not null
+distributed by (invoice_realization_code);
+
+analyze pg_temp.irc_step2;
+
+-- g. Строки С группой: инвойс, контракт и выбор одной строки на фактуру реализации
+drop table if exists pg_temp.irc_res_group;
+create temporary table pg_temp.irc_res_group as
+select
+    invoice_realization_code,
+    country_of_destination_code,
+    sales_bank_account_code
+from (
+    select
+        x.invoice_realization_code,
+        coalesce(x.land1, x.counterparty_country_code) as country_of_destination_code,   -- SD.000892 "Страна конечной поставки (код)"
+        case
+            when i.billing_document_code is not null                    -- если SD.000891 "Фактура сбыта (инвойс)" есть в VBSK
+                and i.bank_as_counterparty_code is not null             -- и VBSK-ZZBANK не пусто,
+                then i.bank_as_counterparty_code                        -- то VBSK-ZZBANK,
+            when i.billing_document_code is not null
+                and i.bank_as_counterparty_code is null                 -- и VBSK-ZZBANK пусто,
+                and s.sales_partner_role_code is not null               -- и значение VBPA-PARVW присутствует в /RUSAL/ROLE_VAL-ROLE
+                then s.customer_code                                    -- то VBPA-KUNNR
+        end as sales_bank_account_code,                                 -- SD.000928 "Собственник банковского счёта (код)"
+        row_number() over (
+            partition by
+                x.invoice_realization_code
+            order by
+                x.invoice_realization_group_code asc,
+                x.invoice_code asc,
+                x.counterparty_country_code asc,
+                x.land1 asc,
+                i.billing_document_code asc,
+                s.sales_partner_role_code asc,
+                i.bank_as_counterparty_code asc,
+                s.customer_code asc
+        ) as rn
+    from pg_temp.irc_step2 as x
+    left join dds.invoice as i
+        on i.billing_document_code = x.inv_key
+        and x.invoice_type_code = 'О'
+    left join pg_temp.irc_sch as s
+        on s.sales_contract_code = i.sales_contract_code
+) as q
+where rn = 1
+distributed by (invoice_realization_code);
+
+-- h. Итог: та же таблица и те же колонки, что давал прежний irc_sic2
+drop table if exists pg_temp.irc_sic2;
+create temporary table pg_temp.irc_sic2 as
+select invoice_realization_code, country_of_destination_code, sales_bank_account_code
+from pg_temp.irc_res_group
+union all
+select invoice_realization_code, country_of_destination_code, sales_bank_account_code
+from pg_temp.irc_res_nogroup
+distributed by (invoice_realization_code);
+
+analyze pg_temp.irc_sic2;
+
+drop table if exists pg_temp.irc_vbrk;
+drop table if exists pg_temp.irc_res_nogroup;
+drop table if exists pg_temp.irc_vbss;
+drop table if exists pg_temp.irc_grp;
+drop table if exists pg_temp.irc_sch;
+drop table if exists pg_temp.irc_step2;
+drop table if exists pg_temp.irc_res_group;
 drop table if exists pg_temp.vbss_vbsk_o_prepare;
 drop table if exists pg_temp.sales_contract_header_prepare;
 
@@ -441,7 +525,7 @@ select
     vbrk.invoice_realization_group_code,                                    -- группа фактуры реализации (код)
     vbrk.posting_status_code,                                               -- статус передачи данных в бухгалтерию (код)
     case
-        when vbrk.posting_status_code in ('C', 'E')                         -- VBRK-RFBSK = "C" или "E"
+        when vbrk.posting_status_code in ('C', 'E')                         -- VBRK-RFBSK = "C" или "E"
             then
                 case
                     when vbrk.realization_invoice_type_code = 'N'
@@ -486,3 +570,34 @@ from pg_temp.vbrk as vbrk
 		vbrk.invoice_realization_code = zv.vbeln
 	left join pg_temp.irc_sic2 as irc on
 		irc.invoice_realization_code = vbrk.invoice_realization_code;
+
+
+
+Что нужно знать перед запуском
+Скрипт в начале делает drop table dds.invoice_realization, как и раньше. Если хотите сравнить новую загрузку со старой, перед запуском сохраните копию: create table dds.invoice_realization_old as select * from dds.invoice_realization;. После загрузки сравните country_of_destination_code и sales_bank_account_code через except по обеим таблицам. Это проверка уже на полных данных, а не на выборке.
+Все шаги должны идти в одной сессии, так как таблицы временные.
+Буквы 'Р', 'О', 'К' в скрипте кириллические (как в вашем исходнике), 'Q' латинская. Если будете вставлять скрипт через редактор, проверьте, что они не заменились.
+Вопрос по 87 924 строкам
+
+Это строки без группы с vgtyp = 'U'. В оригинале (и в моей версии, чтобы результат совпал) у них sales_bank_account_code всегда пусто: инвойс по vgbel не присоединяется, потому что условие d_ldadr2.invoice_type_code = 'О' для них ложно. А по вашему комментарию к колонке банк должен определяться по инвойсу, если он есть в VBSK со smart = 'О'. То есть для этих 87 924 строк результат, возможно, неверный уже сейчас.
+
+Проверить, затронет ли это данные, можно так:
+
+sql
+select count(*) as rows_with_vgbel_invoice,
+       count(i.bank_as_counterparty_code) as rows_with_bank_directly,
+       count(s.customer_code) as rows_with_bank_via_contract
+from pg_temp.vbrk as v
+join dds.invoice as i
+  on i.billing_document_code = v.vgbel
+ and i.invoice_type_code = 'О'
+left join pg_temp.sales_contract_header_prepare as s
+  on s.sales_contract_code = i.sales_contract_code
+ and s.sales_partner_role_code is not null
+where v.posting_status_code in ('C','E')
+  and v.invoice_realization_group_code is null
+  and v.vgtyp = 'U';
+
+Запускайте его до того, как скрипт удалит sales_contract_header_prepare (то есть отдельно, в сессии, где эта таблица ещё есть), либо замените её на dds.sales_contract_header с теми же джойнами. Если rows_with_bank_directly или rows_with_bank_via_contract не ноль, значит, у части этих строк должен быть банк, а сейчас там пусто. Тогда это ошибка в исходной логике, и я напишу правку. Менять поведение без вашего решения я не стал, чтобы результат остался таким же, как сейчас.
+
+Как Claude справляется в этой сессии?

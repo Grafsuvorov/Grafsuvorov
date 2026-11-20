@@ -1798,6 +1798,50 @@ class SourceLoadEntityIdentityTests(unittest.TestCase):
         self.assertEqual(saved[0]["replica_yaml_contents"], {"SECOND": prepared["SECOND"]})
 
 
+class SourceLoaderSapNamesTests(unittest.TestCase):
+    def test_sap_names_pass_to_function_unchanged_for_all_and_explicit_fields(self):
+        source = "/BIC/ATR_TO13000"
+        target = "BIP_/BIC/ATR_T013000"
+        for fields in ("ALL", "REQUEST,/BIC/ZTRSRVTYP,DATAPAKID,RECORD"):
+            with self.subTest(fields=fields):
+                captured = []
+                recreate = ("select tech_etl.etl_source_to_greenplum_new("
+                    f"v_source_table_name := '{source}', v_target_table_name := '{target}');")
+                notices = [f"NOTICE: ALL FIELDS {fields}", "NOTICE: Garbage: t",
+                    f'NOTICE: DML INSERT QUERY: INSERT INTO STG."{target}" SELECT * FROM RAW_EXT."{target}_READ";',
+                    "NOTICE: Value: 1688724", f"NOTICE: QUERY CREATE WITH FIELDS: {recreate}"]
+                cursor = SimpleNamespace(execute=lambda query, args: captured.append((query, args)), close=lambda: None)
+                raw = SimpleNamespace(cursor=lambda: cursor, commit=lambda: None, close=lambda: None, notices=notices)
+                class Engine:
+                    def connect(self): return self
+                    def __enter__(self): return self
+                    def __exit__(self, *args): return False
+                    def execute(self, *args):
+                        return SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: {
+                            "server_id": 2, "source_type": "oracle", "server_name": "oracle_sap_bi_prod"}))
+                    def raw_connection(self): return raw
+                result = stg_source_loader.run_source_loader(Engine(), dict(
+                    source_schema="SAPSR3", source_table=source, target_schema="stg", target_table=target,
+                    primary_key="REQUEST, DATAPAKID, RECORD", distribution_field="RN", server_id=2, fields=fields))
+                self.assertEqual(result["status"], "ok")
+                self.assertEqual(captured[0][1], ("SAPSR3", source, fields, "STG", target, "2", "RN",
+                    '"REQUEST" || "DATAPAKID" || "RECORD"'))
+                self.assertIn("v_source_table_name := %s", captured[0][0])
+                self.assertNotIn(source, captured[0][0])
+                self.assertEqual(result["recreate_sql"], recreate)
+                self.assertIn(f'STG."{target}"', result["insert_sql"])
+                self.assertEqual(result["truncate_sql"], f'truncate table stg."{target}";')
+                self.assertEqual(source_loader_parameters_from_sql(result["recreate_sql"])["source_table_name"], source)
+
+    def test_sap_namespace_columns_supported_in_primary_key(self):
+        self.assertEqual(_primary_key_expression('REQUEST, /BIC/ZTRSRVTYP'), '"REQUEST" || "/BIC/ZTRSRVTYP"')
+
+    def test_invalid_identifiers_still_rejected(self):
+        for value in ("/", "//BIC/ABC", "/BIC/A;DROP TABLE stg.x", "/BIC/A'", "../ABC", "/BIC/A--", "A B"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                stg_source_loader._identifier(value, "Таблица источника")
+
+
 class SourceLoadWithoutYamlTests(unittest.TestCase):
     class MissingYaml(Exception):
         pass

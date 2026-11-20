@@ -13,7 +13,9 @@ from sqlalchemy import text
 
 
 ALLOWED_SCHEMAS = {"stg", "dict_stg"}
-IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$#/]*$")
+# SAP namespace identifiers may start with '/', e.g. /BIC/ATR_TO13000.
+# These names are passed as bound function arguments, preserving their case.
+IDENTIFIER_RE = re.compile(r"^/?[A-Za-z_][A-Za-z0-9_$#/]*$")
 
 
 def source_load_entity_names(value: Any) -> list[str]:

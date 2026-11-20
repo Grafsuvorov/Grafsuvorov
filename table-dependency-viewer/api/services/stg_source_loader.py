@@ -252,8 +252,8 @@ def list_target_tables(engine, schema_name: str) -> list[dict[str, Any]]:
 def target_table_exists(engine, schema_name: str, table_name: str) -> bool:
     """Return whether the physical DEV target already exists.
 
-    A source-load update must never silently receive a new metadata identity.
-    The caller uses this check before it invokes the database loading function.
+    Physical existence is independent of ETL metadata: hand-created DEV
+    tables can legitimately have no YAML or metadata catalog entry yet.
     """
     schema = str(schema_name or "").strip().lower()
     table = _identifier(table_name, "Таблица target")

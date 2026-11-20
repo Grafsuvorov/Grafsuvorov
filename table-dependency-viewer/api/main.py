@@ -209,7 +209,6 @@ from .services.stg_source_loader import (
     source_load_entity_names,
     prepare_source_load_yaml_contents,
     source_loader_parameters_from_sql,
-    target_table_exists,
 )
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
@@ -1849,9 +1848,8 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
                             metadata[key] = value
                     entity_name = str(metadata.get("entity_name") or entity_name).strip()
             except MetaWorkspaceObjectNotFoundError:
-                # The physical table can predate the Git metadata.  Keep the
-                # picker usable and let the run endpoint show its protection
-                # message if an update would be unsafe.
+                # Hand-created DEV tables may not have YAML yet. Keep the
+                # picker usable; generation will create their metadata.
                 pass
 
         return {
@@ -1896,10 +1894,9 @@ def run_admin_prototype_source_load(payload, request: Request):
         if not entity_names:
             raise ValueError("Заполните обязательное поле «Сущность / расписание»")
         primary_entity_name = entity_names[0]
-        # Metadata identity comes from the canonical Git main branch.  Do this
-        # before executing the database function: an existing physical table
-        # must never be updated under a newly allocated table_id.
-        exists_in_dev = target_table_exists(dev_engine, payload.target_schema, payload.target_table)
+        # Prefer Git metadata, but a physical DEV table may have been created
+        # manually. Missing YAML is a normal metadata-generation case. Resolve
+        # each entity's catalog identity below before invoking the function.
         try:
             bundle = read_meta_workspace_branch_gp_bundle(
                 git_repo_value=ENTITY_META_GIT_REPO,
@@ -1913,11 +1910,6 @@ def run_admin_prototype_source_load(payload, request: Request):
                 table_name=payload.target_table,
             )
         except MetaWorkspaceObjectNotFoundError:
-            if exists_in_dev:
-                raise ValueError(
-                    "Таблица уже существует в DEV, но её YAML не найден в main Git. "
-                    "Загрузка остановлена: проверьте сущность и метаданные, чтобы не создать новый table_id."
-                ) from None
             bundle = init_entity_dev_meta_bundle(
                 engine=engine,
                 base_dir=BASE_DIR,

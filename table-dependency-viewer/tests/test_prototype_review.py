@@ -1798,6 +1798,82 @@ class SourceLoadEntityIdentityTests(unittest.TestCase):
         self.assertEqual(saved[0]["replica_yaml_contents"], {"SECOND": prepared["SECOND"]})
 
 
+class SourceLoadWithoutYamlTests(unittest.TestCase):
+    class MissingYaml(Exception):
+        pass
+
+    class HttpError(Exception):
+        def __init__(self, status_code, detail):
+            super().__init__(detail)
+            self.status_code = status_code
+
+    def run_loader(self, existing=None, git_exists=False, git_error=None):
+        events = []
+        engine = SourceLoadEntityIdentityTests.Engine(existing=existing)
+        def read(**kwargs):
+            if git_error:
+                raise git_error
+            if git_exists and kwargs["entity_name"] == "FIRST":
+                return {"yaml_content": SourceLoadEntityIdentityTests.yaml_text(table_id=501)}
+            raise self.MissingYaml()
+        def init(**kwargs):
+            events.append("init")
+            return {"yaml_content": SourceLoadEntityIdentityTests.yaml_text()}
+        def load(dev_engine, payload):
+            events.append("load")
+            self.assertEqual(payload["entity_name"], "FIRST")
+            return {"status": "ok", "server": {"source_type": "oracle"}, "insert_sql": "insert into stg.target select 1;"}
+        namespace = dict(Request=object, _require_authenticated=lambda _: SimpleNamespace(email="test@example.com"),
+            source_load_entity_names=stg_source_loader.source_load_entity_names,
+            read_meta_workspace_branch_gp_bundle=read, MetaWorkspaceObjectNotFoundError=self.MissingYaml,
+            init_entity_dev_meta_bundle=init, target_table_exists=lambda *args: True,
+            prepare_source_load_yaml_contents=stg_source_loader.prepare_source_load_yaml_contents,
+            engine=engine, dev_engine=object(), yaml=entity_dev_meta.yaml, _dump_yaml=json.dumps,
+            run_source_loader=load, HTTPException=self.HttpError, traceback=__import__("traceback"))
+        namespace.update({key: "fixture" for key in ("ENTITY_META_GIT_REPO", "ENTITY_META_GIT_META_ROOT",
+            "META_WORKSPACE_ROOT", "PROTOTYPE_ETL_BASE_BRANCH", "BASE_DIR", "ENTITY_META_DIR", "DEV_ENTITY_META_DIR")})
+        module = ast.parse(Path("api/main.py").read_text())
+        nodes = [n for n in module.body if isinstance(n, ast.FunctionDef) and n.name in {
+            "_prototype_prepare_source_load_yamls", "run_admin_prototype_source_load"}]
+        exec(compile(ast.Module(body=nodes, type_ignores=[]), "api/main.py", "exec"), namespace)
+        data = dict(entity_name="FIRST, SECOND", target_schema="stg", target_table="target", server_id=6,
+            source_schema="SRC", source_table="SOURCE_TARGET", primary_key="id", distribution_field="id")
+        payload = SimpleNamespace(**data, model_dump=lambda: dict(data))
+        with (
+            patch.object(entity_dev_meta.yaml, "safe_load", side_effect=SourceLoadEntityIdentityTests.parse_yaml),
+            patch.object(entity_dev_meta, "_lookup_entity_id", side_effect=lambda _, name: {"FIRST": 11, "SECOND": 22}[name]),
+            patch.object(entity_dev_meta, "_reserve_next_table_id", return_value=102),
+        ):
+            result = namespace["run_admin_prototype_source_load"](payload, None)
+        return result, events
+
+    def test_hand_created_dev_table_without_yaml_generates_metadata_and_runs_function(self):
+        result, events = self.run_loader()
+        self.assertEqual(events, ["init", "load"])
+        self.assertEqual(result["status"], "ok")
+        contents = {name: json.loads(content) for name, content in result["yaml_contents"].items()}
+        self.assertEqual([contents[n]["table_id"] for n in ("FIRST", "SECOND")], [101, 102])
+        self.assertEqual([contents[n]["entity_id"] for n in ("FIRST", "SECOND")], [11, 22])
+        self.assertEqual(contents["FIRST"]["source_id"], 6)
+        self.assertEqual(contents["FIRST"]["source_type"], "ORACLE")
+
+    def test_missing_yaml_keeps_catalog_ids_for_each_entity(self):
+        result, events = self.run_loader(existing={11: 501, 22: 702})
+        self.assertEqual(events, ["init", "load"])
+        self.assertEqual([json.loads(result["yaml_contents"][n])["table_id"] for n in ("FIRST", "SECOND")], [501, 702])
+
+    def test_existing_git_yaml_still_used_without_initialization(self):
+        result, events = self.run_loader(existing={11: 501, 22: 702}, git_exists=True)
+        self.assertEqual(events, ["load"])
+        self.assertEqual(json.loads(result["yaml_content"])["table_id"], 501)
+
+    def test_git_access_error_does_not_fall_back_to_new_metadata(self):
+        with self.assertRaises(self.HttpError) as raised:
+            self.run_loader(git_error=ValueError("Git access denied"))
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertIn("Git access denied", str(raised.exception))
+
+
 class PrototypeViewDbtDeliveryTests(unittest.TestCase):
     @staticmethod
     def publish(items, files, existing=None):

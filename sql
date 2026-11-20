@@ -1,55 +1,113 @@
-select count(*) as rows_total,
-       count(distinct invoice_realization_code) as uniq_codes,
-       count(distinct invoice_realization_group_code) as uniq_groups,
-       sum(case when invoice_realization_group_code is null then 1 else 0 end) as null_group_rows
+-- 1. vbrk: нужные строки и колонки
+drop table if exists t_vbrk;
+create temp table t_vbrk as
+select invoice_realization_code, invoice_realization_group_code, counterparty_country_code
 from pg_temp.vbrk
-where posting_status_code in ('C','E');
--- rows_total > uniq_codes => код в vbrk дублируется
-3902378	3902378	323998	3568942
+where posting_status_code in ('C','E')
+distributed by (invoice_realization_code);
+analyze t_vbrk;
 
--- D2. VBSS: сколько поставок на документ и есть ли точные дубли
-select max(cnt) as max_per_doc, round(avg(cnt),2) as avg_per_doc,
-       sum(case when cnt > 1 then 1 else 0 end) as docs_with_many
-from (select logistics_document_code, count(*) cnt
-      from dds.logistics_document_and_delivery_relationship group by 1) t;
-     27596	5.06	2641740
+-- 2. Ветка БЕЗ группы (3,57 млн строк): код уникален, row_number не нужен
+drop table if exists t_res_nogroup;
+create temp table t_res_nogroup as
+select invoice_realization_code,
+       counterparty_country_code as country_of_destination_code,
+       null::varchar as sales_bank_account_code   -- замените varchar на тип customer_code, если он другой
+from t_vbrk
+where invoice_realization_group_code is null
+distributed by (invoice_realization_code);
 
-select (select count(*) from dds.logistics_document_and_delivery_relationship) as rows_total,
-       (select count(*) from (select distinct logistics_document_code, delivery_code
-                              from dds.logistics_document_and_delivery_relationship) d) as rows_distinct;
-                            54421606	54421606
+-- 3. VBSS только по нужным группам (~324 тыс. групп)
+drop table if exists t_vbss;
+create temp table t_vbss as
+select l.logistics_document_code, l.delivery_code
+from dds.logistics_document_and_delivery_relationship l
+where l.logistics_document_code in (
+    select invoice_realization_group_code from t_vbrk
+    where invoice_realization_group_code is not null)
+distributed by (delivery_code);
+analyze t_vbss;
 
--- D3. vbss_vbsk_o_prepare: строк на поставку и дубли
-select max(cnt) as max_per_delivery, round(avg(cnt),2) as avg_per_delivery
-from (select delivery_code, count(*) cnt from pg_temp.vbss_vbsk_o_prepare group by 1) t;
-813	4.02
+-- 4. Группа -> уникальные наборы из prepare (здесь схлопываются дубли 3,5x)
+drop table if exists t_grp;
+create temp table t_grp as
+select distinct l.logistics_document_code as grp,
+       p.invoice_code, p."LAND1_exp04", p.billing_document_code, p.invoice_type_code
+from t_vbss l
+left join pg_temp.vbss_vbsk_o_prepare p on p.delivery_code = l.delivery_code
+distributed by (grp);
+analyze t_grp;
 
-select (select count(*) from pg_temp.vbss_vbsk_o_prepare) as rows_total,
-       (select count(*) from (select distinct delivery_code, invoice_code, "LAND1_exp04",
-                                     billing_document_code, invoice_type_code
-                              from pg_temp.vbss_vbsk_o_prepare) d) as rows_distinct;
+select count(*) from t_grp;   -- контрольная точка: ожидаю порядка 10 млн (оценка: 38 млн / 3,5), не сотни миллионов
 
-                             54460748	15407523
-                             
--- D4. invoice и sales_contract_header_prepare: уникальны ли ключи
-select count(*) as rows_total, count(distinct billing_document_code) as uniq_keys from dds.invoice;
-select count(*) as rows_total, count(distinct sales_contract_code) as uniq_keys
-from pg_temp.sales_contract_header_prepare;
-23360178	3332514
--- D5. Реальный размер результата после джойнов vbrk -> VBSS -> prepare (без материализации)
-with pc as (
-    select delivery_code, count(*) as cnt
-    from pg_temp.vbss_vbsk_o_prepare group by 1
-), g as (
-    select l.logistics_document_code, sum(coalesce(pc.cnt, 1)) as exp_rows
-    from dds.logistics_document_and_delivery_relationship l
-    left join pc on pc.delivery_code = l.delivery_code
-    group by 1
-)
-select count(*) as vbrk_rows,
-       sum(coalesce(g.exp_rows, 1))::bigint as rows_after_vbss_prepare,
-       max(g.exp_rows) as worst_group
-from pg_temp.vbrk v
-left join g on g.logistics_document_code = v.invoice_realization_group_code
-where v.posting_status_code in ('C','E');
-3902378	41798759	69266
+-- 5. Одна строка на контракт (убирает множитель ~7)
+drop table if exists t_sch;
+create temp table t_sch as
+select distinct on (sales_contract_code)
+       sales_contract_code, sales_partner_role_code, customer_code
+from pg_temp.sales_contract_header_prepare
+order by sales_contract_code, sales_partner_role_code asc, customer_code asc
+distributed by (sales_contract_code);
+analyze t_sch;
+
+-- 6. Привязка к инвойсам vbrk только с группой (~333 тыс. строк)
+drop table if exists t_step2;
+create temp table t_step2 as
+select v.invoice_realization_code,
+       v.invoice_realization_group_code,
+       v.counterparty_country_code,
+       g.invoice_code,
+       g."LAND1_exp04" as land1,
+       coalesce(g.billing_document_code, v.invoice_realization_code) as inv_key,
+       g.invoice_type_code
+from t_vbrk v
+left join t_grp g on g.grp = v.invoice_realization_group_code
+where v.invoice_realization_group_code is not null
+distributed by (invoice_realization_code);
+analyze t_step2;
+
+select count(*) from t_step2;   -- контрольная точка
+
+-- 7. Ветка С группой
+drop table if exists t_res_group;
+create temp table t_res_group as
+select invoice_realization_code, country_of_destination_code, sales_bank_account_code
+from (
+    select x.invoice_realization_code,
+           coalesce(x.land1, x.counterparty_country_code) as country_of_destination_code,
+           case
+               when i.billing_document_code is not null and i.bank_as_counterparty_code is not null
+                   then i.bank_as_counterparty_code
+               when i.billing_document_code is not null and i.bank_as_counterparty_code is null
+                    and s.sales_partner_role_code is not null
+                   then s.customer_code
+           end as sales_bank_account_code,
+           row_number() over (
+               partition by x.invoice_realization_code
+               order by x.invoice_realization_group_code asc,
+                        x.invoice_code asc,
+                        x.counterparty_country_code asc,
+                        x.land1 asc,
+                        i.billing_document_code asc,
+                        s.sales_partner_role_code asc,
+                        i.bank_as_counterparty_code asc,   -- для детерминизма
+                        s.customer_code asc                -- для детерминизма
+           ) as rn
+    from t_step2 x
+    left join dds.invoice i
+           on i.billing_document_code = x.inv_key
+          and x.invoice_type_code = 'О'      -- проверьте, что 'О' кириллическая
+    left join t_sch s on s.sales_contract_code = i.sales_contract_code
+) q
+where rn = 1
+distributed by (invoice_realization_code);
+
+-- 8. Итог
+drop table if exists t_result;
+create temp table t_result as
+select * from t_res_group
+union all
+select * from t_res_nogroup
+distributed by (invoice_realization_code);
+
+select count(*) from t_result;   -- должно быть 3 902 378

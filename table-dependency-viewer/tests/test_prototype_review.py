@@ -1579,7 +1579,32 @@ class PrototypeSqlAlgorithmTests(unittest.TestCase):
 
 
 class PrototypeReviewRetryTests(unittest.TestCase):
-    def run_selected(self, files, target="dm.failed", overrides=None):
+    def test_two_files_of_one_object_do_not_create_phantom_review_object(self):
+        files = [{"path": path, "sql": sql, "statements": prototype_review._split_sql_statements(sql)}
+                 for path, sql in [("config_files/meta/dm/failed_recreate.sql", "create table dm.failed(id int);"),
+                                   ("config_files/meta/dm/failed_insert.sql", "insert into dm.failed select invalid_column;")]]
+        def execute(**kw):
+            plan = build_review_execution_plan(files=kw["files"], review_targets=kw["review_targets"])
+            return [], [{**unit, "status": "error" if "invalid_column" in unit["sql_text"] else "ok",
+                         "error_message": "unknown column" if "invalid_column" in unit["sql_text"] else ""} for unit in plan]
+        dependencies = PrototypeReviewWorkflowDependencies(
+            load_bundle=lambda **kw: {"files": files, "mr": {}}, get_meta_and_index=lambda: ([], {}),
+            resolve_item=lambda **kw: {"target_fqn": kw["target_fqn"], "execution": kw["execution_row"], "warnings": []},
+            execute_review=execute, gitlab_api_url="", gitlab_project="", gitlab_token="",
+            gitlab_ssl_verify=True, analyst_gitlab_project="", dev_database_url="fixture")
+        payload = SimpleNamespace(mr_input="1", task_text="", issue_summary="", dependent_views=[], linked_issues=[],
+            release_date="", direction="", business_key_changed=None, entity_name="")
+        result = build_prototype_review_result(payload, None, dependencies=dependencies)
+        self.assertEqual([item["item_id"] for item in result["review_items"]], ["dm.failed::TABLE"])
+        self.assertEqual(result["status"], "error")
+        files[1].update(sql="insert into dm.failed select 1;", statements=["insert into dm.failed select 1"])
+        payload.selected_item_ids = [item["item_id"] for item in result["review_items"]]
+        retried = build_prototype_review_result(payload, None, dependencies=dependencies)
+        self.assertEqual(retried["status"], "ok")
+        self.assertEqual(len(retried["execution"]), 1)
+        self.assertEqual([item["item_id"] for item in retried["review_items"]], ["dm.failed::TABLE"])
+
+    def run_selected(self, files, target="dm.failed", overrides=None, selected_id=None):
         targets = infer_review_targets(files)
         chosen = next(t for t in targets if t["target_fqn"] == target)
         executed, checked = [], []
@@ -1596,7 +1621,8 @@ class PrototypeReviewRetryTests(unittest.TestCase):
             gitlab_ssl_verify=True, analyst_gitlab_project="", dev_database_url="fixture")
         payload = SimpleNamespace(mr_input="1", task_text="", issue_summary="", dependent_views=[], linked_issues=[],
             release_date="", direction="", business_key_changed=None, entity_name="",
-            selected_item_ids=[chosen["item_id"]], item_overrides=[{"item_id": chosen["item_id"], **(overrides or {})}])
+            selected_item_ids=[selected_id or chosen["item_id"]],
+            item_overrides=[{"item_id": selected_id or chosen["item_id"], **(overrides or {})}])
         result = build_prototype_review_result(payload, None, dependencies=dependencies)
         return result, executed, checked
 
@@ -1610,6 +1636,33 @@ class PrototypeReviewRetryTests(unittest.TestCase):
         self.assertEqual(len(checked), 1)
         self.assertEqual(checked[0]["key_attributes_override"], ["new_key"])
         self.assertEqual([i["target_fqn"] for i in result["review_items"]], ["dm.failed"])
+
+    def test_corrected_target_name_rebound_by_file_without_rerunning_successful_neighbour(self):
+        files = [{"path": p, "sql": s, "statements": prototype_review._split_sql_statements(s)} for p, s in [
+            ("dm/dm.failed.sql", "insert into dm.failed select 2;"),
+            ("dm/dm.success.sql", "insert into dm.success select 1;")]]
+        result, executed, checked = self.run_selected(files, selected_id="dm.failed_typo::TABLE", overrides={
+            "target_fqn": "dm.failed_typo", "paths": ["dm/dm.failed.sql"], "object_type": "TABLE",
+            "entity_name": "NIGHT", "key_attributes": ["new_key"]})
+        self.assertEqual(result["item_id_aliases"], {"dm.failed_typo::TABLE": "dm.failed::TABLE"})
+        self.assertEqual(len(executed), 1)
+        self.assertNotIn("dm.success", executed[0]["sql"])
+        self.assertEqual(checked[0]["key_attributes_override"], ["new_key"])
+
+    def test_ambiguous_file_correction_requires_explicit_review(self):
+        sql = "insert into dm.failed select 1; insert into dm.second select 2;"
+        with self.assertRaisesRegex(ValueError, "однозначно"):
+            self.run_selected([{"path": "objects.sql", "sql": sql, "statements": prototype_review._split_sql_statements(sql)}],
+                selected_id="dm.old::TABLE", overrides={"target_fqn": "dm.old", "paths": ["objects.sql"]})
+
+    def test_changed_variant_id_matches_only_its_entity(self):
+        from api.services.prototype_review_retry import resolve_retry_item_ids
+        targets = PrototypeSqlAlgorithmTests().targets()
+        old = {"item_id": "old-variant", "target_fqn": "dm.sb_wuc", "object_type": "TABLE",
+            "sql_variant_mode": "separate", "entity_name": "2hours", "paths": ["dm_update.sb_wuc.sql"]}
+        selected, aliases = resolve_retry_item_ids(["old-variant"], targets, [old])
+        self.assertEqual(selected, {targets[1]["item_id"]})
+        self.assertEqual(aliases, {"old-variant": targets[1]["item_id"]})
 
     def test_validation_of_unselected_file_does_not_block_selected_object(self):
         files = [{"path": p, "sql": s, "statements": prototype_review._split_sql_statements(s)} for p, s in [

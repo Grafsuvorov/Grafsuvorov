@@ -11,7 +11,7 @@ export function mergeReviewRetry(previous, fresh, buildDraftItem) {
   const replacements = new Map((fresh.review_items || []).map((item) => [item.item_id, item]));
   const manifest = new Map((fresh.source_manifest || []).map((item) => [item.item_id, item]));
   return previous.map((item) => {
-    const replacement = replacements.get(item.item_id);
+    const replacement = replacements.get(fresh.item_id_aliases?.[item.item_id] || item.item_id);
     if (replacement) {
       const checked = buildDraftItem(replacement);
       const currentKeys = String(item.key_attributes_text || "").split(/[,;\n]+/).map((key) => key.trim()).filter(Boolean).join(", ");
@@ -19,6 +19,7 @@ export function mergeReviewRetry(previous, fresh, buildDraftItem) {
       return { ...item, ...Object.fromEntries([
         "execution", "checks", "preparation", "duration_sec", "warnings", "sql_fingerprint", "paths", "path",
         "table_id", "is_new", "requires_user_input", "missing_fields", "validation_errors",
+        "item_id", "target_fqn", "object_type", "variant_key", "sql_variant_mode", "is_clickhouse_view",
       ].map((key) => [key, checked[key]])), checks_stale: currentKeys !== checked.key_attributes_text, source_stale: false,
       rechecking: false, last_checked_key_attributes_text: checked.key_attributes_text };
     }

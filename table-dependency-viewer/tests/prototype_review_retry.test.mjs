@@ -59,6 +59,23 @@ test("key edits made while retry is running remain visible and require recheckin
   assert.equal(merged[1].checks_stale, true);
 });
 
+test("corrected object ID and name replace the old result without losing form edits", () => {
+  const fixed = { ...fresh,
+    item_id_aliases: { bad: "corrected" },
+    review_items: [{ ...fresh.review_items[0], item_id: "corrected", target_fqn: "dm.corrected", object_type: "TABLE" }],
+    source_manifest: [fresh.source_manifest[0], { item_id: "corrected", sql_fingerprint: "bad2" }],
+    execution: [{ item_id: "corrected", status: "ok" }],
+  };
+  const drafts = mergeReviewRetry(previous, fixed, build);
+  assert.equal(drafts[1].item_id, "corrected");
+  assert.equal(drafts[1].target_fqn, "dm.corrected");
+  assert.equal(drafts[1].filter_text, "active is true");
+  const result = reviewResultWithItems({ execution: [{ item_id: "good", status: "ok" }, { item_id: "bad", status: "error" }] }, fixed, drafts, ["bad"]);
+  assert.equal(result.composition_stale, false);
+  assert.equal(result.status, "ok");
+  assert.deepEqual(result.execution.map((i) => i.item_id), ["good", "corrected"]);
+});
+
 test("failed preparation, duplicate checks and validation errors are retryable", () => {
   assert.equal(reviewItemNeedsRetry({ preparation: { status: "error" } }), true);
   assert.equal(reviewItemNeedsRetry({ checks: { duplicate_groups: 2 } }), true);

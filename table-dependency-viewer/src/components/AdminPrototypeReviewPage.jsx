@@ -353,6 +353,8 @@ export default function AdminPrototypeReviewPage() {
         selected_item_ids: selectedIds,
         item_overrides: selectedIds ? reviewItemsDraft.filter((item) => selectedIds.includes(item.item_id)).map((item) => ({
           item_id: item.item_id, entity_name: item.entity_name, key_attributes: splitItems(item.key_attributes_text),
+          target_fqn: item.target_fqn, object_type: item.object_type, paths: item.paths || [item.path],
+          sql_variant_mode: item.sql_variant_mode || null,
         })) : null,
         sql_variant_mappings: sqlMappings,
         mr_input: trimmedMr,

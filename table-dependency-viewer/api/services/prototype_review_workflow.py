@@ -17,7 +17,7 @@ from .prototype_review import (
 )
 
 from .prototype_review_variants import variant_groups, apply_variant_mappings
-from .prototype_review_retry import sql_fingerprint
+from .prototype_review_retry import sql_fingerprint, resolve_retry_item_ids
 
 
 @dataclass(frozen=True)
@@ -80,11 +80,10 @@ def build_prototype_review_result(
     selected = getattr(payload, "selected_item_ids", None)
     selected_plan = None
     invalidated_item_ids = set()
+    item_id_aliases = {}
     if selected is not None:
-        selected = set(selected)
-        known_ids = {t["item_id"] for t in review_targets}
-        if not selected or selected - known_ids:
-            raise ValueError("Состав объектов MR изменился. Обновите полный review и сопоставление алгоритмов.")
+        selected, item_id_aliases = resolve_retry_item_ids(
+            selected, review_targets, getattr(payload, "item_overrides", None))
         # Build with ALL targets first: multi-object files must not execute
         # successful neighbours when only one object is selected.
         full_plan = build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
@@ -98,7 +97,8 @@ def build_prototype_review_result(
             invalidated_item_ids.update(unit["item_id"] for unit in dependents)
             affected.update(unit["target_fqn"].lower() for unit in dependents)
         review_targets = [t for t in review_targets if t["item_id"] in selected]
-    overrides = {o.get("item_id"): o for o in getattr(payload, "item_overrides", None) or []}
+    overrides = {item_id_aliases.get(o.get("item_id"), o.get("item_id")): o
+                 for o in getattr(payload, "item_overrides", None) or []}
     for target in review_targets:
         override = overrides.get(target["item_id"], {})
         if "key_attributes" in override:
@@ -257,9 +257,14 @@ def build_prototype_review_result(
         for path_value in (item.get("paths") or [item.get("path")])
         if str(path_value).strip()
     }
+    reviewed_ids = {item.get("item_id") for item in review_items}
+    source_paths = {str(file.get("path") or "").strip() for file in files}
     for execution_row in execution_rows:
         path_value = str(execution_row.get("path") or "").strip()
-        if not path_value or path_value in covered_paths or _is_clickhouse_sql_path(path_value):
+        # A plan row can describe several files joined by newlines. It is
+        # already represented by its review item, not another SQL filename.
+        if (execution_row.get("item_id") in reviewed_ids or path_value not in source_paths
+                or path_value in covered_paths or _is_clickhouse_sql_path(path_value)):
             continue
         fallback_target = _infer_target_from_path(path_value)
         if not fallback_target:
@@ -281,7 +286,7 @@ def build_prototype_review_result(
         )
         item_result["item_id"] = f"{target_fqn}::{object_type}"
         item_result["object_type"] = object_type
-        item_result["is_clickhouse_view"] = bool(target_item.get("is_clickhouse_view"))
+        item_result["is_clickhouse_view"] = False
         item_result["paths"] = [path_value]
         item_result["preparation"] = {"status": "skipped"}
         item_result["dependencies"] = table_dependencies
@@ -306,6 +311,7 @@ def build_prototype_review_result(
         "partial": selected is not None,
         "source_manifest": source_manifest,
         "invalidated_item_ids": sorted(invalidated_item_ids),
+        "item_id_aliases": item_id_aliases,
         "status": status,
         "mr": bundle.get("mr") or {},
         "files": [{"path": item.get("path"), "statements_count": len(item.get("statements") or [])} for item in files],

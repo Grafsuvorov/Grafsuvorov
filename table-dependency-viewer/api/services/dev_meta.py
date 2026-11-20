@@ -70,7 +70,7 @@ REQUIRED_ATTRIBUTE_KEYS = {
     "data_type_gp",
     "is_nullable",
 }
-REQUIRED_TECH_FIELDS = {"dttm_inserted", "dttm_updated", "job_name", "deleted_flag"}
+REQUIRED_TECH_FIELDS = {"dttm_updated"}
 
 ALLOWED_CLICK_SCHEMAS = {
     "dm_view",

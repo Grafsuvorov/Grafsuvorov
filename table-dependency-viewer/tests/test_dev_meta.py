@@ -23,14 +23,12 @@ from api.services.dev_meta import _normalize_click_type, _validate_required_tech
 
 
 class DevMetaHelpersTests(unittest.TestCase):
-    def test_validate_required_tech_fields_accepts_full_set(self) -> None:
-        _validate_required_tech_fields(
-            ["id", "dttm_inserted", "dttm_updated", "job_name", "deleted_flag"]
-        )
+    def test_validate_required_tech_fields_accepts_only_updated_timestamp(self) -> None:
+        _validate_required_tech_fields(["id", "dttm_updated"])
 
     def test_validate_required_tech_fields_reports_missing(self) -> None:
-        with self.assertRaisesRegex(ValueError, "job_name"):
-            _validate_required_tech_fields(["dttm_inserted", "dttm_updated", "deleted_flag"])
+        with self.assertRaisesRegex(ValueError, "dttm_updated"):
+            _validate_required_tech_fields(["id", "dttm_inserted", "job_name", "deleted_flag"])
 
     def test_normalize_click_type_supports_timestamptz(self) -> None:
         self.assertEqual(_normalize_click_type("timestamptz"), "DateTime")

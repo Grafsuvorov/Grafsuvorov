@@ -639,7 +639,7 @@ export default function AdminPrototypeReviewPage() {
           <section className="cc-surface">
             <div className="section-title">Повторная проверка</div>
             <p className="muted">Исправьте SQL в исходном MR, затем перезапустите нужный объект. Приложение загрузит свежую версию SQL и сохранит успешные результаты остальных объектов.</p>
-            {reviewItemsDraft.some((i) => i.source_stale) && <p className="muted">У отмеченных объектов изменился SQL или данные зависимостей. Их результаты сохранены, но перед созданием задачи нужна повторная проверка.</p>}
+            {reviewItemsDraft.some((i) => i.source_stale) && <p className="muted">{isOhd ? "У отмеченных объектов изменился SQL." : "У отмеченных объектов изменился SQL или данные зависимостей."} Их результаты сохранены, но перед созданием задачи нужна повторная проверка.</p>}
             <button type="button" className="btn btn-primary" disabled={loading || creatingIssue || !retryItemIds.length}
               onClick={() => handleRun(retryItemIds)}>Перезапустить объекты с ошибками{retryItemIds.length ? ` (${retryItemIds.length})` : ""}</button>
             {result.composition_stale && <p className="page-error">Состав объектов MR изменился. Нужен полный запуск review.</p>}
@@ -1094,7 +1094,7 @@ export default function AdminPrototypeReviewPage() {
                 onClick={handleCreateIssue}
                 disabled={loading || creatingIssue || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
-                {creatingIssue ? "Ищем зависимости и создаём задачу…" : "Создать задачу"}
+                {creatingIssue ? (isOhd ? "Создаём задачу и dbt MR…" : "Ищем зависимости и создаём задачу…") : "Создать задачу"}
               </button>
             </div>
             {!isOhd && sourceLoad ? (
@@ -1106,7 +1106,7 @@ export default function AdminPrototypeReviewPage() {
             {creatingIssue ? (
               <div className="card" style={{ marginTop: 14 }}>
                 <div className="section-title">Подготавливаем задачу</div>
-                <div className="muted">1. Повторно ищем зависимости по файлам каждого объекта.</div>
+                <div className="muted">{isOhd ? "1. Проверяем SQL и параметры dbt registry." : "1. Повторно ищем зависимости по файлам каждого объекта."}</div>
                 <div className="muted">2. Формируем описание, комментарии и ручные скрипты.</div>
                 <div className="muted">3. Создаём YouTrack-задачу и MR.</div>
               </div>

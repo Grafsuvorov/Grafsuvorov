@@ -946,6 +946,7 @@ def build_review_execution_plan(
     files: list[dict[str, Any]],
     review_targets: list[dict[str, Any]],
     known_schemas: Optional[set[str]] = None,
+    parse_dependencies: bool = True,
 ) -> list[dict[str, Any]]:
     file_map = {str(item.get("path") or "").strip(): item for item in files}
     review_target_fqns = {
@@ -997,11 +998,12 @@ def build_review_execution_plan(
                 if not path_has_single_review_target and target_fqn.lower() not in statement_targets:
                     continue
                 sql_parts.append(statement_text)
-                for dep in _extract_statement_dependencies_normalized(
+                source_dependencies = _extract_statement_dependencies_normalized(
                     statement_text,
                     known_schemas=known_schemas,
                     exclude_fqns={target_fqn},
-                ):
+                ) if parse_dependencies else []
+                for dep in source_dependencies:
                     dep_norm = dep.lower()
                     if dep_norm in review_target_fqns and dep_norm not in seen_dependencies:
                         seen_dependencies.add(dep_norm)
@@ -1132,6 +1134,7 @@ def execute_sql_review_items_in_dev(
     files: list[dict[str, Any]],
     review_targets: list[dict[str, Any]],
     progress_callback=None,
+    parse_dependencies: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not dev_database_url:
         raise ValueError("Не настроен DEV_DATABASE_URL")
@@ -1152,6 +1155,7 @@ def execute_sql_review_items_in_dev(
             files=files,
             review_targets=review_targets,
             known_schemas=known_schemas or None,
+            parse_dependencies=parse_dependencies,
         )
         for review_item in review_targets:
             item_id = str(review_item.get("item_id") or "").strip()

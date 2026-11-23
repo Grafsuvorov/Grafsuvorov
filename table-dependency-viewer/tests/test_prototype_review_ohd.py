@@ -106,7 +106,7 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         deps = fixtures.PrototypeIssueWorkflowTests.dependencies(
             load_bundle=lambda **kw: {"mr": {}, "files": [{"path": "ods.sql", "sql": "create table ods.ral_bse_clr(id int);"}]},
             parse_task=lambda _: {}, prepare_yaml=self.forbidden, apply_yaml_dependencies=self.forbidden,
-            extract_dependencies=lambda *a, **kw: [], item_needs_attention=lambda _: (False, []),
+            extract_dependencies=self.forbidden, item_needs_attention=lambda _: (False, []),
             build_description=lambda **kw: "OHD description", create_issue=lambda **kw: created.append(kw) or {"issue_id": "OHD-5"},
             link_issues=lambda **kw: [], deliver_issue=lambda **kw: delivered.append(kw) or {},
             build_issue_link=lambda i: f"/issue/{i}", youtrack_project="ОХД", youtrack_queue="OHD")
@@ -115,6 +115,33 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(result["issue"]["issue_id"], "OHD-5")
         self.assertEqual(delivered[0]["review_items"][0]["yaml_content"], "")
         self.assertIsNone(delivered[0]["review_items"][0]["table_id"])
+        self.assertEqual(delivered[0]["review_items"][0]["dependencies"], [])
+
+    def test_ohd_full_and_selective_execution_never_parse_source_dependencies(self):
+        files = [{"path": p, "sql": s, "statements": fixtures.prototype_review._split_sql_statements(s)} for p, s in [
+            ("ods/downstream.sql", "insert into ods.downstream select * from ods.upstream;"),
+            ("ods/upstream.sql", "insert into ods.upstream select 1;")]]
+        executed = []
+        def execute(**kw):
+            self.assertFalse(kw["parse_dependencies"])
+            plan = fixtures.build_review_execution_plan(files=kw["files"], review_targets=kw["review_targets"],
+                                                       parse_dependencies=kw["parse_dependencies"])
+            executed.extend(p["target_fqn"] for p in plan)
+            return [], [{**p, "status": "ok"} for p in plan]
+        dependencies = fixtures.PrototypeReviewWorkflowDependencies(load_bundle=lambda **kw: {"files": files, "mr": {}},
+            get_meta_and_index=lambda: ([], {}), resolve_item=lambda **kw: {"target_fqn": kw["target_fqn"], "warnings": []},
+            execute_review=execute, dev_database_url="ohd-dev", gitlab_api_url="", gitlab_project="", gitlab_token="",
+            gitlab_ssl_verify=True, analyst_gitlab_project="")
+        payload = SimpleNamespace(mode="ohd", mr_input="1", task_text="", issue_summary="", entity_name="TRANSPORTATION",
+            dependent_views=[], linked_issues=[], release_date="", direction="", business_key_changed=None)
+        with patch.object(fixtures.prototype_review, "_extract_statement_dependencies_normalized", side_effect=self.forbidden):
+            fixtures.build_prototype_review_result(payload, None, dependencies=dependencies)
+            self.assertEqual(executed, ["ods.downstream", "ods.upstream"])
+            executed.clear()
+            payload.selected_item_ids = ["ods.upstream::TABLE"]
+            result = fixtures.build_prototype_review_result(payload, None, dependencies=dependencies)
+        self.assertEqual(executed, ["ods.upstream"])
+        self.assertEqual(result["invalidated_item_ids"], [])
 
     def test_ohd_delivery_only_publishes_dbt_and_links_it_to_ohd_task(self):
         params = {f.name: self.forbidden for f in fields(PrototypeIssueDeliveryDependencies)}
@@ -146,6 +173,7 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         with patch.dict(os.environ, {"DBT_GITLAB_PROJECT": "khd/dbt", "DBT_GITLAB_TARGET_BRANCH": "develop"}), \
              patch.object(fixtures.prototype_review_delivery, "resource_exists", return_value=False), \
              patch.object(fixtures.prototype_review_delivery, "file_content", return_value=None), \
+             patch.object(fixtures.prototype_review, "_extract_statement_dependencies_normalized", side_effect=self.forbidden), \
              patch.object(fixtures.prototype_review_delivery, "_gitlab_json_request", side_effect=git):
             result = publish_dbt_registry(task_id="OHD-5", author="test", review_items=[item], changed_files=files,
                                           mode="ohd", gitlab_project="ohd/dbt", gitlab_token="ohd-token")

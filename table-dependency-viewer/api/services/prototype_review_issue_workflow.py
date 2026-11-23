@@ -138,7 +138,9 @@ def create_prototype_review_issue(
             for file_item in changed_files
             if str(file_item.get("path") or "").strip() in item_paths
         ]
-        if related_files:
+        if ohd:
+            item["dependencies"] = []
+        elif related_files:
             item["dependencies"] = dependencies.extract_dependencies(
                 related_files,
                 exclude_fqns={str(item.get("target_fqn") or "").strip()},

@@ -41,6 +41,8 @@ def build_prototype_review_result(
     *,
     dependencies: PrototypeReviewWorkflowDependencies,
 ) -> dict[str, Any]:
+    ohd = getattr(payload, "mode", "khd") == "ohd"
+    execution_options = {"parse_dependencies": False} if ohd else {}
     bundle = dependencies.load_bundle(
         gitlab_api_url=dependencies.gitlab_api_url,
         gitlab_project=dependencies.gitlab_project,
@@ -66,7 +68,7 @@ def build_prototype_review_result(
                 f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; проверьте влияние удаления на объект и зависимости"
             )
     review_targets = infer_review_targets(files)
-    if getattr(payload, "mode", "khd") == "ohd" and any(t.get("is_clickhouse_view") for t in review_targets):
+    if ohd and any(t.get("is_clickhouse_view") for t in review_targets):
         raise ValueError("Режим ОХД поддерживает только dbt Greenplum, без ClickHouse")
     groups = variant_groups(files, review_targets, all_meta)
     mappings = getattr(payload, "sql_variant_mappings", None)
@@ -88,7 +90,8 @@ def build_prototype_review_result(
             selected, review_targets, getattr(payload, "item_overrides", None))
         # Build with ALL targets first: multi-object files must not execute
         # successful neighbours when only one object is selected.
-        full_plan = build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
+        full_plan = build_review_execution_plan(files=files, review_targets=review_targets,
+            known_schemas=known_schemas, parse_dependencies=not ohd)
         selected_plan = [unit for unit in full_plan if unit["item_id"] in selected]
         affected = {unit["target_fqn"].lower() for unit in selected_plan}
         while True:
@@ -136,7 +139,8 @@ def build_prototype_review_result(
         if selected_plan is not None or any(t.get("sql_variant_mode") == "separate" for t in review_targets):
             # Check each result while its own algorithm is still in the table.
             # The next variant can overwrite the same physical relation.
-            ordered = selected_plan if selected_plan is not None else build_review_execution_plan(files=files, review_targets=review_targets, known_schemas=known_schemas)
+            ordered = selected_plan if selected_plan is not None else build_review_execution_plan(
+                files=files, review_targets=review_targets, known_schemas=known_schemas, parse_dependencies=not ohd)
             by_id = {t["item_id"]: t for t in review_targets}
             for index, unit in enumerate(ordered):
                 target = by_id[unit["item_id"]]
@@ -146,6 +150,7 @@ def build_prototype_review_result(
                 prep, executed = dependencies.execute_review(
                     dev_database_url=dependencies.dev_database_url, files=scoped_files,
                     review_targets=[{**target, "execution_paths": [path]}], progress_callback=progress_callback,
+                    **execution_options,
                 )
                 preparation_rows.extend(prep)
                 execution_rows.extend(executed)
@@ -167,6 +172,7 @@ def build_prototype_review_result(
             preparation_rows, execution_rows = dependencies.execute_review(
                 dev_database_url=dependencies.dev_database_url, files=files,
                 review_targets=review_targets, progress_callback=progress_callback,
+                **execution_options,
             )
 
     exec_by_path = {str(item.get("path") or "").strip(): item for item in execution_rows if str(item.get("path") or "").strip()}

@@ -62,6 +62,7 @@ def publish_dbt_registry(
         for plan_item in build_review_execution_plan(
             files=changed_files or [],
             review_targets=sql_review_targets,
+            parse_dependencies=mode != "ohd",
         )
         if str(plan_item.get("target_fqn") or "").strip()
     }

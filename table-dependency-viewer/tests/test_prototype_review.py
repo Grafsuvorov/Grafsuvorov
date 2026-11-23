@@ -1059,6 +1059,68 @@ class InferReviewTargetsTests(unittest.TestCase):
         self.assertEqual(result[0]["paths"], [item["path"] for item in files])
 
 
+class SqlStatementSplittingTests(unittest.TestCase):
+    def test_line_and_nested_block_comments_do_not_split_statements(self):
+        sql = """-- don't split here; nor after a quote '
+SELECT 1 /* outer; /* nested; ' */ still comment; */;
+-- only a comment; ' trailing
+"""
+        statements = prototype_review._split_sql_statements(sql)
+        self.assertEqual(len(statements), 1)
+        self.assertIn("SELECT 1", statements[0])
+
+    def test_quoted_values_identifiers_and_escaped_strings(self):
+        for sql in ("SELECT 'it''s;ready'; SELECT 2;", 'SELECT "semi;""colon" FROM dm.t; SELECT 2;',
+                    r"SELECT E'it\'s;ready'; SELECT 2;"):
+            with self.subTest(sql=sql):
+                statements = prototype_review._split_sql_statements(sql)
+                self.assertEqual(len(statements), 2)
+                self.assertEqual(statements[1], "SELECT 2")
+
+    def test_dollar_quoted_bodies_remain_one_statement(self):
+        for tag in ("$$", "$body$"):
+            sql = f"DO {tag} BEGIN RAISE NOTICE 'a;b'; -- comment;\nPERFORM 1; END {tag}; SELECT 2;"
+            with self.subTest(tag=tag):
+                statements = prototype_review._split_sql_statements(sql)
+                self.assertEqual(len(statements), 2)
+                self.assertIn("PERFORM 1;", statements[0])
+                self.assertEqual(statements[1], "SELECT 2")
+
+    def test_comment_only_fragments_are_not_executable_objects(self):
+        self.assertEqual(prototype_review._split_sql_statements("-- comment;\n/* another; */; -- end;"), [])
+
+    def test_trailing_line_comment_does_not_hide_sql_delimiter(self):
+        sql = "INSERT INTO dm.t SELECT 1 -- trailing comment\n; INSERT INTO dm.t SELECT 2;"
+        files = [{"path": "dm/dm.t.sql", "sql": sql, "statements": prototype_review._split_sql_statements(sql)}]
+        plan = build_review_execution_plan(files=files, review_targets=infer_review_targets(files))
+        executable = prototype_review._strip_sql_comments(plan[0]["sql_text"])
+        self.assertRegex(executable, r"SELECT 1\s*;\s*INSERT INTO dm.t SELECT 2")
+        bundle = _load_collect_target_sql()("dm.t", files)
+        self.assertRegex(prototype_review._strip_sql_comments(bundle["insert_sql"]), r"SELECT 1\s*;\s*INSERT")
+
+    def test_semicolon_in_graph_plan_comment_is_not_sql(self):
+        sql = """
+-- stg.sapxi_casting_schedule (GRAPH_PLAN)
+CREATE TABLE IF NOT EXISTS stg.sapxi_casting_schedule (PLAN_ID NUMERIC);
+COMMENT ON TABLE stg.sapxi_casting_schedule IS 'STG: график литья; JSON';
+-- ---- INSERT (JSON parse: jsonb_array_elements) ----
+-- NOTE: all SI_GraphPlan_AI rows are parsed; document_text must be JSON (::jsonb).
+INSERT INTO stg.sapxi_casting_schedule (PLAN_ID)
+SELECT (j.value ->> 'PLAN_ID')::NUMERIC
+FROM landing."INPUT_DATA_AS_TEXT_FROM_SAPXI_IN" l,
+jsonb_array_elements(l.document_text::jsonb -> 'GRAPH_PLAN') AS j(value)
+WHERE l.flow_id = 'SI_GraphPlan_AI';
+"""
+        statements = prototype_review._split_sql_statements(sql)
+        self.assertEqual(len(statements), 3)
+        self.assertTrue(prototype_review._strip_sql_comments(statements[2]).strip().startswith("INSERT INTO"))
+        files = [{"path": "stg/stg.sapxi_casting_schedule.sql", "sql": sql, "statements": statements}]
+        plan = build_review_execution_plan(files=files, review_targets=infer_review_targets(files))
+        executable = prototype_review._strip_sql_comments(plan[0]["sql_text"])
+        self.assertNotIn("document_text must be JSON", executable)
+        self.assertIn("l.document_text::jsonb", executable)
+
+
 class CollectTargetSqlTests(unittest.TestCase):
     def test_new_object_bundle_keeps_temp_preparation_and_splits_target_ddl(self) -> None:
         collect = _load_collect_target_sql()
@@ -1573,8 +1635,8 @@ class PrototypeSqlAlgorithmTests(unittest.TestCase):
         sql = "create temp table tmp_rows (id int); insert into tmp_rows select 1; insert into dm.sb_wuc select * from tmp_rows;"
         result = _load_collect_target_sql()("dm.sb_wuc", [{"path": "dm.sb_wuc.sql", "sql": sql,
             "statements": prototype_review._split_sql_statements(sql)}])
-        self.assertIn("create temp table tmp_rows (id int);", result["insert_sql"])
-        self.assertIn("insert into tmp_rows select 1;", result["insert_sql"])
+        self.assertRegex(result["insert_sql"], r"create temp table tmp_rows \(id int\)\s*;")
+        self.assertRegex(result["insert_sql"], r"insert into tmp_rows select 1\s*;")
         self.assertTrue(result["insert_sql"].endswith(";"))
 
 

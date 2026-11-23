@@ -1115,7 +1115,8 @@ def _prototype_review_collect_target_sql(target_fqn: str, files: list[dict[str, 
         for statement in statements or [sql_text]:
             # MR statements are parsed without delimiters; generated SQL files
             # must remain executable when a script has multiple statements.
-            statement = str(statement).strip().rstrip(";") + ";"
+            # Put the delimiter on its own line to survive trailing -- comments.
+            statement = str(statement).strip().rstrip(";") + "\n;"
             statement_without_comments = _strip_sql_comments(statement)
             assigned = False
             normalized_targets: set[str] = set()

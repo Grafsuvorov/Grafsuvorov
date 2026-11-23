@@ -368,26 +368,80 @@ def validate_prototype_sql(files: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 
 def _split_sql_statements(sql_text: str) -> list[str]:
-    text_value = _normalize_sql_text(sql_text)
-    statements: list[str] = []
-    current: list[str] = []
-    in_single = False
-    in_double = False
-    for char in text_value:
-        if char == "'" and not in_double:
-            in_single = not in_single
-        elif char == '"' and not in_single:
-            in_double = not in_double
-        if char == ";" and not in_single and not in_double:
-            candidate = "".join(current).strip()
-            if candidate:
-                statements.append(candidate)
-            current = []
+    """Split at SQL delimiters, preserving comments and quoted bodies intact."""
+    value = _normalize_sql_text(sql_text)
+    statements = []
+    start = index = 0
+    quote = dollar_tag = ""
+    block_depth = 0
+    line_comment = escaped_string = has_code = False
+    while index < len(value):
+        char = value[index]
+        pair = value[index:index + 2]
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+            index += 1
             continue
-        current.append(char)
-    tail = "".join(current).strip()
-    if tail:
-        statements.append(tail)
+        if block_depth:
+            if pair == "/*":
+                block_depth += 1
+                index += 2
+            elif pair == "*/":
+                block_depth -= 1
+                index += 2
+            else:
+                index += 1
+            continue
+        if dollar_tag:
+            if value.startswith(dollar_tag, index):
+                index += len(dollar_tag)
+                dollar_tag = ""
+            else:
+                index += 1
+            continue
+        if quote:
+            if quote == "'" and escaped_string and char == "\\":
+                index += 2
+            elif char == quote:
+                if index + 1 < len(value) and value[index + 1] == quote:
+                    index += 2
+                else:
+                    quote = ""
+                    index += 1
+            else:
+                index += 1
+            continue
+        if pair == "--":
+            line_comment = True
+            index += 2
+            continue
+        if pair == "/*":
+            block_depth = 1
+            index += 2
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            escaped_string = (char == "'" and index > 0 and value[index - 1] in "eE"
+                              and (index < 2 or not re.match(r"[\w$]", value[index - 2])))
+            has_code = True
+        elif char == "$" and (index == 0 or not re.match(r"[\w$]", value[index - 1])):
+            tag = re.match(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$", value[index:])
+            if tag:
+                dollar_tag = tag.group()
+                has_code = True
+                index += len(dollar_tag)
+                continue
+        elif char == ";":
+            if has_code:
+                statements.append(value[start:index].strip())
+            start = index + 1
+            has_code = False
+        elif not char.isspace():
+            has_code = True
+        index += 1
+    if has_code or block_depth:
+        statements.append(value[start:].strip())
     return statements
 
 
@@ -952,9 +1006,8 @@ def build_review_execution_plan(
                     if dep_norm in review_target_fqns and dep_norm not in seen_dependencies:
                         seen_dependencies.add(dep_norm)
                         dependencies.append(dep_norm)
-        sql_text = "\n\n".join(f"{part.rstrip(';')};" for part in sql_parts if part.strip())
-        if sql_text:
-            sql_text = sql_text + ";"
+        # A trailing -- comment must not swallow the reconstructed delimiter.
+        sql_text = "\n\n".join(f"{part.rstrip(';')}\n;" for part in sql_parts if part.strip())
         plan_items.append(
             {
                 "item_id": item_id or None,

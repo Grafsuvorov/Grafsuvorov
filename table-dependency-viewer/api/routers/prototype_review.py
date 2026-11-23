@@ -5,7 +5,7 @@ Business handlers are injected while the legacy service is moved out of
 """
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Literal
 
 from fastapi import APIRouter, Request
 
@@ -81,8 +81,8 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
         return handlers.create_issue(payload, request)
 
     @router.get("/parent-issue/{issue_id}")
-    def parent_issue(issue_id: str, request: Request):
-        return handlers.parent_issue(issue_id, request)
+    def parent_issue(issue_id: str, request: Request, mode: Literal["khd", "ohd"] = "khd"):
+        return handlers.parent_issue(issue_id, request) if mode == "khd" else handlers.parent_issue(issue_id, request, mode=mode)
 
     @router.get("/release-slots")
     def release_slots(release_date: str, request: Request):

@@ -1,9 +1,13 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Literal
 
 from pydantic import BaseModel
 
 
-class PrototypeReviewRunPayload(BaseModel):
+class PrototypeReviewModePayload(BaseModel):
+    mode: Literal["khd", "ohd"] = "khd"
+
+
+class PrototypeReviewRunPayload(PrototypeReviewModePayload):
     mr_input: str
     selected_item_ids: Optional[List[str]] = None
     item_overrides: Optional[List[Dict[str, Any]]] = None
@@ -27,7 +31,7 @@ class PrototypeReviewRunPayload(BaseModel):
     diff_comment: Optional[str] = None
 
 
-class PrototypeReviewTableCheckPayload(BaseModel):
+class PrototypeReviewTableCheckPayload(PrototypeReviewModePayload):
     mr_input: str
     item_id: Optional[str] = None
     target_fqn: str
@@ -35,7 +39,7 @@ class PrototypeReviewTableCheckPayload(BaseModel):
     key_attributes: Optional[List[str]] = None
 
 
-class PrototypeReviewYamlRefreshPayload(BaseModel):
+class PrototypeReviewYamlRefreshPayload(PrototypeReviewModePayload):
     target_fqn: str
     entity_name: str
     key_attributes: Optional[List[str]] = None
@@ -77,7 +81,7 @@ class PrototypeReviewItemPayload(BaseModel):
     manual_scripts: Optional[List[Dict[str, Any]]] = None
 
 
-class PrototypeReviewCreateIssuePayload(BaseModel):
+class PrototypeReviewCreateIssuePayload(PrototypeReviewModePayload):
     mr_input: str
     task_text: Optional[str] = None
     issue_summary: Optional[str] = None

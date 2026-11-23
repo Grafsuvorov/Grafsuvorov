@@ -29,12 +29,18 @@ def publish_dbt_registry(
     review_items: list[dict[str, Any]],
     changed_files: Optional[list[dict[str, Any]]] = None,
     deleted_files: Optional[list[dict[str, Any]]] = None,
+    mode: str = "khd",
+    gitlab_project: Optional[str] = None,
+    gitlab_token: Optional[str] = None,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
-    if not re.fullmatch(r"DWH-\d+", task_id_norm):
-        raise ValueError("Номер задачи для dbt MR должен быть в формате DWH-12345")
-    token = os.getenv("DBT_GITLAB_TOKEN", "")
-    project_ref = _parse_gitlab_project(os.getenv("DBT_GITLAB_PROJECT", "dwh/dbt"))
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*-\d+" if mode == "ohd" else r"DWH-\d+", task_id_norm):
+        raise ValueError("Некорректный номер задачи YouTrack ОХД" if mode == "ohd"
+                         else "Номер задачи для dbt MR должен быть в формате DWH-12345")
+    if mode == "ohd" and (not gitlab_project or not gitlab_token):
+        raise ValueError("Для ОХД не настроен отдельный dbt GitLab project/token")
+    token = gitlab_token if mode == "ohd" else os.getenv("DBT_GITLAB_TOKEN", "")
+    project_ref = _parse_gitlab_project(gitlab_project if mode == "ohd" else os.getenv("DBT_GITLAB_PROJECT", "dwh/dbt"))
     if not token:
         raise ValueError("Не настроен DBT_GITLAB_TOKEN")
     if not project_ref:
@@ -104,7 +110,7 @@ def publish_dbt_registry(
         return {"status": "skipped", "reason": "В review нет SQL, registry или DQ для публикации", "files": []}
 
     branch_name = f"feature/{task_id_norm}"
-    target_branch = os.getenv("DBT_GITLAB_TARGET_BRANCH", "main").strip() or "main"
+    target_branch = "main" if mode == "ohd" else os.getenv("DBT_GITLAB_TARGET_BRANCH", "main").strip() or "main"
     api_url = os.getenv("GITLAB_API_URL", "")
     ssl_verify = os.getenv("GITLAB_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"}
     branch_exists = resource_exists(project=project_ref, token=token, path=f"repository/branches/{urlparse.quote(branch_name, safe='')}")

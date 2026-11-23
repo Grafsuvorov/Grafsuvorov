@@ -117,6 +117,8 @@ function buildDraftItem(item) {
 }
 
 export default function AdminPrototypeReviewPage() {
+  const [reviewMode, setReviewMode] = useState("khd");
+  const isOhd = reviewMode === "ohd";
   const [mrInput, setMrInput] = useState("");
   const [form, setForm] = useState(DEFAULT_FORM);
   const [linkedIssues, setLinkedIssues] = useState("");
@@ -164,7 +166,7 @@ export default function AdminPrototypeReviewPage() {
     let cancelled = false;
     setSelectedReleaseSlot("");
     setReleaseSlotsError("");
-    if (!releaseDate) {
+    if (!releaseDate || isOhd) {
       setReleaseSlots([]);
       setReleaseSlotsLoading(false);
       return () => { cancelled = true; };
@@ -184,7 +186,7 @@ export default function AdminPrototypeReviewPage() {
         if (!cancelled) setReleaseSlotsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [form.release_date]);
+  }, [form.release_date, isOhd]);
 
   const normalizedTaskText = useMemo(
     () => buildTaskText(form, linkedIssues),
@@ -243,7 +245,7 @@ export default function AdminPrototypeReviewPage() {
     setParentLoading(true);
     setError(null);
     try {
-      const payload = await adminApi.prototypeReviewParentIssue(issueId);
+      const payload = await adminApi.prototypeReviewParentIssue(issueId, reviewMode);
       setForm((prev) => ({ ...prev, parent_issue: payload?.issue_id || issueId, direction: payload?.direction || prev.direction }));
     } catch (err) {
       setError(err?.message || "Не удалось загрузить родительскую задачу");
@@ -350,6 +352,7 @@ export default function AdminPrototypeReviewPage() {
       }
       if (sqlMappings?.some((m) => m.mode === "shared" && !m.entity_name.trim())) throw new Error("Укажите сущности общего алгоритма");
       const startPayload = await adminApi.prototypeReviewRunStart({
+        mode: reviewMode,
         selected_item_ids: selectedIds,
         item_overrides: selectedIds ? reviewItemsDraft.filter((item) => selectedIds.includes(item.item_id)).map((item) => ({
           item_id: item.item_id, entity_name: item.entity_name, key_attributes: splitItems(item.key_attributes_text),
@@ -430,6 +433,7 @@ export default function AdminPrototypeReviewPage() {
     )));
     try {
       const payload = await adminApi.prototypeReviewCheckTable({
+        mode: reviewMode,
         mr_input: String(mrInput || "").trim(),
         item_id: current.item_id,
         target_fqn: current.target_fqn,
@@ -489,6 +493,7 @@ export default function AdminPrototypeReviewPage() {
     setError(null);
     try {
       const payload = await adminApi.prototypeReviewCreateIssue({
+        mode: reviewMode,
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
         issue_summary: form.summary.trim(),
@@ -497,7 +502,7 @@ export default function AdminPrototypeReviewPage() {
         direction: String(form.direction || "").trim(),
         parent_issue: String(form.parent_issue || "").trim() || null,
         diff_comment: String(form.diff_comment || "").trim() || null,
-        source_load: includeSourceLoad && sourceLoad ? sourceLoad : null,
+        source_load: !isOhd && includeSourceLoad && sourceLoad ? sourceLoad : null,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           sql_variant_mode: item.sql_variant_mode || null,
@@ -525,7 +530,7 @@ export default function AdminPrototypeReviewPage() {
           yaml_content: "",
           stand_dev: Boolean(item.stand_dev),
           stand_prod: Boolean(item.stand_prod),
-          copy_to_clickhouse: Boolean(item.copy_to_clickhouse),
+          copy_to_clickhouse: !isOhd && Boolean(item.copy_to_clickhouse),
           comment: String(item.comment || "").trim() || null,
           manual_script_name: String(item.manual_script_name || "").trim() || null,
           manual_scripts: item.manual_scripts || [],
@@ -566,6 +571,23 @@ export default function AdminPrototypeReviewPage() {
         </div>
       </section>
 
+      <section aria-label="Режим Prototype Review" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
+        {[
+          { value: "khd", title: "КХД", description: "ETL metadata, dbt и инженерный MR" },
+          { value: "ohd", title: "ОХД · dbt", description: "SQL, registry и DQ · MR в main · отдельный проект YouTrack" },
+        ].map((mode) => <button key={mode.value} type="button" aria-pressed={reviewMode === mode.value}
+          className="cc-surface" disabled={loading || creatingIssue || parentLoading}
+          style={{ margin: 0, textAlign: "left", cursor: "pointer", borderColor: reviewMode === mode.value ? "var(--accent, #4f7cff)" : undefined }}
+          onClick={() => {
+            if (reviewMode === mode.value) return;
+            setReviewMode(mode.value); setMrInput(""); setForm(DEFAULT_FORM); setLinkedIssues("");
+            setResult(null); setReviewItemsDraft([]); setMappingGroups([]); setMappingChoices({});
+            setSourceLoad(null); setRunProgress(null); setError(null);
+          }}>
+          <div className="section-title">{mode.title}</div><div className="muted">{mode.description}</div>
+        </button>)}
+      </section>
+
       <section className="cc-surface">
         <div className="prototype-top-grid">
           <div className="prototype-step-field" style={{ margin: 0 }}>
@@ -604,9 +626,9 @@ export default function AdminPrototypeReviewPage() {
         ) : null}
       </section>
 
-      <BusinessDqPanel />
+      {!isOhd && <BusinessDqPanel />}
 
-      <PrototypeSourceLoadPanel onSourceLoadReady={(value) => { setSourceLoad(value); setIncludeSourceLoad(true); }} />
+      {!isOhd && <PrototypeSourceLoadPanel onSourceLoadReady={(value) => { setSourceLoad(value); setIncludeSourceLoad(true); }} />}
 
       {error ? <div className="page-error">{error}</div> : null}
 
@@ -672,7 +694,7 @@ export default function AdminPrototypeReviewPage() {
                 onChange={(event) => handleFieldChange("release_date", event.target.value)}
               />
             </div>
-            {form.release_date ? <div className="prototype-step-field" style={{ margin: 0 }}>
+            {form.release_date && !isOhd ? <div className="prototype-step-field" style={{ margin: 0 }}>
               <span className="slow-select-label">Release Slot</span>
               <select
                 className="slow-entity-select"
@@ -949,14 +971,14 @@ export default function AdminPrototypeReviewPage() {
                             />
                             <span>PROD</span>
                           </label>
-                            <label className="prototype-toggle-card wide">
+                            {!isOhd && <label className="prototype-toggle-card wide">
                             <input
                               type="checkbox"
                               checked={Boolean(item.copy_to_clickhouse)}
                               onChange={(event) => handleReviewItemToggle(item.item_id, "copy_to_clickhouse", event.target.checked)}
                             />
                             <span>Требуется ClickHouse</span>
-                          </label>
+                          </label>}
                           </div>
                         </div>
 
@@ -1064,7 +1086,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                Одна задача будет создана на весь diff. ETL YAML, SQL объектов, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи.
+                {isOhd ? "Одна задача будет создана в проекте ОХД. SQL, registry и DQ-модели попадут в dbt MR с целевой веткой main." : "Одна задача будет создана на весь diff. ETL YAML, SQL объектов, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи."}
               </div>
               <button
                 type="button"
@@ -1075,7 +1097,7 @@ export default function AdminPrototypeReviewPage() {
                 {creatingIssue ? "Ищем зависимости и создаём задачу…" : "Создать задачу"}
               </button>
             </div>
-            {sourceLoad ? (
+            {!isOhd && sourceLoad ? (
               <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 14, cursor: "pointer" }}>
                 <input type="checkbox" checked={includeSourceLoad} onChange={(event) => setIncludeSourceLoad(event.target.checked)} />
                 Добавить загрузку из источника <span className="mono">{sourceLoad.target_schema}.{sourceLoad.target_table}</span> в эту задачу и тот же инженерный MR

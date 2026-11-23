@@ -9,6 +9,8 @@ import re
 from .prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 from .prototype_review_variants import validate_issue_variants
 from .prototype_review_retry import validate_review_sources
+from .prototype_review_dbt import build_registry_yaml
+from .prototype_review import infer_review_targets
 
 
 @dataclass(frozen=True)
@@ -86,6 +88,10 @@ def create_prototype_review_issue(
     *,
     dependencies: PrototypeIssueWorkflowDependencies,
 ) -> dict[str, Any]:
+    ohd = getattr(payload, "mode", "khd") == "ohd"
+    if ohd and (getattr(payload, "source_load", None)
+                or any(getattr(i, "is_clickhouse_view", False) for i in payload.review_items)):
+        raise ValueError("В режиме ОХД поддерживается только dbt Greenplum без STG-загрузки и ClickHouse")
     dashboard_direction = str(payload.direction or "").strip()
     requested_parent_issue = str(getattr(payload, "parent_issue", None) or "").strip().upper()
     if requested_parent_issue:
@@ -115,6 +121,8 @@ def create_prototype_review_issue(
     parsed_task = dependencies.parse_task(payload.task_text or "")
     review_items = [item.model_dump() for item in payload.review_items]
     changed_files = bundle.get("files") or []
+    if ohd and any(t.get("is_clickhouse_view") for t in infer_review_targets(changed_files)):
+        raise ValueError("Режим ОХД поддерживает только dbt Greenplum, без ClickHouse")
     validate_review_sources(review_items, changed_files)
     validate_issue_variants(review_items, changed_files)
     for item in review_items:
@@ -138,6 +146,17 @@ def create_prototype_review_issue(
         item["_related_files"] = related_files
     reserved_table_ids: set[int] = set()
     for item in review_items:
+        if ohd:
+            item.pop("_related_files", None)
+            item["yaml_content"] = ""
+            item["table_id"] = None
+            item["replica_yaml_contents"] = {}
+            item["entity_names"] = _split_entity_names(item.get("entity_name"))
+            if str(item.get("object_type") or "TABLE").upper() == "TABLE":
+                if not item["entity_names"]:
+                    raise ValueError(f"Для {item.get('target_fqn')} заполните сущность dbt")
+                build_registry_yaml(item)
+            continue
         if item.get("is_clickhouse_view"):
             # ClickHouse view DDL is delivered verbatim to config_files/meta;
             # it has no Greenplum YAML identity or DEV execution step.

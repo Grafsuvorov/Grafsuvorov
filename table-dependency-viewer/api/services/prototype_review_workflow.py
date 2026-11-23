@@ -66,6 +66,8 @@ def build_prototype_review_result(
                 f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; проверьте влияние удаления на объект и зависимости"
             )
     review_targets = infer_review_targets(files)
+    if getattr(payload, "mode", "khd") == "ohd" and any(t.get("is_clickhouse_view") for t in review_targets):
+        raise ValueError("Режим ОХД поддерживает только dbt Greenplum, без ClickHouse")
     groups = variant_groups(files, review_targets, all_meta)
     mappings = getattr(payload, "sql_variant_mappings", None)
     if groups and not mappings:
@@ -308,6 +310,7 @@ def build_prototype_review_result(
     elif not status_reason:
         status_reason = "; ".join(validation_warnings) if validation_warnings else "Проверки завершены. Проверьте блоки по всем таблицам и затем создайте задачу."
     return {
+        "mode": getattr(payload, "mode", "khd"),
         "partial": selected is not None,
         "source_manifest": source_manifest,
         "invalidated_item_ids": sorted(invalidated_item_ids),

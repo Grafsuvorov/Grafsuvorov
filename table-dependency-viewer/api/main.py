@@ -8,6 +8,8 @@ from pydantic import BaseModel
 import os
 import logging
 import yaml
+from dataclasses import replace
+from functools import partial
 
 from datetime import datetime
 from sqlalchemy import text, bindparam
@@ -268,6 +270,7 @@ from .services.gitlab_delivery import (
     _prototype_gitlab_resource_exists,
 )
 from .services.prototype_review_delivery import _prototype_review_publish_dbt_registry
+from .services.prototype_review_ohd import OhdReviewContext, ohd_settings, require_ohd_settings, deliver_ohd_issue
 from .services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
@@ -1467,6 +1470,14 @@ def _prototype_review_build_result(
         analyst_gitlab_project=ANALYST_GITLAB_PROJECT,
         dev_database_url=DEV_DATABASE_URL,
     )
+    if payload.mode == "ohd":
+        settings = ohd_settings()
+        require_ohd_settings(settings)
+        context = OhdReviewContext(settings=settings, read_file=_prototype_gitlab_file_content,
+                                   base_resolver=_prototype_review_item_dependencies())
+        dependencies = replace(dependencies, dev_database_url=settings["dev_database_url"],
+            gitlab_token=settings["token"], analyst_gitlab_project=settings["analyst_project"],
+            get_meta_and_index=lambda: ([], {}), resolve_item=context.resolve_item)
     return build_prototype_review_result(
         payload,
         user,
@@ -1638,11 +1649,16 @@ def get_admin_prototype_review_status(job_id: str, request: Request):
 def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload, request: Request):
     _require_authenticated(request)
     try:
+        database_url = DEV_DATABASE_URL
+        if payload.mode == "ohd":
+            settings = ohd_settings()
+            require_ohd_settings(settings)
+            database_url = settings["dev_database_url"]
         key_attributes = [str(value).strip() for value in (payload.key_attributes or []) if str(value).strip()]
         if not key_attributes:
             raise HTTPException(status_code=400, detail="Сначала укажите ключевые поля для проверки дублей")
         checks = query_dev_table_checks(
-            dev_database_url=DEV_DATABASE_URL,
+            dev_database_url=database_url,
             target_fqn=payload.target_fqn,
             key_attributes=key_attributes,
         )
@@ -1663,6 +1679,8 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
 def refresh_admin_prototype_review_yaml(payload: PrototypeReviewYamlRefreshPayload, request: Request):
     _require_authenticated(request)
     try:
+        if payload.mode == "ohd":
+            raise ValueError("В режиме ОХД используется dbt registry; ETL YAML не создаётся")
         yaml_content = _prototype_review_refresh_yaml_identity(
             item=payload.model_dump(),
             preserve_submitted_table_id=True,
@@ -1751,10 +1769,20 @@ def _prototype_issue_workflow_dependencies() -> PrototypeIssueWorkflowDependenci
 def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
     user = _require_authenticated(request)
     try:
+        dependencies = _prototype_issue_workflow_dependencies()
+        if payload.mode == "ohd":
+            settings = ohd_settings()
+            require_ohd_settings(settings, delivery=True)
+            delivery = replace(dependencies.delivery, publish_dbt=partial(_prototype_review_publish_dbt_registry,
+                mode="ohd", gitlab_project=settings["project"], gitlab_token=settings["token"]))
+            dependencies = replace(dependencies, delivery=delivery, deliver_issue=deliver_ohd_issue,
+                gitlab_token=settings["token"], analyst_gitlab_project=settings["analyst_project"],
+                youtrack_project=settings["youtrack_project"], youtrack_project_id=settings["youtrack_project_id"],
+                youtrack_queue=settings["youtrack_queue"], direction_field_name=settings["direction_field"])
         result = create_prototype_review_issue(
             payload,
             user,
-            dependencies=_prototype_issue_workflow_dependencies(),
+            dependencies=dependencies,
         )
         issue = result.get("issue") or {}
         issue_id = str(issue.get("issue_id") or "").strip()
@@ -2110,14 +2138,14 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-def get_admin_prototype_parent_issue(issue_id: str, request: Request):
+def get_admin_prototype_parent_issue(issue_id: str, request: Request, mode: str = "khd"):
     _require_authenticated(request)
     try:
         return get_ytrack_issue_context(
             base_url=YOUTRACK_URL,
             token=YOUTRACK_TOKEN,
             issue_id=issue_id,
-            direction_field_name=YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+            direction_field_name=ohd_settings()["direction_field"] if mode == "ohd" else YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
             ssl_verify=YOUTRACK_SSL_VERIFY,
         )
     except ValueError as exc:

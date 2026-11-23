@@ -10,7 +10,7 @@ from .prototype_review_item import resolve_prototype_review_item
 
 def ohd_settings():
     return {
-        "dev_database_url": os.getenv("OHD_DEV_DATABASE_URL", ""),
+        "dev_database_url": os.getenv("OHD_DEV_DATABASE_URL") or os.getenv("DBT_LOGS_DATABASE_URL", ""),
         "project": os.getenv("OHD_DBT_GITLAB_PROJECT", ""),
         "token": os.getenv("OHD_DBT_GITLAB_TOKEN") or os.getenv("DBT_GITLAB_TOKEN", ""),
         "analyst_project": os.getenv("OHD_ANALYST_GITLAB_PROJECT") or os.getenv("OHD_DBT_GITLAB_PROJECT", ""),
@@ -23,7 +23,8 @@ def ohd_settings():
 
 def require_ohd_settings(settings, *, delivery=False):
     required = {"project": "OHD_DBT_GITLAB_PROJECT", "token": "OHD_DBT_GITLAB_TOKEN (или DBT_GITLAB_TOKEN)"}
-    required.update({"youtrack_queue": "OHD_YOUTRACK_QUEUE"} if delivery else {"dev_database_url": "OHD_DEV_DATABASE_URL"})
+    required.update({"youtrack_queue": "OHD_YOUTRACK_QUEUE"} if delivery else {
+        "dev_database_url": "DBT_LOGS_DATABASE_URL (или OHD_DEV_DATABASE_URL)"})
     missing = [name for key, name in required.items() if not settings.get(key)]
     if missing:
         raise ValueError("Для режима ОХД настройте: " + ", ".join(missing))

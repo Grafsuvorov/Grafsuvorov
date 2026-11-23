@@ -30,6 +30,13 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "OHD_DEV_DATABASE_URL"):
             require_ohd_settings(settings)
 
+    def test_ohd_uses_existing_dbt_connection_with_optional_override(self):
+        with patch.dict(os.environ, {"DBT_LOGS_DATABASE_URL": "ohd-existing", "DEV_DATABASE_URL": "khd-dev",
+                                     "OHD_DEV_DATABASE_URL": ""}, clear=True):
+            self.assertEqual(ohd_settings()["dev_database_url"], "ohd-existing")
+            with patch.dict(os.environ, {"OHD_DEV_DATABASE_URL": "ohd-override"}):
+                self.assertEqual(ohd_settings()["dev_database_url"], "ohd-override")
+
     def test_run_handler_uses_ohd_dependencies_without_loading_khd_metadata(self):
         module = ast.parse(Path("api/main.py").read_text())
         node = next(n for n in module.body if isinstance(n, ast.FunctionDef) and n.name == "_prototype_review_build_result")

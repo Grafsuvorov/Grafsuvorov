@@ -1,3 +1,163 @@
-MES_EP_ELECTROLISYS_2MONTH
+dbt_greenplum_elt/models_metadata/ods/ods.bicatr_to12900.sql
 
-entity_name: "MANAGEMENT_REPORTING_3"
+drop table if exists ods.ral_bse_clr;
+
+create table if not exists ods.ral_bse_clr (
+	bukrs_clr	varchar			not null,
+	belnr_clr	varchar			not null,
+	gjahr_clr	varchar			not null,
+	index_clr	varchar			not null,
+	agbuz		varchar			not null,
+	waers		varchar			null,
+	clrin		varchar			null,
+	bukrs		varchar			not null,
+	belnr		varchar			not null,
+	gjahr		varchar			not null,
+	buzei		varchar			not null,
+	shkzg		varchar			not null,
+	dmbtr		numeric(13,2)	not null,
+	dmbe2		numeric(13,2)	not null,
+	wrbtr		numeric(13,2)	not null,
+	bdiff		numeric(13,2)	not null,
+	bdif2		numeric(13,2)	not null,
+	koart		varchar			null,
+	umskz		varchar			null,
+	dttm_inserted	timestamp		not null default now(),
+	dttm_updated	timestamp			not null default now(),
+	job_name		varchar(60)			not null default 'airflow'::character varying,
+	deleted_flag	bool					not null default false
+)
+with (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (bukrs_clr, gjahr_clr, belnr_clr, index_clr);
+
+comment on table ods.ral_bse_clr is 'Связи клиринга бухгалтерских документов';
+
+comment on column ods.ral_bse_clr.bukrs_clr is 'Балансовая единица клирингового документа | Балансовая единица клирингового документа | stg."BSE_CLR"."BUKRS_CLR"';
+
+comment on column ods.ral_bse_clr.belnr_clr is 'Номер клирингового документа | Номер клирингового документа | stg."BSE_CLR"."BELNR_CLR"';
+
+comment on column ods.ral_bse_clr.gjahr_clr is 'Учебный год клирингового документа | Учебный год клирингового документа | stg."BSE_CLR"."GJAHR_CLR"';
+
+comment on column ods.ral_bse_clr.index_clr is 'Порядковый номер клиринга | Порядковый номер клиринга | stg."BSE_CLR"."INDEX_CLR"';
+
+comment on column ods.ral_bse_clr.agbuz is 'Номер позиции клирингового документа | Номер позиции клирингового документа | stg."BSE_CLR"."AGBUZ"';
+
+comment on column ods.ral_bse_clr.waers is 'Код валюты документа | Код валюты документа | stg."BSE_CLR"."WAERS"';
+
+comment on column ods.ral_bse_clr.clrin is 'Тип клиринга | Тип клиринга | stg."BSE_CLR"."CLRIN"';
+
+comment on column ods.ral_bse_clr.bukrs is 'Балансовая единица | Балансовая единица | stg."BSE_CLR"."BUKRS"';
+
+comment on column ods.ral_bse_clr.belnr is 'Номер бухгалтерского документа | Номер бухгалтерского документа | stg."BSE_CLR"."BELNR"';
+
+comment on column ods.ral_bse_clr.gjahr is 'Учебный год | Учебный год | stg."BSE_CLR"."GJAHR"';
+
+comment on column ods.ral_bse_clr.buzei is 'Номер позиции | Номер позиции | stg."BSE_CLR"."BUZEI"';
+
+comment on column ods.ral_bse_clr.shkzg is 'Признак дебет/кредит | Признак дебет/кредит | stg."BSE_CLR"."SHKZG"';
+
+comment on column ods.ral_bse_clr.dmbtr is 'Сумма в местной валюте | Сумма в местной валюте | stg."BSE_CLR"."DMBTR"';
+
+comment on column ods.ral_bse_clr.dmbe2 is 'Сумма во второй местной валюте | Сумма во второй местной валюте | stg."BSE_CLR"."DMBE2"';
+
+comment on column ods.ral_bse_clr.wrbtr is 'Сумма в валюте документа | Сумма в валюте документа | stg."BSE_CLR"."WRBTR"';
+
+comment on column ods.ral_bse_clr.bdiff is 'Курсовая разница в валюте документа | Курсовая разница в валюте документа | stg."BSE_CLR"."BDIFF"';
+
+comment on column ods.ral_bse_clr.bdif2 is 'Курсовая разница во второй местной валюте | Курсовая разница во второй местной валюте | stg."BSE_CLR"."BDIF2"';
+
+comment on column ods.ral_bse_clr.koart is 'Тип счёта | Тип счёта | stg."BSE_CLR"."KOART"';
+
+comment on column ods.ral_bse_clr.umskz is 'Признак special GL | Признак special GL | stg."BSE_CLR"."UMSKZ"';
+
+insert into ods.ral_bse_clr (
+	bukrs_clr,
+	belnr_clr,
+	gjahr_clr,
+	index_clr,
+	agbuz,
+	waers,
+	clrin,
+	bukrs,
+	belnr,
+	gjahr,
+	buzei,
+	shkzg,
+	dmbtr,
+	dmbe2,
+	wrbtr,
+	bdiff,
+	bdif2,
+	koart,
+	umskz
+)
+select
+	"BUKRS_CLR"::varchar											as bukrs_clr,
+	"BELNR_CLR"::varchar											as belnr_clr,
+	"GJAHR_CLR"::varchar											as gjahr_clr,
+	"INDEX_CLR"::varchar											as index_clr,
+	"AGBUZ"::varchar												as agbuz,
+	tech_etl.util_text_to_null_validation("WAERS")::varchar		as waers,
+	tech_etl.util_text_to_null_validation("CLRIN")::varchar		as clrin,
+	"BUKRS"::varchar												as bukrs,
+	"BELNR"::varchar												as belnr,
+	"GJAHR"::varchar												as gjahr,
+	"BUZEI"::varchar												as buzei,
+	"SHKZG"::varchar												as shkzg,
+	"DMBTR"::numeric(13,2)										as dmbtr,
+	"DMBE2"::numeric(13,2)										as dmbe2,
+	"WRBTR"::numeric(13,2)										as wrbtr,
+	"BDIFF"::numeric(13,2)										as bdiff,
+	"BDIF2"::numeric(13,2)										as bdif2,
+	tech_etl.util_text_to_null_validation("KOART")::varchar		as koart,
+	tech_etl.util_text_to_null_validation("UMSKZ")::varchar		as umskz
+from stg."BSE_CLR"
+where "MANDT" = '400';
+
+/*
+select * from ods.ral_bse_clr;
+
+select 
+	bukrs_clr,
+	belnr_clr,
+	gjahr_clr,
+	index_clr,
+	agbuz
+from ods.ral_bse_clr
+group by 
+	bukrs_clr,
+	belnr_clr,
+	gjahr_clr,
+	index_clr,
+	agbuz
+having count(*) > 1;
+
+*/;;
+
+dbt_greenplum_elt/models_metadata/ods/ods.bicasb_do00800.yml
+relation:
+  # наименование схемы
+  schema_name: ods
+  # наименование таблицы
+  table_name: /bic/asb_do00800
+  # тип scd (scd1, scd2)
+  scd_type: scd1
+  unique_key: # список полей уникального ключа
+    - /bic/zakazn_md
+    - /bic/zncorr
+    - calday
+    - calmonth
+    - /bic/zversion
+    - /bic/zstrngnum
+    - /bic/zpbe
+  entity:
+    - TRANSPORTATION
+dq:
+  - check_type: "duplicates"
+    detail_store_flag: true
+    detail_store_limit: null

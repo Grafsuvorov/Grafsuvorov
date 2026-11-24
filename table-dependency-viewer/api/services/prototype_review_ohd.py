@@ -4,6 +4,7 @@ import os
 
 import yaml
 
+from ..config import OHD_ANALYST_GITLAB_PROJECT
 from .prototype_review_dbt import dbt_registry_path
 from .prototype_review_item import resolve_prototype_review_item
 
@@ -14,7 +15,7 @@ def ohd_settings():
         "dev_database_url": os.getenv("OHD_DEV_DATABASE_URL") or os.getenv("DBT_LOGS_DATABASE_URL", ""),
         "project": dbt_project,
         "token": os.getenv("OHD_DBT_GITLAB_TOKEN") or os.getenv("DBT_GITLAB_TOKEN", ""),
-        "analyst_project": os.getenv("OHD_ANALYST_GITLAB_PROJECT") or dbt_project,
+        "analyst_project": os.getenv("OHD_ANALYST_GITLAB_PROJECT", OHD_ANALYST_GITLAB_PROJECT) or dbt_project,
         "youtrack_project": os.getenv("OHD_YOUTRACK_PROJECT", "ОХД - Общее Хранилище Данных (Данные партнеров)"),
         "youtrack_project_id": os.getenv("OHD_YOUTRACK_PROJECT_ID", ""),
         "youtrack_queue": os.getenv("OHD_YOUTRACK_QUEUE", ""),

@@ -85,6 +85,8 @@ ENTITY_META_GIT_META_ROOT = os.getenv(
 GITLAB_TOKEN = os.getenv("GITLAB_TOKEN", "")
 GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
 ANALYST_GITLAB_PROJECT = os.getenv("ANALYST_GITLAB_PROJECT", "")
+# OHD analysts' source MR project: GitLab namespace/project path or numeric ID.
+OHD_ANALYST_GITLAB_PROJECT = os.getenv("OHD_ANALYST_GITLAB_PROJECT", "")
 DBT_GITLAB_TOKEN = os.getenv("DBT_GITLAB_TOKEN", "")
 DBT_GITLAB_PROJECT = os.getenv("DBT_GITLAB_PROJECT", "dwh/dbt")
 DBT_REGISTRY_ROOT = os.getenv("DBT_REGISTRY_ROOT", "dbt_greenplum_elt/models_metadata")

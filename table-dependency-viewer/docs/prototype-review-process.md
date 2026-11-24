@@ -65,6 +65,8 @@ Prototype Review передаёт в ETL MR только YAML. Скрипты `r
 
 Для включения на сервере используются существующие `DBT_LOGS_DATABASE_URL`, `DBT_GITLAB_PROJECT` и `DBT_GITLAB_TOKEN`. Отдельно задайте `OHD_YOUTRACK_QUEUE` и `OHD_YOUTRACK_PROJECT_ID` или точное название `OHD_YOUTRACK_PROJECT`. При необходимости `OHD_DBT_GITLAB_PROJECT` и `OHD_DBT_GITLAB_TOKEN` переопределяют общий dbt-репозиторий и токен. `OHD_ANALYST_GITLAB_PROJECT` переопределяет проект входного MR; по умолчанию он совпадает с эффективным dbt-проектом. Также доступны `OHD_DEV_DATABASE_URL` и `OHD_YOUTRACK_DIRECTION_FIELD_NAME`. Подключение `DEV_DATABASE_URL` КХД не используется для ОХД.
 
+Для отдельного репозитория аналитиков заполните пустую строку `OHD_ANALYST_GITLAB_PROJECT=` в серверном `.env`: укажите `namespace/project` из URL GitLab или числовой ID проекта, а не отображаемое название. Шаблон строки также добавлен в `.env.production` и `.env.example`, настройка объявлена в `api/config.py`. Docker Compose уже читает `.env` через `env_file`; после изменения значения пересоздайте контейнер API. Эта настройка меняет только источник MR и не меняет dbt-репозиторий публикации.
+
 ## 3. Тестирование аналитиком
 
 После выполнения инженерных работ задача передаётся аналитику. Аналитик проверяет данные в DEV, полноту загрузки, бизнес-логику, соответствие постановке и влияние на зависимые витрины и отчёты.

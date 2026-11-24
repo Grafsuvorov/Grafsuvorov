@@ -31,7 +31,7 @@ AUTH_ALLOW_REGISTER = str(AUTH_ALLOW_REGISTER).lower() == "true"
 
 ALLOWED_ROLES = {"analyst", "engineer", "admin"}
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=1800)
 
 
 class TokenResponse(BaseModel):

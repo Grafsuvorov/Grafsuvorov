@@ -65,7 +65,9 @@ def build_prototype_review_result(
         deleted_path = str(deleted_file.get("path") or "").strip()
         if deleted_path:
             validation_warnings.append(
-                f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; проверьте влияние удаления на объект и зависимости"
+                f"Удалённый SQL-файл `{deleted_path}` не выполнялся в DEV; "
+                + ("проверьте, что удаление файла в MR намеренное" if ohd
+                   else "проверьте влияние удаления на объект и зависимости")
             )
     review_targets = infer_review_targets(files)
     if ohd and any(t.get("is_clickhouse_view") for t in review_targets):

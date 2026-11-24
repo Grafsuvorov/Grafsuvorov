@@ -1029,8 +1029,12 @@ def _gitlab_json_request(
             body = resp.read().decode("utf-8")
             return json.loads(body) if body else {}
     except urlerror.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")
-        raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
+        with exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+        context = f"{method.upper()} /projects/{project_ref}/{path.lstrip('/')} (проект: {project})"
+        if query and query.get("ref") is not None:
+            context += f", ref: {query['ref']}"
+        raise ValueError(f"GitLab вернул {exc.code}: {body}. Запрос: {context}") from exc
     except Exception as exc:
         raise ValueError(f"Не удалось вызвать GitLab API: {exc}") from exc
 

@@ -14,8 +14,10 @@ def ohd_settings():
     def setting(name):
         return os.getenv(name, getattr(config, name, "")).strip()
     dbt_token = setting("OHD_DBT_GITLAB_TOKEN") or setting("OHD_GITLAB_TOKEN")
+    dev_url = os.getenv("OHD_DEV_DATABASE_URL", "").strip()
     return {
-        "dev_database_url": os.getenv("OHD_DEV_DATABASE_URL") or os.getenv("DBT_LOGS_DATABASE_URL", ""),
+        "dev_database_url": dev_url or os.getenv("DBT_LOGS_DATABASE_URL", "").strip(),
+        "database_url_source": "OHD_DEV_DATABASE_URL" if dev_url else "DBT_LOGS_DATABASE_URL",
         "api_url": setting("OHD_GITLAB_API_URL").rstrip("/"),
         "ssl_verify": (setting("OHD_GITLAB_SSL_VERIFY") or "true").lower() not in {"0", "false", "no", "off"},
         "project": setting("OHD_DBT_GITLAB_PROJECT"),

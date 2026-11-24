@@ -271,6 +271,7 @@ from .services.gitlab_delivery import (
 )
 from .services.prototype_review_delivery import _prototype_review_publish_dbt_registry
 from .services.prototype_review_ohd import OhdReviewContext, ohd_settings, require_ohd_settings, deliver_ohd_issue, load_ohd_bundle
+from .services.prototype_review_connection import check_ohd_database_connection
 from .services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
@@ -1473,6 +1474,7 @@ def _prototype_review_build_result(
     if payload.mode == "ohd":
         settings = ohd_settings()
         require_ohd_settings(settings)
+        check_ohd_database_connection(settings["dev_database_url"], source=settings.get("database_url_source", "OHD"))
         context = OhdReviewContext(settings=settings, read_file=_prototype_gitlab_file_content,
                                    base_resolver=_prototype_review_item_dependencies())
         dependencies = replace(dependencies, dev_database_url=settings["dev_database_url"],
@@ -1657,6 +1659,7 @@ def check_admin_prototype_review_table(payload: PrototypeReviewTableCheckPayload
             settings = ohd_settings()
             require_ohd_settings(settings)
             database_url = settings["dev_database_url"]
+            check_ohd_database_connection(database_url, source=settings.get("database_url_source", "OHD"))
         key_attributes = [str(value).strip() for value in (payload.key_attributes or []) if str(value).strip()]
         if not key_attributes:
             raise HTTPException(status_code=400, detail="Сначала укажите ключевые поля для проверки дублей")

@@ -87,11 +87,13 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         settings = {"project": "ohd/dbt", "token": "ohd-token", "dev_database_url": "ohd-dev", "analyst_project": "ohd/analyst",
                     "api_url": "https://ohd.example/api/v4", "ssl_verify": True, "analyst_token": "ohd-read-token"}
         captured = []
+        checked_urls = []
         namespace = {"Any": object, "PrototypeReviewRunPayload": object,
             "PrototypeReviewWorkflowDependencies": fixtures.PrototypeReviewWorkflowDependencies,
             "replace": replace, "partial": partial, "load_ohd_bundle": load_ohd_bundle,
             "OhdReviewContext": OhdReviewContext, "ohd_settings": lambda: settings,
             "require_ohd_settings": require_ohd_settings,
+            "check_ohd_database_connection": lambda url, **kw: checked_urls.append(url),
             "_prototype_gitlab_file_content": self.forbidden, "_prototype_review_item_dependencies": lambda: None,
             "load_merge_request_sql_bundle": self.forbidden, "get_cached_meta_and_index": self.forbidden,
             "_prototype_review_resolve_item": self.forbidden, "execute_sql_review_items_in_dev": self.forbidden,
@@ -105,6 +107,13 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(captured[0].gitlab_api_url, "https://ohd.example/api/v4")
         self.assertEqual(captured[0].get_meta_and_index(), ([], {}))
         self.assertEqual(captured[0].analyst_gitlab_project, "ohd/analyst")
+        self.assertEqual(checked_urls, ["ohd-dev"])
+        def failed_connection(*args, **kwargs):
+            raise ValueError("OHD connection failed")
+        namespace["check_ohd_database_connection"] = failed_connection
+        namespace["build_prototype_review_result"] = self.forbidden
+        with self.assertRaisesRegex(ValueError, "OHD connection failed"):
+            namespace[node.name](SimpleNamespace(mode="ohd"), None)
 
     def test_issue_handler_routes_source_and_publication_to_separate_ohd_projects(self):
         module = ast.parse(Path("api/main.py").read_text())

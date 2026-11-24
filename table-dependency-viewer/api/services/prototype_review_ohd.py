@@ -9,11 +9,12 @@ from .prototype_review_item import resolve_prototype_review_item
 
 
 def ohd_settings():
+    dbt_project = os.getenv("OHD_DBT_GITLAB_PROJECT") or os.getenv("DBT_GITLAB_PROJECT", "dwh/dbt")
     return {
         "dev_database_url": os.getenv("OHD_DEV_DATABASE_URL") or os.getenv("DBT_LOGS_DATABASE_URL", ""),
-        "project": os.getenv("OHD_DBT_GITLAB_PROJECT", ""),
+        "project": dbt_project,
         "token": os.getenv("OHD_DBT_GITLAB_TOKEN") or os.getenv("DBT_GITLAB_TOKEN", ""),
-        "analyst_project": os.getenv("OHD_ANALYST_GITLAB_PROJECT") or os.getenv("OHD_DBT_GITLAB_PROJECT", ""),
+        "analyst_project": os.getenv("OHD_ANALYST_GITLAB_PROJECT") or dbt_project,
         "youtrack_project": os.getenv("OHD_YOUTRACK_PROJECT", "ОХД - Общее Хранилище Данных (Данные партнеров)"),
         "youtrack_project_id": os.getenv("OHD_YOUTRACK_PROJECT_ID", ""),
         "youtrack_queue": os.getenv("OHD_YOUTRACK_QUEUE", ""),
@@ -22,7 +23,8 @@ def ohd_settings():
 
 
 def require_ohd_settings(settings, *, delivery=False):
-    required = {"project": "OHD_DBT_GITLAB_PROJECT", "token": "OHD_DBT_GITLAB_TOKEN (или DBT_GITLAB_TOKEN)"}
+    required = {"project": "DBT_GITLAB_PROJECT (или OHD_DBT_GITLAB_PROJECT)",
+                "token": "OHD_DBT_GITLAB_TOKEN (или DBT_GITLAB_TOKEN)"}
     required.update({"youtrack_queue": "OHD_YOUTRACK_QUEUE"} if delivery else {
         "dev_database_url": "DBT_LOGS_DATABASE_URL (или OHD_DEV_DATABASE_URL)"})
     missing = [name for key, name in required.items() if not settings.get(key)]

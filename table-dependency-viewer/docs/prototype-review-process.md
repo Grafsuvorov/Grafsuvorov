@@ -63,7 +63,7 @@ Prototype Review передаёт в ETL MR только YAML. Скрипты `r
 
 Задача создаётся в проекте YouTrack ОХД. Публикация формирует только dbt MR в `main`: SQL и registry в `dbt_greenplum_elt/models_metadata/<schema>/`, технические DQ в `dbt_greenplum_elt/models/dq/technical/`. Имена файлов нормализованы, физические имена и ключи с `/bic/` сохраняются в YAML. Целевой объект определяется SQL, а не произвольным именем исходного файла. ETL YAML, `table_id`, ETL workspace и инженерный MR в этом режиме не создаются. STG-загрузка и ClickHouse доступны в режиме КХД.
 
-Для включения на сервере используйте существующий `DBT_LOGS_DATABASE_URL` и задайте `OHD_DBT_GITLAB_PROJECT` и `OHD_YOUTRACK_QUEUE` в `.env`. Токен `OHD_DBT_GITLAB_TOKEN` можно задать отдельно; иначе используется `DBT_GITLAB_TOKEN`. Настройте `OHD_YOUTRACK_PROJECT_ID` или точное название `OHD_YOUTRACK_PROJECT`. При необходимости задайте `OHD_DEV_DATABASE_URL`, `OHD_ANALYST_GITLAB_PROJECT` и `OHD_YOUTRACK_DIRECTION_FIELD_NAME`. Настройки подключения DEV и целевого GitLab-проекта КХД не используются как значения по умолчанию для ОХД.
+Для включения на сервере используются существующие `DBT_LOGS_DATABASE_URL`, `DBT_GITLAB_PROJECT` и `DBT_GITLAB_TOKEN`. Отдельно задайте `OHD_YOUTRACK_QUEUE` и `OHD_YOUTRACK_PROJECT_ID` или точное название `OHD_YOUTRACK_PROJECT`. При необходимости `OHD_DBT_GITLAB_PROJECT` и `OHD_DBT_GITLAB_TOKEN` переопределяют общий dbt-репозиторий и токен. `OHD_ANALYST_GITLAB_PROJECT` переопределяет проект входного MR; по умолчанию он совпадает с эффективным dbt-проектом. Также доступны `OHD_DEV_DATABASE_URL` и `OHD_YOUTRACK_DIRECTION_FIELD_NAME`. Подключение `DEV_DATABASE_URL` КХД не используется для ОХД.
 
 ## 3. Тестирование аналитиком
 

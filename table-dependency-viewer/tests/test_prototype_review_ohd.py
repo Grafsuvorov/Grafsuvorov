@@ -20,15 +20,24 @@ class OhdPrototypeReviewTests(unittest.TestCase):
     def forbidden(*args, **kwargs):
         raise AssertionError("OHD must not call KHD metadata or ETL delivery")
 
-    def test_missing_ohd_configuration_never_falls_back_to_khd_dev_or_project(self):
-        with patch.dict(os.environ, {"DEV_DATABASE_URL": "khd-dev", "DBT_GITLAB_PROJECT": "khd/dbt",
+    def test_shared_dbt_project_is_reused_but_khd_dev_is_not(self):
+        with patch.dict(os.environ, {"DEV_DATABASE_URL": "khd-dev", "DBT_GITLAB_PROJECT": "shared/dbt",
+                                     "GITLAB_PROJECT": "khd/etl", "OHD_DBT_GITLAB_PROJECT": "",
                                      "DBT_GITLAB_TOKEN": "common-token"}, clear=True):
             settings = ohd_settings()
         self.assertEqual(settings["dev_database_url"], "")
-        self.assertEqual(settings["project"], "")
+        self.assertEqual(settings["project"], "shared/dbt")
+        self.assertEqual(settings["analyst_project"], "shared/dbt")
         self.assertEqual(settings["token"], "common-token")
         with self.assertRaisesRegex(ValueError, "OHD_DEV_DATABASE_URL"):
             require_ohd_settings(settings)
+
+    def test_explicit_ohd_git_projects_override_shared_defaults(self):
+        with patch.dict(os.environ, {"DBT_GITLAB_PROJECT": "shared/dbt", "OHD_DBT_GITLAB_PROJECT": "override/dbt"}, clear=True):
+            self.assertEqual(ohd_settings()["project"], "override/dbt")
+            self.assertEqual(ohd_settings()["analyst_project"], "override/dbt")
+            with patch.dict(os.environ, {"OHD_ANALYST_GITLAB_PROJECT": "override/analyst"}):
+                self.assertEqual(ohd_settings()["analyst_project"], "override/analyst")
 
     def test_ohd_uses_existing_dbt_connection_with_optional_override(self):
         with patch.dict(os.environ, {"DBT_LOGS_DATABASE_URL": "ohd-existing", "DEV_DATABASE_URL": "khd-dev",

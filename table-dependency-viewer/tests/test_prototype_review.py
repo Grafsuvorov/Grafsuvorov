@@ -763,6 +763,22 @@ class LoadMergeRequestSqlBundleTests(unittest.TestCase):
             "diff_refs": {"head_sha": "head-sha"},
         }
 
+    def test_ssl_setting_is_preserved_for_mr_changes_and_sql_file_requests(self):
+        for value, expected in ((False, False), ("false", False), (True, True), ("true", True), (None, True), ("", True)):
+            seen = []
+            def request(**kwargs):
+                seen.append(kwargs["ssl_verify"])
+                return {"changes": [{"new_path": "ods.sql", "old_path": "ods.sql"}]} if kwargs["path"].endswith("/changes") else self._mr_payload()
+            def raw(request, **kwargs):
+                seen.append(kwargs["ssl_verify"])
+                return self.FakeResponse(b"insert into ods.target select 1;")
+            with self.subTest(value=value), patch.object(prototype_review, "_gitlab_json_request", side_effect=request), \
+                 patch.object(prototype_review, "_urlopen_without_proxy", side_effect=raw):
+                bundle = load_merge_request_sql_bundle(gitlab_api_url="https://ohd.example/api/v4", gitlab_project="ohd/analyst",
+                    gitlab_token="secret", gitlab_ssl_verify=value, mr_input="17", default_project="ohd/analyst")
+                self.assertEqual(seen, [expected, expected, expected])
+                self.assertEqual(len(bundle["files"]), 1)
+
     def test_renamed_file_is_loaded_from_new_path(self) -> None:
         changes = [{
             "old_path": "sql/old_name.sql",

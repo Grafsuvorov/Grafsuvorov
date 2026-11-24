@@ -60,8 +60,9 @@ class PrototypeGitLabRef:
     mr_iid: int
 
 
-def _normalize_bool(value: str, default: bool = True) -> bool:
-    text_value = str(value or "").strip().lower()
+def _normalize_bool(value: Any, default: bool = True) -> bool:
+    # False is an explicit setting, not an absent value using the default.
+    text_value = "" if value is None else str(value).strip().lower()
     if not text_value:
         return default
     return text_value not in {"0", "false", "no", "off"}
@@ -610,7 +611,7 @@ def load_merge_request_sql_bundle(
     gitlab_api_url: str,
     gitlab_project: str,
     gitlab_token: str,
-    gitlab_ssl_verify: str,
+    gitlab_ssl_verify: str | bool,
     mr_input: str,
     default_project: str,
 ) -> dict[str, Any]:

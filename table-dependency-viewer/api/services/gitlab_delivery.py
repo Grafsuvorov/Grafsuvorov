@@ -16,9 +16,11 @@ def _api_url() -> str:
     return os.getenv("GITLAB_API_URL", "")
 
 
-def resource_exists(*, project: str, token: str, path: str, query: Optional[dict[str, Any]] = None) -> bool:
+def resource_exists(*, project: str, token: str, path: str, query: Optional[dict[str, Any]] = None,
+                    api_url: Optional[str] = None, ssl_verify: Optional[bool] = None) -> bool:
     try:
-        _gitlab_json_request(api_url=_api_url(), project=project, token=token, ssl_verify=_ssl_verify(), path=path, method="GET", query=query)
+        _gitlab_json_request(api_url=_api_url() if api_url is None else api_url, project=project, token=token,
+                             ssl_verify=_ssl_verify() if ssl_verify is None else ssl_verify, path=path, method="GET", query=query)
         return True
     except ValueError as exc:
         if "GitLab вернул 404" in str(exc):
@@ -26,10 +28,12 @@ def resource_exists(*, project: str, token: str, path: str, query: Optional[dict
         raise
 
 
-def file_content(*, project: str, token: str, file_path: str, ref: str) -> Optional[str]:
+def file_content(*, project: str, token: str, file_path: str, ref: str,
+                 api_url: Optional[str] = None, ssl_verify: Optional[bool] = None) -> Optional[str]:
     try:
         payload = _gitlab_json_request(
-            api_url=_api_url(), project=project, token=token, ssl_verify=_ssl_verify(),
+            api_url=_api_url() if api_url is None else api_url, project=project, token=token,
+            ssl_verify=_ssl_verify() if ssl_verify is None else ssl_verify,
             path=f"repository/files/{urlparse.quote(file_path, safe='')}", method="GET", query={"ref": ref},
         )
     except ValueError as exc:

@@ -87,6 +87,13 @@ GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
 ANALYST_GITLAB_PROJECT = os.getenv("ANALYST_GITLAB_PROJECT", "")
 # OHD analysts' source MR project: GitLab namespace/project path or numeric ID.
 OHD_ANALYST_GITLAB_PROJECT = os.getenv("OHD_ANALYST_GITLAB_PROJECT", "")
+# Separate GitLab instance for OHD analysts and dbt/engineer delivery.
+OHD_GITLAB_API_URL = os.getenv("OHD_GITLAB_API_URL", "")
+OHD_GITLAB_TOKEN = os.getenv("OHD_GITLAB_TOKEN", "")
+OHD_GITLAB_SSL_VERIFY = os.getenv("OHD_GITLAB_SSL_VERIFY", "true")
+OHD_ANALYST_GITLAB_TOKEN = os.getenv("OHD_ANALYST_GITLAB_TOKEN", "")
+OHD_DBT_GITLAB_PROJECT = os.getenv("OHD_DBT_GITLAB_PROJECT", "")
+OHD_DBT_GITLAB_TOKEN = os.getenv("OHD_DBT_GITLAB_TOKEN", "")
 DBT_GITLAB_TOKEN = os.getenv("DBT_GITLAB_TOKEN", "")
 DBT_GITLAB_PROJECT = os.getenv("DBT_GITLAB_PROJECT", "dwh/dbt")
 DBT_REGISTRY_ROOT = os.getenv("DBT_REGISTRY_ROOT", "dbt_greenplum_elt/models_metadata")

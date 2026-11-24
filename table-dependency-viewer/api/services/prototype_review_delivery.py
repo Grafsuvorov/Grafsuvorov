@@ -32,13 +32,15 @@ def publish_dbt_registry(
     mode: str = "khd",
     gitlab_project: Optional[str] = None,
     gitlab_token: Optional[str] = None,
+    gitlab_api_url: Optional[str] = None,
+    gitlab_ssl_verify: bool = True,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"[A-Z][A-Z0-9_]*-\d+" if mode == "ohd" else r"DWH-\d+", task_id_norm):
         raise ValueError("Некорректный номер задачи YouTrack ОХД" if mode == "ohd"
                          else "Номер задачи для dbt MR должен быть в формате DWH-12345")
-    if mode == "ohd" and (not gitlab_project or not gitlab_token):
-        raise ValueError("Для ОХД не настроен отдельный dbt GitLab project/token")
+    if mode == "ohd" and (not gitlab_project or not gitlab_token or not gitlab_api_url):
+        raise ValueError("Для ОХД не настроен отдельный GitLab API/project/token")
     token = gitlab_token if mode == "ohd" else os.getenv("DBT_GITLAB_TOKEN", "")
     project_ref = _parse_gitlab_project(gitlab_project if mode == "ohd" else os.getenv("DBT_GITLAB_PROJECT", "dwh/dbt"))
     if not token:
@@ -112,16 +114,17 @@ def publish_dbt_registry(
 
     branch_name = f"feature/{task_id_norm}"
     target_branch = "main" if mode == "ohd" else os.getenv("DBT_GITLAB_TARGET_BRANCH", "main").strip() or "main"
-    api_url = os.getenv("GITLAB_API_URL", "")
-    ssl_verify = os.getenv("GITLAB_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"}
-    branch_exists = resource_exists(project=project_ref, token=token, path=f"repository/branches/{urlparse.quote(branch_name, safe='')}")
+    api_url = gitlab_api_url if mode == "ohd" else os.getenv("GITLAB_API_URL", "")
+    ssl_verify = gitlab_ssl_verify if mode == "ohd" else os.getenv("GITLAB_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"}
+    lookup_options = {"api_url": api_url, "ssl_verify": ssl_verify} if mode == "ohd" else {}
+    branch_exists = resource_exists(project=project_ref, token=token, path=f"repository/branches/{urlparse.quote(branch_name, safe='')}", **lookup_options)
     content_ref = branch_name if branch_exists else target_branch
     actions: list[dict[str, Any]] = []
     result_files: list[dict[str, Any]] = []
 
     for file_data in dbt_files.values():
         file_path = file_data["file_path"]
-        existing_content = file_content(project=project_ref, token=token, file_path=file_path, ref=content_ref)
+        existing_content = file_content(project=project_ref, token=token, file_path=file_path, ref=content_ref, **lookup_options)
         if file_data["file_kind"] == "dq_model":
             content = update_duplicates_model(existing_content, file_data["key_attributes"]) if existing_content is not None else build_duplicates_model({"key_attributes": file_data["key_attributes"]})
         elif file_data["file_kind"] == "nulls_model":
@@ -149,7 +152,7 @@ def publish_dbt_registry(
             ("dq_model", dbt_duplicates_path(schema_name, table_name)),
             ("nulls_model", dbt_nulls_path(schema_name, table_name)),
         ):
-            if file_content(project=project_ref, token=token, file_path=file_path, ref=content_ref) is None:
+            if file_content(project=project_ref, token=token, file_path=file_path, ref=content_ref, **lookup_options) is None:
                 continue
             actions.append({"action": "delete", "file_path": file_path})
             result_files.append({"target_fqn": target_fqn, "file_path": file_path, "file_kind": file_kind, "action": "delete"})
@@ -163,7 +166,7 @@ def publish_dbt_registry(
     request_args = {"api_url": api_url, "project": project_ref, "token": token, "ssl_verify": ssl_verify}
     commit_data = _gitlab_json_request(**request_args, path="repository/commits", method="POST", payload=commit_payload)
 
-    undeleted_paths = [str(action.get("file_path") or "") for action in actions if action.get("action") == "delete" and file_content(project=project_ref, token=token, file_path=str(action.get("file_path") or ""), ref=branch_name) is not None]
+    undeleted_paths = [str(action.get("file_path") or "") for action in actions if action.get("action") == "delete" and file_content(project=project_ref, token=token, file_path=str(action.get("file_path") or ""), ref=branch_name, **lookup_options) is not None]
     if undeleted_paths:
         raise ValueError("После dbt-коммита не удалены файлы: " + ", ".join(sorted(undeleted_paths)))
 

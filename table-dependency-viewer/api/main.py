@@ -270,7 +270,7 @@ from .services.gitlab_delivery import (
     _prototype_gitlab_resource_exists,
 )
 from .services.prototype_review_delivery import _prototype_review_publish_dbt_registry
-from .services.prototype_review_ohd import OhdReviewContext, ohd_settings, require_ohd_settings, deliver_ohd_issue
+from .services.prototype_review_ohd import OhdReviewContext, ohd_settings, require_ohd_settings, deliver_ohd_issue, load_ohd_bundle
 from .services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
@@ -1476,7 +1476,10 @@ def _prototype_review_build_result(
         context = OhdReviewContext(settings=settings, read_file=_prototype_gitlab_file_content,
                                    base_resolver=_prototype_review_item_dependencies())
         dependencies = replace(dependencies, dev_database_url=settings["dev_database_url"],
-            gitlab_token=settings["token"], analyst_gitlab_project=settings["analyst_project"],
+            load_bundle=partial(load_ohd_bundle, loader=load_merge_request_sql_bundle),
+            gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"],
+            gitlab_project=settings["analyst_project"], gitlab_token=settings["analyst_token"],
+            analyst_gitlab_project=settings["analyst_project"],
             get_meta_and_index=lambda: ([], {}), resolve_item=context.resolve_item)
     return build_prototype_review_result(
         payload,
@@ -1774,9 +1777,13 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             settings = ohd_settings()
             require_ohd_settings(settings, delivery=True)
             delivery = replace(dependencies.delivery, publish_dbt=partial(_prototype_review_publish_dbt_registry,
-                mode="ohd", gitlab_project=settings["project"], gitlab_token=settings["token"]))
+                mode="ohd", gitlab_project=settings["project"], gitlab_token=settings["token"],
+                gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"]))
             dependencies = replace(dependencies, delivery=delivery, deliver_issue=deliver_ohd_issue,
-                gitlab_token=settings["token"], analyst_gitlab_project=settings["analyst_project"],
+                load_bundle=partial(load_ohd_bundle, loader=load_merge_request_sql_bundle),
+                gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"],
+                gitlab_project=settings["analyst_project"], gitlab_token=settings["analyst_token"],
+                analyst_gitlab_project=settings["analyst_project"],
                 youtrack_project=settings["youtrack_project"], youtrack_project_id=settings["youtrack_project_id"],
                 youtrack_queue=settings["youtrack_queue"], direction_field_name=settings["direction_field"])
         result = create_prototype_review_issue(

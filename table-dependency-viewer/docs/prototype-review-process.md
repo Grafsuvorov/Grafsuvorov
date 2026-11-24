@@ -63,9 +63,19 @@ Prototype Review передаёт в ETL MR только YAML. Скрипты `r
 
 Задача создаётся в проекте YouTrack ОХД. Публикация формирует только dbt MR в `main`: SQL и registry в `dbt_greenplum_elt/models_metadata/<schema>/`, технические DQ в `dbt_greenplum_elt/models/dq/technical/`. Имена файлов нормализованы, физические имена и ключи с `/bic/` сохраняются в YAML. Целевой объект определяется SQL, а не произвольным именем исходного файла. ETL YAML, `table_id`, ETL workspace и инженерный MR в этом режиме не создаются. STG-загрузка и ClickHouse доступны в режиме КХД.
 
-Для включения на сервере используются существующие `DBT_LOGS_DATABASE_URL`, `DBT_GITLAB_PROJECT` и `DBT_GITLAB_TOKEN`. Отдельно задайте `OHD_YOUTRACK_QUEUE` и `OHD_YOUTRACK_PROJECT_ID` или точное название `OHD_YOUTRACK_PROJECT`. При необходимости `OHD_DBT_GITLAB_PROJECT` и `OHD_DBT_GITLAB_TOKEN` переопределяют общий dbt-репозиторий и токен. `OHD_ANALYST_GITLAB_PROJECT` переопределяет проект входного MR; по умолчанию он совпадает с эффективным dbt-проектом. Также доступны `OHD_DEV_DATABASE_URL` и `OHD_YOUTRACK_DIRECTION_FIELD_NAME`. Подключение `DEV_DATABASE_URL` КХД не используется для ОХД.
+ОХД использует отдельный GitLab. В серверном `.env` явно задайте:
 
-Для отдельного репозитория аналитиков заполните пустую строку `OHD_ANALYST_GITLAB_PROJECT=` в серверном `.env`: укажите `namespace/project` из URL GitLab или числовой ID проекта, а не отображаемое название. Шаблон строки также добавлен в `.env.production` и `.env.example`, настройка объявлена в `api/config.py`. Docker Compose уже читает `.env` через `env_file`; после изменения значения пересоздайте контейнер API. Эта настройка меняет только источник MR и не меняет dbt-репозиторий публикации.
+```dotenv
+OHD_GITLAB_API_URL=https://ohd-gitlab.example/api/v4
+OHD_GITLAB_TOKEN=значение_созданного_токена
+OHD_GITLAB_SSL_VERIFY=true
+OHD_ANALYST_GITLAB_PROJECT=namespace/analysts-project
+OHD_DBT_GITLAB_PROJECT=namespace/engineers-dbt-project
+```
+
+В `OHD_GITLAB_TOKEN` нужно значение Personal Access Token, созданного под именем `ohd_app_token`, а не само имя. Этот токен по умолчанию используется для чтения MR аналитиков и публикации в dbt. Необязательные `OHD_ANALYST_GITLAB_TOKEN` и `OHD_DBT_GITLAB_TOKEN` позволяют переопределить токены отдельно. Проекты указываются путями `namespace/project` из URL или числовыми ID, не отображаемыми названиями. Адрес API, проекты, токены и SSL-настройка КХД в ОХД не подставляются. Все запросы — MR, SQL, registry, ветки, коммиты и dbt MR — используют GitLab ОХД. Ссылка на MR другого сервера отклоняется до чтения файлов и выполнения SQL.
+
+Для базы по-прежнему используется существующий `DBT_LOGS_DATABASE_URL`; `OHD_DEV_DATABASE_URL` может переопределить его. В YouTrack отдельно задаются `OHD_YOUTRACK_QUEUE` и `OHD_YOUTRACK_PROJECT_ID` или точное название `OHD_YOUTRACK_PROJECT`. Также доступна `OHD_YOUTRACK_DIRECTION_FIELD_NAME`. Шаблоны GitLab-настроек добавлены в `.env`, `.env.production` и `.env.example`, переменные объявлены в `api/config.py`. Docker Compose читает `.env` через `env_file`; после заполнения настроек обновите и пересоздайте контейнер API.
 
 ## 3. Тестирование аналитиком
 

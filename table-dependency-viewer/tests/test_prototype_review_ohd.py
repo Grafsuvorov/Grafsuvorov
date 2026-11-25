@@ -18,6 +18,38 @@ from api.services.prototype_review_delivery import publish_dbt_registry
 
 
 class OhdPrototypeReviewTests(unittest.TestCase):
+    def test_ohd_youtrack_token_is_separate_and_required_only_for_delivery(self):
+        env = {"OHD_GITLAB_API_URL": "https://ohd.example/api/v4", "OHD_GITLAB_TOKEN": "ohd-git",
+               "OHD_ANALYST_GITLAB_PROJECT": "ohd/analyst", "OHD_DBT_GITLAB_PROJECT": "ohd/dbt",
+               "OHD_YOUTRACK_QUEUE": "SDS", "DBT_LOGS_DATABASE_URL": "ohd-db", "YOUTRACK_TOKEN": "khd-yt"}
+        with patch.dict(os.environ, env, clear=True):
+            settings = ohd_settings()
+            self.assertEqual(settings["youtrack_token"], "")
+            require_ohd_settings(settings)
+            with self.assertRaisesRegex(ValueError, "OHD_YOUTRACK_TOKEN"):
+                require_ohd_settings(settings, delivery=True)
+            with patch.dict(os.environ, {"OHD_YOUTRACK_TOKEN": "ohd-yt"}):
+                settings = ohd_settings()
+                require_ohd_settings(settings, delivery=True)
+                self.assertEqual(settings["youtrack_token"], "ohd-yt")
+
+    def test_parent_issue_uses_token_for_selected_mode_and_rejects_missing_ohd_token(self):
+        node = next(n for n in ast.parse(Path("api/main.py").read_text()).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "get_admin_prototype_parent_issue")
+        settings = {"youtrack_token": "ohd-yt", "direction_field": "OHD dashboard"}
+        namespace = {"Request": object, "_require_authenticated": lambda _: None,
+                     "ohd_settings": lambda: settings, "get_ytrack_issue_context": lambda **kw: kw,
+                     "YOUTRACK_URL": "https://yt.example", "YOUTRACK_TOKEN": "khd-yt",
+                     "YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME": "KHD dashboard", "YOUTRACK_SSL_VERIFY": False,
+                     "HTTPException": fixtures.SourceLoadWithoutYamlTests.HttpError}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "api/main.py", "exec"), namespace)
+        call = namespace[node.name]
+        self.assertEqual(call("SDS-471", None, mode="ohd")["token"], "ohd-yt")
+        self.assertEqual(call("DWH-1", None)["token"], "khd-yt")
+        settings["youtrack_token"] = ""
+        with self.assertRaisesRegex(fixtures.SourceLoadWithoutYamlTests.HttpError, "OHD_YOUTRACK_TOKEN"):
+            call("SDS-471", None, mode="ohd")
+
     @staticmethod
     def forbidden(*args, **kwargs):
         raise AssertionError("OHD must not call KHD metadata or ETL delivery")
@@ -120,7 +152,8 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         node = next(n for n in module.body if isinstance(n, ast.FunctionDef) and n.name == "create_admin_prototype_review_issue")
         settings = {"api_url": "https://ohd.example/api/v4", "ssl_verify": False,
             "project": "ohd/engineers-dbt", "token": "ohd-write", "analyst_project": "ohd/analysts", "analyst_token": "ohd-read",
-            "youtrack_project": "OHD", "youtrack_project_id": "0-5", "youtrack_queue": "OHD", "direction_field": "Dashboard"}
+            "youtrack_project": "OHD", "youtrack_project_id": "0-5", "youtrack_queue": "OHD", "direction_field": "Dashboard",
+            "youtrack_token": "ohd-yt-secret"}
         delivery = PrototypeIssueDeliveryDependencies(**{f.name: None for f in fields(PrototypeIssueDeliveryDependencies)})
         dependencies = fixtures.PrototypeIssueWorkflowTests.dependencies(delivery=delivery)
         captured = []
@@ -138,6 +171,8 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(dep.gitlab_api_url, settings["api_url"])
         self.assertEqual(dep.analyst_gitlab_project, "ohd/analysts")
         self.assertEqual(dep.gitlab_token, "ohd-read")
+        self.assertEqual(dep.youtrack_token, "ohd-yt-secret")
+        self.assertEqual(dep.delivery.youtrack_token, "ohd-yt-secret")
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_project"], "ohd/engineers-dbt")
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_api_url"], settings["api_url"])
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_token"], "ohd-write")

@@ -1779,7 +1779,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         if payload.mode == "ohd":
             settings = ohd_settings()
             require_ohd_settings(settings, delivery=True)
-            delivery = replace(dependencies.delivery, publish_dbt=partial(_prototype_review_publish_dbt_registry,
+            delivery = replace(dependencies.delivery, youtrack_token=settings["youtrack_token"], publish_dbt=partial(_prototype_review_publish_dbt_registry,
                 mode="ohd", gitlab_project=settings["project"], gitlab_token=settings["token"],
                 gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"]))
             dependencies = replace(dependencies, delivery=delivery, deliver_issue=deliver_ohd_issue,
@@ -1788,6 +1788,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                 gitlab_project=settings["analyst_project"], gitlab_token=settings["analyst_token"],
                 analyst_gitlab_project=settings["analyst_project"],
                 youtrack_project=settings["youtrack_project"], youtrack_project_id=settings["youtrack_project_id"],
+                youtrack_token=settings["youtrack_token"],
                 youtrack_queue=settings["youtrack_queue"], direction_field_name=settings["direction_field"])
         result = create_prototype_review_issue(
             payload,
@@ -2151,11 +2152,14 @@ def create_admin_prototype_source_load_issue(payload, request: Request):
 def get_admin_prototype_parent_issue(issue_id: str, request: Request, mode: str = "khd"):
     _require_authenticated(request)
     try:
+        settings = ohd_settings() if mode == "ohd" else None
+        if settings is not None and not settings.get("youtrack_token"):
+            raise ValueError("Для режима ОХД настройте OHD_YOUTRACK_TOKEN")
         return get_ytrack_issue_context(
             base_url=YOUTRACK_URL,
-            token=YOUTRACK_TOKEN,
+            token=settings["youtrack_token"] if settings is not None else YOUTRACK_TOKEN,
             issue_id=issue_id,
-            direction_field_name=ohd_settings()["direction_field"] if mode == "ohd" else YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
+            direction_field_name=settings["direction_field"] if settings is not None else YOUTRACK_DASHBOARD_DIRECTION_FIELD_NAME,
             ssl_verify=YOUTRACK_SSL_VERIFY,
         )
     except ValueError as exc:

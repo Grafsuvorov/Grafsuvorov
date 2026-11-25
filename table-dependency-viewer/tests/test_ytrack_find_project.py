@@ -12,6 +12,19 @@ spec.loader.exec_module(lookup)
 
 
 class YouTrackProjectLookupTests(unittest.TestCase):
+    def test_mode_selects_dedicated_env_token_without_fallback(self):
+        with patch.dict(os.environ, {"YOUTRACK_TOKEN": "khd-yt", "OHD_YOUTRACK_TOKEN": "ohd-yt"}, clear=True), \
+             patch.object(lookup, "load_env"), contextlib.redirect_stderr(io.StringIO()), \
+             patch.object(lookup, "YouTrack", side_effect=ValueError("stop")) as client:
+            lookup.main(["--issue", "SDS-471"])
+            self.assertEqual(client.call_args.args[1], "ohd-yt")
+            lookup.main(["--mode", "khd", "--issue", "DWH-1"])
+            self.assertEqual(client.call_args.args[1], "khd-yt")
+            os.environ["OHD_YOUTRACK_TOKEN"] = ""
+            client.reset_mock()
+            self.assertEqual(lookup.main(["--issue", "SDS-471"]), 1)
+            client.assert_not_called()
+
     def test_ssl_failure_preserves_reason_and_redacts_token(self):
         client = lookup.YouTrack("https://yt.example", "secret-token", True)
         cause = lookup.error.URLError(lookup.ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED secret-token"))
@@ -71,7 +84,7 @@ class YouTrackProjectLookupTests(unittest.TestCase):
 
     def test_cli_prints_real_project_id_and_queue_without_token(self):
         output = io.StringIO()
-        with patch.dict(os.environ, {"YOUTRACK_TOKEN": "secret-token"}, clear=True), \
+        with patch.dict(os.environ, {"OHD_YOUTRACK_TOKEN": "secret-token"}, clear=True), \
              patch.object(lookup, "load_env"), \
              patch.object(lookup.YouTrack, "get", return_value={"project": {"id": "0-42", "shortName": "SDS", "name": "ОХД"}}), \
              contextlib.redirect_stdout(output):

@@ -65,7 +65,7 @@ class YouTrack:
             with self.opener.open(req, timeout=30) as response:
                 return json.load(response)
         except error.HTTPError as exc:
-            hints = {401: "Проверьте YOUTRACK_TOKEN.", 403: "Токену не хватает прав. Попробуйте --issue SDS-471 вместо списка проектов.",
+            hints = {401: "Проверьте токен выбранного режима (ОХД: OHD_YOUTRACK_TOKEN; КХД: YOUTRACK_TOKEN).", 403: "Токену не хватает прав. Попробуйте --issue SDS-471 вместо списка проектов.",
                      404: "Проверьте адрес YouTrack и код задачи; задача также может быть недоступна токену."}
             raise ValueError(f"GET {path}: HTTP {exc.code}. {hints.get(exc.code, 'Ошибка YouTrack API.')}") from None
         except (error.URLError, TimeoutError, OSError) as exc:
@@ -127,9 +127,10 @@ def main(argv=None) -> int:
             load_env(args.env_file)
         elif args.env_file != ".env":
             raise ValueError("Указанный файл настроек не найден")
-        token = SCRIPT_YOUTRACK_TOKEN.strip() or os.getenv("YOUTRACK_TOKEN", "").strip()
+        token_key = "OHD_YOUTRACK_TOKEN" if args.mode == "ohd" else "YOUTRACK_TOKEN"
+        token = SCRIPT_YOUTRACK_TOKEN.strip() or os.getenv(token_key, "").strip()
         if not token:
-            raise ValueError("Вставьте токен в SCRIPT_YOUTRACK_TOKEN в начале скрипта или задайте YOUTRACK_TOKEN в .env")
+            raise ValueError(f"Вставьте токен в SCRIPT_YOUTRACK_TOKEN в начале скрипта или задайте {token_key} в .env")
         verify = (SCRIPT_YOUTRACK_SSL_VERIFY if SCRIPT_YOUTRACK_SSL_VERIFY is not None else
                   os.getenv("YOUTRACK_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"})
         client = YouTrack(SCRIPT_YOUTRACK_URL.strip() or os.getenv("YOUTRACK_URL", "https://yt.rusal.ru").strip(), token, verify)
@@ -156,7 +157,7 @@ def main(argv=None) -> int:
         return 0
     except (ValueError, IndexError) as exc:
         message = str(exc)
-        for secret in (SCRIPT_YOUTRACK_TOKEN.strip(), os.getenv("YOUTRACK_TOKEN", "").strip()):
+        for secret in (SCRIPT_YOUTRACK_TOKEN.strip(), os.getenv("YOUTRACK_TOKEN", "").strip(), os.getenv("OHD_YOUTRACK_TOKEN", "").strip()):
             if secret:
                 message = message.replace(secret, "***")
         print(f"Ошибка: {message}", file=sys.stderr)

@@ -24,6 +24,7 @@ def ohd_settings():
         "token": dbt_token,
         "analyst_project": setting("OHD_ANALYST_GITLAB_PROJECT"),
         "analyst_token": setting("OHD_ANALYST_GITLAB_TOKEN") or setting("OHD_GITLAB_TOKEN") or dbt_token,
+        "youtrack_token": setting("OHD_YOUTRACK_TOKEN"),
         "youtrack_project": os.getenv("OHD_YOUTRACK_PROJECT", "ОХД - Общее Хранилище Данных (Данные партнеров)"),
         "youtrack_project_id": os.getenv("OHD_YOUTRACK_PROJECT_ID", ""),
         "youtrack_queue": os.getenv("OHD_YOUTRACK_QUEUE", ""),
@@ -36,7 +37,7 @@ def require_ohd_settings(settings, *, delivery=False):
                 "analyst_project": "OHD_ANALYST_GITLAB_PROJECT",
                 "token": "OHD_GITLAB_TOKEN (или OHD_DBT_GITLAB_TOKEN)",
                 "analyst_token": "OHD_GITLAB_TOKEN (или OHD_ANALYST_GITLAB_TOKEN)"}
-    required.update({"youtrack_queue": "OHD_YOUTRACK_QUEUE"} if delivery else {
+    required.update({"youtrack_queue": "OHD_YOUTRACK_QUEUE", "youtrack_token": "OHD_YOUTRACK_TOKEN"} if delivery else {
         "dev_database_url": "DBT_LOGS_DATABASE_URL (или OHD_DEV_DATABASE_URL)"})
     missing = [name for key, name in required.items() if not settings.get(key)]
     if missing:

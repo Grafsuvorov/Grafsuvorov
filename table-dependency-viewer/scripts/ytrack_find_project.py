@@ -11,6 +11,9 @@ import ssl
 import sys
 from urllib import error, parse, request
 
+# Вставьте токен сюда для локального запуска. Непустое значение важнее .env.
+SCRIPT_YOUTRACK_TOKEN = ""
+
 
 def load_env(path: str) -> None:
     try:
@@ -116,9 +119,9 @@ def main(argv=None) -> int:
             load_env(args.env_file)
         elif args.env_file != ".env":
             raise ValueError("Указанный файл настроек не найден")
-        token = os.getenv("YOUTRACK_TOKEN", "").strip()
+        token = SCRIPT_YOUTRACK_TOKEN.strip() or os.getenv("YOUTRACK_TOKEN", "").strip()
         if not token:
-            raise ValueError("Укажите YOUTRACK_TOKEN в окружении или файле .env")
+            raise ValueError("Вставьте токен в SCRIPT_YOUTRACK_TOKEN в начале скрипта или задайте YOUTRACK_TOKEN в .env")
         verify = os.getenv("YOUTRACK_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"}
         client = YouTrack(os.getenv("YOUTRACK_URL", "https://yt.rusal.ru").strip(), token, verify)
         if args.issue:
@@ -143,9 +146,9 @@ def main(argv=None) -> int:
         return 0
     except (ValueError, IndexError) as exc:
         message = str(exc)
-        token = os.getenv("YOUTRACK_TOKEN", "")
-        if token:
-            message = message.replace(token, "***")
+        for secret in (SCRIPT_YOUTRACK_TOKEN.strip(), os.getenv("YOUTRACK_TOKEN", "").strip()):
+            if secret:
+                message = message.replace(secret, "***")
         print(f"Ошибка: {message}", file=sys.stderr)
         return 1
 

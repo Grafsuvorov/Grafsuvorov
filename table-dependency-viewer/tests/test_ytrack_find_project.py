@@ -12,6 +12,18 @@ spec.loader.exec_module(lookup)
 
 
 class YouTrackProjectLookupTests(unittest.TestCase):
+    def test_inline_token_overrides_env_and_is_redacted_on_error(self):
+        output = io.StringIO()
+        with patch.object(lookup, "SCRIPT_YOUTRACK_TOKEN", " inline-secret "), \
+             patch.dict(os.environ, {"YOUTRACK_TOKEN": "env-secret"}, clear=True), \
+             patch.object(lookup, "load_env"), \
+             patch.object(lookup, "YouTrack", side_effect=ValueError("inline-secret env-secret")) as client, \
+             contextlib.redirect_stderr(output):
+            self.assertEqual(lookup.main(["--issue", "SDS-471"]), 1)
+        self.assertEqual(client.call_args.args[1], "inline-secret")
+        self.assertNotIn("inline-secret", output.getvalue())
+        self.assertNotIn("env-secret", output.getvalue())
+
     def test_known_issue_reads_actual_project_without_admin_api(self):
         client = lookup.YouTrack("https://yt.example", "secret", True)
         expected = {"id": "0-42", "shortName": "SDS", "name": "ОХД"}

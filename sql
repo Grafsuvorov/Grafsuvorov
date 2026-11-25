@@ -1,89 +1,201 @@
- => [table-dependency-viewer_api stage-1  9/10] RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=   pip install --index-url=https  61.3s
- => ERROR [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-recommends openssh-cli  9.6s
-------
- > [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-recommends openssh-client sshpass     && rm -rf /var/lib/apt/lists/*:
-#19 0.565 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
-#19 0.565 Ign:1 http://deb.debian.org/debian trixie InRelease
-#19 0.714 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#19 0.714 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#19 0.907 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#19 0.907 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#19 2.057 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#19 2.057 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#19 2.206 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#19 2.206 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#19 2.354 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
-#19 2.354 Ign:1 http://deb.debian.org/debian trixie InRelease
-#19 4.507 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
-#19 4.507 Ign:1 http://deb.debian.org/debian trixie InRelease
-#19 4.656 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#19 4.656 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#19 4.828 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#19 4.828 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#19 8.978 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
-#19 8.978 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
-#19 8.978   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#19 9.127 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#19 9.128 Err:2 http://deb.debian.org/debian trixie-updates InRelease
-#19 9.128   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#19 9.295 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
-#19 9.295 Err:1 http://deb.debian.org/debian trixie InRelease
-#19 9.295   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#19 9.298 Reading package lists...
-#19 9.306 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#19 9.306 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#19 9.306 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#19 9.306 W: Some index files failed to download. They have been ignored, or old ones used instead.
-#19 9.314 Reading package lists...
-#19 9.321 Building dependency tree...
-#19 9.321 Reading state information...
-#19 9.322 E: Unable to locate package sshpass
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c apt-get update     && apt-get install -y --no-install-recommends openssh-client sshpass     && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
-https://yt.rusal.ru/issue/SDS-471/OHD-Novye-tablicy-dorabotka-vitrin
 
-Проект
-
-ОХД - Общее Хранилище Данных (Данные партнеров)
-User avatar
-Тип карточки
-
-Release Slot⁠
-R
-Состояние
-
-Завершена
-З
-Исполнитель
-
-Kitaev Stanislav
-User avatar
-Команда (Подсистема)
-
-DE (Data Engineer)⁠
-D
-Направление
-
-Нет: направление
-Дашборд КХД/Направление
-
-Релиз
-Дежурный аналитик
-
-Нет: дежурный аналитик
-Номер релиза КХД
-
-Нет: номер релиза кхд
-Фактическая дата релиза КХД
-Нет: фактическая дата релиза кхд
-Экономия за счет ИИ
-
-?
-Доски
-
-Нет видимых досок
-  
-OHD_YOUTRACK_PROJECT=ОХД - Общее Хранилище Данных (Данные партнеров)
-OHD_YOUTRACK_PROJECT_ID=
-OHD_YOUTRACK_QUEUE=
-OHD_YOUTRACK_DIRECTION_FIELD_NAME=Дашборд КХД/Направление
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 448, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 620, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 434, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 136, in <module>
+table-dependency-viewer-api-1  |     from .runtime import engine, dbt_logs_engine, dev_engine
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 14, in <module>
+table-dependency-viewer-api-1  |     engine = _engine(DATABASE_URL)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 10, in _engine
+table-dependency-viewer-api-1  |     raise RuntimeError("DATABASE_URL is not configured")
+table-dependency-viewer-api-1  | RuntimeError: DATABASE_URL is not configured
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1653, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1560, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1414, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 911, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 448, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 620, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 434, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 136, in <module>
+table-dependency-viewer-api-1  |     from .runtime import engine, dbt_logs_engine, dev_engine
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 14, in <module>
+table-dependency-viewer-api-1  |     engine = _engine(DATABASE_URL)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 10, in _engine
+table-dependency-viewer-api-1  |     raise RuntimeError("DATABASE_URL is not configured")
+table-dependency-viewer-api-1  | RuntimeError: DATABASE_URL is not configured
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1653, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1560, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1414, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 911, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 448, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 620, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 434, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 136, in <module>
+table-dependency-viewer-api-1  |     from .runtime import engine, dbt_logs_engine, dev_engine
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 14, in <module>
+table-dependency-viewer-api-1  |     engine = _engine(DATABASE_URL)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 10, in _engine
+table-dependency-viewer-api-1  |     raise RuntimeError("DATABASE_URL is not configured")
+table-dependency-viewer-api-1  | RuntimeError: DATABASE_URL is not configured
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1653, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1560, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1414, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 911, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 448, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 620, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 434, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 136, in <module>
+table-dependency-viewer-api-1  |     from .runtime import engine, dbt_logs_engine, dev_engine
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 14, in <module>
+table-dependency-viewer-api-1  |     engine = _engine(DATABASE_URL)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 10, in _engine
+table-dependency-viewer-api-1  |     raise RuntimeError("DATABASE_URL is not configured")
+table-dependency-viewer-api-1  | RuntimeError: DATABASE_URL is not configured
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1653, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1560, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1414, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 911, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 448, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 620, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 434, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 136, in <module>
+table-dependency-viewer-api-1  |     from .runtime import engine, dbt_logs_engine, dev_engine
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 14, in <module>
+table-dependency-viewer-api-1  |     engine = _engine(DATABASE_URL)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/runtime.py", line 10, in _engine
+table-dependency-viewer-api-1  |     raise RuntimeError("DATABASE_URL is not configured")
+table-dependency-viewer-api-1  | RuntimeError: DATABASE_URL is not configured

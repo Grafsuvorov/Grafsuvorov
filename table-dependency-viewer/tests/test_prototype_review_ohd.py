@@ -191,7 +191,7 @@ class OhdPrototypeReviewTests(unittest.TestCase):
 
     def test_ohd_issue_creation_skips_all_etl_yaml_preparation(self):
         created, delivered = [], []
-        item = {"target_fqn": "ods.ral_bse_clr", "paths": ["ods.sql"], "entity_name": "TRANSPORTATION",
+        item = {"target_fqn": "ods.ral_bse_clr", "paths": ["ods.sql"], "entity_name": "",
                 "key_attributes": ["bukrs_clr", "gjahr_clr"], "is_new": True}
         payload = SimpleNamespace(mode="ohd", direction="LE-TR03 Shipping", mr_input="1", task_text="", issue_summary="OHD prototype",
             linked_issues=[], release_date="", business_key_changed=False,
@@ -209,6 +209,8 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(delivered[0]["review_items"][0]["yaml_content"], "")
         self.assertIsNone(delivered[0]["review_items"][0]["table_id"])
         self.assertEqual(delivered[0]["review_items"][0]["dependencies"], [])
+        self.assertEqual(delivered[0]["review_items"][0]["review_mode"], "ohd")
+        self.assertEqual(delivered[0]["review_items"][0]["entity_names"], [])
 
     def test_ohd_full_and_selective_execution_never_parse_source_dependencies(self):
         files = [{"path": p, "sql": s, "statements": fixtures.prototype_review._split_sql_statements(s)} for p, s in [

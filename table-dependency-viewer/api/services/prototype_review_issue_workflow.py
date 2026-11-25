@@ -149,14 +149,13 @@ def create_prototype_review_issue(
     reserved_table_ids: set[int] = set()
     for item in review_items:
         if ohd:
+            item["review_mode"] = "ohd"
             item.pop("_related_files", None)
             item["yaml_content"] = ""
             item["table_id"] = None
             item["replica_yaml_contents"] = {}
             item["entity_names"] = _split_entity_names(item.get("entity_name"))
             if str(item.get("object_type") or "TABLE").upper() == "TABLE":
-                if not item["entity_names"]:
-                    raise ValueError(f"Для {item.get('target_fqn')} заполните сущность dbt")
                 build_registry_yaml(item)
             continue
         if item.get("is_clickhouse_view"):

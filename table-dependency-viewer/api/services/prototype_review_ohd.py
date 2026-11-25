@@ -97,6 +97,7 @@ class OhdReviewContext:
         duplicates = next((d for d in registry.get("dq") or [] if d.get("check_type") == "duplicates"), {})
         nulls = next((d for d in registry.get("dq") or [] if d.get("check_type") == "nulls"), {})
         resolver = replace(self.base_resolver,
+            item_needs_attention=lambda item: self.base_resolver.item_needs_attention({**item, "review_mode": "ohd"}),
             find_meta=lambda _: meta if relation else None,
             find_meta_variants=lambda _: [{**meta, "entity_name": name} for name in entities],
             get_click_meta_index=lambda: {"meta": {}}, impact_summary=lambda _: {},
@@ -107,7 +108,8 @@ class OhdReviewContext:
             kwargs["key_attributes_override"] = relation.get("unique_key") or []
         result = resolve_prototype_review_item(**kwargs, resolver=resolver)
         result.update(scd_type=relation.get("scd_type") or "scd1", version_key=relation.get("version_key") or [],
-                      copy_to_clickhouse=False, table_id=None, yaml_bundle=None)
+                      copy_to_clickhouse=False, table_id=None, yaml_bundle=None, review_mode="ohd")
+        result["requires_user_input"], result["missing_fields"] = self.base_resolver.item_needs_attention(result)
         return result
 
 

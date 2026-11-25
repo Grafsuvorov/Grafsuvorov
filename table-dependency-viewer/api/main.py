@@ -931,7 +931,7 @@ def _prototype_issue_description(
 
 def _prototype_item_needs_attention(item: dict[str, Any]) -> tuple[bool, list[str]]:
     missing: list[str] = []
-    if item.get("is_new") and not str(item.get("entity_name") or "").strip():
+    if item.get("review_mode") != "ohd" and item.get("is_new") and not str(item.get("entity_name") or "").strip():
         missing.append("сущность")
     object_type = str(item.get("object_type") or "TABLE").upper()
     if object_type == "TABLE" and not [str(value).strip() for value in (item.get("key_attributes") or []) if str(value).strip()]:
@@ -1022,7 +1022,7 @@ def _prototype_multi_issue_description(
                 f"## Объект {index}",
                 f"**Витрина:** {item.get('target_fqn') or 'не определена'}",
                 f"**Тип объекта:** {str(item.get('object_type') or 'TABLE').upper()}",
-                f"**Сущность:** {entity_display}",
+                *([f"**Сущность:** {entity_display}"] if item.get("review_mode") != "ohd" else []),
                 f"**Статус объекта:** {'новый объект' if item.get('is_new') else 'существующий объект'}",
                 f"**Ключевые поля:** {', '.join(item.get('key_attributes') or []) or '—'}",
                 f"**SCD:** {str(item.get('scd_type') or 'scd1').lower()}",

@@ -113,6 +113,16 @@ class PrototypeReviewDbtRegistryTests(unittest.TestCase):
         self.assertNotIn("дистрибуция", missing)
         self.assertIn("version key для SCD2", missing)
 
+    def test_ohd_does_not_require_entity_but_still_requires_keys_and_version(self) -> None:
+        check = self.functions["_prototype_item_needs_attention"]
+        item = {"is_new": True, "review_mode": "ohd", "entity_name": "", "key_attributes": ["id"]}
+        self.assertEqual(check(item), (False, []))
+        self.assertIn("сущность", check({**item, "review_mode": "khd"})[1])
+        self.assertIn("ключевые поля", check({**item, "key_attributes": []})[1])
+        self.assertIn("version key для SCD2", check({**item, "scd_type": "scd2"})[1])
+        registry = prototype_review_dbt.build_registry_yaml({**item, "target_fqn": "ods.example"})
+        self.assertNotIn("  entity:", registry)
+
     def test_registry_path_is_scoped_by_schema(self) -> None:
         build_path = self.functions["_prototype_review_dbt_registry_path"]
 

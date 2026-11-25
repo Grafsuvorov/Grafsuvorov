@@ -204,7 +204,7 @@ export default function AdminPrototypeReviewPage() {
 
   const unresolvedItemsCount = useMemo(
     () => reviewItemsDraft.filter((item) => (
-      !String(item.entity_name || "").trim()
+      (!isOhd && !String(item.entity_name || "").trim())
       || (
         String(item.object_type || "TABLE").toUpperCase() === "TABLE"
         && (
@@ -213,7 +213,7 @@ export default function AdminPrototypeReviewPage() {
         )
       )
     )).length,
-    [reviewItemsDraft],
+    [reviewItemsDraft, isOhd],
   );
 
   const progressText = useMemo(() => {
@@ -785,7 +785,7 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Объекты diff</div>
             <div style={{ display: "grid", gap: 16 }}>
               {reviewItemsDraft.map((item) => {
-                const needsEntity = !String(item.entity_name || "").trim();
+                const needsEntity = !isOhd && !String(item.entity_name || "").trim();
                 const isTableObject = String(item.object_type || "TABLE").toUpperCase() === "TABLE";
                 const needsKeys = isTableObject && !splitItems(item.key_attributes_text).length;
                 const needsVersionKey = isTableObject
@@ -818,10 +818,10 @@ export default function AdminPrototypeReviewPage() {
                     </div>
 
                     <div className="prototype-object-stats">
-                      <div className="prototype-stat-card">
+                      {!isOhd && <div className="prototype-stat-card">
                         <div className="prototype-stat-label">Сущность</div>
                         <div className="prototype-stat-value">{item.entity_names_label || item.entity_name || "—"}</div>
-                      </div>
+                      </div>}
                       {isTableObject ? (
                         <div className="prototype-stat-card">
                           <div className="prototype-stat-label">Ключевые поля</div>
@@ -850,7 +850,7 @@ export default function AdminPrototypeReviewPage() {
 
                     <div className="prototype-object-layout">
                       <div className="prototype-object-main">
-                        <div className="prototype-step-field" style={{ margin: 0 }}>
+                        {!isOhd && <div className="prototype-step-field" style={{ margin: 0 }}>
                         <span className="slow-select-label">Сущность загрузки (несколько — через запятую)</span>
                         <input
                           className="slow-entity-select"
@@ -860,7 +860,7 @@ export default function AdminPrototypeReviewPage() {
                           placeholder="MANAGEMENT_REPORTING_1, MANAGEMENT_REPORTING_2"
                         />
                         {item.sql_variant_mode === "separate" && <span className="muted">Сущности этого алгоритма задаются в сопоставлении SQL выше. После изменения запустите review заново.</span>}
-                        </div>
+                        </div>}
                         {isTableObject ? (
                           <div className="prototype-step-field" style={{ margin: 0 }}>
                           <span className="slow-select-label">Ключевые поля / unique_key</span>

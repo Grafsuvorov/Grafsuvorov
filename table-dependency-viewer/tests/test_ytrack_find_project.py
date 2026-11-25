@@ -12,6 +12,28 @@ spec.loader.exec_module(lookup)
 
 
 class YouTrackProjectLookupTests(unittest.TestCase):
+    def test_ssl_failure_preserves_reason_and_redacts_token(self):
+        client = lookup.YouTrack("https://yt.example", "secret-token", True)
+        cause = lookup.error.URLError(lookup.ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED secret-token"))
+        with patch.object(client.opener, "open", side_effect=cause):
+            with self.assertRaises(ValueError) as raised:
+                client.get("/api/issues/SDS-471", {})
+        self.assertIn("CERTIFICATE_VERIFY_FAILED", str(raised.exception))
+        self.assertIn("https://yt.example/api/issues/SDS-471", str(raised.exception))
+        self.assertNotIn("secret-token", str(raised.exception))
+
+    def test_inline_false_ssl_overrides_environment(self):
+        output = io.StringIO()
+        with patch.object(lookup, "SCRIPT_YOUTRACK_TOKEN", "inline-secret"), \
+             patch.object(lookup, "SCRIPT_YOUTRACK_URL", "https://yt.example"), \
+             patch.object(lookup, "SCRIPT_YOUTRACK_SSL_VERIFY", False), \
+             patch.dict(os.environ, {"YOUTRACK_SSL_VERIFY": "true"}, clear=True), \
+             patch.object(lookup, "load_env"), \
+             patch.object(lookup, "YouTrack", side_effect=ValueError("stop")) as client, \
+             contextlib.redirect_stderr(output):
+            self.assertEqual(lookup.main(["--issue", "SDS-471"]), 1)
+        self.assertEqual(client.call_args.args, ("https://yt.example", "inline-secret", False))
+
     def test_inline_token_overrides_env_and_is_redacted_on_error(self):
         output = io.StringIO()
         with patch.object(lookup, "SCRIPT_YOUTRACK_TOKEN", " inline-secret "), \

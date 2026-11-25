@@ -13,6 +13,9 @@ from urllib import error, parse, request
 
 # Вставьте токен сюда для локального запуска. Непустое значение важнее .env.
 SCRIPT_YOUTRACK_TOKEN = ""
+# Пустой URL / None для SSL означают: взять из .env или окружения.
+SCRIPT_YOUTRACK_URL = ""
+SCRIPT_YOUTRACK_SSL_VERIFY = None  # True — проверять сертификат; False — не проверять.
 
 
 def load_env(path: str) -> None:
@@ -65,8 +68,13 @@ class YouTrack:
             hints = {401: "Проверьте YOUTRACK_TOKEN.", 403: "Токену не хватает прав. Попробуйте --issue SDS-471 вместо списка проектов.",
                      404: "Проверьте адрес YouTrack и код задачи; задача также может быть недоступна токену."}
             raise ValueError(f"GET {path}: HTTP {exc.code}. {hints.get(exc.code, 'Ошибка YouTrack API.')}") from None
-        except (error.URLError, TimeoutError, OSError):
-            raise ValueError(f"GET {path}: не удалось подключиться. Проверьте сеть, YOUTRACK_URL и YOUTRACK_SSL_VERIFY.") from None
+        except (error.URLError, TimeoutError, OSError) as exc:
+            reason = getattr(exc, "reason", exc)
+            detail = str(reason).replace(self.token, "***") if self.token else str(reason)
+            hint = ("Ошибка проверки сертификата. Проверьте доверенный CA или настройку SSL_VERIFY."
+                    if isinstance(reason, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in detail
+                    else "Проверьте доступ к серверу, DNS и VPN из среды запуска скрипта.")
+            raise ValueError(f"GET {self.base_url}{path}: {type(reason).__name__}: {detail}. {hint}") from None
 
     def project_from_issue(self, value: str) -> dict:
         # Request the project directly from a known issue, without admin/projects permissions.
@@ -122,8 +130,10 @@ def main(argv=None) -> int:
         token = SCRIPT_YOUTRACK_TOKEN.strip() or os.getenv("YOUTRACK_TOKEN", "").strip()
         if not token:
             raise ValueError("Вставьте токен в SCRIPT_YOUTRACK_TOKEN в начале скрипта или задайте YOUTRACK_TOKEN в .env")
-        verify = os.getenv("YOUTRACK_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"}
-        client = YouTrack(os.getenv("YOUTRACK_URL", "https://yt.rusal.ru").strip(), token, verify)
+        verify = (SCRIPT_YOUTRACK_SSL_VERIFY if SCRIPT_YOUTRACK_SSL_VERIFY is not None else
+                  os.getenv("YOUTRACK_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no", "off"})
+        client = YouTrack(SCRIPT_YOUTRACK_URL.strip() or os.getenv("YOUTRACK_URL", "https://yt.rusal.ru").strip(), token, verify)
+        print(f"YouTrack: {client.base_url}; проверка SSL: {verify}")
         if args.issue:
             projects = [client.project_from_issue(args.issue)]
         else:

@@ -121,3 +121,54 @@ class RequiredEstimateTests(unittest.TestCase):
             reference.assert_called_once()
             payload = json.loads(send.call_args.args[0].data)
             self.assertEqual(payload["customFields"][0]["value"], 1)
+
+    def test_verified_ohd_schema_matches_successful_manual_payload_without_metadata_apis(self):
+        import importlib.util
+        from pathlib import Path
+        from api.services.prototype_review_youtrack_ohd import VERIFIED_FIELDS
+        spec = importlib.util.spec_from_file_location("manual_ohd_payload", Path("scripts/ytrack_ohd_create_test_issue.py"))
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        manual = script.build_payload(script.VERIFIED_OHD_FIELDS, "0-83", script.CONFIG)
+        with patch.object(review, "_get_ytrack_project_custom_fields", side_effect=AssertionError("No admin fields API")), \
+             patch.object(review, "_get_ytrack_reference_custom_fields", side_effect=AssertionError("No reference issue API")), \
+             patch.object(review, "_urlopen_without_proxy", return_value=io.BytesIO(b'{"idReadable":"SDS-548"}')) as send:
+            result = review.create_ytrack_issue(base_url="https://yt.example", project_id="0-83", project="ОХД",
+                token="ohd-token", queue="SDS", issue_type="task", ssl_verify=False, summary="Prototype", description="",
+                custom_fields_override=VERIFIED_FIELDS, custom_fields_project_id="0-83",
+                required_custom_fields=("Оценка (чел./час.)", "Дашборд КХД/Направление", "Тип карточки"),
+                direction="LE-TR03 Shipping", direction_field_name="Дашборд КХД/Направление", assignee_query="")
+        self.assertEqual(result["issue_id"], "SDS-548")
+        send.assert_called_once()
+        request = send.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(payload["customFields"], manual["customFields"])
+        self.assertEqual(payload["project"], manual["project"])
+        self.assertEqual(payload["queue"], manual["queue"])
+        self.assertEqual(payload["type"], "task")
+        self.assertEqual(request.headers["Authorization"], "Bearer ohd-token")
+
+    def test_verified_schema_cannot_be_used_for_another_project(self):
+        from api.services.prototype_review_youtrack_ohd import VERIFIED_FIELDS
+        with patch.object(review, "_urlopen_without_proxy") as send:
+            with self.assertRaisesRegex(ValueError, "не соответствует проекту"):
+                review.create_ytrack_issue(base_url="https://yt.example", project_id="0-30", project="КХД",
+                    token="token", queue="DWH", issue_type="task", ssl_verify=False, summary="Prototype", description="",
+                    custom_fields_override=VERIFIED_FIELDS, custom_fields_project_id="0-83")
+            send.assert_not_called()
+
+    def test_verified_ohd_keeps_assignee_and_release_date(self):
+        from api.services.prototype_review_youtrack_ohd import VERIFIED_FIELDS
+        with patch.object(review, "_resolve_ytrack_user_value", return_value={"login": "Engineer"}) as user, \
+             patch.object(review, "_urlopen_without_proxy", return_value=io.BytesIO(b'{"idReadable":"SDS-548"}')) as send:
+            review.create_ytrack_issue(base_url="https://yt.example", project_id="0-83", project="ОХД",
+                token="ohd-token", queue="SDS", issue_type="task", ssl_verify=False, summary="Prototype", description="",
+                custom_fields_override=VERIFIED_FIELDS, custom_fields_project_id="0-83",
+                assignee_query="engineer@example.com", release_date="2026-11-26")
+        payload = json.loads(send.call_args.args[0].data)
+        custom = {field["id"]: field for field in payload["customFields"]}
+        self.assertEqual(custom["135-769"]["value"], {"login": "Engineer"})
+        self.assertEqual(custom["173-517"]["$type"], "DateIssueCustomField")
+        self.assertIsInstance(custom["173-517"]["value"], int)
+        self.assertGreater(custom["173-517"]["value"], 0)
+        self.assertEqual(user.call_args.kwargs["token"], "ohd-token")

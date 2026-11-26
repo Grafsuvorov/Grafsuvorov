@@ -11,6 +11,7 @@ from unittest.mock import patch
 import test_prototype_review as fixtures
 from api.services.prototype_review_ohd import OhdReviewContext, ohd_settings, require_ohd_settings, deliver_ohd_issue, load_ohd_bundle
 from api.services import gitlab_delivery
+from api.services.prototype_review_youtrack_ohd import VERIFIED_FIELDS, VERIFIED_PROJECT_ID
 from api.services.prototype_review_item import PrototypeReviewItemDependencies
 from api.services.prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 from api.services.prototype_review_issue_workflow import create_prototype_review_issue
@@ -158,6 +159,7 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         dependencies = fixtures.PrototypeIssueWorkflowTests.dependencies(delivery=delivery, create_issue=self.forbidden)
         captured = []
         namespace = {"Request": object, "PrototypeReviewCreateIssuePayload": object, "replace": replace, "partial": partial,
+            "OHD_YOUTRACK_FIELDS": VERIFIED_FIELDS, "OHD_VERIFIED_PROJECT_ID": VERIFIED_PROJECT_ID,
             "load_ohd_bundle": load_ohd_bundle, "load_merge_request_sql_bundle": self.forbidden,
             "_require_authenticated": lambda _: SimpleNamespace(email="test@example.com"),
             "_prototype_issue_workflow_dependencies": lambda: dependencies, "ohd_settings": lambda: settings,
@@ -173,7 +175,10 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(dep.gitlab_token, "ohd-read")
         self.assertEqual(dep.youtrack_token, "ohd-yt-secret")
         self.assertEqual(dep.delivery.youtrack_token, "ohd-yt-secret")
-        self.assertEqual(dep.create_issue.keywords["reference_issue"], "SDS-543")
+        self.assertEqual(dep.create_issue.keywords["custom_fields_override"], VERIFIED_FIELDS)
+        self.assertEqual(dep.create_issue.keywords["custom_fields_project_id"], "0-83")
+        self.assertEqual(dep.estimate_field_name, "Оценка (чел./час.)")
+        self.assertEqual(dep.card_type_value, "Task")
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_project"], "ohd/engineers-dbt")
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_api_url"], settings["api_url"])
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_token"], "ohd-write")

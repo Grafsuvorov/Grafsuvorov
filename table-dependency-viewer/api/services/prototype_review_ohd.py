@@ -8,6 +8,7 @@ import yaml
 from .. import config
 from .prototype_review_dbt import dbt_registry_path
 from .prototype_review_item import resolve_prototype_review_item
+from .prototype_review_youtrack_ohd import VERIFIED_PROJECT_ID
 
 
 def ohd_settings():
@@ -25,9 +26,8 @@ def ohd_settings():
         "analyst_project": setting("OHD_ANALYST_GITLAB_PROJECT"),
         "analyst_token": setting("OHD_ANALYST_GITLAB_TOKEN") or setting("OHD_GITLAB_TOKEN") or dbt_token,
         "youtrack_token": setting("OHD_YOUTRACK_TOKEN"),
-        "youtrack_reference_issue": setting("OHD_YOUTRACK_REFERENCE_ISSUE"),
         "youtrack_project": os.getenv("OHD_YOUTRACK_PROJECT", "ОХД - Общее Хранилище Данных (Данные партнеров)"),
-        "youtrack_project_id": os.getenv("OHD_YOUTRACK_PROJECT_ID", ""),
+        "youtrack_project_id": os.getenv("OHD_YOUTRACK_PROJECT_ID", "").strip() or VERIFIED_PROJECT_ID,
         "youtrack_queue": os.getenv("OHD_YOUTRACK_QUEUE", ""),
         "direction_field": os.getenv("OHD_YOUTRACK_DIRECTION_FIELD_NAME", "Дашборд КХД/Направление"),
     }

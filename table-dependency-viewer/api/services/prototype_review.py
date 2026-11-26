@@ -1482,6 +1482,8 @@ def create_ytrack_issue(
     business_key_changed_field_name: str = "Меняется бизнес-ключ",
     reference_issue: str = "",
     required_custom_fields: tuple[str, ...] = (),
+    custom_fields_override: Optional[list[dict[str, Any]]] = None,
+    custom_fields_project_id: str = "",
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -1504,17 +1506,24 @@ def create_ytrack_issue(
         "description": description,
         "type": issue_type or "task",
     }
-    try:
-        project_custom_fields = _get_ytrack_project_custom_fields(
-            base_url=base_url, token=token, project_id=resolved_project_id, ssl_verify=ssl_verify,
-        )
-    except ValueError:
-        if not reference_issue:
-            raise
-        project_custom_fields = []
+    if custom_fields_override is not None:
+        if not custom_fields_project_id or str(resolved_project_id) != str(custom_fields_project_id):
+            raise ValueError("Проверенная схема полей YouTrack не соответствует проекту; создание остановлено")
+        project_custom_fields = list(custom_fields_override)
+        logging.getLogger("uvicorn.error").info("[YTRACK FIELDS] project=%s source=verified_ohd count=%s",
+                                               resolved_project_id, len(project_custom_fields))
+    else:
+        try:
+            project_custom_fields = _get_ytrack_project_custom_fields(
+                base_url=base_url, token=token, project_id=resolved_project_id, ssl_verify=ssl_verify,
+            )
+        except ValueError:
+            if not reference_issue:
+                raise
+            project_custom_fields = []
     known_names = {str((item.get("field") or {}).get("name") or "").strip().casefold()
                    for item in project_custom_fields}
-    if reference_issue and (not project_custom_fields or any(name.casefold() not in known_names for name in required_custom_fields)):
+    if custom_fields_override is None and reference_issue and (not project_custom_fields or any(name.casefold() not in known_names for name in required_custom_fields)):
         reference_fields = _get_ytrack_reference_custom_fields(
             base_url=base_url, token=token, project_id=resolved_project_id,
             issue_id=reference_issue, ssl_verify=ssl_verify,
@@ -1623,12 +1632,21 @@ def create_ytrack_issue(
             )
         )
 
+    if custom_fields_override is not None:
+        field_order = {item["id"]: index for index, item in enumerate(custom_fields_override)}
+        custom_fields_payload.sort(key=lambda field: field_order.get(field.get("id"), len(field_order)))
     if custom_fields_payload:
         payload["customFields"] = custom_fields_payload
     sent_names = {str(field.get("name") or "").strip().casefold() for field in custom_fields_payload
                   if field.get("value") is not None and field.get("value") != ""}
     missing = [name for name in required_custom_fields if name.casefold() not in sent_names]
     if missing:
+        if custom_fields_override is not None:
+            raise ValueError(
+                f"Задача не отправлена в YouTrack: не заполнены обязательные поля: {', '.join(missing)}. "
+                f"Проект: {resolved_project_id}; используется проверенная схема ОХД. "
+                "Проверьте значения полей в форме и настройки обязательной оценки."
+            )
         raise ValueError(
             f"Задача не отправлена в YouTrack: не заполнены обязательные поля: {', '.join(missing)}. "
             f"Проект: {resolved_project_id}; задача-образец: {reference_issue or 'не задана'}. "

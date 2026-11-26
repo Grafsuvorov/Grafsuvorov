@@ -272,6 +272,7 @@ from .services.gitlab_delivery import (
 from .services.prototype_review_delivery import _prototype_review_publish_dbt_registry
 from .services.prototype_review_ohd import OhdReviewContext, ohd_settings, require_ohd_settings, deliver_ohd_issue, load_ohd_bundle
 from .services.prototype_review_connection import check_ohd_database_connection
+from .services.prototype_review_youtrack_ohd import VERIFIED_FIELDS as OHD_YOUTRACK_FIELDS, VERIFIED_PROJECT_ID as OHD_VERIFIED_PROJECT_ID
 from .services.prototype_review_issue_delivery import (
     PrototypeIssueDeliveryDependencies,
     deliver_prototype_issue,
@@ -1783,14 +1784,16 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                 mode="ohd", gitlab_project=settings["project"], gitlab_token=settings["token"],
                 gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"]))
             dependencies = replace(dependencies, delivery=delivery, deliver_issue=deliver_ohd_issue,
-                create_issue=partial(dependencies.create_issue, reference_issue=settings.get("youtrack_reference_issue", ""),
-                    required_custom_fields=("Оценка (чел./час.)", settings["direction_field"])),
+                create_issue=partial(dependencies.create_issue, custom_fields_override=OHD_YOUTRACK_FIELDS,
+                    custom_fields_project_id=OHD_VERIFIED_PROJECT_ID,
+                    required_custom_fields=("Оценка (чел./час.)", settings["direction_field"], "Тип карточки")),
                 load_bundle=partial(load_ohd_bundle, loader=load_merge_request_sql_bundle),
                 gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"],
                 gitlab_project=settings["analyst_project"], gitlab_token=settings["analyst_token"],
                 analyst_gitlab_project=settings["analyst_project"],
                 youtrack_project=settings["youtrack_project"], youtrack_project_id=settings["youtrack_project_id"],
                 youtrack_token=settings["youtrack_token"],
+                estimate_field_name="Оценка (чел./час.)", card_type_field_name="Тип карточки", card_type_value="Task",
                 youtrack_queue=settings["youtrack_queue"], direction_field_name=settings["direction_field"])
         result = create_prototype_review_issue(
             payload,

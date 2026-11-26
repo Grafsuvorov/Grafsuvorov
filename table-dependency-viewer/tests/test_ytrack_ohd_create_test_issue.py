@@ -16,6 +16,17 @@ FIELDS = [{"id": "173-515", "$type": "PeriodProjectCustomField",
 
 
 class OhdCreateTestIssueTests(unittest.TestCase):
+    def test_issue_fields_uses_issue_api_and_never_creates_issue(self):
+        with patch.object(script, "CONFIG", {**script.CONFIG, "token": "secret"}), \
+             patch.object(script, "Api") as api_type, patch.object(script, "project_id", return_value="0-83"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            api = api_type.return_value
+            api.call.return_value = {"project": {"id": "0-83"}, "customFields": []}
+            self.assertEqual(script.main(["--issue-fields", "SDS-471"]), 0)
+            api.call.assert_called_once()
+            self.assertEqual(api.call.call_args.args[:2], ("GET", "/api/issues/SDS-471"))
+            api.list_all.assert_not_called()
+
     def test_exact_workflow_id_is_required_instead_of_picking_another_estimate(self):
         config = deepcopy(script.CONFIG)
         with self.assertRaisesRegex(ValueError, "173-515"):

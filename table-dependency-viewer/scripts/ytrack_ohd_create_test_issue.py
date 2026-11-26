@@ -169,17 +169,29 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Создать одну тестовую задачу ОХД. Все настройки в CONFIG в начале файла.")
     parser.add_argument("--fields", action="store_true", help="Только показать поля проекта, без POST")
     parser.add_argument("--dry-run", action="store_true", help="Показать поля и payload, без POST")
+    parser.add_argument("--issue-fields", metavar="SDS-471", help="Прочитать поля существующей задачи; ничего не создавать")
     args = parser.parse_args(argv)
     try:
         api = Api(CONFIG)
         pid = project_id(api, CONFIG)
         print(f"Проект: {pid}; SSL verify: {CONFIG['ssl_verify']}")
+        if args.issue_fields:
+            issue = api.call("GET", f"/api/issues/{parse.quote(args.issue_fields.strip(), safe='')}",
+                {"fields": "id,idReadable,project(id,name,shortName),customFields(id,name,$type,value(id,name,minutes,presentation,text,login))"})
+            print("\nПОЛЯ СУЩЕСТВУЮЩЕЙ ЗАДАЧИ:")
+            print(redact(json.dumps(issue, ensure_ascii=False, indent=2), CONFIG))
+            if str((issue.get("project") or {}).get("id")) != str(pid):
+                raise ValueError("Задача принадлежит другому проекту; её поля нельзя использовать как образец ОХД")
+            return 0
         fields = api.list_all(f"/api/admin/projects/{parse.quote(pid, safe='')}/customFields",
                              "id,$type,canBeEmpty,field(id,name,fieldType(id,valueType))")
         print("\nПОЛЯ ПРОЕКТА (canBeEmpty не отражает все обязательные поля workflow):")
         print(redact(json.dumps(fields, ensure_ascii=False, indent=2), CONFIG))
         if args.fields:
             return 0
+        if not fields:
+            raise ValueError("API вернул пустой список полей проекта. Это не означает отсутствие обязательных полей. "
+                             "Прочитайте образец: --issue-fields SDS-471. Проверьте права владельца токена на поля проекта.")
         payload = build_payload(fields, pid, CONFIG)
         print("\nPAYLOAD СОЗДАНИЯ:")
         print(redact(json.dumps(payload, ensure_ascii=False, indent=2), CONFIG))

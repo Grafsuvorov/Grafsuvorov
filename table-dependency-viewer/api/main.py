@@ -1783,7 +1783,8 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
                 mode="ohd", gitlab_project=settings["project"], gitlab_token=settings["token"],
                 gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"]))
             dependencies = replace(dependencies, delivery=delivery, deliver_issue=deliver_ohd_issue,
-                create_issue=partial(dependencies.create_issue, reference_issue=settings.get("youtrack_reference_issue", "")),
+                create_issue=partial(dependencies.create_issue, reference_issue=settings.get("youtrack_reference_issue", ""),
+                    required_custom_fields=("Оценка (чел./час.)", settings["direction_field"])),
                 load_bundle=partial(load_ohd_bundle, loader=load_merge_request_sql_bundle),
                 gitlab_api_url=settings["api_url"], gitlab_ssl_verify=settings["ssl_verify"],
                 gitlab_project=settings["analyst_project"], gitlab_token=settings["analyst_token"],

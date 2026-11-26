@@ -97,3 +97,27 @@ class RequiredEstimateTests(unittest.TestCase):
                     token="ohd-token", queue="SDS", issue_type="task", ssl_verify=False, summary="Prototype", description="",
                     reference_issue="DWH-1")
         self.assertTrue(all(r.get_method() == "GET" for r in requests))
+
+    def test_ohd_missing_reference_stops_before_sending_empty_estimate(self):
+        with patch.object(review, "_resolve_ytrack_project_id", return_value="0-83"), \
+             patch.object(review, "_get_ytrack_project_custom_fields", return_value=[]), \
+             patch.object(review, "_urlopen_without_proxy") as send:
+            with self.assertRaisesRegex(ValueError, "задача-образец: не задана"):
+                review.create_ytrack_issue(base_url="https://yt.example", project_id="0-83", project="ОХД",
+                    token="ohd-token", queue="SDS", issue_type="task", ssl_verify=False, summary="Prototype", description="",
+                    required_custom_fields=("Оценка (чел./час.)", "Дашборд КХД/Направление"))
+            send.assert_not_called()
+
+    def test_incomplete_admin_schema_uses_reference_before_post(self):
+        schema = [{"id": "173-515", "$type": "SimpleIssueCustomField", "field": {
+            "name": "Оценка (чел./час.)", "fieldType": {"valueType": "integer"}}}]
+        with patch.object(review, "_resolve_ytrack_project_id", return_value="0-83"), \
+             patch.object(review, "_get_ytrack_project_custom_fields", return_value=[{"id": "other", "field": {"name": "Other"}}]), \
+             patch.object(review, "_get_ytrack_reference_custom_fields", return_value=schema) as reference, \
+             patch.object(review, "_urlopen_without_proxy", return_value=io.BytesIO(b'{"idReadable":"SDS-1"}')) as send:
+            review.create_ytrack_issue(base_url="https://yt.example", project_id="0-83", project="ОХД",
+                token="ohd-token", queue="SDS", issue_type="task", ssl_verify=False, summary="Prototype", description="",
+                reference_issue="SDS-543", required_custom_fields=("Оценка (чел./час.)",), assignee_query="")
+            reference.assert_called_once()
+            payload = json.loads(send.call_args.args[0].data)
+            self.assertEqual(payload["customFields"][0]["value"], 1)

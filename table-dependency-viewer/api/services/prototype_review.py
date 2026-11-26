@@ -1481,6 +1481,7 @@ def create_ytrack_issue(
     business_key_changed: Optional[bool] = None,
     business_key_changed_field_name: str = "Меняется бизнес-ключ",
     reference_issue: str = "",
+    required_custom_fields: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -1511,11 +1512,14 @@ def create_ytrack_issue(
         if not reference_issue:
             raise
         project_custom_fields = []
-    if not project_custom_fields and reference_issue:
-        project_custom_fields = _get_ytrack_reference_custom_fields(
+    known_names = {str((item.get("field") or {}).get("name") or "").strip().casefold()
+                   for item in project_custom_fields}
+    if reference_issue and (not project_custom_fields or any(name.casefold() not in known_names for name in required_custom_fields)):
+        reference_fields = _get_ytrack_reference_custom_fields(
             base_url=base_url, token=token, project_id=resolved_project_id,
             issue_id=reference_issue, ssl_verify=ssl_verify,
         )
+        project_custom_fields = list({item["id"]: item for item in [*project_custom_fields, *reference_fields]}.values())
     custom_fields_payload: list[dict[str, Any]] = []
 
     estimate_field = _resolve_ytrack_custom_field(
@@ -1621,6 +1625,16 @@ def create_ytrack_issue(
 
     if custom_fields_payload:
         payload["customFields"] = custom_fields_payload
+    sent_names = {str(field.get("name") or "").strip().casefold() for field in custom_fields_payload
+                  if field.get("value") is not None and field.get("value") != ""}
+    missing = [name for name in required_custom_fields if name.casefold() not in sent_names]
+    if missing:
+        raise ValueError(
+            f"Задача не отправлена в YouTrack: не заполнены обязательные поля: {', '.join(missing)}. "
+            f"Проект: {resolved_project_id}; задача-образец: {reference_issue or 'не задана'}. "
+            "Проверьте OHD_YOUTRACK_REFERENCE_ISSUE=SDS-543 в окружении контейнера API, "
+            "доступ токена к образцу и заполнение направления в форме."
+        )
     req = urlrequest.Request(
         f"{base_url.rstrip('/')}/api/issues?fields=id,idReadable,key,summary",
         data=json.dumps(payload).encode("utf-8"),

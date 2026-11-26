@@ -20,6 +20,7 @@ CONFIG = {
     "project": "SDS",                    # shortName или точное имя; используется при пустом project_id.
     "reference_issue": "SDS-471",        # Источник типов полей, если admin/customFields возвращает [].
     "queue": "SDS",
+    "legacy_issue_type": "task",         # Используется только с --with-legacy-type для сравнения с приложением.
     "summary": "[TEST ОХД] Создание задачи и обязательная оценка",
     "description": "Тестовая задача для отладки API Prototype Review. Можно удалить после проверки.",
     "card_type_field": "Тип карточки",
@@ -43,6 +44,17 @@ CONFIG = {
     # Пример: {"name": "Дашборд КХД/Направление", "value": "Релиз"}
     "enum_fields": [],
 }
+
+# Подтверждено успешным созданием SDS-543. Используется только по --verified-fields
+# и только для проекта 0-83; не требует чтения admin/customFields или задачи-образца.
+VERIFIED_OHD_FIELDS = [
+    {"id": "173-515", "$type": "SimpleIssueCustomField", "field": {
+        "name": "Оценка (чел./час.)", "fieldType": {"valueType": "integer"}}},
+    {"id": "173-646", "$type": "SimpleIssueCustomField", "field": {
+        "name": "Дашборд КХД/Направление", "fieldType": {"valueType": "string"}}},
+    {"id": "134-1948", "$type": "SingleEnumIssueCustomField", "field": {
+        "name": "Тип карточки", "fieldType": {"valueType": "enum"}}},
+]
 
 
 def redact(value, config):
@@ -198,6 +210,8 @@ def main(argv=None):
     parser.add_argument("--fields", action="store_true", help="Только показать поля проекта, без POST")
     parser.add_argument("--dry-run", action="store_true", help="Показать поля и payload, без POST")
     parser.add_argument("--issue-fields", metavar="SDS-471", help="Прочитать поля существующей задачи; ничего не создавать")
+    parser.add_argument("--verified-fields", action="store_true", help="Взять три проверенных поля проекта 0-83 из скрипта")
+    parser.add_argument("--with-legacy-type", action="store_true", help="Добавить верхнеуровневое type=task, как в запросе приложения")
     args = parser.parse_args(argv)
     try:
         api = Api(CONFIG)
@@ -210,8 +224,14 @@ def main(argv=None):
             if str((issue.get("project") or {}).get("id")) != str(pid):
                 raise ValueError("Задача принадлежит другому проекту; её поля нельзя использовать как образец ОХД")
             return 0
-        fields = api.list_all(f"/api/admin/projects/{parse.quote(pid, safe='')}/customFields",
-                             "id,$type,canBeEmpty,field(id,name,fieldType(id,valueType))")
+        if args.verified_fields:
+            if str(pid) != "0-83":
+                raise ValueError("--verified-fields разрешён только для проверенного проекта ОХД 0-83")
+            fields = VERIFIED_OHD_FIELDS
+            print("Источник схемы: три поля, проверенные созданием SDS-543.")
+        else:
+            fields = api.list_all(f"/api/admin/projects/{parse.quote(pid, safe='')}/customFields",
+                                 "id,$type,canBeEmpty,field(id,name,fieldType(id,valueType))")
         if not fields and CONFIG["reference_issue"].strip():
             print(f"\nСписок настроек полей пуст. Читаю типы из {CONFIG['reference_issue']}; значения задачи не копируются.")
             fields = fields_from_reference(read_reference(api, CONFIG["reference_issue"]), pid)
@@ -223,6 +243,9 @@ def main(argv=None):
             raise ValueError("API вернул пустой список полей проекта. Это не означает отсутствие обязательных полей. "
                              "Прочитайте образец: --issue-fields SDS-471. Проверьте права владельца токена на поля проекта.")
         payload = build_payload(fields, pid, CONFIG)
+        if args.with_legacy_type:
+            payload["type"] = CONFIG["legacy_issue_type"]
+        print(f"Режим запроса: {'с верхнеуровневым type' if args.with_legacy_type else 'как при успешном SDS-543'}")
         print("\nPAYLOAD СОЗДАНИЯ:")
         print(redact(json.dumps(payload, ensure_ascii=False, indent=2), CONFIG))
         if args.dry_run:

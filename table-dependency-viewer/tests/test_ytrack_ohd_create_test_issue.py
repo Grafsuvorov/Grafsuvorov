@@ -17,6 +17,23 @@ FIELDS = [{"id": "173-515", "$type": "PeriodProjectCustomField",
 
 
 class OhdCreateTestIssueTests(unittest.TestCase):
+    def test_verified_fields_create_one_task_and_optional_type_is_only_added_when_requested(self):
+        for extra in ([], ["--with-legacy-type"]):
+            with self.subTest(extra=extra), patch.object(script, "CONFIG", {**script.CONFIG, "token": "secret"}), \
+                 patch.object(script, "Api") as api_type, patch.object(script, "project_id", return_value="0-83"), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                api = api_type.return_value
+                api.call.return_value = {"idReadable": "SDS-544"}
+                self.assertEqual(script.main(["--verified-fields", *extra]), 0)
+                api.list_all.assert_not_called()
+                posts = [c for c in api.call.call_args_list if c.args[0] == "POST"]
+                self.assertEqual(len(posts), 1)
+                payload = posts[0].args[3]
+                self.assertEqual(payload.get("type"), "task" if extra else None)
+                self.assertEqual(payload["customFields"][0]["value"], 1)
+                self.assertEqual(payload["customFields"][1]["value"], "LE-TR03 Shipping")
+                self.assertEqual(payload["customFields"][2]["value"], {"name": "Task"})
+
     def test_empty_admin_fields_uses_reference_and_sends_numeric_estimate_without_copying_state(self):
         reference = {"project": {"id": "0-83"}, "customFields": [
             {"id": "173-515", "name": "Оценка (чел./час.)", "$type": "SimpleIssueCustomField", "value": 0},

@@ -1480,6 +1480,7 @@ def create_ytrack_issue(
     direction_field_name: str = "Направление",
     business_key_changed: Optional[bool] = None,
     business_key_changed_field_name: str = "Меняется бизнес-ключ",
+    reference_issue: str = "",
 ) -> dict[str, Any]:
     if not token or not queue:
         return {"status": "not_configured", "issue_id": None, "url": None}
@@ -1502,12 +1503,19 @@ def create_ytrack_issue(
         "description": description,
         "type": issue_type or "task",
     }
-    project_custom_fields = _get_ytrack_project_custom_fields(
-        base_url=base_url,
-        token=token,
-        project_id=resolved_project_id,
-        ssl_verify=ssl_verify,
-    )
+    try:
+        project_custom_fields = _get_ytrack_project_custom_fields(
+            base_url=base_url, token=token, project_id=resolved_project_id, ssl_verify=ssl_verify,
+        )
+    except ValueError:
+        if not reference_issue:
+            raise
+        project_custom_fields = []
+    if not project_custom_fields and reference_issue:
+        project_custom_fields = _get_ytrack_reference_custom_fields(
+            base_url=base_url, token=token, project_id=resolved_project_id,
+            issue_id=reference_issue, ssl_verify=ssl_verify,
+        )
     custom_fields_payload: list[dict[str, Any]] = []
 
     estimate_field = _resolve_ytrack_custom_field(
@@ -2002,6 +2010,41 @@ def _get_ytrack_project_custom_fields(
         skip += len(batch)
 
 
+def _get_ytrack_reference_custom_fields(
+    *, base_url: str, token: str, project_id: str, issue_id: str, ssl_verify: str,
+) -> list[dict[str, Any]]:
+    """Read field identities and types, never copy another issue's values."""
+    query = urlparse.urlencode({"fields": "project(id),customFields(id,name,$type,value(id,name,minutes,presentation,text,login))"})
+    req = urlrequest.Request(
+        f"{base_url.rstrip('/')}/api/issues/{urlparse.quote(issue_id.strip(), safe='')}?{query}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}, method="GET",
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+            issue = json.loads(resp.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        exc.close()
+        raise ValueError(f"Не удалось прочитать поля задачи-образца {issue_id}: HTTP {exc.code}") from None
+    except Exception:
+        raise ValueError(f"Не удалось прочитать поля задачи-образца {issue_id}") from None
+    if not isinstance(issue, dict) or str((issue.get("project") or {}).get("id")) != str(project_id):
+        raise ValueError("Задача-образец YouTrack принадлежит другому проекту; создание остановлено")
+    result = []
+    for item in issue.get("customFields") or []:
+        if not item.get("id") or not item.get("name") or not item.get("$type"):
+            continue
+        value = item.get("value")
+        value_type = ("boolean" if isinstance(value, bool) else "integer" if isinstance(value, int)
+                      else "float" if isinstance(value, float) else "string" if isinstance(value, str) else "")
+        result.append({"id": item["id"], "$type": item["$type"],
+                       "field": {"name": item["name"], "fieldType": {"valueType": value_type}}})
+    if not result:
+        raise ValueError(f"В задаче-образце {issue_id} не найдены доступные поля YouTrack")
+    logging.getLogger("uvicorn.error").info("[YTRACK FIELDS] project=%s source_issue=%s count=%s",
+                                           project_id, issue_id, len(result))
+    return result
+
+
 def _resolve_ytrack_custom_field(
     *,
     items: list[dict[str, Any]],
@@ -2042,7 +2085,8 @@ def _resolve_ytrack_custom_field(
 
 
 def _normalize_ytrack_issue_custom_field_type(project_field_type: str, field_type_id: str) -> str:
-    # Re-pushed marker: backend YouTrack custom field mapping refreshed on 2026-08-26.
+    if project_field_type.endswith("IssueCustomField"):
+        return project_field_type
     if project_field_type == "EnumProjectCustomField":
         return "SingleEnumIssueCustomField"
     if project_field_type == "OwnedProjectCustomField":
@@ -2068,7 +2112,9 @@ def _build_ytrack_estimate_payload(*, estimate_field: dict[str, str], default_es
     if field_value_type == "period" or issue_custom_field_type == "PeriodIssueCustomField":
         value: Any = {"minutes": minutes}
     elif field_value_type in {"integer", "int"}:
-        value = minutes
+        value = (minutes + 59) // 60
+    elif field_value_type in {"float", "double", "number"}:
+        value = minutes / 60
     else:
         value = f"{minutes // 60 if minutes % 60 == 0 else round(minutes / 60, 2)}ч"
 

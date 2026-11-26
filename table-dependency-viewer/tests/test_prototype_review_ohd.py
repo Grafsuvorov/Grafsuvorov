@@ -153,9 +153,9 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         settings = {"api_url": "https://ohd.example/api/v4", "ssl_verify": False,
             "project": "ohd/engineers-dbt", "token": "ohd-write", "analyst_project": "ohd/analysts", "analyst_token": "ohd-read",
             "youtrack_project": "OHD", "youtrack_project_id": "0-5", "youtrack_queue": "OHD", "direction_field": "Dashboard",
-            "youtrack_token": "ohd-yt-secret"}
+            "youtrack_token": "ohd-yt-secret", "youtrack_reference_issue": "SDS-543"}
         delivery = PrototypeIssueDeliveryDependencies(**{f.name: None for f in fields(PrototypeIssueDeliveryDependencies)})
-        dependencies = fixtures.PrototypeIssueWorkflowTests.dependencies(delivery=delivery)
+        dependencies = fixtures.PrototypeIssueWorkflowTests.dependencies(delivery=delivery, create_issue=self.forbidden)
         captured = []
         namespace = {"Request": object, "PrototypeReviewCreateIssuePayload": object, "replace": replace, "partial": partial,
             "load_ohd_bundle": load_ohd_bundle, "load_merge_request_sql_bundle": self.forbidden,
@@ -173,6 +173,7 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(dep.gitlab_token, "ohd-read")
         self.assertEqual(dep.youtrack_token, "ohd-yt-secret")
         self.assertEqual(dep.delivery.youtrack_token, "ohd-yt-secret")
+        self.assertEqual(dep.create_issue.keywords["reference_issue"], "SDS-543")
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_project"], "ohd/engineers-dbt")
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_api_url"], settings["api_url"])
         self.assertEqual(dep.delivery.publish_dbt.keywords["gitlab_token"], "ohd-write")

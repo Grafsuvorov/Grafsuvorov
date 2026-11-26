@@ -25,6 +25,7 @@ from .entity_dev_meta import (
 
 SQL_FILE_RE = re.compile(r"\.sql$", re.IGNORECASE)
 IGNORED_DEPENDENCY_SCHEMAS = {"information_schema", "pg_catalog", "pg_temp"}
+YTRACK_CREATE_DIAGNOSTIC_VERSION = "ytrack-create-v2"
 TARGET_PATTERNS = [
     re.compile(r"\binsert\s+into\s+([^\s;(]+)", re.IGNORECASE),
     re.compile(r"\binsert\s+overwrite(?:\s+table)?\s+([^\s;(]+)", re.IGNORECASE),
@@ -1659,13 +1660,29 @@ def create_ytrack_issue(
         headers=headers,
         method="POST",
     )
+    diagnostic = json.dumps({
+        "version": YTRACK_CREATE_DIAGNOSTIC_VERSION,
+        "server": urlparse.urlsplit(base_url).hostname,
+        "project_id": resolved_project_id, "queue": queue,
+        "schema": "verified_ohd" if custom_fields_override is not None else "reference" if reference_issue else "admin_api",
+        "estimate": next((field for field in custom_fields_payload if field.get("id") == "173-515"
+                          or field.get("name") == estimate_field_name), None),
+        "field_ids": [field.get("id") for field in custom_fields_payload],
+    }, ensure_ascii=False)
+    if token:
+        diagnostic = diagnostic.replace(token, "***")
+    logging.getLogger("uvicorn.error").info("[YTRACK CREATE] %s", diagnostic)
     try:
         with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
             body = resp.read().decode("utf-8")
             data = json.loads(body) if body else {}
     except urlerror.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
-        raise ValueError(f"YTrack вернул {exc.code}: {body}") from exc
+        code = exc.code
+        exc.close()
+        if token:
+            body = body.replace(token, "***")
+        raise ValueError(f"YTrack вернул {code}: {body}. Диагностика запроса: {diagnostic}") from None
     except Exception as exc:
         raise ValueError(f"Не удалось создать задачу в YTrack: {exc}") from exc
     issue_id = data.get("idReadable") or data.get("key") or data.get("id")

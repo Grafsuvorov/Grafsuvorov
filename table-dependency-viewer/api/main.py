@@ -1811,7 +1811,7 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
             )
         return result
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=f"Prototype Review mode={payload.mode}: {exc}")
     except Exception as exc:
         print("❌ /api/admin/prototype-review/create-issue error:", exc)
         print(traceback.format_exc())

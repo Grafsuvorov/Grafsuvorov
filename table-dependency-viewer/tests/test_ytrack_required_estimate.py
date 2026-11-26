@@ -172,3 +172,22 @@ class RequiredEstimateTests(unittest.TestCase):
         self.assertIsInstance(custom["173-517"]["value"], int)
         self.assertGreater(custom["173-517"]["value"], 0)
         self.assertEqual(user.call_args.kwargs["token"], "ohd-token")
+
+    def test_failed_post_reports_actual_schema_and_estimate_without_token(self):
+        from api.services.prototype_review_youtrack_ohd import VERIFIED_FIELDS
+        def rejected(req, **kwargs):
+            raise HTTPError(req.full_url, 400, "Bad Request", {}, io.BytesIO(b'Field required secret-token'))
+        with patch.object(review, "_urlopen_without_proxy", side_effect=rejected):
+            with self.assertRaises(ValueError) as raised:
+                review.create_ytrack_issue(base_url="https://yt.example", project_id="0-83", project="ОХД",
+                    token="secret-token", queue="SDS", issue_type="task", ssl_verify=False, summary="Prototype", description="",
+                    custom_fields_override=VERIFIED_FIELDS, custom_fields_project_id="0-83",
+                    direction="LE-TR03 Shipping", direction_field_name="Дашборд КХД/Направление", assignee_query="")
+        message = str(raised.exception)
+        self.assertIn("ytrack-create-v2", message)
+        diagnostic = json.loads(message.split("Диагностика запроса: ", 1)[1])
+        self.assertEqual(diagnostic["schema"], "verified_ohd")
+        self.assertEqual(diagnostic["estimate"]["id"], "173-515")
+        self.assertEqual(diagnostic["estimate"]["value"], 1)
+        self.assertEqual(diagnostic["project_id"], "0-83")
+        self.assertNotIn("secret-token", message)

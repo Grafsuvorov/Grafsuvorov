@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import ssl
 import time
@@ -1521,6 +1522,16 @@ def create_ytrack_issue(
                 default_estimate_minutes=default_estimate_minutes,
             )
         )
+        logging.getLogger("uvicorn.error").info(
+            "[YTRACK ESTIMATE] project=%s field=%s id=%s type=%s value=%s",
+            resolved_project_id, estimate_field.get("name"), estimate_field.get("id"),
+            custom_fields_payload[-1].get("$type"), custom_fields_payload[-1].get("value"),
+        )
+    else:
+        logging.getLogger("uvicorn.error").warning(
+            "[YTRACK ESTIMATE] project=%s configured_field=%s not found among %s fields",
+            resolved_project_id, estimate_field_name, len(project_custom_fields),
+        )
 
     card_type_field = _resolve_ytrack_custom_field(
         items=project_custom_fields,
@@ -1957,23 +1968,39 @@ def _get_ytrack_project_custom_fields(
     project_id: str,
     ssl_verify: str,
 ) -> list[dict[str, Any]]:
-    req = urlrequest.Request(
-        (
-            f"{base_url.rstrip('/')}/api/admin/projects/{urlparse.quote(project_id, safe='')}/customFields"
-            "?fields=id,$type,canBeEmpty,field(name,fieldType(id,valueType))"
-        ),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json",
-        },
-        method="GET",
-    )
-    try:
-        with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
-            body = resp.read().decode("utf-8")
-            return json.loads(body) if body else []
-    except Exception:
-        return []
+    result = []
+    skip = 0
+    while True:
+        query = urlparse.urlencode({
+            "fields": "id,$type,canBeEmpty,field(name,fieldType(id,valueType))",
+            "$top": 100, "$skip": skip,
+        })
+        req = urlrequest.Request(
+            f"{base_url.rstrip('/')}/api/admin/projects/{urlparse.quote(project_id, safe='')}/customFields?{query}",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}, method="GET",
+        )
+        try:
+            with _urlopen_without_proxy(req, timeout=30, ssl_verify=_normalize_bool(ssl_verify, default=True)) as resp:
+                body = resp.read().decode("utf-8")
+                batch = json.loads(body) if body else []
+        except urlerror.HTTPError as exc:
+            exc.close()
+            raise ValueError(
+                f"Не удалось прочитать поля YouTrack проекта {project_id}: HTTP {exc.code}. "
+                "Проверьте права токена на чтение полей проекта; задача не отправлена."
+            ) from None
+        except Exception:
+            raise ValueError(
+                f"Не удалось прочитать поля YouTrack проекта {project_id}. "
+                "Проверьте подключение и ответ API; задача не отправлена."
+            ) from None
+        if not isinstance(batch, list):
+            raise ValueError(f"YouTrack вернул некорректный список полей проекта {project_id}; задача не отправлена")
+        if not batch:
+            return result
+        result.extend(batch)
+        skip += len(batch)
+
 
 def _resolve_ytrack_custom_field(
     *,

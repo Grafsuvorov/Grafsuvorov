@@ -1,5 +1,9 @@
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c "from api.services.prototype_review import YTRACK_CREATE_DIAGNOSTIC_VERSION; print(YTRACK_CREATE_DIAGNOSTIC_VERSION)"
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-ImportError: cannot import name 'YTRACK_CREATE_DIAGNOSTIC_VERSION' from 'api.services.prototype_review' (/app/api/services/prototype_review.py)
+echo "ФАЙЛ НА СЕРВЕРЕ" 
+  grep -nF 'ytrack-create-v2' /root/table-dependency-viewer/api/services/prototype_review.py 
+ 
+  echo "ФАЙЛ В КОНТЕЙНЕРЕ" 
+  docker compose exec api grep -nF 'ytrack-create-v2' /app/api/services/prototype_review.py 
+ 
+  echo "ОТКУДА ИМПОРТИРУЕТ PYTHON" 
+  docker compose exec api python -c "import api.services.prototype_review as m; print(m.__file__); print(getattr(m, 'YTRACK_CREATE_DIAGNOSTIC_VERSION', 'КОНСТАНТА
+  ОТСУТСТВУЕТ'))"

@@ -1,1 +1,1 @@
-YTrack вернул 400: {"error":"Field required","error_description":"Поле Оценка (чел./час.) обязательно","error_field":"Оценка (чел./час.)","error_rule_name":"@jetbrains/required-custom-fields-feature","error_issue_id":"2-266800","error_issue_is_draft":false,"error_transitions":[],"error_original_command":"","error_project_custom_field_id":"173-515","error_type":"workflow","error_workflow_type":"require"}
+docker compose exec api python -c "from api.services.prototype_review import YTRACK_CREATE_DIAGNOSTIC_VERSION; print(YTRACK_CREATE_DIAGNOSTIC_VERSION)"

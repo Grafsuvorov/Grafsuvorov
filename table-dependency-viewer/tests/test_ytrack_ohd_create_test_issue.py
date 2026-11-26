@@ -12,13 +12,15 @@ spec.loader.exec_module(script)
 
 FIELDS = [{"id": "173-515", "$type": "PeriodProjectCustomField",
            "field": {"name": "Оценка (чел./час.)", "fieldType": {"id": "period", "valueType": "period"}}},
-          {"id": "173-2", "$type": "EnumProjectCustomField", "field": {"name": "Тип карточки"}}]
+          {"id": "173-2", "$type": "EnumProjectCustomField", "field": {"name": "Тип карточки"}},
+          {"id": "173-646", "$type": "SimpleProjectCustomField", "field": {"name": "Дашборд КХД/Направление"}}]
 
 
 class OhdCreateTestIssueTests(unittest.TestCase):
     def test_empty_admin_fields_uses_reference_and_sends_numeric_estimate_without_copying_state(self):
         reference = {"project": {"id": "0-83"}, "customFields": [
             {"id": "173-515", "name": "Оценка (чел./час.)", "$type": "SimpleIssueCustomField", "value": 0},
+            {"id": "173-646", "name": "Дашборд КХД/Направление", "$type": "SimpleIssueCustomField", "value": "LE-TR03 Shipping"},
             {"id": "134-1948", "name": "Тип карточки", "$type": "SingleEnumIssueCustomField", "value": {"name": "Task"}},
             {"id": "134-490", "name": "State", "$type": "StateMachineIssueCustomField", "value": {"name": "Завершена"}},
             {"id": "135-769", "name": "Assignee", "$type": "SingleUserIssueCustomField", "value": {"login": "another-user"}},
@@ -36,7 +38,12 @@ class OhdCreateTestIssueTests(unittest.TestCase):
         estimate = payload["customFields"][0]
         self.assertEqual(estimate["$type"], "SimpleIssueCustomField")
         self.assertEqual(estimate["value"], 1)
-        self.assertEqual([f["name"] for f in payload["customFields"]], ["Оценка (чел./час.)", "Тип карточки"])
+        self.assertEqual([f["name"] for f in payload["customFields"]],
+                         ["Оценка (чел./час.)", "Дашборд КХД/Направление", "Тип карточки"])
+        direction = payload["customFields"][1]
+        self.assertEqual(direction["id"], "173-646")
+        self.assertEqual(direction["$type"], "SimpleIssueCustomField")
+        self.assertEqual(direction["value"], "LE-TR03 Shipping")
 
     def test_reference_from_another_project_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "другому проекту"):

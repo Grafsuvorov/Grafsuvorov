@@ -24,6 +24,9 @@ CONFIG = {
     "description": "Тестовая задача для отладки API Prototype Review. Можно удалить после проверки.",
     "card_type_field": "Тип карточки",
     "card_type_value": "Task",
+    "direction_field_id": "173-646",
+    "direction_field_name": "Дашборд КХД/Направление",
+    "direction": "LE-TR03 Shipping",     # Текст, как в SDS-471; замените нужным направлением.
     "estimate_field_id": "173-515",      # Обязательное поле из ответа workflow ОХД.
     "estimate_field_name": "Оценка (чел./час.)",
     "estimate_minutes": 60,               # Для period: минуты; числовые поля ниже получают часы.
@@ -173,6 +176,9 @@ def build_payload(fields, pid, config):
     else:
         raise ValueError(f"Нужен явный estimate_value_override для типа {value_type!r}")
     custom = [field_payload(estimate, value, config, kind)]
+    if str(config["direction"]).strip():
+        field = find_field(fields, config["direction_field_name"], config["direction_field_id"])
+        custom.append(field_payload(field, str(config["direction"]).strip(), config))
     if config["card_type_value"]:
         field = find_field(fields, config["card_type_field"])
         custom.append(field_payload(field, {"name": config["card_type_value"]}, config))

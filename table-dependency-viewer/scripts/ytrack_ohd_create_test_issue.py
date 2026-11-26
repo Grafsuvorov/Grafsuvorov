@@ -18,6 +18,7 @@ CONFIG = {
     "timeout_seconds": 30,
     "project_id": "",                    # Например 0-123; не 173-515 (это ID поля).
     "project": "SDS",                    # shortName или точное имя; используется при пустом project_id.
+    "reference_issue": "SDS-471",        # Источник типов полей, если admin/customFields возвращает [].
     "queue": "SDS",
     "summary": "[TEST ОХД] Создание задачи и обязательная оценка",
     "description": "Тестовая задача для отладки API Prototype Review. Можно удалить после проверки.",
@@ -115,12 +116,33 @@ def find_field(fields, name, field_id=""):
 
 def issue_type(field):
     kind = field.get("$type", "")
+    if kind.endswith("IssueCustomField"):
+        return kind  # Тип уже прочитан из реальной задачи, без преобразования Project -> Issue.
     values = {"EnumProjectCustomField": "SingleEnumIssueCustomField", "UserProjectCustomField": "SingleUserIssueCustomField",
               "StateProjectCustomField": "StateIssueCustomField", "PeriodProjectCustomField": "PeriodIssueCustomField",
               "SimpleProjectCustomField": "SimpleIssueCustomField", "TextProjectCustomField": "TextIssueCustomField"}
     if kind not in values:
         raise ValueError(f"Неизвестный тип поля {kind!r}; добавьте явное соответствие в issue_type().")
     return values[kind]
+
+
+def fields_from_reference(issue, pid):
+    if str((issue.get("project") or {}).get("id")) != str(pid):
+        raise ValueError("Задача-образец принадлежит другому проекту")
+    fields = []
+    for item in issue.get("customFields") or []:
+        value = item.get("value")
+        # Use values only to discover primitive types. Never copy them into the new issue.
+        value_type = ("boolean" if isinstance(value, bool) else "integer" if isinstance(value, int)
+                      else "float" if isinstance(value, float) else "string" if isinstance(value, str) else "")
+        fields.append({"id": item["id"], "$type": item["$type"],
+                       "field": {"name": item["name"], "fieldType": {"valueType": value_type}}})
+    return fields
+
+
+def read_reference(api, key):
+    return api.call("GET", f"/api/issues/{parse.quote(key.strip(), safe='')}",
+        {"fields": "id,idReadable,project(id,name,shortName),customFields(id,name,$type,value(id,name,minutes,presentation,text,login))"})
 
 
 def field_payload(field, value, config, type_override=""):
@@ -176,8 +198,7 @@ def main(argv=None):
         pid = project_id(api, CONFIG)
         print(f"Проект: {pid}; SSL verify: {CONFIG['ssl_verify']}")
         if args.issue_fields:
-            issue = api.call("GET", f"/api/issues/{parse.quote(args.issue_fields.strip(), safe='')}",
-                {"fields": "id,idReadable,project(id,name,shortName),customFields(id,name,$type,value(id,name,minutes,presentation,text,login))"})
+            issue = read_reference(api, args.issue_fields)
             print("\nПОЛЯ СУЩЕСТВУЮЩЕЙ ЗАДАЧИ:")
             print(redact(json.dumps(issue, ensure_ascii=False, indent=2), CONFIG))
             if str((issue.get("project") or {}).get("id")) != str(pid):
@@ -185,6 +206,9 @@ def main(argv=None):
             return 0
         fields = api.list_all(f"/api/admin/projects/{parse.quote(pid, safe='')}/customFields",
                              "id,$type,canBeEmpty,field(id,name,fieldType(id,valueType))")
+        if not fields and CONFIG["reference_issue"].strip():
+            print(f"\nСписок настроек полей пуст. Читаю типы из {CONFIG['reference_issue']}; значения задачи не копируются.")
+            fields = fields_from_reference(read_reference(api, CONFIG["reference_issue"]), pid)
         print("\nПОЛЯ ПРОЕКТА (canBeEmpty не отражает все обязательные поля workflow):")
         print(redact(json.dumps(fields, ensure_ascii=False, indent=2), CONFIG))
         if args.fields:

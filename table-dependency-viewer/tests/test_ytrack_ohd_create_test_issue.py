@@ -16,6 +16,32 @@ FIELDS = [{"id": "173-515", "$type": "PeriodProjectCustomField",
 
 
 class OhdCreateTestIssueTests(unittest.TestCase):
+    def test_empty_admin_fields_uses_reference_and_sends_numeric_estimate_without_copying_state(self):
+        reference = {"project": {"id": "0-83"}, "customFields": [
+            {"id": "173-515", "name": "Оценка (чел./час.)", "$type": "SimpleIssueCustomField", "value": 0},
+            {"id": "134-1948", "name": "Тип карточки", "$type": "SingleEnumIssueCustomField", "value": {"name": "Task"}},
+            {"id": "134-490", "name": "State", "$type": "StateMachineIssueCustomField", "value": {"name": "Завершена"}},
+            {"id": "135-769", "name": "Assignee", "$type": "SingleUserIssueCustomField", "value": {"login": "another-user"}},
+        ]}
+        with patch.object(script, "CONFIG", {**script.CONFIG, "token": "secret"}), \
+             patch.object(script, "Api") as api_type, patch.object(script, "project_id", return_value="0-83"), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            api = api_type.return_value
+            api.list_all.return_value = []
+            api.call.return_value = reference
+            self.assertEqual(script.main(["--dry-run"]), 0)
+            api.call.assert_called_once()
+            self.assertEqual(api.call.call_args.args[:2], ("GET", "/api/issues/SDS-471"))
+        payload = script.build_payload(script.fields_from_reference(reference, "0-83"), "0-83", script.CONFIG)
+        estimate = payload["customFields"][0]
+        self.assertEqual(estimate["$type"], "SimpleIssueCustomField")
+        self.assertEqual(estimate["value"], 1)
+        self.assertEqual([f["name"] for f in payload["customFields"]], ["Оценка (чел./час.)", "Тип карточки"])
+
+    def test_reference_from_another_project_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "другому проекту"):
+            script.fields_from_reference({"project": {"id": "0-30"}, "customFields": []}, "0-83")
+
     def test_issue_fields_uses_issue_api_and_never_creates_issue(self):
         with patch.object(script, "CONFIG", {**script.CONFIG, "token": "secret"}), \
              patch.object(script, "Api") as api_type, patch.object(script, "project_id", return_value="0-83"), \

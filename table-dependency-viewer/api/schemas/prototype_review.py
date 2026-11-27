@@ -97,6 +97,7 @@ class PrototypeReviewCreateIssuePayload(PrototypeReviewModePayload):
     diff_comment: Optional[str] = None
     source_load: Optional["PrototypeReviewSourceLoadIssuePayload"] = None
     source_loads: Optional[List["PrototypeReviewSourceLoadIssuePayload"]] = None
+    expected_source_load_count: Optional[int] = None
     review_items: List[PrototypeReviewItemPayload]
 
 

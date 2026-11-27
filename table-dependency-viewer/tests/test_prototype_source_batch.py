@@ -37,6 +37,7 @@ class SourceBatchTests(unittest.TestCase):
             self.assertEqual(delivered[0]["source_load"], values)
             self.assertIn('stg."First"', result["description"])
             self.assertIn('stg."Second"', result["description"])
+            self.assertEqual(result["task_contents"]["source_targets"], ["stg.First", "stg.Second"])
 
     def test_duplicates_dirty_results_and_cross_mode_stop_before_external_calls(self):
         for values, mode, error in [([load(), load()], "khd", "повторяется"),
@@ -49,12 +50,12 @@ class SourceBatchTests(unittest.TestCase):
             validate_source_loads([load()], mode="khd", review_items=[{"target_fqn": "stg.first"}])
 
     def test_khd_batch_saves_each_table_once_into_same_task_branch(self):
-        saved, mrs = [], []
+        saved, mrs, dbt = [], [], []
         params = {f.name: "" for f in fields(PrototypeIssueDeliveryDependencies)}
         params.update(engine=None, collect_target_sql=lambda **kw: {},
             prepare_source_load=lambda **kw: {"DAILY": kw["source_load"]["yaml_content"]},
             save_gp_bundle=lambda **kw: saved.append(kw) or {"branch_name": kw["branch_name"]},
-            create_meta_mr=lambda **kw: mrs.append(kw) or {}, publish_dbt=lambda **kw: {}, base_branch="main")
+            create_meta_mr=lambda **kw: mrs.append(kw) or {}, publish_dbt=lambda **kw: dbt.append(kw) or {}, base_branch="main")
         result = deliver_prototype_issue(issue_result={"issue_id": "DWH-19", "raw": {"id": "2-19"}}, review_items=[], bundle={"files": []},
             user=SimpleNamespace(email="eng@example.com"), dependencies=PrototypeIssueDeliveryDependencies(**params),
             source_load=[load(), load("Second")])
@@ -62,6 +63,8 @@ class SourceBatchTests(unittest.TestCase):
         self.assertEqual([s["table_name"] for s in saved], ["First", "Second"])
         self.assertEqual(len({s["branch_name"] for s in saved}), 1)
         self.assertEqual(len(mrs), 1)
+        self.assertEqual([i["target_fqn"] for i in dbt[0]["review_items"]], ["stg.First", "stg.Second"])
+        self.assertEqual(dbt[0]["review_items"][0]["entity_names"], ["DAILY"])
 
     def test_ohd_diff_and_sources_publish_in_one_dbt_call_without_etl_writes(self):
         calls = []
@@ -157,3 +160,28 @@ class SourceBatchTests(unittest.TestCase):
         self.assertEqual(len(delivered[0]["source_load"]), 2)
         self.assertIn("Checked diff", result["description"])
         self.assertIn('stg."First"', created[0]["description"])
+
+    def test_expected_source_count_mismatch_stops_before_issue_creation(self):
+        payload = SimpleNamespace(mode="khd", source_loads=[], expected_source_load_count=2, review_items=[])
+        with self.assertRaisesRegex(ValueError, "ожидалось 2, получено 0"):
+            create_prototype_review_issue(payload, None, dependencies=fixtures.PrototypeIssueWorkflowTests.dependencies())
+
+    def test_khd_dbt_commit_contains_diff_and_both_stg_models_and_registries(self):
+        import os
+        import api.services.prototype_review_delivery as delivery
+        requests = []
+        def git(**kw):
+            requests.append(kw)
+            return {} if kw["method"] != "GET" else []
+        sql = 'CREATE TABLE ods.Report(ID int); INSERT INTO ods.Report VALUES(1);'
+        files = [{"path": "ods.sql", "sql": sql, "statements": fixtures.prototype_review._split_sql_statements(sql)}]
+        items = [{"target_fqn": "ods.Report", "key_attributes": ["ID"], "paths": ["ods.sql"], "entity_name": "DAILY"},
+                 *source_dbt_items([load(), load("Second")])]
+        with patch.dict(os.environ, {"DBT_GITLAB_TOKEN": "token", "DBT_GITLAB_PROJECT": "khd/dbt"}), \
+             patch.object(delivery, "resource_exists", return_value=False), patch.object(delivery, "file_content", return_value=None), \
+             patch.object(delivery, "_gitlab_json_request", side_effect=git):
+            publish_dbt_registry(task_id="DWH-19", author="eng", review_items=items, changed_files=files)
+        actions = next(r["payload"]["actions"] for r in requests if r["path"] == "repository/commits")
+        for target in ("ods/ods.report", "stg/stg.first", "stg/stg.second"):
+            self.assertTrue(any(a["file_path"].endswith(target + ".sql") for a in actions), target)
+            self.assertTrue(any(a["file_path"].endswith(target + ".yml") for a in actions), target)

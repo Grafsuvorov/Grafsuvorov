@@ -33,3 +33,13 @@ export function sourceDetailsForm(form, details, touched = new Set()) {
   }
   return next;
 }
+
+export function sourceTaskWarning(response, submittedLoads) {
+  if (!response?.issue?.issue_id || !submittedLoads.length) return '';
+  const expected = submittedLoads.map((load) => `${load.target_schema}.${load.target_table}`.toLowerCase()).sort();
+  const actual = response.task_contents?.source_targets?.map((target) => target.toLowerCase()).sort();
+  if (!actual || expected.join('|') !== actual.join('|')) {
+    return `Задача ${response.issue.issue_id} создана, но API не подтвердил включение всех STG-таблиц (${expected.join(', ')}). Проверьте состав задачи и обновление API; повторное создание создаст другую задачу.`;
+  }
+  return '';
+}

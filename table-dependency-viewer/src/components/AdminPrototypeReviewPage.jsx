@@ -5,6 +5,7 @@ import PrototypeSqlVariantMapping, { variantMappingPayload } from "./PrototypeSq
 import { mergeReviewRetry, reviewItemNeedsRetry, reviewResultWithItems } from "../utils/prototypeReviewRetry.js";
 import BusinessDqPanel from "./BusinessDqPanel.jsx";
 import PrototypeSourceLoadPanel from "./PrototypeSourceLoadPanel.jsx";
+import { sourceTaskWarning } from "../utils/prototypeSourceBatch.js";
 
 const DEFAULT_FORM = {
   summary: "",
@@ -140,7 +141,6 @@ export default function AdminPrototypeReviewPage() {
   const [mappingGroups, setMappingGroups] = useState([]);
   const [mappingChoices, setMappingChoices] = useState({});
   useEffect(() => { setMappingGroups([]); setMappingChoices({}); setResult(null); setReviewItemsDraft([]); }, [mrInput]);
-  const [includeSourceLoad, setIncludeSourceLoad] = useState(true);
 
   useEffect(() => {
     accountApi.me().then(setCurrentUser).catch(() => {});
@@ -489,7 +489,7 @@ export default function AdminPrototypeReviewPage() {
       setError("Заполните обязательное поле «Дашборд КХД/Направление»");
       return;
     }
-    if (includeSourceLoad && !sourceBatch.valid) {
+    if (!sourceBatch.valid) {
       setError("Завершите генерацию всех выбранных STG-таблиц или снимите их выбор"); return;
     }
     setCreatingIssue(true);
@@ -505,7 +505,8 @@ export default function AdminPrototypeReviewPage() {
         direction: String(form.direction || "").trim(),
         parent_issue: String(form.parent_issue || "").trim() || null,
         diff_comment: String(form.diff_comment || "").trim() || null,
-        source_loads: includeSourceLoad ? sourceBatch.loads : [],
+        source_loads: sourceBatch.loads,
+        expected_source_load_count: sourceBatch.loads.length,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           sql_variant_mode: item.sql_variant_mode || null,
@@ -544,6 +545,8 @@ export default function AdminPrototypeReviewPage() {
           ? {
               ...prev,
               issue: payload?.issue || null,
+              task_contents: payload?.task_contents || null,
+              source_task_warning: sourceTaskWarning(payload, sourceBatch.loads),
               meta_branch: payload?.meta_branch || null,
               meta_files: payload?.meta_files || [],
               meta_error: payload?.meta_error || null,
@@ -1095,17 +1098,18 @@ export default function AdminPrototypeReviewPage() {
                 type="button"
                 className="btn btn-primary"
                 onClick={handleCreateIssue}
-                disabled={loading || creatingIssue || (includeSourceLoad && !sourceBatch.valid) || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
+                disabled={loading || creatingIssue || !sourceBatch.valid || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
                 {creatingIssue ? (isOhd ? "Создаём задачу и dbt MR…" : "Ищем зависимости и создаём задачу…") : "Создать задачу"}
               </button>
             </div>
-            {sourceBatch.selected > 0 ? (
-              <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 14, cursor: "pointer" }}>
-                <input type="checkbox" checked={includeSourceLoad} onChange={(event) => setIncludeSourceLoad(event.target.checked)} />
-                Добавить выбранные STG-таблицы ({sourceBatch.ready || 0} из {sourceBatch.selected} готовы) в эту задачу и общий MR
-              </label>
-            ) : null}
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="section-title">Состав общей задачи и MR</div>
+              <div>Объекты diff: {reviewItemsDraft.length} · STG: {sourceBatch.ready || 0} из {sourceBatch.selected} готовы</div>
+              {sourceBatch.loads.map((load) => <div className="mono" key={`${load.target_schema}.${load.target_table}`}>{load.target_schema}.{load.target_table}</div>)}
+              {!!sourceBatch.selected && <p className="muted">Все выбранные STG-таблицы будут добавлены автоматически. Для исключения таблицы снимите выбор в её карточке выше.</p>}
+            </div>
+            {result.source_task_warning && <p className="page-error">{result.source_task_warning}</p>}
             {creatingIssue ? (
               <div className="card" style={{ marginTop: 14 }}>
                 <div className="section-title">Подготавливаем задачу</div>

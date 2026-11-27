@@ -33,3 +33,11 @@ test('autofill preserves fields manually edited while the lookup was pending', a
     { fields: 'ID,KEY', primary_key: '"ID"', entity_name: 'DAILY' }, new Set(['fields', 'primary_key']));
   assert.equal(next.fields, 'CUSTOM'); assert.equal(next.primary_key, 'MANUAL'); assert.equal(next.entity_name, 'DAILY');
 });
+
+test('missing STG confirmation from an old server cannot look like complete success', async () => {
+  const { sourceTaskWarning } = await import('../src/utils/prototypeSourceBatch.js');
+  const loads = [{ target_schema: 'stg', target_table: 'First' }, { target_schema: 'stg', target_table: 'Second' }];
+  assert.match(sourceTaskWarning({ issue: { issue_id: 'DWH-19' } }, loads), /не подтвердил/);
+  assert.equal(sourceTaskWarning({ issue: { issue_id: 'DWH-19' }, task_contents: { source_targets: ['stg.Second', 'stg.First'] } }, loads), '');
+  assert.match(sourceTaskWarning({ issue: { issue_id: 'DWH-19' }, task_contents: { source_targets: ['stg.First'] } }, loads), /не подтвердил/);
+});

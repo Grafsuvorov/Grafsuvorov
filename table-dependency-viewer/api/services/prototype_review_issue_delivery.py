@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from .prototype_review import infer_removed_table_targets
 from .stg_source_loader import source_load_entity_names
-from .prototype_source_batch import source_load_items
+from .prototype_source_batch import source_load_items, source_dbt_items
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,7 @@ def deliver_prototype_issue(
     source_load: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     author = getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review"
+    source_loads = source_load_items(source_load)
     meta_branch = None
     meta_files = []
     meta_error = None
@@ -188,7 +189,7 @@ def deliver_prototype_issue(
         # produced the canonical recreate/insert/truncate scripts.  Put those
         # files into the same task branch so one engineer MR contains both the
         # SQL diff metadata and the STG source-load change.
-        for source_load in source_load_items(source_load):
+        for source_load in source_loads:
             if meta_error:
                 break
             schema_name = str(source_load.get("target_schema") or "").strip().lower()
@@ -310,7 +311,7 @@ def deliver_prototype_issue(
             dbt_registry = dependencies.publish_dbt(
                 task_id=issue_id,
                 author=author,
-                review_items=review_items,
+                review_items=[*review_items, *source_dbt_items(source_loads)],
                 changed_files=bundle.get("files") or [],
                 deleted_files=bundle.get("deleted_files") or [],
             )

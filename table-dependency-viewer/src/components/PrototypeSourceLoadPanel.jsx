@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { adminApi } from "../api/admin.js";
-import { summarizeSourceBatch, sourceTargetKey, sourceDetailsForm } from "../utils/prototypeSourceBatch.js";
+import { summarizeSourceBatch, sourceTargetKey, sourceDetailsForm, sourceTaskWarning } from "../utils/prototypeSourceBatch.js";
 
 const INITIAL = { target_schema: "stg", target_table: "", source_schema: "", source_table: "", server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "", entity_name: "" };
 
@@ -142,7 +142,7 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
     if (!summary.valid || !summary.loads.length || !task.direction.trim()) return;
     setCreating(true); setError("");
     try { setCreated(await adminApi.prototypeReviewCreateIssue({ ...task, mode, mr_input: "", review_items: [],
-      source_loads: summary.loads, issue_summary: task.summary.trim() || "Загрузка таблиц в STG", linked_issues: [] })); }
+      source_loads: summary.loads, expected_source_load_count: summary.loads.length, issue_summary: task.summary.trim() || "Загрузка таблиц в STG", linked_issues: [] })); }
     catch (e) { setError(e.message); } finally { setCreating(false); }
   };
   const busy = disabled || creating || runningAll || rows.some((row) => row.busy || row.lookupBusy);
@@ -183,7 +183,7 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
       {!summary.valid && <p className="muted">Сначала завершите генерацию всех выбранных таблиц или снимите выбор с ненужных.</p>}
     </div>}
     {error && <p className="page-error">{error}</p>}
-    {created && <div className="card"><div>Задача: <a href={created.issue?.link} target="_blank" rel="noreferrer">{created.issue?.issue_id}</a></div>
+    {created && <div className="card">{sourceTaskWarning(created, summary.loads) && <p className="page-error">{sourceTaskWarning(created, summary.loads)}</p>}<div>Задача: <a href={created.issue?.link} target="_blank" rel="noreferrer">{created.issue?.issue_id}</a></div>
       {[created.meta_mr, created.dbt_registry].filter(Boolean).map((mr, index) => mr.mr_url && <div key={index}><a href={mr.mr_url} target="_blank" rel="noreferrer">Открыть MR</a></div>)}
       {[created.meta_error, created.meta_mr_error, created.dbt_registry_error, created.attachment_error].filter(Boolean).map((message) => <p className="page-error" key={message}>{message}</p>)}
     </div>}

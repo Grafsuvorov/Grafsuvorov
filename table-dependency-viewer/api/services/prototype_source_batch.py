@@ -1,6 +1,6 @@
 """Validation and publication data for multiple independently generated STG tables."""
 import re
-from .stg_source_loader import _primary_key_expression
+from .stg_source_loader import _primary_key_expression, source_load_entity_names
 
 
 def source_load_items(value):
@@ -15,7 +15,11 @@ def payload_source_loads(payload):
     if batch and single:
         raise ValueError("Передайте source_loads или source_load, а не оба поля")
     values = batch or ([single] if single else [])
-    return [item.model_dump() if hasattr(item, "model_dump") else dict(item) for item in values]
+    result = [item.model_dump() if hasattr(item, "model_dump") else dict(item) for item in values]
+    expected = getattr(payload, "expected_source_load_count", None)
+    if expected is not None and expected != len(result):
+        raise ValueError(f"Состав STG не совпадает: ожидалось {expected}, получено {len(result)}. Задача не создана; обновите API и повторите проверку состава.")
+    return result
 
 
 def source_keys(load):
@@ -48,5 +52,7 @@ def validate_source_loads(loads, *, mode, review_items):
 def source_dbt_items(loads):
     return [{"item_id": f"source:{load['target_schema']}.{load['target_table']}",
              "target_fqn": f"{load['target_schema']}.{load['target_table']}", "object_type": "TABLE",
-             "key_attributes": source_keys(load), "scd_type": "scd1", "entity_name": "",
+             "key_attributes": source_keys(load), "scd_type": "scd1",
+             "entity_name": load.get("entity_name", "") if load.get("mode", "khd") == "khd" else "",
+             "entity_names": source_load_entity_names(load.get("entity_name")) if load.get("mode", "khd") == "khd" else [],
              "source_load_sql": load["recreate_sql"]} for load in loads]

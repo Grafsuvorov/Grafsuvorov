@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 import re
+import logging
 
 from .prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 from .prototype_review_variants import validate_issue_variants
@@ -96,6 +97,12 @@ def create_prototype_review_issue(
     if ohd and any(getattr(i, "is_clickhouse_view", False) for i in payload.review_items):
         raise ValueError("В режиме ОХД поддерживается только dbt Greenplum без ClickHouse")
     validate_source_loads(source_loads, mode="ohd" if ohd else "khd", review_items=review_items)
+    task_contents = {
+        "mode": "ohd" if ohd else "khd",
+        "diff_targets": [item.get("target_fqn") for item in review_items],
+        "source_targets": [f"{load['target_schema']}.{load['target_table']}" for load in source_loads],
+    }
+    logging.getLogger("uvicorn.error").info("[PROTOTYPE TASK CONTENTS] %s", task_contents)
     dashboard_direction = str(payload.direction or "").strip()
     requested_parent_issue = str(getattr(payload, "parent_issue", None) or "").strip().upper()
     if requested_parent_issue:
@@ -337,6 +344,7 @@ def create_prototype_review_issue(
         issue_result["link"] = dependencies.build_issue_link(issue_result["issue_id"])
     return {
         "status": "ok",
+        "task_contents": task_contents,
         "issue": issue_result,
         "issue_links": issue_links,
         "parent_link": parent_link,

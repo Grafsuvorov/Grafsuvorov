@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "../api/admin.js";
+import { apiClient } from "../api/client.js";
 import { accountApi } from "../api/account.js";
 import PrototypeSqlVariantMapping, { variantMappingPayload } from "./PrototypeSqlVariantMapping.jsx";
 import { mergeReviewRetry, reviewItemNeedsRetry, reviewResultWithItems } from "../utils/prototypeReviewRetry.js";
@@ -474,6 +475,10 @@ export default function AdminPrototypeReviewPage() {
   };
 
   const handleCreateIssue = async () => {
+    if (sourcePanelRef.current && typeof sourcePanelRef.current.getSelection !== "function") {
+      setError("Обновите src/components/PrototypeSourceLoadPanel.jsx вместе со страницей Prototype Review и пересоберите frontend");
+      return;
+    }
     const selectedSources = sourcePanelRef.current?.getSelection() || sourceBatch;
     const trimmedMr = String(mrInput || "").trim();
     const reviewItems = trimmedMr ? reviewItemsRef.current : [];
@@ -485,8 +490,10 @@ export default function AdminPrototypeReviewPage() {
     setCreatingIssue(true);
     setError(null);
     try {
-      const create = combined ? adminApi.prototypeReviewCreateCombinedIssue : adminApi.prototypeReviewCreateIssue;
-      const payload = await create({
+      // Use the stable transport directly: manual deployments may retain an
+      // older adminApi module without the combined-issue convenience method.
+      const endpoint = combined ? "/api/admin/prototype-review/create-combined-issue" : "/api/admin/prototype-review/create-issue";
+      const payload = await apiClient.post(endpoint, {
         mode: reviewMode,
         mr_input: trimmedMr,
         task_text: normalizedTaskText,

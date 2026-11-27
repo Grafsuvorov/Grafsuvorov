@@ -142,7 +142,7 @@ const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ 
   };
   const createTask = async () => {
     if (creating || disabled || combinedAction?.creating) return;
-    if (!combinedAction?.onCreate) { setError("Не подключён обработчик общей задачи. Обновите оба файла интерфейса Prototype Review"); return; }
+    if (typeof combinedAction?.onCreate !== "function") { setError("Не подключён обработчик общей задачи. Обновите оба файла интерфейса Prototype Review"); return; }
     setCreating(true); setError("");
     try { const response = await combinedAction.onCreate(); if (response) setCreated(response); }
     catch (e) { setError(e.message); } finally { setCreating(false); }

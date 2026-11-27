@@ -2012,7 +2012,7 @@ class SourceLoadWithoutYamlTests(unittest.TestCase):
             "_prototype_prepare_source_load_yamls", "run_admin_prototype_source_load"}]
         exec(compile(ast.Module(body=nodes, type_ignores=[]), "api/main.py", "exec"), namespace)
         data = dict(entity_name="FIRST, SECOND", target_schema="stg", target_table="target", server_id=6,
-            source_schema="SRC", source_table="SOURCE_TARGET", primary_key="id", distribution_field="id")
+            source_schema="SRC", source_table="SOURCE_TARGET", fields="ID,SOURCE_NAME", primary_key="id", distribution_field="id")
         payload = SimpleNamespace(**data, model_dump=lambda: dict(data))
         with (
             patch.object(entity_dev_meta.yaml, "safe_load", side_effect=SourceLoadEntityIdentityTests.parse_yaml),
@@ -2031,6 +2031,8 @@ class SourceLoadWithoutYamlTests(unittest.TestCase):
         self.assertEqual([contents[n]["entity_id"] for n in ("FIRST", "SECOND")], [11, 22])
         self.assertEqual(contents["FIRST"]["source_id"], 6)
         self.assertEqual(contents["FIRST"]["source_type"], "ORACLE")
+        self.assertEqual(contents["FIRST"]["fields"], "ID,SOURCE_NAME")
+        self.assertEqual(contents["SECOND"]["fields"], "ID,SOURCE_NAME")
 
     def test_missing_yaml_keeps_catalog_ids_for_each_entity(self):
         result, events = self.run_loader(existing={11: 501, 22: 702})

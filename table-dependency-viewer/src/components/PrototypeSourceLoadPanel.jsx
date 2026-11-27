@@ -60,7 +60,7 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
           autoFields.current = Object.fromEntries(Object.keys(INITIAL).filter((field) => field !== "target_table" && next[field] !== prev[field]).map((field) => [field, next[field]]));
           return next;
         });
-        setLookup({ status: "found" });
+        setLookup({ status: "found", fieldsSource: details.fields_source });
       } catch (e) { if (active) setLookup({ status: "error", message: e.message }); }
       finally { if (active) { setDetailsLoading(false); callbacks.current.onLookupBusy?.(false); } }
     }, 400);
@@ -95,7 +95,7 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
     <div className="prototype-step-grid">
       <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => change("target_schema", e.target.value)}><option>stg</option><option>dict_stg</option></select></label>
       <label className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" list={`source-tables-${rowId}`} value={form.target_table} onChange={(e) => change("target_table", e.target.value)} placeholder="Новая или существующая таблица" /><datalist id={`source-tables-${rowId}`}>{tables.map((t) => <option key={t.table_name} value={t.table_name} />)}</datalist>
-        <span className="muted">{lookup?.status === "loading" ? "Проверяем target и подставляем параметры…" : lookup?.status === "found" ? "Таблица существует в DEV. Доступные параметры подставлены автоматически." : lookup?.status === "new" ? "Таблица не найдена в DEV — будет создана новая." : "Введите имя или выберите существующую таблицу из подсказок."}</span>
+        <span className="muted">{lookup?.status === "loading" ? "Проверяем target и подставляем параметры…" : lookup?.status === "found" ? `Параметры подставлены из метаданных. Поля: ${lookup.fieldsSource === "yaml" ? "YAML" : lookup.fieldsSource === "sql" ? "SQL загрузки (в YAML списка нет)" : "список не сохранён, ALL"}.` : lookup?.status === "new" ? "Таблица не найдена в DEV — будет создана новая." : "Введите имя или выберите существующую таблицу из подсказок."}</span>
         {lookup?.status === "error" && <span className="page-error">Не удалось проверить target: {lookup.message}</span>}
       </label>
       {input("source_schema", "Схема источника", "SAPSR3")}
@@ -140,11 +140,10 @@ const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ 
     try { for (const row of rows.filter((r) => r.selected && !r.ready)) await editors.current[row.id]?.run(); }
     finally { setRunningAll(false); }
   };
-  const createOnlyStg = async () => {
-    if (!summary.valid || !summary.loads.length || !task.direction.trim()) return;
+  const createTask = async () => {
+    if (!summary.valid || !summary.loads.length || !combinedAction?.canCreate) return;
     setCreating(true); setError("");
-    try { setCreated(await adminApi.prototypeReviewCreateIssue({ ...task, mode, mr_input: "", review_items: [],
-      source_loads: summary.loads, expected_source_load_count: summary.loads.length, issue_summary: task.summary.trim() || "Загрузка таблиц в STG", linked_issues: [] })); }
+    try { const response = await combinedAction.onCreate(); if (response) setCreated(response); }
     catch (e) { setError(e.message); } finally { setCreating(false); }
   };
   const busy = disabled || creating || runningAll || rows.some((row) => row.busy || row.lookupBusy);
@@ -179,18 +178,18 @@ const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ 
         <div className="prototype-source-task-actions">
           <button type="button" className="btn btn-primary prototype-combined-task-button"
             disabled={busy || !summary.valid || !summary.loads.length || !combinedAction?.canCreate}
-            onClick={() => combinedAction?.onCreate()}>{combinedAction?.createdIssue ? `Общая задача ${combinedAction.createdIssue} создана` : combinedTaskLabel(summary.selected, combinedAction?.diffTargets?.length || 0)}</button>
+            onClick={createTask}>{combinedAction?.createdIssue ? `Общая задача ${combinedAction.createdIssue} создана` : combinedTaskLabel(summary.selected, combinedAction?.diffTargets?.length || 0)}</button>
           {combinedAction?.reviewReady && <a className="btn btn-ghost" href="#prototype-task-parameters">Общие параметры задачи</a>}
         </div>
         {!combinedAction?.reviewReady ? <p className="muted">Сначала запустите ревью указанного MR.</p> : !combinedAction?.canCreate && !combinedAction?.createdIssue ? <p className="muted">Заполните общие параметры задачи ниже и исправьте отмеченные ошибки ревью.</p> : null}
       </> : <>
-        <p className="muted">Для общей задачи с diff укажите MR выше и запустите review. Для задачи только по STG заполните параметры здесь.</p>
+        <p className="muted">Кнопка создаст одну задачу со всеми выбранными объектами. Чтобы включить diff, укажите MR выше и выполните ревью перед созданием.</p>
         <div className="prototype-step-grid">
           {[ ["summary", "Название задачи"], ["direction", "Дашборд КХД/Направление *"], ["release_date", "Дата релиза"], ["parent_issue", "Родительская задача"] ].map(([name, label]) =>
             <label key={name} className="prototype-step-field"><span className="slow-select-label">{label}</span><input className="slow-entity-select" type={name === "release_date" ? "date" : "text"} value={task[name]} disabled={busy} onChange={(e) => { setTask((prev) => ({ ...prev, [name]: e.target.value })); onTaskDefaults?.(name, e.target.value); }} /></label>)}
         </div>
         <div className="prototype-source-task-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !task.direction.trim()} onClick={createOnlyStg}>Создать отдельную STG-задачу ({summary.selected} таблицы)</button>
+        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !combinedAction?.canCreate} onClick={createTask}>Создать задачу · STG: {summary.selected}</button>
         </div>
       </>}
       {!summary.valid && <p className="muted">Сначала завершите генерацию всех выбранных таблиц или снимите выбор с ненужных.</p>}

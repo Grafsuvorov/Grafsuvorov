@@ -156,6 +156,24 @@ def source_loader_parameters_from_sql(sql: str) -> dict[str, str]:
     return result
 
 
+def source_loader_metadata(metadata: dict, sql: str = "") -> tuple[dict, str]:
+    """Use the saved source projection, never physical DEV columns."""
+    result = dict(metadata)
+    projection = next((result.get(key) for key in ("fields", "fields_list", "source_fields", "source_fields_list")
+                       if result.get(key)), None)
+    if isinstance(projection, list):
+        projection = ",".join(str(item).strip() for item in projection if str(item).strip())
+    origin = "yaml" if projection else "unspecified"
+    saved = source_loader_parameters_from_sql(sql)
+    if not projection and saved.get("fields"):
+        projection, origin = saved["fields"], "sql"
+    for key, value in saved.items():
+        if value and not result.get(key):
+            result[key] = value
+    result["fields"] = str(projection or "ALL")
+    return result, origin
+
+
 def _identifier(value: str, label: str) -> str:
     result = str(value or "").strip().strip('"')
     if not result or not IDENTIFIER_RE.fullmatch(result):

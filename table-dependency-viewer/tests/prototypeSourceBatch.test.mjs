@@ -46,3 +46,12 @@ test('combined button explicitly names both STG and diff counts', async () => {
   const { combinedTaskLabel } = await import('../src/utils/prototypeSourceBatch.js');
   assert.equal(combinedTaskLabel(2, 1), 'Создать общую задачу · STG: 2 · diff: 1');
 });
+
+test('saved YAML projection and keys win over physical DEV fields', async () => {
+  const { sourceDetailsForm } = await import('../src/utils/prototypeSourceBatch.js');
+  const result = sourceDetailsForm({ fields: 'ALL', primary_key: '' }, {
+    fields: 'ID,DEV_ONLY', primary_key: 'DEV_ONLY', metadata: { fields: 'ID,SOURCE', key_attributes: ['ID'] }
+  });
+  assert.equal(result.fields, 'ID,SOURCE');
+  assert.equal(result.primary_key, '"ID"');
+});

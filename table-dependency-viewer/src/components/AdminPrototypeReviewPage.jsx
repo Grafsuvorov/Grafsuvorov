@@ -471,15 +471,18 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleCreateIssue = async ({ requireCombined = false } = {}) => {
+  const handleCreateIssue = async () => {
     const selectedSources = sourcePanelRef.current?.getSelection() || sourceBatch;
-    const combined = requireCombined || selectedSources.selected > 0;
+    const trimmedMr = String(mrInput || "").trim();
+    const reviewItems = trimmedMr ? reviewItemsRef.current : [];
+    const combined = Boolean(trimmedMr && selectedSources.selected > 0);
     if (combined && (!selectedSources.selected || !selectedSources.valid || !selectedSources.loads.length)) {
       setError("Для общей задачи выберите и подготовьте STG-таблицы"); return;
     }
     if (result?.issue?.issue_id) { setError(`Задача ${result.issue.issue_id} уже создана`); return; }
-    const trimmedMr = String(mrInput || "").trim();
-    if (!trimmedMr || creatingIssue || loading) return;
+    if (creatingIssue || loading) return;
+    if (!trimmedMr && !selectedSources.loads.length) { setError("Добавьте STG-таблицы или выполните ревью MR"); return; }
+    if (trimmedMr && (!result || result.mapping_required)) { setError("Сначала выполните ревью указанного MR"); return; }
     if (result?.composition_stale) {
       setError("Состав объектов MR изменился. Запустите полный review перед созданием задачи.");
       return;
@@ -515,7 +518,7 @@ export default function AdminPrototypeReviewPage() {
         diff_comment: String(form.diff_comment || "").trim() || null,
         source_loads: selectedSources.loads,
         expected_source_load_count: selectedSources.loads.length,
-        review_items: reviewItemsDraft.map((item) => ({
+        review_items: reviewItems.map((item) => ({
           item_id: item.item_id,
           sql_variant_mode: item.sql_variant_mode || null,
           sql_fingerprint: item.sql_fingerprint || null,
@@ -569,6 +572,7 @@ export default function AdminPrototypeReviewPage() {
             }
           : prev
       ));
+      return payload;
     } catch (err) {
       setError(combined && [404, 405].includes(err?.status)
         ? "API не поддерживает общую задачу. Обновите API вместе с интерфейсом: задача не создана."
@@ -649,10 +653,11 @@ export default function AdminPrototypeReviewPage() {
         onTaskDefaults={(name, value) => setForm((prev) => ({ ...prev, [name]: value }))}
         combinedAction={{ diffTargets: reviewItemsDraft.map((item) => item.target_fqn),
           reviewReady: Boolean(result && !result.mapping_required), createdIssue: result?.issue?.issue_id,
-          canCreate: Boolean(result && !result.mapping_required && !result.composition_stale && !result.issue?.issue_id
-            && !reviewItemsDraft.some((item) => item.source_stale) && unresolvedItemsCount === 0
-            && (reviewItemsDraft.length || hasDeletedFiles) && hasDashboardDirection),
-          onCreate: () => handleCreateIssue({ requireCombined: true }) }} />
+          canCreate: Boolean(!result?.issue?.issue_id && hasDashboardDirection && (mrInput.trim()
+            ? result && !result.mapping_required && !result.composition_stale && !reviewItemsDraft.some((item) => item.source_stale)
+              && unresolvedItemsCount === 0 && (reviewItemsDraft.length || hasDeletedFiles)
+            : sourceBatch.selected > 0)),
+          creating: creatingIssue, onCreate: handleCreateIssue }} />
 
       {error ? <div className="page-error">{error}</div> : null}
 

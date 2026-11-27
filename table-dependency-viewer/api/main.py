@@ -212,7 +212,6 @@ from .services.stg_source_loader import (
     run_source_loader,
     source_load_entity_names,
     prepare_source_load_yaml_contents,
-    source_loader_parameters_from_sql,
 )
 from .services.prototype_review import (
     CREATE_OBJECT_PATTERNS,
@@ -1857,38 +1856,42 @@ def get_admin_prototype_source_tables(target_schema: str, request: Request, mode
 
 
 def get_admin_prototype_source_table_details(target_schema: str, target_table: str, request: Request, mode: str = "khd"):
-    """Return reusable load metadata for an existing STG target.
-
-    Physical columns come from DEV; the entity, source server and key fields
-    come from the canonical YAML in main.  This means choosing an existing
-    target does not require the user to retype its loading metadata.
-    """
+    """Restore the saved source projection from YAML or canonical loader SQL."""
+    from .services.stg_source_loader import source_loader_metadata
     user = _require_authenticated(request)
     try:
         if mode == "ohd":
             with _prototype_source_engine(mode) as source_engine:
                 tables = list_target_tables(source_engine, target_schema, target_table)
             selected = next((row for row in tables if row["table_name"].lower() == target_table.strip().strip('"').lower()), None)
-            if not selected:
-                return {"found": False, "table_name": target_table, "metadata": {}}
-            from .services.prototype_review_dbt import dbt_model_sql_path
+            selected = selected or {"table_name": target_table.strip().strip('"')}
+            from .services.prototype_review_dbt import dbt_model_sql_path, dbt_registry_path
             settings = ohd_settings()
-            metadata = {}
+            metadata, source_sql, source_yaml = {}, "", ""
             if settings.get("project") and settings.get("token") and settings.get("api_url"):
                 source_sql = _prototype_gitlab_file_content(
                     project=settings["project"], token=settings["token"], ref="main",
                     file_path=dbt_model_sql_path(target_schema, selected["table_name"]),
                     api_url=settings["api_url"], ssl_verify=settings["ssl_verify"],
                 )
-                metadata = source_loader_parameters_from_sql(source_sql or "")
-            return {**selected, "found": True, "metadata": metadata, "entity_name": "", "entity_id": None}
+                source_yaml = _prototype_gitlab_file_content(
+                    project=settings["project"], token=settings["token"], ref="main",
+                    file_path=dbt_registry_path(target_schema, selected["table_name"]),
+                    api_url=settings["api_url"], ssl_verify=settings["ssl_verify"],
+                )
+                raw_metadata = yaml.safe_load(source_yaml or "") or {}
+                if isinstance(raw_metadata, dict):
+                    metadata = {**raw_metadata, **(raw_metadata.get("relation") or {})}
+            metadata, fields_source = source_loader_metadata(metadata, source_sql or "")
+            return {"table_name": selected["table_name"], "found": bool(tables or source_sql or source_yaml),
+                    "fields": metadata["fields"], "fields_source": fields_source,
+                    "metadata": metadata, "entity_name": "", "entity_id": None}
         tables = list_target_tables(dev_engine, target_schema, target_table)
         selected = next(
             (row for row in tables if str(row.get("table_name") or "").lower() == str(target_table or "").strip().strip('"').lower()),
             None,
         )
-        if not selected:
-            return {"found": False, "table_name": target_table, "metadata": {}}
+        selected = selected or {"table_name": target_table.strip().strip('"')}
 
         with engine.connect() as conn:
             meta_row = conn.execute(text(f"""
@@ -1906,6 +1909,7 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
 
         entity_name = str((meta_row or {}).get("entity_name") or "").strip()
         metadata: dict[str, Any] = {}
+        saved_sql = ""
         if entity_name:
             try:
                 bundle = read_meta_workspace_branch_gp_bundle(
@@ -1922,23 +1926,20 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
                 raw_metadata = yaml.safe_load(bundle.get("yaml_content") or "") or {}
                 if isinstance(raw_metadata, dict):
                     metadata = raw_metadata
-                    # Source arguments of older objects live in the recreate
-                    # SQL rather than the YAML.  Fill missing YAML values from
-                    # that canonical function invocation.
-                    for key, value in source_loader_parameters_from_sql(bundle.get("recreate_sql") or "").items():
-                        if value and not metadata.get(key):
-                            metadata[key] = value
+                    saved_sql = bundle.get("recreate_sql") or ""
                     entity_name = str(metadata.get("entity_name") or entity_name).strip()
             except MetaWorkspaceObjectNotFoundError:
                 # Hand-created DEV tables may not have YAML yet. Keep the
                 # picker usable; generation will create their metadata.
                 pass
 
+        metadata, fields_source = source_loader_metadata(metadata, saved_sql)
         return {
-            "found": True,
+            "found": bool(tables or meta_row),
             "table_name": selected["table_name"],
-            "fields": selected.get("fields") or "ALL",
-            "primary_key": selected.get("primary_key") or "",
+            "fields": metadata["fields"],
+            "fields_source": fields_source,
+            "primary_key": metadata.get("primary_key") or "",
             "entity_id": (meta_row or {}).get("entity_id"),
             "entity_name": entity_name,
             "metadata": metadata,
@@ -2024,6 +2025,7 @@ def run_admin_prototype_source_load(payload, request: Request):
             # so a later edit of the same target can restore the complete form.
             "source_schema_name": str(payload.source_schema).strip(),
             "source_table_name": str(payload.source_table).strip(),
+            "fields": str(result.get("fields") or payload.fields or "ALL").strip(),
             "primary_key": str(payload.primary_key).strip(),
             "distribution_field": str(payload.distribution_field or "RN").strip(),
             "table_schema": str(payload.target_schema).lower(),

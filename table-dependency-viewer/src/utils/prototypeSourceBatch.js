@@ -19,8 +19,8 @@ export function sourceTargetKey(value) {
 export function sourceDetailsForm(form, details, touched = new Set()) {
   const meta = details.metadata || {};
   const values = {
-    fields: details.fields,
-    primary_key: meta.primary_key || details.primary_key || (meta.key_attributes || []).map((name) => `"${name}"`).join(' || '),
+    fields: meta.fields || details.fields || "ALL",
+    primary_key: meta.primary_key || (meta.key_attributes || meta.unique_key || []).map((name) => `"${name}"`).join(' || ') || details.primary_key,
     source_schema: meta.source_schema_name,
     source_table: meta.source_table_name,
     entity_name: details.entity_name || meta.entity_name,

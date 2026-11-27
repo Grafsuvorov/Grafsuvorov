@@ -55,3 +55,15 @@ test('saved YAML projection and keys win over physical DEV fields', async () => 
   assert.equal(result.fields, 'ID,SOURCE');
   assert.equal(result.primary_key, '"ID"');
 });
+
+test('creation explains missing common metadata and permits the complete STG and diff batch', async () => {
+  const { taskCreationBlockReason } = await import('../src/utils/prototypeSourceBatch.js');
+  const args = { mrInput: '78', result: {}, sources: summarizeSourceBatch([a]), items: [{ target_fqn: 'dm.example' }], hasDirection: false, unresolvedItemsCount: 0 };
+  assert.match(taskCreationBlockReason(args), /Дашборд КХД/);
+  assert.equal(taskCreationBlockReason({ ...args, hasDirection: true }), '');
+  assert.match(taskCreationBlockReason({ ...args, hasDirection: true, unresolvedItemsCount: 2 }), /diff: 2/);
+  assert.match(taskCreationBlockReason({ ...args, sources: summarizeSourceBatch([a, { selected: true }]) }), /генерацию/);
+  assert.match(taskCreationBlockReason({ ...args, result: null }), /ревью/);
+  assert.match(taskCreationBlockReason({ ...args, items: [{ source_stale: true }] }), /SQL/);
+  assert.match(taskCreationBlockReason({ ...args, result: { issue: { issue_id: 'DWH-42' } } }), /DWH-42/);
+});

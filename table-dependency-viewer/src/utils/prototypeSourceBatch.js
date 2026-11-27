@@ -47,3 +47,20 @@ export function sourceTaskWarning(response, submittedLoads) {
 export function combinedTaskLabel(sourceCount, diffCount) {
   return `Создать общую задачу · STG: ${sourceCount} · diff: ${diffCount}`;
 }
+
+export function taskCreationBlockReason({ mrInput, result, sources, items, hasDirection, unresolvedItemsCount }) {
+  if (result?.issue?.issue_id) return `Задача ${result.issue.issue_id} уже создана`;
+  if (sources.busy) return 'Дождитесь завершения генерации и подстановки параметров STG';
+  if (!sources.valid) return sources.errors?.[0] || 'Завершите генерацию всех выбранных STG-таблиц или снимите их выбор';
+  if (!String(mrInput || '').trim() && !sources.loads.length) return 'Добавьте STG-таблицы или выполните ревью MR';
+  if (String(mrInput || '').trim()) {
+    if (!result || result.mapping_required) return 'Сначала выполните ревью указанного MR';
+    if (result.composition_stale) return 'Состав объектов MR изменился. Запустите полный review перед созданием задачи';
+    if (items.some((item) => item.source_stale)) return 'SQL некоторых объектов изменился. Перезапустите отмеченные объекты';
+    if (items.some((item) => item.sql_variant_mode === 'separate' && item.checks_stale)) return 'Ключи алгоритма изменились. Повторите review алгоритмов';
+    if (unresolvedItemsCount > 0) return `Заполните обязательные поля у объектов diff: ${unresolvedItemsCount}`;
+    if (!items.length && !result.deleted_files?.length) return 'В ревью нет объектов для создания задачи';
+  }
+  if (!hasDirection) return 'Заполните обязательное поле «Дашборд КХД/Направление» в общих параметрах задачи';
+  return '';
+}

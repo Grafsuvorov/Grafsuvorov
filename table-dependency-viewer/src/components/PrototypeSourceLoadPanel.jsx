@@ -141,12 +141,14 @@ const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ 
     finally { setRunningAll(false); }
   };
   const createTask = async () => {
-    if (!summary.valid || !summary.loads.length || !combinedAction?.canCreate) return;
+    if (creating || disabled || combinedAction?.creating) return;
+    if (!combinedAction?.onCreate) { setError("Не подключён обработчик общей задачи. Обновите оба файла интерфейса Prototype Review"); return; }
     setCreating(true); setError("");
     try { const response = await combinedAction.onCreate(); if (response) setCreated(response); }
     catch (e) { setError(e.message); } finally { setCreating(false); }
   };
-  const busy = disabled || creating || runningAll || rows.some((row) => row.busy || row.lookupBusy);
+  const taskCreating = creating || Boolean(combinedAction?.creating);
+  const busy = disabled || taskCreating || runningAll || rows.some((row) => row.busy || row.lookupBusy);
   return <section className="cc-surface prototype-source-load">
     <div className="section-title">STG: таблицы из источников · {mode.toUpperCase()}</div>
     <p className="muted">Добавьте таблицы и сгенерируйте каждую в DEV. Готовые результаты сохраняются отдельно. Затем создайте одну задачу для STG или объедините их с проверенным diff.</p>
@@ -177,8 +179,8 @@ const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ 
         {(combinedAction?.diffTargets || []).map((target) => <div className="mono" key={target}>diff · {target}</div>)}
         <div className="prototype-source-task-actions">
           <button type="button" className="btn btn-primary prototype-combined-task-button"
-            disabled={busy || !summary.valid || !summary.loads.length || !combinedAction?.canCreate}
-            onClick={createTask}>{combinedAction?.createdIssue ? `Общая задача ${combinedAction.createdIssue} создана` : combinedTaskLabel(summary.selected, combinedAction?.diffTargets?.length || 0)}</button>
+            disabled={busy || Boolean(combinedAction?.createdIssue)} aria-busy={taskCreating}
+            onClick={createTask}>{taskCreating ? "Создаём общую задачу и MR…" : combinedAction?.createdIssue ? `Общая задача ${combinedAction.createdIssue} создана` : combinedTaskLabel(summary.selected, combinedAction?.diffTargets?.length || 0)}</button>
           {combinedAction?.reviewReady && <a className="btn btn-ghost" href="#prototype-task-parameters">Общие параметры задачи</a>}
         </div>
         {!combinedAction?.reviewReady ? <p className="muted">Сначала запустите ревью указанного MR.</p> : !combinedAction?.canCreate && !combinedAction?.createdIssue ? <p className="muted">Заполните общие параметры задачи ниже и исправьте отмеченные ошибки ревью.</p> : null}
@@ -189,9 +191,12 @@ const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ 
             <label key={name} className="prototype-step-field"><span className="slow-select-label">{label}</span><input className="slow-entity-select" type={name === "release_date" ? "date" : "text"} value={task[name]} disabled={busy} onChange={(e) => { setTask((prev) => ({ ...prev, [name]: e.target.value })); onTaskDefaults?.(name, e.target.value); }} /></label>)}
         </div>
         <div className="prototype-source-task-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !combinedAction?.canCreate} onClick={createTask}>Создать задачу · STG: {summary.selected}</button>
+        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id)} aria-busy={taskCreating} onClick={createTask}>{taskCreating ? "Создаём задачу и MR…" : `Создать задачу · STG: ${summary.selected}`}</button>
         </div>
       </>}
+      {taskCreating && <p role="status" aria-live="polite">Создаём задачу YouTrack и публикуем MR. Дождитесь результата, повторно нажимать не нужно.</p>}
+      {!taskCreating && combinedAction?.blockReason && !combinedAction?.createdIssue && <p className="muted">{combinedAction.blockReason}</p>}
+      {combinedAction?.error && <p className="page-error" role="alert">{combinedAction.error}</p>}
       {!summary.valid && <p className="muted">Сначала завершите генерацию всех выбранных таблиц или снимите выбор с ненужных.</p>}
     </div>}
     {error && <p className="page-error">{error}</p>}

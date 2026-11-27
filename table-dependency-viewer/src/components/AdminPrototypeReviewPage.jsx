@@ -5,7 +5,7 @@ import PrototypeSqlVariantMapping, { variantMappingPayload } from "./PrototypeSq
 import { mergeReviewRetry, reviewItemNeedsRetry, reviewResultWithItems } from "../utils/prototypeReviewRetry.js";
 import BusinessDqPanel from "./BusinessDqPanel.jsx";
 import PrototypeSourceLoadPanel from "./PrototypeSourceLoadPanel.jsx";
-import { sourceTaskWarning, combinedTaskLabel } from "../utils/prototypeSourceBatch.js";
+import { sourceTaskWarning, combinedTaskLabel, taskCreationBlockReason } from "../utils/prototypeSourceBatch.js";
 
 const DEFAULT_FORM = {
   summary: "",
@@ -200,7 +200,6 @@ export default function AdminPrototypeReviewPage() {
   );
 
   const hasDashboardDirection = Boolean(String(form.direction || "").trim());
-  const hasDeletedFiles = Array.isArray(result?.deleted_files) && result.deleted_files.length > 0;
   const retryItemIds = reviewItemsDraft.filter(reviewItemNeedsRetry).filter((item) => !item.is_clickhouse_view).map((item) => item.item_id);
 
   const unresolvedItemsCount = useMemo(
@@ -216,6 +215,9 @@ export default function AdminPrototypeReviewPage() {
     )).length,
     [reviewItemsDraft, isOhd],
   );
+
+  const creationBlockReason = taskCreationBlockReason({ mrInput, result, sources: sourceBatch,
+    items: reviewItemsDraft, hasDirection: hasDashboardDirection, unresolvedItemsCount });
 
   const progressText = useMemo(() => {
     if (!runProgress) return "";
@@ -476,32 +478,10 @@ export default function AdminPrototypeReviewPage() {
     const trimmedMr = String(mrInput || "").trim();
     const reviewItems = trimmedMr ? reviewItemsRef.current : [];
     const combined = Boolean(trimmedMr && selectedSources.selected > 0);
-    if (combined && (!selectedSources.selected || !selectedSources.valid || !selectedSources.loads.length)) {
-      setError("Для общей задачи выберите и подготовьте STG-таблицы"); return;
-    }
-    if (result?.issue?.issue_id) { setError(`Задача ${result.issue.issue_id} уже создана`); return; }
     if (creatingIssue || loading) return;
-    if (!trimmedMr && !selectedSources.loads.length) { setError("Добавьте STG-таблицы или выполните ревью MR"); return; }
-    if (trimmedMr && (!result || result.mapping_required)) { setError("Сначала выполните ревью указанного MR"); return; }
-    if (result?.composition_stale) {
-      setError("Состав объектов MR изменился. Запустите полный review перед созданием задачи.");
-      return;
-    }
-    if (reviewItemsDraft.some((item) => item.source_stale)) {
-      setError("SQL некоторых объектов изменился. Перезапустите отмеченные объекты перед созданием задачи.");
-      return;
-    }
-    if (reviewItemsDraft.some((item) => item.sql_variant_mode === "separate" && item.checks_stale)) {
-      setError("Ключи алгоритма изменились. Повторите review: каждый алгоритм должен быть проверен отдельно.");
-      return;
-    }
-    if (!hasDashboardDirection) {
-      setError("Заполните обязательное поле «Дашборд КХД/Направление»");
-      return;
-    }
-    if (!selectedSources.valid) {
-      setError("Завершите генерацию всех выбранных STG-таблиц или снимите их выбор"); return;
-    }
+    const reason = taskCreationBlockReason({ mrInput: trimmedMr, result, sources: selectedSources,
+      items: reviewItems, hasDirection: hasDashboardDirection, unresolvedItemsCount });
+    if (reason) { setError(reason); return; }
     setCreatingIssue(true);
     setError(null);
     try {
@@ -653,10 +633,7 @@ export default function AdminPrototypeReviewPage() {
         onTaskDefaults={(name, value) => setForm((prev) => ({ ...prev, [name]: value }))}
         combinedAction={{ diffTargets: reviewItemsDraft.map((item) => item.target_fqn),
           reviewReady: Boolean(result && !result.mapping_required), createdIssue: result?.issue?.issue_id,
-          canCreate: Boolean(!result?.issue?.issue_id && hasDashboardDirection && (mrInput.trim()
-            ? result && !result.mapping_required && !result.composition_stale && !reviewItemsDraft.some((item) => item.source_stale)
-              && unresolvedItemsCount === 0 && (reviewItemsDraft.length || hasDeletedFiles)
-            : sourceBatch.selected > 0)),
+          canCreate: !creationBlockReason, blockReason: creationBlockReason, error,
           creating: creatingIssue, onCreate: handleCreateIssue }} />
 
       {error ? <div className="page-error">{error}</div> : null}
@@ -1121,11 +1098,14 @@ export default function AdminPrototypeReviewPage() {
                 type="button"
                 className="btn btn-primary prototype-combined-task-button"
                 onClick={() => handleCreateIssue()}
-                disabled={loading || creatingIssue || Boolean(result.issue?.issue_id) || !sourceBatch.valid || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
+                disabled={loading || creatingIssue || Boolean(result.issue?.issue_id)}
+                aria-busy={creatingIssue}
               >
                 {creatingIssue ? (isOhd ? "Создаём задачу и dbt MR…" : "Ищем зависимости и создаём задачу…") : result.issue?.issue_id ? `Задача ${result.issue.issue_id} создана` : sourceBatch.selected ? combinedTaskLabel(sourceBatch.selected, reviewItemsDraft.length) : `Создать задачу только по diff (${reviewItemsDraft.length})`}
               </button>
             </div>
+            {error && <p className="page-error" role="alert">{error}</p>}
+            {!creatingIssue && creationBlockReason && !result.issue?.issue_id && <p className="muted">{creationBlockReason}</p>}
             <div className="card" style={{ marginTop: 16 }}>
               <div className="section-title">Состав общей задачи и MR</div>
               <div>Объекты diff: {reviewItemsDraft.length} · STG: {sourceBatch.ready || 0} из {sourceBatch.selected} готовы</div>
@@ -1135,7 +1115,7 @@ export default function AdminPrototypeReviewPage() {
             </div>
             {result.source_task_warning && <p className="page-error">{result.source_task_warning}</p>}
             {creatingIssue ? (
-              <div className="card" style={{ marginTop: 14 }}>
+              <div className="card" style={{ marginTop: 14 }} role="status" aria-live="polite">
                 <div className="section-title">Подготавливаем задачу</div>
                 <div className="muted">{isOhd ? "1. Проверяем SQL и параметры dbt registry." : "1. Повторно ищем зависимости по файлам каждого объекта."}</div>
                 <div className="muted">2. Формируем описание, комментарии и ручные скрипты.</div>

@@ -13,6 +13,7 @@ from ..schemas.prototype_review import (
     BusinessDqCreatePayload,
     BusinessDqPreviewPayload,
     PrototypeReviewCreateIssuePayload,
+    PrototypeReviewCombinedIssuePayload,
     PrototypeReviewSourceLoadIssuePayload,
     PrototypeReviewSourceLoadPayload,
     PrototypeReviewRunPayload,
@@ -78,6 +79,10 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
 
     @router.post("/create-issue")
     def create_issue(payload: PrototypeReviewCreateIssuePayload, request: Request):
+        return handlers.create_issue(payload, request)
+
+    @router.post("/create-combined-issue")
+    def create_combined_issue(payload: PrototypeReviewCombinedIssuePayload, request: Request):
         return handlers.create_issue(payload, request)
 
     @router.get("/parent-issue/{issue_id}")

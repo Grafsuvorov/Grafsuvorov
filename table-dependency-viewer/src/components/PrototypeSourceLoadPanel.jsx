@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { adminApi } from "../api/admin.js";
-import { summarizeSourceBatch, sourceTargetKey, sourceDetailsForm, sourceTaskWarning } from "../utils/prototypeSourceBatch.js";
+import { summarizeSourceBatch, sourceTargetKey, sourceDetailsForm, sourceTaskWarning, combinedTaskLabel } from "../utils/prototypeSourceBatch.js";
 
 const INITIAL = { target_schema: "stg", target_table: "", source_schema: "", source_table: "", server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "", entity_name: "" };
 
@@ -118,7 +118,8 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
 });
 
 let nextSourceRow = 1;
-export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsChange, hasDiff = false, disabled = false }) {
+const PrototypeSourceLoadPanel = forwardRef(function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsChange,
+  hasDiff = false, disabled = false, combinedAction, onTaskDefaults }, ref) {
   const [rows, setRows] = useState([]);
   const [runningAll, setRunningAll] = useState(false);
   const [task, setTask] = useState({ summary: "", direction: "", release_date: "", parent_issue: "" });
@@ -129,6 +130,7 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
   const onChange = useRef(onSourceLoadsChange); onChange.current = onSourceLoadsChange;
   const summary = useMemo(() => summarizeSourceBatch(rows), [rows]);
   useEffect(() => { onChange.current?.(summary); }, [summary]);
+  useImperativeHandle(ref, () => ({ getSelection: () => summarizeSourceBatch(rows) }), [rows]);
   const update = (id, patch) => {
     if (!("expanded" in patch)) setCreated(null);
     setRows((prev) => prev.map((row) => row.id === id ? { ...row, ...patch } : row));
@@ -170,14 +172,25 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
     {summary.errors.map((message) => <p className="page-error" key={message}>{message}</p>)}
     {!!summary.selected && <div className="card" style={{ marginTop: 16 }}>
       <div className="section-title">Одна задача для выбранных STG-таблиц{hasDiff ? " и diff" : ""}</div>
-      {hasDiff ? <p className="muted">Выбранные таблицы войдут в задачу вместе с diff. Заполните общие параметры ниже и нажмите «Создать задачу».</p> : <>
+      {hasDiff ? <>
+        <p className="muted">Это одна задача, включающая выбранные STG-таблицы и объекты из MR.</p>
+        {summary.loads.map((load) => <div className="mono" key={`${load.target_schema}.${load.target_table}`}>STG · {load.target_schema}.{load.target_table}</div>)}
+        {(combinedAction?.diffTargets || []).map((target) => <div className="mono" key={target}>diff · {target}</div>)}
+        <div className="prototype-source-task-actions">
+          <button type="button" className="btn btn-primary prototype-combined-task-button"
+            disabled={busy || !summary.valid || !summary.loads.length || !combinedAction?.canCreate}
+            onClick={() => combinedAction?.onCreate()}>{combinedAction?.createdIssue ? `Общая задача ${combinedAction.createdIssue} создана` : combinedTaskLabel(summary.selected, combinedAction?.diffTargets?.length || 0)}</button>
+          {combinedAction?.reviewReady && <a className="btn btn-ghost" href="#prototype-task-parameters">Общие параметры задачи</a>}
+        </div>
+        {!combinedAction?.reviewReady ? <p className="muted">Сначала запустите ревью указанного MR.</p> : !combinedAction?.canCreate && !combinedAction?.createdIssue ? <p className="muted">Заполните общие параметры задачи ниже и исправьте отмеченные ошибки ревью.</p> : null}
+      </> : <>
         <p className="muted">Для общей задачи с diff укажите MR выше и запустите review. Для задачи только по STG заполните параметры здесь.</p>
         <div className="prototype-step-grid">
           {[ ["summary", "Название задачи"], ["direction", "Дашборд КХД/Направление *"], ["release_date", "Дата релиза"], ["parent_issue", "Родительская задача"] ].map(([name, label]) =>
-            <label key={name} className="prototype-step-field"><span className="slow-select-label">{label}</span><input className="slow-entity-select" type={name === "release_date" ? "date" : "text"} value={task[name]} disabled={busy} onChange={(e) => setTask((prev) => ({ ...prev, [name]: e.target.value }))} /></label>)}
+            <label key={name} className="prototype-step-field"><span className="slow-select-label">{label}</span><input className="slow-entity-select" type={name === "release_date" ? "date" : "text"} value={task[name]} disabled={busy} onChange={(e) => { setTask((prev) => ({ ...prev, [name]: e.target.value })); onTaskDefaults?.(name, e.target.value); }} /></label>)}
         </div>
         <div className="prototype-source-task-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !task.direction.trim()} onClick={createOnlyStg}>Создать одну задачу для {summary.selected} STG-таблиц</button>
+        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !task.direction.trim()} onClick={createOnlyStg}>Создать отдельную STG-задачу ({summary.selected} таблицы)</button>
         </div>
       </>}
       {!summary.valid && <p className="muted">Сначала завершите генерацию всех выбранных таблиц или снимите выбор с ненужных.</p>}
@@ -188,4 +201,6 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
       {[created.meta_error, created.meta_mr_error, created.dbt_registry_error, created.attachment_error].filter(Boolean).map((message) => <p className="page-error" key={message}>{message}</p>)}
     </div>}
   </section>;
-}
+});
+
+export default PrototypeSourceLoadPanel;

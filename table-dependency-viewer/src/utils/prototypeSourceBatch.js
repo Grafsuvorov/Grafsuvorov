@@ -43,3 +43,7 @@ export function sourceTaskWarning(response, submittedLoads) {
   }
   return '';
 }
+
+export function combinedTaskLabel(sourceCount, diffCount) {
+  return `Создать общую задачу · STG: ${sourceCount} · diff: ${diffCount}`;
+}

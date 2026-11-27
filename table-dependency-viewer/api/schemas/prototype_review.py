@@ -101,6 +101,12 @@ class PrototypeReviewCreateIssuePayload(PrototypeReviewModePayload):
     review_items: List[PrototypeReviewItemPayload]
 
 
+class PrototypeReviewCombinedIssuePayload(PrototypeReviewCreateIssuePayload):
+    task_kind: Literal["combined"] = "combined"
+    source_loads: List["PrototypeReviewSourceLoadIssuePayload"]
+    expected_source_load_count: int
+
+
 class PrototypeReviewSourceLoadPayload(PrototypeReviewModePayload):
     target_schema: str = "stg"
     target_table: str

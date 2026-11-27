@@ -17218,3 +17218,9 @@ html[data-theme="light"] .prototype-toggle-card:hover {
   max-width: 100%;
   white-space: normal;
 }
+
+.prototype-review-page .prototype-combined-task-button {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}

@@ -92,6 +92,9 @@ def create_prototype_review_issue(
 ) -> dict[str, Any]:
     ohd = getattr(payload, "mode", "khd") == "ohd"
     source_loads = payload_source_loads(payload)
+    combined = getattr(payload, "task_kind", "") == "combined"
+    if combined and (not source_loads or not str(getattr(payload, "mr_input", "") or "").strip()):
+        raise ValueError("Для общей задачи нужны выбранные STG-таблицы и проверенный MR. Задача не создана")
     review_items = [item.model_dump() if hasattr(item, "model_dump") else dict(item)
                     for item in getattr(payload, "review_items", [])]
     if ohd and any(getattr(i, "is_clickhouse_view", False) for i in payload.review_items):
@@ -99,6 +102,7 @@ def create_prototype_review_issue(
     validate_source_loads(source_loads, mode="ohd" if ohd else "khd", review_items=review_items)
     task_contents = {
         "mode": "ohd" if ohd else "khd",
+        "task_kind": "combined" if combined else "standard",
         "diff_targets": [item.get("target_fqn") for item in review_items],
         "source_targets": [f"{load['target_schema']}.{load['target_table']}" for load in source_loads],
     }
@@ -135,6 +139,8 @@ def create_prototype_review_issue(
     if not str(payload.mr_input or "").strip() and not source_loads:
         raise ValueError("Добавьте STG-таблицы или укажите MR")
     changed_files = bundle.get("files") or []
+    if combined and not review_items and infer_review_targets(changed_files):
+        raise ValueError("Перед общей задачей выполните ревью объектов diff. Задача не создана")
     removed_targets = infer_removed_table_targets(files=changed_files, deleted_files=bundle.get("deleted_files") or [],
         active_targets={str(item.get("target_fqn") or "").lower() for item in review_items})
     for load in source_loads:

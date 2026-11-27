@@ -146,7 +146,7 @@ class SourceBatchTests(unittest.TestCase):
         created, delivered = [], []
         item = {"target_fqn": "ods.Report", "paths": ["ods.sql"], "key_attributes": ["ID"], "is_new": True}
         sources = [load(mode="ohd"), load("Second", "ohd")]
-        payload = SimpleNamespace(mode="ohd", source_loads=sources, mr_input="78", direction="Shipping", task_text="",
+        payload = SimpleNamespace(mode="ohd", task_kind="combined", expected_source_load_count=2, source_loads=sources, mr_input="78", direction="Shipping", task_text="",
             review_items=[SimpleNamespace(model_dump=lambda: dict(item))], issue_summary="Combined", linked_issues=[], release_date="", business_key_changed=False)
         deps = fixtures.PrototypeIssueWorkflowTests.dependencies(
             load_bundle=lambda **kw: {"mr": {"iid": 78}, "files": [{"path": "ods.sql", "sql": "create table ods.Report(ID int);"}]},
@@ -154,6 +154,7 @@ class SourceBatchTests(unittest.TestCase):
             create_issue=lambda **kw: created.append(kw) or {"issue_id": "SDS-548"}, link_issues=lambda **kw: [],
             deliver_issue=lambda **kw: delivered.append(kw) or {}, build_issue_link=lambda i: f"/issue/{i}")
         result = create_prototype_review_issue(payload, SimpleNamespace(email="eng@example.com"), dependencies=deps)
+        self.assertEqual(result["task_contents"]["task_kind"], "combined")
         self.assertEqual(len(created), 1)
         self.assertEqual(len(delivered), 1)
         self.assertEqual(len(delivered[0]["review_items"]), 1)
@@ -185,3 +186,37 @@ class SourceBatchTests(unittest.TestCase):
         for target in ("ods/ods.report", "stg/stg.first", "stg/stg.second"):
             self.assertTrue(any(a["file_path"].endswith(target + ".sql") for a in actions), target)
             self.assertTrue(any(a["file_path"].endswith(target + ".yml") for a in actions), target)
+
+    def test_combined_task_rejects_empty_sources_or_mr_before_external_calls(self):
+        for sources, mr in (([], "78"), ([load()], "")):
+            with self.subTest(mr=mr, sources=len(sources)):
+                payload = SimpleNamespace(mode="khd", task_kind="combined", source_loads=sources,
+                                          expected_source_load_count=len(sources), mr_input=mr, review_items=[])
+                with self.assertRaisesRegex(ValueError, "нужны выбранные STG"):
+                    create_prototype_review_issue(payload, None, dependencies=fixtures.PrototypeIssueWorkflowTests.dependencies())
+
+    def test_dedicated_combined_route_uses_combined_payload_and_shared_handler(self):
+        import ast
+        import inspect
+        from pathlib import Path
+        node = next(n for n in ast.parse(Path("api/routers/prototype_review.py").read_text()).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "build_prototype_review_router")
+        class Router:
+            def __init__(self, **kwargs): self.routes = {}
+            def post(self, path):
+                def register(fn): self.routes[path] = fn; return fn
+                return register
+            get = post
+        class Combined: pass
+        payload_names = {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and n.id.endswith("Payload")}
+        namespace = {name: object for name in payload_names}
+        namespace.update(APIRouter=Router, Request=object, PrototypeReviewHandlers=object,
+                         PrototypeReviewCombinedIssuePayload=Combined, Literal=__import__('typing').Literal)
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "api/routers/prototype_review.py", "exec"), namespace)
+        calls = []
+        router = namespace[node.name](SimpleNamespace(create_issue=lambda payload, req: calls.append(payload) or {"status": "ok"}))
+        route = router.routes["/create-combined-issue"]
+        self.assertIs(inspect.signature(route).parameters["payload"].annotation, Combined)
+        payload = Combined()
+        self.assertEqual(route(payload, None), {"status": "ok"})
+        self.assertEqual(calls, [payload])

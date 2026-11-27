@@ -5,7 +5,7 @@ import PrototypeSqlVariantMapping, { variantMappingPayload } from "./PrototypeSq
 import { mergeReviewRetry, reviewItemNeedsRetry, reviewResultWithItems } from "../utils/prototypeReviewRetry.js";
 import BusinessDqPanel from "./BusinessDqPanel.jsx";
 import PrototypeSourceLoadPanel from "./PrototypeSourceLoadPanel.jsx";
-import { sourceTaskWarning } from "../utils/prototypeSourceBatch.js";
+import { sourceTaskWarning, combinedTaskLabel } from "../utils/prototypeSourceBatch.js";
 
 const DEFAULT_FORM = {
   summary: "",
@@ -137,6 +137,7 @@ export default function AdminPrototypeReviewPage() {
   const [releaseSlotsLoading, setReleaseSlotsLoading] = useState(false);
   const [releaseSlotsError, setReleaseSlotsError] = useState("");
   const [selectedReleaseSlot, setSelectedReleaseSlot] = useState("");
+  const sourcePanelRef = useRef(null);
   const [sourceBatch, setSourceBatch] = useState({ loads: [], valid: true, selected: 0 });
   const [mappingGroups, setMappingGroups] = useState([]);
   const [mappingChoices, setMappingChoices] = useState({});
@@ -470,7 +471,13 @@ export default function AdminPrototypeReviewPage() {
     }
   };
 
-  const handleCreateIssue = async () => {
+  const handleCreateIssue = async ({ requireCombined = false } = {}) => {
+    const selectedSources = sourcePanelRef.current?.getSelection() || sourceBatch;
+    const combined = requireCombined || selectedSources.selected > 0;
+    if (combined && (!selectedSources.selected || !selectedSources.valid || !selectedSources.loads.length)) {
+      setError("Для общей задачи выберите и подготовьте STG-таблицы"); return;
+    }
+    if (result?.issue?.issue_id) { setError(`Задача ${result.issue.issue_id} уже создана`); return; }
     const trimmedMr = String(mrInput || "").trim();
     if (!trimmedMr || creatingIssue || loading) return;
     if (result?.composition_stale) {
@@ -489,13 +496,14 @@ export default function AdminPrototypeReviewPage() {
       setError("Заполните обязательное поле «Дашборд КХД/Направление»");
       return;
     }
-    if (!sourceBatch.valid) {
+    if (!selectedSources.valid) {
       setError("Завершите генерацию всех выбранных STG-таблиц или снимите их выбор"); return;
     }
     setCreatingIssue(true);
     setError(null);
     try {
-      const payload = await adminApi.prototypeReviewCreateIssue({
+      const create = combined ? adminApi.prototypeReviewCreateCombinedIssue : adminApi.prototypeReviewCreateIssue;
+      const payload = await create({
         mode: reviewMode,
         mr_input: trimmedMr,
         task_text: normalizedTaskText,
@@ -505,8 +513,8 @@ export default function AdminPrototypeReviewPage() {
         direction: String(form.direction || "").trim(),
         parent_issue: String(form.parent_issue || "").trim() || null,
         diff_comment: String(form.diff_comment || "").trim() || null,
-        source_loads: sourceBatch.loads,
-        expected_source_load_count: sourceBatch.loads.length,
+        source_loads: selectedSources.loads,
+        expected_source_load_count: selectedSources.loads.length,
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           sql_variant_mode: item.sql_variant_mode || null,
@@ -546,7 +554,7 @@ export default function AdminPrototypeReviewPage() {
               ...prev,
               issue: payload?.issue || null,
               task_contents: payload?.task_contents || null,
-              source_task_warning: sourceTaskWarning(payload, sourceBatch.loads),
+              source_task_warning: sourceTaskWarning(payload, selectedSources.loads),
               meta_branch: payload?.meta_branch || null,
               meta_files: payload?.meta_files || [],
               meta_error: payload?.meta_error || null,
@@ -562,7 +570,9 @@ export default function AdminPrototypeReviewPage() {
           : prev
       ));
     } catch (err) {
-      setError(err?.message || "Не удалось создать задачу");
+      setError(combined && [404, 405].includes(err?.status)
+        ? "API не поддерживает общую задачу. Обновите API вместе с интерфейсом: задача не создана."
+        : err?.message || "Не удалось создать задачу");
     } finally {
       setCreatingIssue(false);
     }
@@ -634,7 +644,15 @@ export default function AdminPrototypeReviewPage() {
 
       {!isOhd && <BusinessDqPanel />}
 
-      <PrototypeSourceLoadPanel key={reviewMode} mode={reviewMode} onSourceLoadsChange={setSourceBatch} hasDiff={Boolean(mrInput.trim())} disabled={loading || creatingIssue} />
+      <PrototypeSourceLoadPanel ref={sourcePanelRef} key={reviewMode} mode={reviewMode} onSourceLoadsChange={setSourceBatch}
+        hasDiff={Boolean(mrInput.trim())} disabled={loading || creatingIssue}
+        onTaskDefaults={(name, value) => setForm((prev) => ({ ...prev, [name]: value }))}
+        combinedAction={{ diffTargets: reviewItemsDraft.map((item) => item.target_fqn),
+          reviewReady: Boolean(result && !result.mapping_required), createdIssue: result?.issue?.issue_id,
+          canCreate: Boolean(result && !result.mapping_required && !result.composition_stale && !result.issue?.issue_id
+            && !reviewItemsDraft.some((item) => item.source_stale) && unresolvedItemsCount === 0
+            && (reviewItemsDraft.length || hasDeletedFiles) && hasDashboardDirection),
+          onCreate: () => handleCreateIssue({ requireCombined: true }) }} />
 
       {error ? <div className="page-error">{error}</div> : null}
 
@@ -670,8 +688,8 @@ export default function AdminPrototypeReviewPage() {
             </div>
           </section>
 
-          <section className="cc-surface">
-            <div className="section-title">Параметры задачи</div>
+          <section className="cc-surface" id="prototype-task-parameters">
+            <div className="section-title">Общие параметры задачи</div>
             <div className="prototype-step-grid">
               <div className="prototype-step-field" style={{ margin: 0 }}>
                 <span className="slow-select-label">Название задачи</span>
@@ -1089,24 +1107,25 @@ export default function AdminPrototypeReviewPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Создание задачи</div>
+            <div className="section-title">{sourceBatch.selected ? "Общая задача: STG и diff" : "Задача по diff"}</div>
             <div className="prototype-import-actions">
               <div className="muted">
                 {isOhd ? "Одна задача для diff и выбранных STG-таблиц будет создана в проекте ОХД. SQL, registry и DQ-модели попадут в dbt MR с целевой веткой main." : "Одна задача будет создана на весь diff. ETL YAML, SQL объектов, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи."}
               </div>
               <button
                 type="button"
-                className="btn btn-primary"
-                onClick={handleCreateIssue}
-                disabled={loading || creatingIssue || !sourceBatch.valid || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
+                className="btn btn-primary prototype-combined-task-button"
+                onClick={() => handleCreateIssue()}
+                disabled={loading || creatingIssue || Boolean(result.issue?.issue_id) || !sourceBatch.valid || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
-                {creatingIssue ? (isOhd ? "Создаём задачу и dbt MR…" : "Ищем зависимости и создаём задачу…") : "Создать задачу"}
+                {creatingIssue ? (isOhd ? "Создаём задачу и dbt MR…" : "Ищем зависимости и создаём задачу…") : result.issue?.issue_id ? `Задача ${result.issue.issue_id} создана` : sourceBatch.selected ? combinedTaskLabel(sourceBatch.selected, reviewItemsDraft.length) : `Создать задачу только по diff (${reviewItemsDraft.length})`}
               </button>
             </div>
             <div className="card" style={{ marginTop: 16 }}>
               <div className="section-title">Состав общей задачи и MR</div>
               <div>Объекты diff: {reviewItemsDraft.length} · STG: {sourceBatch.ready || 0} из {sourceBatch.selected} готовы</div>
-              {sourceBatch.loads.map((load) => <div className="mono" key={`${load.target_schema}.${load.target_table}`}>{load.target_schema}.{load.target_table}</div>)}
+              {reviewItemsDraft.map((item) => <div className="mono" key={item.item_id || item.target_fqn}>diff · {item.target_fqn}</div>)}
+              {sourceBatch.loads.map((load) => <div className="mono" key={`${load.target_schema}.${load.target_table}`}>STG · {load.target_schema}.{load.target_table}</div>)}
               {!!sourceBatch.selected && <p className="muted">Все выбранные STG-таблицы будут добавлены автоматически. Для исключения таблицы снимите выбор в её карточке выше.</p>}
             </div>
             {result.source_task_warning && <p className="page-error">{result.source_task_warning}</p>}

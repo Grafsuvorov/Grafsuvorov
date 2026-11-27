@@ -20,6 +20,7 @@ export const adminApi = {
   prototypeReviewCheckTable: (body) => apiClient.post("/api/admin/prototype-review/check-table", body),
   prototypeReviewRefreshYaml: (body) => apiClient.post("/api/admin/prototype-review/refresh-yaml", body),
   prototypeReviewCreateIssue: (body) => apiClient.post("/api/admin/prototype-review/create-issue", body),
+  prototypeReviewCreateCombinedIssue: (body) => apiClient.post("/api/admin/prototype-review/create-combined-issue", body),
   prototypeReviewParentIssue: (issueId, mode) => apiClient.get(`/api/admin/prototype-review/parent-issue/${encodeURIComponent(issueId)}`, { params: { mode } }),
   prototypeReviewReleaseSlots: (releaseDate) => apiClient.get("/api/admin/prototype-review/release-slots", { params: { release_date: releaseDate } }),
   prototypeReviewSourceServers: (mode = "khd") => apiClient.get("/api/admin/prototype-review/source-load/servers", { params: { mode } }),

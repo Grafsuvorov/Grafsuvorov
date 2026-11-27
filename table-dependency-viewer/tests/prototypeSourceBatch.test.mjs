@@ -41,3 +41,8 @@ test('missing STG confirmation from an old server cannot look like complete succ
   assert.equal(sourceTaskWarning({ issue: { issue_id: 'DWH-19' }, task_contents: { source_targets: ['stg.Second', 'stg.First'] } }, loads), '');
   assert.match(sourceTaskWarning({ issue: { issue_id: 'DWH-19' }, task_contents: { source_targets: ['stg.First'] } }, loads), /не подтвердил/);
 });
+
+test('combined button explicitly names both STG and diff counts', async () => {
+  const { combinedTaskLabel } = await import('../src/utils/prototypeSourceBatch.js');
+  assert.equal(combinedTaskLabel(2, 1), 'Создать общую задачу · STG: 2 · diff: 1');
+});

@@ -143,6 +143,7 @@ def source_loader_parameters_from_sql(sql: str) -> dict[str, str]:
         "v_fields_list": "fields",
         "v_distribution_field": "distribution_field",
         "v_pk": "primary_key",
+        "v_server_id": "source_id",
     }
     for argument_name, result_name in field_map.items():
         match = re.search(
@@ -213,42 +214,42 @@ def list_source_servers(engine) -> list[dict[str, Any]]:
     ]
 
 
-def list_target_tables(engine, schema_name: str) -> list[dict[str, Any]]:
+def list_target_tables(engine, schema_name: str, table_name: str | None = None) -> list[dict[str, Any]]:
     schema = str(schema_name or "").strip().lower()
     if schema not in ALLOWED_SCHEMAS:
         raise ValueError("Доступны только схемы stg и dict_stg")
-
+    selected_table = str(table_name).strip().strip('"') if table_name is not None else None
+    # Read physical relations directly. information_schema joins can multiply
+    # column rows across constraints and are expensive on Greenplum catalogs.
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT
-                c.table_name,
-                string_agg(c.column_name, ',' ORDER BY c.ordinal_position) AS fields,
-                string_agg(
-                    CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN quote_ident(kcu.column_name) END,
-                    ' || ' ORDER BY kcu.ordinal_position
-                ) AS primary_key
-            FROM information_schema.columns c
-            LEFT JOIN information_schema.key_column_usage kcu
-              ON kcu.table_schema = c.table_schema
-             AND kcu.table_name = c.table_name
-             AND kcu.column_name = c.column_name
-            LEFT JOIN information_schema.table_constraints tc
-              ON tc.constraint_schema = kcu.constraint_schema
-             AND tc.constraint_name = kcu.constraint_name
-             AND tc.table_schema = kcu.table_schema
-             AND tc.table_name = kcu.table_name
-            WHERE c.table_schema = :schema_name
-              -- etl_source_to_greenplum_new adds these fields itself; passing
-              -- them as source fields would make an update of an existing
-              -- table fail against the external source.
-              AND lower(c.column_name) NOT IN (
-                  'rn', 'dttm_inserted', 'dttm_updated', 'job_name',
-                  'deleted_flag', 'is_actual'
-              )
-            GROUP BY c.table_name
-            ORDER BY c.table_name
-        """), {"schema_name": schema}).mappings().all()
-    return [dict(row) for row in rows]
+            SELECT c.relname AS table_name, a.attname AS column_name,
+                   a.attnum AS ordinal_position, pk.conkey AS primary_key_positions
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_catalog.pg_attribute a
+              ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+            LEFT JOIN pg_catalog.pg_constraint pk
+              ON pk.conrelid = c.oid AND pk.contype = 'p'
+            WHERE n.nspname = :schema_name
+              AND c.relkind IN ('r', 'p', 'f')
+              AND (:table_name IS NULL OR lower(c.relname) = lower(:table_name))
+            ORDER BY c.relname, a.attnum
+        """), {"schema_name": schema, "table_name": selected_table}).mappings().all()
+    technical = {"rn", "dttm_inserted", "dttm_updated", "job_name", "deleted_flag", "is_actual"}
+    tables = {}
+    for row in rows:
+        table = tables.setdefault(row["table_name"], {"columns": {}, "keys": row.get("primary_key_positions") or []})
+        name = row.get("column_name")
+        if name and name.lower() not in technical:
+            table["columns"][int(row["ordinal_position"])] = name
+    result = []
+    for name, table in tables.items():
+        columns = table["columns"]
+        keys = [columns[pos] for pos in table["keys"] if pos in columns]
+        result.append({"table_name": name, "fields": ",".join(columns[pos] for pos in sorted(columns)),
+                       "primary_key": " || ".join('"' + key.replace('"', '""') + '"' for key in keys)})
+    return result
 
 
 def target_table_exists(engine, schema_name: str, table_name: str) -> bool:

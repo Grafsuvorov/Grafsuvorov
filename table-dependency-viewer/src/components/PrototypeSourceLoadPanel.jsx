@@ -1,13 +1,20 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { adminApi } from "../api/admin.js";
-import { summarizeSourceBatch } from "../utils/prototypeSourceBatch.js";
+import { summarizeSourceBatch, sourceTargetKey, sourceDetailsForm } from "../utils/prototypeSourceBatch.js";
 
 const INITIAL = { target_schema: "stg", target_table: "", source_schema: "", source_table: "", server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "", entity_name: "" };
 
-const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onReady, onBusy }, ref) {
+const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onReady, onBusy, onLookupBusy }, ref) {
   const [form, setForm] = useState(INITIAL);
   const [servers, setServers] = useState([]);
   const [tables, setTables] = useState([]);
+  const [tablesError, setTablesError] = useState("");
+  const [lookup, setLookup] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const callbacks = useRef({ onReady, onLookupBusy }); callbacks.current = { onReady, onLookupBusy };
+  const touched = useRef(new Set());
+  const autoFields = useRef({});
+  const loadedTarget = useRef("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -17,30 +24,52 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
     return () => { active = false; };
   }, [mode]);
   useEffect(() => { let active = true;
-    adminApi.prototypeReviewSourceTables(form.target_schema, mode).then((v) => { if (active) setTables(v?.items || []); }).catch((e) => { if (active) setError(e.message); });
+    adminApi.prototypeReviewSourceTables(form.target_schema, mode).then((v) => { if (active) { setTables(v?.items || []); setTablesError(""); } }).catch((e) => { if (active) { setTables([]); setTablesError(e.message); } });
     return () => { active = false; };
   }, [form.target_schema, mode]);
   const change = (name, value) => {
     onReady(null); setResult(null); setError("");
-    setForm((prev) => ({ ...prev, [name]: value, ...(name === "target_schema" ? { target_table: "", fields: "ALL" } : {}) }));
+    const identityChanged = name === "target_schema" || (name === "target_table" && sourceTargetKey(form.target_table) !== sourceTargetKey(value));
+    const previousAutoFields = identityChanged ? autoFields.current : {};
+    if (identityChanged) { touched.current = new Set(); loadedTarget.current = ""; }
+    else touched.current.add(name);
+    setForm((prev) => {
+      const reset = {};
+      if (identityChanged) for (const [field, oldValue] of Object.entries(previousAutoFields)) {
+        if (prev[field] === oldValue) reset[field] = INITIAL[field];
+      }
+      return { ...prev, ...reset, [name]: value, ...(name === "target_schema" ? { target_table: "", fields: "ALL" } : {}) };
+    });
+    if (identityChanged) autoFields.current = {};
   };
-  const fillExisting = async () => {
-    if (!tables.some((t) => t.table_name === form.target_table)) return;
-    onReady(null); setResult(null); setLoading(true); onBusy(true); setError("");
-    try {
-      const details = await adminApi.prototypeReviewSourceTableDetails(form.target_schema, form.target_table, mode);
-      const meta = details.metadata || {};
-      setForm((prev) => ({ ...prev, fields: details.fields || prev.fields,
-        primary_key: meta.primary_key || details.primary_key || (meta.key_attributes || []).join(", ") || prev.primary_key,
-        source_schema: meta.source_schema_name || prev.source_schema, source_table: meta.source_table_name || prev.source_table,
-        entity_name: details.entity_name || prev.entity_name, distribution_field: meta.distribution_field || prev.distribution_field,
-        server_id: meta.source_id != null ? String(meta.source_id) : prev.server_id }));
-    } catch (e) { setError(e.message); } finally { setLoading(false); onBusy(false); }
-  };
+  useEffect(() => {
+    const target = form.target_table.trim();
+    const key = `${mode}:${form.target_schema}:${sourceTargetKey(target)}`;
+    if (!target || key === loadedTarget.current) { setDetailsLoading(false); return; }
+    let active = true;
+    setLookup({ status: "loading" }); setDetailsLoading(true); callbacks.current.onLookupBusy?.(true);
+    const timer = setTimeout(async () => {
+      try {
+        const details = await adminApi.prototypeReviewSourceTableDetails(form.target_schema, target, mode);
+        if (!active) return;
+        loadedTarget.current = key;
+        if (details.found === false) { setLookup({ status: "new" }); return; }
+        callbacks.current.onReady(null);
+        setForm((prev) => {
+          const next = sourceDetailsForm(prev, details, touched.current);
+          autoFields.current = Object.fromEntries(Object.keys(INITIAL).filter((field) => field !== "target_table" && next[field] !== prev[field]).map((field) => [field, next[field]]));
+          return next;
+        });
+        setLookup({ status: "found" });
+      } catch (e) { if (active) setLookup({ status: "error", message: e.message }); }
+      finally { if (active) { setDetailsLoading(false); callbacks.current.onLookupBusy?.(false); } }
+    }, 400);
+    return () => { active = false; clearTimeout(timer); callbacks.current.onLookupBusy?.(false); };
+  }, [form.target_schema, form.target_table, mode]);
   const complete = Boolean(form.target_table.trim() && form.source_schema.trim() && form.source_table.trim()
     && (isOhd || form.entity_name.trim()) && form.primary_key.trim() && form.server_id);
   const run = async () => {
-    if (loading) return false;
+    if (loading || detailsLoading) return false;
     onReady(null);
     if (!complete) { setError("Заполните источник, target, сервер, ключ и сущность (для КХД)"); return false; }
     setLoading(true); onBusy(true); setError(""); setResult(null);
@@ -57,7 +86,7 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
     } catch (e) { setError(e?.message || "Не удалось выполнить функцию загрузки"); return false; }
     finally { setLoading(false); onBusy(false); }
   };
-  useImperativeHandle(ref, () => ({ run }), [form, loading, mode]);
+  useImperativeHandle(ref, () => ({ run }), [form, loading, detailsLoading, mode]);
   const input = (name, label, placeholder = "") => <label className="prototype-step-field" key={name}>
     <span className="slow-select-label">{label}</span><input className="slow-entity-select" value={form[name]} placeholder={placeholder} onChange={(e) => change(name, e.target.value)} />
   </label>;
@@ -66,7 +95,8 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
     <div className="prototype-step-grid">
       <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => change("target_schema", e.target.value)}><option>stg</option><option>dict_stg</option></select></label>
       <label className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" list={`source-tables-${rowId}`} value={form.target_table} onChange={(e) => change("target_table", e.target.value)} placeholder="Новая или существующая таблица" /><datalist id={`source-tables-${rowId}`}>{tables.map((t) => <option key={t.table_name} value={t.table_name} />)}</datalist>
-        <button type="button" className="btn btn-ghost" disabled={loading || !tables.some((t) => t.table_name === form.target_table)} onClick={fillExisting}>Подставить параметры существующей</button>
+        <span className="muted">{lookup?.status === "loading" ? "Проверяем target и подставляем параметры…" : lookup?.status === "found" ? "Таблица существует в DEV. Доступные параметры подставлены автоматически." : lookup?.status === "new" ? "Таблица не найдена в DEV — будет создана новая." : "Введите имя или выберите существующую таблицу из подсказок."}</span>
+        {lookup?.status === "error" && <span className="page-error">Не удалось проверить target: {lookup.message}</span>}
       </label>
       {input("source_schema", "Схема источника", "SAPSR3")}
       {input("source_table", "Таблица источника", "/BIC/ATR_TO13000")}
@@ -76,7 +106,8 @@ const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onR
       <label className="prototype-step-field"><span className="slow-select-label">Сервер источника</span><select className="slow-entity-select" value={form.server_id} onChange={(e) => change("server_id", e.target.value)}><option value="">Выберите сервер</option>{servers.map((s) => <option key={s.server_id} value={s.server_id}>{s.server_name} · ID {s.server_id}</option>)}</select></label>
       <label className="prototype-step-field prototype-source-fields"><span className="slow-select-label">Поля источника</span><textarea className="slow-entity-select" value={form.fields} onChange={(e) => change("fields", e.target.value)} /><span className="muted">ALL или список полей. Изменение параметров требует повторной генерации только этой таблицы.</span></label>
     </div>
-    <button type="button" className="btn btn-primary" disabled={loading || !complete} onClick={run}>{loading ? "Генерация…" : result?.status === "ok" ? "Перегенерировать эту таблицу" : "Сгенерировать в DEV"}</button>
+    <button type="button" className="btn btn-primary" disabled={loading || detailsLoading || !complete} onClick={run}>{loading ? "Генерация…" : result?.status === "ok" ? "Перегенерировать эту таблицу" : "Сгенерировать в DEV"}</button>
+    {tablesError && <p className="page-error">Не удалось загрузить подсказки таблиц: {tablesError}. Введённое имя проверяется отдельно.</p>}
     {error && <p className="page-error">{error}</p>}
     {result && <div className="card" style={{ marginTop: 14 }}>
       {[ ["recreate_sql", "SQL создания / пересоздания"], ["insert_sql", "SQL загрузки"], ["truncate_sql", "SQL очистки"] ].map(([key, label]) => result[key] && <details key={key}><summary>{label}</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result[key]}</pre></details>)}
@@ -114,7 +145,7 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
       source_loads: summary.loads, issue_summary: task.summary.trim() || "Загрузка таблиц в STG", linked_issues: [] })); }
     catch (e) { setError(e.message); } finally { setCreating(false); }
   };
-  const busy = disabled || creating || runningAll || rows.some((row) => row.busy);
+  const busy = disabled || creating || runningAll || rows.some((row) => row.busy || row.lookupBusy);
   return <section className="cc-surface prototype-source-load">
     <div className="section-title">STG: таблицы из источников · {mode.toUpperCase()}</div>
     <p className="muted">Добавьте таблицы и сгенерируйте каждую в DEV. Готовые результаты сохраняются отдельно. Затем создайте одну задачу для STG или объедините их с проверенным diff.</p>
@@ -127,13 +158,13 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
       <div className="prototype-import-actions">
         <label><input type="checkbox" checked={row.selected} disabled={busy} onChange={(e) => update(row.id, { selected: e.target.checked })} /> Таблица {index + 1}</label>
         <span className="mono">{row.ready ? `${row.ready.target_schema}.${row.ready.target_table}` : "Настройте и выполните генерацию"}</span>
-        <span className="prototype-badge">{row.busy ? "Генерация…" : row.ready ? "Готова" : "Не готова"}</span>
+        <span className="prototype-badge">{row.busy ? "Генерация…" : row.lookupBusy ? "Подстановка…" : row.ready ? "Готова" : "Не готова"}</span>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => update(row.id, { expanded: !row.expanded })}>{row.expanded ? "Свернуть" : "Параметры и SQL"}</button>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setRows((prev) => prev.filter((r) => r.id !== row.id))}>Убрать</button>
       </div>
       <fieldset hidden={!row.expanded} disabled={disabled || creating || runningAll || row.busy} style={{ border: 0, padding: 0, minWidth: 0 }}>
         <SourceLoadEditor ref={(ref) => { editors.current[row.id] = ref; }} rowId={row.id} mode={mode}
-          onReady={(ready) => { update(row.id, { ready }); if (ready) update(row.id, { expanded: false }); }} onBusy={(value) => update(row.id, { busy: value })} />
+          onReady={(ready) => { update(row.id, { ready }); if (ready) update(row.id, { expanded: false }); }} onBusy={(value) => update(row.id, { busy: value })} onLookupBusy={(value) => update(row.id, { lookupBusy: value })} />
       </fieldset>
     </section>)}
     {summary.errors.map((message) => <p className="page-error" key={message}>{message}</p>)}
@@ -145,7 +176,9 @@ export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsCh
           {[ ["summary", "Название задачи"], ["direction", "Дашборд КХД/Направление *"], ["release_date", "Дата релиза"], ["parent_issue", "Родительская задача"] ].map(([name, label]) =>
             <label key={name} className="prototype-step-field"><span className="slow-select-label">{label}</span><input className="slow-entity-select" type={name === "release_date" ? "date" : "text"} value={task[name]} disabled={busy} onChange={(e) => setTask((prev) => ({ ...prev, [name]: e.target.value }))} /></label>)}
         </div>
+        <div className="prototype-source-task-actions">
         <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !task.direction.trim()} onClick={createOnlyStg}>Создать одну задачу для {summary.selected} STG-таблиц</button>
+        </div>
       </>}
       {!summary.valid && <p className="muted">Сначала завершите генерацию всех выбранных таблиц или снимите выбор с ненужных.</p>}
     </div>}

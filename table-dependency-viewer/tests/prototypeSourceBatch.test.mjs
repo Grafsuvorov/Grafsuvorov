@@ -18,3 +18,18 @@ test('editing or regenerating a row invalidates only that row and never submits 
   assert.equal(summarizeSourceBatch([a, { ...a, busy: true }]).valid, false);
   assert.deepEqual(summarizeSourceBatch([a, { ...a, ready: null }]).loads, [a.ready]);
 });
+
+test('existing target matching ignores display quotes and case without changing physical name', async () => {
+  const { sourceTargetKey, sourceDetailsForm } = await import('../src/utils/prototypeSourceBatch.js');
+  assert.equal(sourceTargetKey(' "BIP_/BIC/Name" '), sourceTargetKey('bip_/bic/name'));
+  const form = { target_table: 'bip_/bic/name', fields: 'ALL', server_id: '', primary_key: '', source_schema: '' };
+  const next = sourceDetailsForm(form, { table_name: 'BIP_/BIC/Name', fields: 'ID,KEY', primary_key: '"ID"', metadata: { source_id: 2, source_schema_name: 'SAPSR3' } });
+  assert.equal(next.target_table, 'BIP_/BIC/Name');
+  assert.equal(next.server_id, '2'); assert.equal(next.fields, 'ID,KEY'); assert.equal(next.source_schema, 'SAPSR3');
+});
+test('autofill preserves fields manually edited while the lookup was pending', async () => {
+  const { sourceDetailsForm } = await import('../src/utils/prototypeSourceBatch.js');
+  const next = sourceDetailsForm({ fields: 'CUSTOM', primary_key: 'MANUAL' },
+    { fields: 'ID,KEY', primary_key: '"ID"', entity_name: 'DAILY' }, new Set(['fields', 'primary_key']));
+  assert.equal(next.fields, 'CUSTOM'); assert.equal(next.primary_key, 'MANUAL'); assert.equal(next.entity_name, 'DAILY');
+});

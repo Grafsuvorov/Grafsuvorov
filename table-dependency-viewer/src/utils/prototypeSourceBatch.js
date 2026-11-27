@@ -9,5 +9,27 @@ export function summarizeSourceBatch(rows) {
     seen.add(target);
   }
   return { loads, selected: selected.length, ready: loads.length,
-    valid: loads.length === selected.length && !errors.length, busy: rows.some((row) => row.busy), errors };
+    valid: loads.length === selected.length && !errors.length, busy: rows.some((row) => row.busy || row.lookupBusy), errors };
+}
+
+export function sourceTargetKey(value) {
+  return String(value || '').trim().replace(/^"|"$/g, '').toLowerCase();
+}
+
+export function sourceDetailsForm(form, details, touched = new Set()) {
+  const meta = details.metadata || {};
+  const values = {
+    fields: details.fields,
+    primary_key: meta.primary_key || details.primary_key || (meta.key_attributes || []).map((name) => `"${name}"`).join(' || '),
+    source_schema: meta.source_schema_name,
+    source_table: meta.source_table_name,
+    entity_name: details.entity_name || meta.entity_name,
+    distribution_field: meta.distribution_field,
+    server_id: meta.source_id == null ? undefined : String(meta.source_id),
+  };
+  const next = { ...form, target_table: details.table_name || form.target_table };
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== null && value !== '' && !touched.has(key)) next[key] = value;
+  }
+  return next;
 }

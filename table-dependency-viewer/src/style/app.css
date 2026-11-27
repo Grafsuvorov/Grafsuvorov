@@ -17205,3 +17205,16 @@ html[data-theme="light"] .prototype-toggle-card:hover {
     width: 100%;
   }
 }
+
+/* Keep the STG task action on a separate row below the date and parent fields. */
+.prototype-review-page .prototype-source-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+  clear: both;
+}
+.prototype-review-page .prototype-source-task-actions > .btn {
+  max-width: 100%;
+  white-space: normal;
+}

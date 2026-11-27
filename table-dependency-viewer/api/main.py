@@ -1852,6 +1852,7 @@ def get_admin_prototype_source_tables(target_schema: str, request: Request, mode
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logging.getLogger("uvicorn.error").exception("[SOURCE TABLES] Failed mode=%s schema=%s", mode, target_schema)
         raise HTTPException(status_code=500, detail=f"Не удалось получить таблицы: {exc}") from exc
 
 
@@ -1866,18 +1867,28 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
     try:
         if mode == "ohd":
             with _prototype_source_engine(mode) as source_engine:
-                tables = list_target_tables(source_engine, target_schema)
+                tables = list_target_tables(source_engine, target_schema, target_table)
             selected = next((row for row in tables if row["table_name"].lower() == target_table.strip().strip('"').lower()), None)
             if not selected:
-                raise ValueError("Таблица target не найдена в DEV ОХД")
-            return {**selected, "metadata": {}, "entity_name": "", "entity_id": None}
-        tables = list_target_tables(dev_engine, target_schema)
+                return {"found": False, "table_name": target_table, "metadata": {}}
+            from .services.prototype_review_dbt import dbt_model_sql_path
+            settings = ohd_settings()
+            metadata = {}
+            if settings.get("project") and settings.get("token") and settings.get("api_url"):
+                source_sql = _prototype_gitlab_file_content(
+                    project=settings["project"], token=settings["token"], ref="main",
+                    file_path=dbt_model_sql_path(target_schema, selected["table_name"]),
+                    api_url=settings["api_url"], ssl_verify=settings["ssl_verify"],
+                )
+                metadata = source_loader_parameters_from_sql(source_sql or "")
+            return {**selected, "found": True, "metadata": metadata, "entity_name": "", "entity_id": None}
+        tables = list_target_tables(dev_engine, target_schema, target_table)
         selected = next(
             (row for row in tables if str(row.get("table_name") or "").lower() == str(target_table or "").strip().strip('"').lower()),
             None,
         )
         if not selected:
-            raise ValueError("Таблица target не найдена в DEV")
+            return {"found": False, "table_name": target_table, "metadata": {}}
 
         with engine.connect() as conn:
             meta_row = conn.execute(text(f"""
@@ -1924,6 +1935,7 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
                 pass
 
         return {
+            "found": True,
             "table_name": selected["table_name"],
             "fields": selected.get("fields") or "ALL",
             "primary_key": selected.get("primary_key") or "",

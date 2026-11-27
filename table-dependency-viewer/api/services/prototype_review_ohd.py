@@ -9,6 +9,7 @@ from .. import config
 from .prototype_review_dbt import dbt_registry_path
 from .prototype_review_item import resolve_prototype_review_item
 from .prototype_review_youtrack_ohd import VERIFIED_PROJECT_ID
+from .prototype_source_batch import source_load_items, source_dbt_items
 
 
 def ohd_settings():
@@ -117,7 +118,7 @@ class OhdReviewContext:
 
 def deliver_ohd_issue(*, issue_result, review_items, bundle, user, dependencies, source_load=None):
     """Publish only to dbt; no ETL workspace writes, IDs or engineering MR."""
-    if source_load or any(item.get("is_clickhouse_view") for item in review_items):
+    if any(item.get("is_clickhouse_view") for item in review_items):
         raise ValueError("В режиме ОХД поддерживается только dbt Greenplum")
     result = {"meta_branch": None, "meta_files": [], "meta_error": None, "meta_mr": None,
               "meta_mr_error": None, "dbt_registry": None, "dbt_registry_error": None}
@@ -126,7 +127,8 @@ def deliver_ohd_issue(*, issue_result, review_items, bundle, user, dependencies,
     try:
         dbt = dependencies.publish_dbt(task_id=issue_result["issue_id"],
             author=getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review",
-            review_items=review_items, changed_files=bundle.get("files") or [], deleted_files=bundle.get("deleted_files") or [])
+            review_items=[*review_items, *source_dbt_items(source_load_items(source_load))],
+            changed_files=bundle.get("files") or [], deleted_files=bundle.get("deleted_files") or [])
         result["dbt_registry"] = dbt
         if dbt.get("mr_url"):
             dependencies.add_comment(base_url=dependencies.youtrack_url, token=dependencies.youtrack_token,

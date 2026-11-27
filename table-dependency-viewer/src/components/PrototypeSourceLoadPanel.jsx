@@ -1,62 +1,158 @@
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { adminApi } from "../api/admin.js";
+import { summarizeSourceBatch } from "../utils/prototypeSourceBatch.js";
 
-const INITIAL = { target_schema: "stg", target_table: "", source_schema: "", source_table: "", server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "", entity_name: "", release_date: "", direction: "", parent_issue: "", linked_issues: "" };
+const INITIAL = { target_schema: "stg", target_table: "", source_schema: "", source_table: "", server_id: "", fields: "ALL", distribution_field: "RN", primary_key: "", entity_name: "" };
 
-export default function PrototypeSourceLoadPanel({ onSourceLoadReady }) {
-  const [isOpen, setIsOpen] = useState(false); const [pickerOpen, setPickerOpen] = useState(false);
-  const [form, setForm] = useState(INITIAL); const [servers, setServers] = useState([]); const [tables, setTables] = useState([]);
-  const [result, setResult] = useState(null); const [loading, setLoading] = useState(false); const [creating, setCreating] = useState(false); const [parentLoading, setParentLoading] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { adminApi.prototypeReviewSourceServers().then((v) => setServers(v?.items || [])).catch((e) => setError(e?.message || "Не удалось загрузить серверы")); }, []);
-  useEffect(() => { adminApi.prototypeReviewSourceTables(form.target_schema).then((v) => setTables(v?.items || [])).catch((e) => setError(e?.message || "Не удалось загрузить таблицы")); }, [form.target_schema]);
-  const matches = useMemo(() => { const q = form.target_table.trim().toLowerCase(); return tables.filter((v) => !q || v.table_name.toLowerCase().includes(q)).slice(0, 18); }, [form.target_table, tables]);
-  const change = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
-  const selectTable = async (table) => {
-    setForm((prev) => ({ ...prev, target_table: table.table_name, fields: table.fields || "ALL", primary_key: table.primary_key || prev.primary_key }));
-    setPickerOpen(false);
-    try {
-      const details = await adminApi.prototypeReviewSourceTableDetails(form.target_schema, table.table_name);
-      const meta = details?.metadata || {};
-      const keyAttributes = Array.isArray(meta.key_attributes) ? meta.key_attributes.filter(Boolean).map((name) => `"${name}"`).join(" || ") : "";
-      setForm((prev) => ({
-        ...prev,
-        fields: table.fields || prev.fields,
-        source_schema: meta.source_schema_name || prev.source_schema,
-        source_table: meta.source_table_name || prev.source_table,
-        primary_key: meta.primary_key || table.primary_key || keyAttributes || prev.primary_key,
-        distribution_field: meta.distribution_field || prev.distribution_field,
-        entity_name: details?.entity_name || meta.entity_name || prev.entity_name,
-        server_id: meta.source_id != null ? String(meta.source_id) : prev.server_id,
-      }));
-    } catch (e) { setError(e?.message || "Не удалось подставить метаданные таблицы"); }
+const SourceLoadEditor = forwardRef(function SourceLoadEditor({ mode, rowId, onReady, onBusy }, ref) {
+  const [form, setForm] = useState(INITIAL);
+  const [servers, setServers] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const isOhd = mode === "ohd";
+  useEffect(() => { let active = true;
+    adminApi.prototypeReviewSourceServers(mode).then((v) => { if (active) setServers(v?.items || []); }).catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [mode]);
+  useEffect(() => { let active = true;
+    adminApi.prototypeReviewSourceTables(form.target_schema, mode).then((v) => { if (active) setTables(v?.items || []); }).catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [form.target_schema, mode]);
+  const change = (name, value) => {
+    onReady(null); setResult(null); setError("");
+    setForm((prev) => ({ ...prev, [name]: value, ...(name === "target_schema" ? { target_table: "", fields: "ALL" } : {}) }));
   };
-  const run = async () => { setLoading(true); setError(""); setResult(null); try { const response = await adminApi.prototypeReviewSourceLoadRun({ ...form, server_id: Number(form.server_id) }); setResult(response); if (form.fields.trim().toUpperCase() === "ALL" && response?.fields) change("fields", response.fields); if (response?.status === "ok" && response?.yaml_content) onSourceLoadReady?.({ ...form, server_id: Number(form.server_id), fields: response.fields || form.fields, yaml_content: response.yaml_content, yaml_contents: response.yaml_contents || {}, recreate_sql: response.recreate_sql || "", insert_sql: response.insert_sql || "", truncate_sql: response.truncate_sql || "" }); } catch (e) { setError(e?.message || "Не удалось выполнить функцию загрузки"); } finally { setLoading(false); } };
-  const linkedIssues = () => String(form.linked_issues || "").split(/[\n,;]+/).map((value) => value.trim()).filter(Boolean);
-  const pullParentIssue = async () => { const issueId = String(form.parent_issue || "").trim().toUpperCase(); if (!issueId || parentLoading) return; setParentLoading(true); setError(""); try { const payload = await adminApi.prototypeReviewParentIssue(issueId); setForm((prev) => ({ ...prev, parent_issue: payload?.issue_id || issueId, direction: payload?.direction || prev.direction })); } catch (e) { setError(e?.message || "Не удалось загрузить родительскую задачу"); } finally { setParentLoading(false); } };
-  const createIssue = async () => { if (!result?.yaml_content || !form.direction.trim()) return; setCreating(true); setError(""); try { const created = await adminApi.prototypeReviewSourceLoadCreateIssue({ ...form, linked_issues: linkedIssues(), server_id: Number(form.server_id), yaml_content: result.yaml_content, yaml_contents: result.yaml_contents || {}, recreate_sql: result.recreate_sql || "", insert_sql: result.insert_sql || "", truncate_sql: result.truncate_sql || "", load_status: result.status }); setResult((prev) => ({ ...prev, created })); } catch (e) { setError(e?.message || "Не удалось создать задачу"); } finally { setCreating(false); } };
-
+  const fillExisting = async () => {
+    if (!tables.some((t) => t.table_name === form.target_table)) return;
+    onReady(null); setResult(null); setLoading(true); onBusy(true); setError("");
+    try {
+      const details = await adminApi.prototypeReviewSourceTableDetails(form.target_schema, form.target_table, mode);
+      const meta = details.metadata || {};
+      setForm((prev) => ({ ...prev, fields: details.fields || prev.fields,
+        primary_key: meta.primary_key || details.primary_key || (meta.key_attributes || []).join(", ") || prev.primary_key,
+        source_schema: meta.source_schema_name || prev.source_schema, source_table: meta.source_table_name || prev.source_table,
+        entity_name: details.entity_name || prev.entity_name, distribution_field: meta.distribution_field || prev.distribution_field,
+        server_id: meta.source_id != null ? String(meta.source_id) : prev.server_id }));
+    } catch (e) { setError(e.message); } finally { setLoading(false); onBusy(false); }
+  };
+  const complete = Boolean(form.target_table.trim() && form.source_schema.trim() && form.source_table.trim()
+    && (isOhd || form.entity_name.trim()) && form.primary_key.trim() && form.server_id);
+  const run = async () => {
+    if (loading) return false;
+    onReady(null);
+    if (!complete) { setError("Заполните источник, target, сервер, ключ и сущность (для КХД)"); return false; }
+    setLoading(true); onBusy(true); setError(""); setResult(null);
+    try {
+      const response = await adminApi.prototypeReviewSourceLoadRun({ ...form, mode, server_id: Number(form.server_id) });
+      setResult(response);
+      if (response?.status !== "ok") throw new Error(response?.error || "Генерация не завершилась успешно");
+      if (!response.recreate_sql || (!isOhd && !response.yaml_content)) throw new Error("Функция не вернула полный SQL/YAML. Проверьте результат генерации");
+      if (form.fields.trim().toUpperCase() === "ALL" && response.fields) setForm((prev) => ({ ...prev, fields: response.fields }));
+      onReady({ ...form, mode, server_id: Number(form.server_id), fields: response.fields || form.fields,
+        load_status: response.status, yaml_content: response.yaml_content || "", yaml_contents: response.yaml_contents || {},
+        recreate_sql: response.recreate_sql, insert_sql: response.insert_sql || "", truncate_sql: response.truncate_sql || "" });
+      return true;
+    } catch (e) { setError(e?.message || "Не удалось выполнить функцию загрузки"); return false; }
+    finally { setLoading(false); onBusy(false); }
+  };
+  useImperativeHandle(ref, () => ({ run }), [form, loading, mode]);
+  const input = (name, label, placeholder = "") => <label className="prototype-step-field" key={name}>
+    <span className="slow-select-label">{label}</span><input className="slow-entity-select" value={form[name]} placeholder={placeholder} onChange={(e) => change(name, e.target.value)} />
+  </label>;
   return <>
-    <section className="cc-surface" style={{ marginTop: 16, padding: 10 }}>
-      <button type="button" className={`btn ${isOpen ? "btn-primary" : "btn-ghost"}`} onClick={() => setIsOpen((v) => !v)} aria-expanded={isOpen}>Загрузка из источника в STG: создание или изменение</button>
-    </section>
-    {isOpen && <section className="cc-surface prototype-source-load" style={{ marginTop: 16 }}>
-      <div className="muted">Функция создаёт или пересоздаёт объект в DEV и формирует SQL для последующей загрузки.</div>
-      <div className="prototype-step-grid" style={{ marginTop: 16 }}>
-        <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => { change("target_schema", e.target.value); change("target_table", ""); change("fields", "ALL"); }}><option value="stg">stg</option><option value="dict_stg">dict_stg</option></select></label>
-        <div className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" value={form.target_table} onFocus={() => setPickerOpen(true)} onChange={(e) => { change("target_table", e.target.value); setPickerOpen(true); }} placeholder="Начните вводить название" />{pickerOpen && <div className="prototype-table-picker">{matches.length ? matches.map((table) => <button type="button" key={table.table_name} className={`prototype-table-option ${form.target_table.toLowerCase() === table.table_name.toLowerCase() ? "active" : ""}`} onClick={() => selectTable(table)}><span className="prototype-table-check">{form.target_table.toLowerCase() === table.table_name.toLowerCase() ? "✓" : ""}</span><span className="mono">{table.table_name}</span></button>) : <div className="muted">Совпадений нет — будет создана новая таблица.</div>}</div>}<span className="muted">Выберите существующую — её поля подставятся автоматически.</span></div>
-        <label className="prototype-step-field"><span className="slow-select-label">Схема источника</span><input className="slow-entity-select" value={form.source_schema} onChange={(e) => change("source_schema", e.target.value)} placeholder="MIGR_KHD" /></label>
-        <label className="prototype-step-field"><span className="slow-select-label">Таблица источника</span><input className="slow-entity-select" value={form.source_table} onChange={(e) => change("source_table", e.target.value)} placeholder="V_SCRAPREMELTBP" /></label>
-        <label className="prototype-step-field"><span className="slow-select-label">Сущность / расписание</span><input className="slow-entity-select" value={form.entity_name} onChange={(e) => change("entity_name", e.target.value)} placeholder="MANAGEMENT_REPORTING_1, MANAGEMENT_REPORTING_2" /><span className="muted">Несколько сущностей: через запятую. Для каждой будет создан отдельный YAML в одном MR.</span></label>
-        <label className="prototype-step-field"><span className="slow-select-label">Первичный ключ</span><input className="slow-entity-select" required value={form.primary_key} onChange={(e) => change("primary_key", e.target.value)} placeholder={'"VBELN" || "MANDT"'} /><span className="muted">Несколько полей: через <span className="mono">||</span> или запятую.</span></label>
-        <label className="prototype-step-field prototype-source-fields"><span className="slow-select-label">Поля</span><textarea className="slow-entity-select" value={form.fields} onChange={(e) => change("fields", e.target.value)} placeholder="ALL или FIELD_A, FIELD_B" /><span className="muted">Можно добавлять и удалять поля перед повторным запуском.</span></label>
-        <label className="prototype-step-field"><span className="slow-select-label">Ключ распределения</span><input className="slow-entity-select" value={form.distribution_field} onChange={(e) => change("distribution_field", e.target.value)} placeholder="RN" /></label>
-        <label className="prototype-step-field"><span className="slow-select-label">Сервер источника</span><select className="slow-entity-select" value={form.server_id} onChange={(e) => change("server_id", e.target.value)}><option value="">Выберите сервер</option>{servers.map((s) => <option key={s.server_id} value={s.server_id}>{s.server_name} · ID {s.server_id}</option>)}</select></label>
-      </div>
-      <div className="prototype-import-actions"><button className="btn btn-primary" disabled={loading || !form.target_table || !form.source_schema || !form.source_table || !form.entity_name || !form.primary_key.trim() || !form.server_id} onClick={run}>{loading ? "Запускаем функцию…" : "Сгенерировать в DEV"}</button></div>
-      {error && <div className="page-error" style={{ marginTop: 12 }}>{error}</div>}
-      {result && <div className={`card ${result.status === "error" ? "page-error" : ""}`} style={{ marginTop: 14 }}>{result.error ? <pre style={{ whiteSpace: "pre-wrap" }}>{result.error}</pre> : <><details><summary>Recreate SQL</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.recreate_sql}</pre></details><details><summary>Insert SQL</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result.insert_sql}</pre></details></>}</div>}
-      {result?.yaml_contents && <section className="cc-surface" style={{ marginTop: 14 }}><div className="section-title">YAML по сущностям</div>{Object.entries(result.yaml_contents).map(([name, content]) => <details key={name}><summary>{name}</summary><pre style={{ whiteSpace: "pre-wrap" }}>{content}</pre></details>)}</section>}
-      {result && <section className="cc-surface" style={{ marginTop: 16 }}><div className="section-title">Отдельная задача для STG</div><div className="muted">Либо добавьте подготовленную загрузку в общую задачу по diff ниже — тогда дата релиза, направление и связи будут общими.</div><div className="prototype-step-grid" style={{ marginTop: 14 }}><label className="prototype-step-field"><span className="slow-select-label">Дата релиза</span><input className="slow-entity-select" type="date" value={form.release_date} onChange={(e) => change("release_date", e.target.value)} /></label><label className="prototype-step-field"><span className="slow-select-label">Дашборд КХД/Направление <span aria-hidden="true">*</span></span><input className="slow-entity-select" required value={form.direction} onChange={(e) => change("direction", e.target.value)} placeholder="Например, Производство" /></label><label className="prototype-step-field"><span className="slow-select-label">Родительская задача</span><div style={{ display: "flex", gap: 8 }}><input className="slow-entity-select" value={form.parent_issue} onBlur={pullParentIssue} onChange={(e) => change("parent_issue", e.target.value.toUpperCase())} placeholder="DWH-12345" /><button type="button" className="btn btn-ghost" onClick={pullParentIssue} disabled={parentLoading || !form.parent_issue.trim()}>{parentLoading ? "Загружаем…" : "Подтянуть"}</button></div><span className="muted">Из задачи подставится направление.</span></label><label className="prototype-step-field"><span className="slow-select-label">Связанные задачи</span><input className="slow-entity-select" value={form.linked_issues} onChange={(e) => change("linked_issues", e.target.value.toUpperCase())} placeholder="DWH-12345, DWH-12346" /></label></div><div className="prototype-import-actions" style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={creating || !form.direction.trim()} onClick={createIssue}>{creating ? "Создаём задачу…" : "Создать отдельную задачу"}</button></div>{!form.direction.trim() ? <div className="muted" style={{ marginTop: 12 }}>Для создания задачи заполните поле «Дашборд КХД/Направление».</div> : null}{result.created?.issue?.issue_id ? <div className="muted" style={{ marginTop: 12 }}>Задача создана: {result.created.issue.link ? <a href={result.created.issue.link} target="_blank" rel="noreferrer">{result.created.issue.issue_id}</a> : <strong>{result.created.issue.issue_id}</strong>}</div> : null}{result.created?.meta_mr?.mr_url ? <div className="muted" style={{ marginTop: 12 }}>MR с YAML и SQL: <a href={result.created.meta_mr.mr_url} target="_blank" rel="noreferrer">{result.created.meta_mr.mr_url}</a></div> : null}{result.created?.meta_error ? <div className="page-error" style={{ marginTop: 12 }}>Не удалось создать MR с YAML и SQL: {result.created.meta_error}</div> : null}{result.created?.issue_links?.linked?.length ? <div className="muted" style={{ marginTop: 12 }}>Связанные задачи: {result.created.issue_links.linked.join(", ")}</div> : null}{result.created?.parent_link?.status === "linked" ? <div className="muted" style={{ marginTop: 12 }}>Родительская задача: {result.created.parent_link.parent_issue}</div> : null}</section>}
-    </section>}
+    <p className="muted">Функция создаёт или пересоздаёт эту таблицу в DEV контура {mode.toUpperCase()} и формирует SQL загрузки.</p>
+    <div className="prototype-step-grid">
+      <label className="prototype-step-field"><span className="slow-select-label">Схема target</span><select className="slow-entity-select" value={form.target_schema} onChange={(e) => change("target_schema", e.target.value)}><option>stg</option><option>dict_stg</option></select></label>
+      <label className="prototype-step-field"><span className="slow-select-label">Таблица target</span><input className="slow-entity-select" list={`source-tables-${rowId}`} value={form.target_table} onChange={(e) => change("target_table", e.target.value)} placeholder="Новая или существующая таблица" /><datalist id={`source-tables-${rowId}`}>{tables.map((t) => <option key={t.table_name} value={t.table_name} />)}</datalist>
+        <button type="button" className="btn btn-ghost" disabled={loading || !tables.some((t) => t.table_name === form.target_table)} onClick={fillExisting}>Подставить параметры существующей</button>
+      </label>
+      {input("source_schema", "Схема источника", "SAPSR3")}
+      {input("source_table", "Таблица источника", "/BIC/ATR_TO13000")}
+      {!isOhd && <div>{input("entity_name", "Сущности / расписания", "TRANSPORTATION, TWO_HOURS")}<span className="muted">Несколько — через запятую. Для каждой будет свой YAML.</span></div>}
+      <div>{input("primary_key", "Первичный ключ", "REQUEST, DATAPAKID, RECORD")}<span className="muted">Несколько полей — через запятую или ||.</span></div>
+      {input("distribution_field", "Ключ распределения", "RN")}
+      <label className="prototype-step-field"><span className="slow-select-label">Сервер источника</span><select className="slow-entity-select" value={form.server_id} onChange={(e) => change("server_id", e.target.value)}><option value="">Выберите сервер</option>{servers.map((s) => <option key={s.server_id} value={s.server_id}>{s.server_name} · ID {s.server_id}</option>)}</select></label>
+      <label className="prototype-step-field prototype-source-fields"><span className="slow-select-label">Поля источника</span><textarea className="slow-entity-select" value={form.fields} onChange={(e) => change("fields", e.target.value)} /><span className="muted">ALL или список полей. Изменение параметров требует повторной генерации только этой таблицы.</span></label>
+    </div>
+    <button type="button" className="btn btn-primary" disabled={loading || !complete} onClick={run}>{loading ? "Генерация…" : result?.status === "ok" ? "Перегенерировать эту таблицу" : "Сгенерировать в DEV"}</button>
+    {error && <p className="page-error">{error}</p>}
+    {result && <div className="card" style={{ marginTop: 14 }}>
+      {[ ["recreate_sql", "SQL создания / пересоздания"], ["insert_sql", "SQL загрузки"], ["truncate_sql", "SQL очистки"] ].map(([key, label]) => result[key] && <details key={key}><summary>{label}</summary><pre style={{ whiteSpace: "pre-wrap" }}>{result[key]}</pre></details>)}
+      {Object.entries(result.yaml_contents || {}).map(([name, content]) => <details key={name}><summary>YAML · {name}</summary><pre style={{ whiteSpace: "pre-wrap" }}>{content}</pre></details>)}
+      {result.status === "error" && <details><summary>Сообщения функции</summary><pre style={{ whiteSpace: "pre-wrap" }}>{(result.notices || []).join("\n")}</pre></details>}
+    </div>}
   </>;
+});
+
+let nextSourceRow = 1;
+export default function PrototypeSourceLoadPanel({ mode = "khd", onSourceLoadsChange, hasDiff = false, disabled = false }) {
+  const [rows, setRows] = useState([]);
+  const [runningAll, setRunningAll] = useState(false);
+  const [task, setTask] = useState({ summary: "", direction: "", release_date: "", parent_issue: "" });
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(null);
+  const [error, setError] = useState("");
+  const editors = useRef({});
+  const onChange = useRef(onSourceLoadsChange); onChange.current = onSourceLoadsChange;
+  const summary = useMemo(() => summarizeSourceBatch(rows), [rows]);
+  useEffect(() => { onChange.current?.(summary); }, [summary]);
+  const update = (id, patch) => {
+    if (!("expanded" in patch)) setCreated(null);
+    setRows((prev) => prev.map((row) => row.id === id ? { ...row, ...patch } : row));
+  };
+  const runAll = async () => {
+    setRunningAll(true);
+    try { for (const row of rows.filter((r) => r.selected && !r.ready)) await editors.current[row.id]?.run(); }
+    finally { setRunningAll(false); }
+  };
+  const createOnlyStg = async () => {
+    if (!summary.valid || !summary.loads.length || !task.direction.trim()) return;
+    setCreating(true); setError("");
+    try { setCreated(await adminApi.prototypeReviewCreateIssue({ ...task, mode, mr_input: "", review_items: [],
+      source_loads: summary.loads, issue_summary: task.summary.trim() || "Загрузка таблиц в STG", linked_issues: [] })); }
+    catch (e) { setError(e.message); } finally { setCreating(false); }
+  };
+  const busy = disabled || creating || runningAll || rows.some((row) => row.busy);
+  return <section className="cc-surface prototype-source-load">
+    <div className="section-title">STG: таблицы из источников · {mode.toUpperCase()}</div>
+    <p className="muted">Добавьте таблицы и сгенерируйте каждую в DEV. Готовые результаты сохраняются отдельно. Затем создайте одну задачу для STG или объедините их с проверенным diff.</p>
+    <div className="prototype-import-actions">
+      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => { setCreated(null); setRows((prev) => [...prev, { id: nextSourceRow++, selected: true, ready: null, busy: false, expanded: true }]); }}>+ Добавить STG-таблицу</button>
+      <button type="button" className="btn btn-ghost" disabled={busy || !rows.some((r) => r.selected && !r.ready)} onClick={runAll}>Сгенерировать непроверенные</button>
+      <span className="muted">Готово {summary.ready} из {summary.selected} выбранных</span>
+    </div>
+    {rows.map((row, index) => <section key={row.id} className="cc-surface" style={{ marginTop: 14 }}>
+      <div className="prototype-import-actions">
+        <label><input type="checkbox" checked={row.selected} disabled={busy} onChange={(e) => update(row.id, { selected: e.target.checked })} /> Таблица {index + 1}</label>
+        <span className="mono">{row.ready ? `${row.ready.target_schema}.${row.ready.target_table}` : "Настройте и выполните генерацию"}</span>
+        <span className="prototype-badge">{row.busy ? "Генерация…" : row.ready ? "Готова" : "Не готова"}</span>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => update(row.id, { expanded: !row.expanded })}>{row.expanded ? "Свернуть" : "Параметры и SQL"}</button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setRows((prev) => prev.filter((r) => r.id !== row.id))}>Убрать</button>
+      </div>
+      <fieldset hidden={!row.expanded} disabled={disabled || creating || runningAll || row.busy} style={{ border: 0, padding: 0, minWidth: 0 }}>
+        <SourceLoadEditor ref={(ref) => { editors.current[row.id] = ref; }} rowId={row.id} mode={mode}
+          onReady={(ready) => { update(row.id, { ready }); if (ready) update(row.id, { expanded: false }); }} onBusy={(value) => update(row.id, { busy: value })} />
+      </fieldset>
+    </section>)}
+    {summary.errors.map((message) => <p className="page-error" key={message}>{message}</p>)}
+    {!!summary.selected && <div className="card" style={{ marginTop: 16 }}>
+      <div className="section-title">Одна задача для выбранных STG-таблиц{hasDiff ? " и diff" : ""}</div>
+      {hasDiff ? <p className="muted">Выбранные таблицы войдут в задачу вместе с diff. Заполните общие параметры ниже и нажмите «Создать задачу».</p> : <>
+        <p className="muted">Для общей задачи с diff укажите MR выше и запустите review. Для задачи только по STG заполните параметры здесь.</p>
+        <div className="prototype-step-grid">
+          {[ ["summary", "Название задачи"], ["direction", "Дашборд КХД/Направление *"], ["release_date", "Дата релиза"], ["parent_issue", "Родительская задача"] ].map(([name, label]) =>
+            <label key={name} className="prototype-step-field"><span className="slow-select-label">{label}</span><input className="slow-entity-select" type={name === "release_date" ? "date" : "text"} value={task[name]} disabled={busy} onChange={(e) => setTask((prev) => ({ ...prev, [name]: e.target.value }))} /></label>)}
+        </div>
+        <button type="button" className="btn btn-primary" disabled={busy || Boolean(created?.issue?.issue_id) || !summary.valid || !summary.loads.length || !task.direction.trim()} onClick={createOnlyStg}>Создать одну задачу для {summary.selected} STG-таблиц</button>
+      </>}
+      {!summary.valid && <p className="muted">Сначала завершите генерацию всех выбранных таблиц или снимите выбор с ненужных.</p>}
+    </div>}
+    {error && <p className="page-error">{error}</p>}
+    {created && <div className="card"><div>Задача: <a href={created.issue?.link} target="_blank" rel="noreferrer">{created.issue?.issue_id}</a></div>
+      {[created.meta_mr, created.dbt_registry].filter(Boolean).map((mr, index) => mr.mr_url && <div key={index}><a href={mr.mr_url} target="_blank" rel="noreferrer">Открыть MR</a></div>)}
+      {[created.meta_error, created.meta_mr_error, created.dbt_registry_error, created.attachment_error].filter(Boolean).map((message) => <p className="page-error" key={message}>{message}</p>)}
+    </div>}
+  </section>;
 }

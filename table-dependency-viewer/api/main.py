@@ -10,6 +10,8 @@ import logging
 import yaml
 from dataclasses import replace
 from functools import partial
+from contextlib import contextmanager
+from sqlalchemy import create_engine
 
 from datetime import datetime
 from sqlalchemy import text, bindparam
@@ -1818,25 +1820,42 @@ def create_admin_prototype_review_issue(payload: PrototypeReviewCreateIssuePaylo
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-def get_admin_prototype_source_servers(request: Request):
+@contextmanager
+def _prototype_source_engine(mode):
+    if mode != "ohd":
+        yield dev_engine
+        return
+    settings = ohd_settings()
+    if not settings.get("dev_database_url"):
+        raise ValueError("Для STG ОХД настройте OHD_DEV_DATABASE_URL или DBT_LOGS_DATABASE_URL")
+    source_engine = create_engine(settings["dev_database_url"], pool_pre_ping=True)
+    try:
+        yield source_engine
+    finally:
+        source_engine.dispose()
+
+
+def get_admin_prototype_source_servers(request: Request, mode: str = "khd"):
     _require_authenticated(request)
     try:
-        return {"items": list_source_servers(dev_engine)}
+        with _prototype_source_engine(mode) as source_engine:
+            return {"items": list_source_servers(source_engine)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Не удалось получить серверы источников: {exc}") from exc
 
 
-def get_admin_prototype_source_tables(target_schema: str, request: Request):
+def get_admin_prototype_source_tables(target_schema: str, request: Request, mode: str = "khd"):
     _require_authenticated(request)
     try:
-        return {"items": list_target_tables(dev_engine, target_schema)}
+        with _prototype_source_engine(mode) as source_engine:
+            return {"items": list_target_tables(source_engine, target_schema)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Не удалось получить таблицы: {exc}") from exc
 
 
-def get_admin_prototype_source_table_details(target_schema: str, target_table: str, request: Request):
+def get_admin_prototype_source_table_details(target_schema: str, target_table: str, request: Request, mode: str = "khd"):
     """Return reusable load metadata for an existing STG target.
 
     Physical columns come from DEV; the entity, source server and key fields
@@ -1845,6 +1864,13 @@ def get_admin_prototype_source_table_details(target_schema: str, target_table: s
     """
     user = _require_authenticated(request)
     try:
+        if mode == "ohd":
+            with _prototype_source_engine(mode) as source_engine:
+                tables = list_target_tables(source_engine, target_schema)
+            selected = next((row for row in tables if row["table_name"].lower() == target_table.strip().strip('"').lower()), None)
+            if not selected:
+                raise ValueError("Таблица target не найдена в DEV ОХД")
+            return {**selected, "metadata": {}, "entity_name": "", "entity_id": None}
         tables = list_target_tables(dev_engine, target_schema)
         selected = next(
             (row for row in tables if str(row.get("table_name") or "").lower() == str(target_table or "").strip().strip('"').lower()),
@@ -1935,6 +1961,13 @@ def _prototype_prepare_source_load_yamls(*, source_load: dict[str, Any], author:
 def run_admin_prototype_source_load(payload, request: Request):
     user = _require_authenticated(request)
     try:
+        if getattr(payload, "mode", "khd") == "ohd":
+            from .services.prototype_source_batch import source_keys
+            with _prototype_source_engine("ohd") as source_engine:
+                result = run_source_loader(source_engine, payload.model_dump())
+            result.update(target_fqn=f"{payload.target_schema}.{payload.target_table}",
+                          key_attributes=source_keys(payload.model_dump()), yaml_content="", yaml_contents={})
+            return result
         entity_names = source_load_entity_names(payload.entity_name)
         if not entity_names:
             raise ValueError("Заполните обязательное поле «Сущность / расписание»")
@@ -2011,6 +2044,12 @@ def run_admin_prototype_source_load(payload, request: Request):
 def create_admin_prototype_source_load_issue(payload, request: Request):
     user = _require_authenticated(request)
     try:
+        if getattr(payload, "mode", "khd") == "ohd":
+            return create_admin_prototype_review_issue(PrototypeReviewCreateIssuePayload(
+                mode="ohd", review_items=[], source_loads=[payload], direction=payload.direction,
+                issue_summary=payload.issue_summary, linked_issues=payload.linked_issues,
+                parent_issue=payload.parent_issue, release_date=payload.release_date,
+            ), request)
         entity_names = source_load_entity_names(payload.entity_name)
         if not entity_names:
             raise ValueError("Заполните обязательное поле «Сущность / расписание»")

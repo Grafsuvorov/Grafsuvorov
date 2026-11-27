@@ -89,16 +89,16 @@ def build_prototype_review_router(handlers: PrototypeReviewHandlers) -> APIRoute
         return handlers.release_slots(release_date, request)
 
     @router.get("/source-load/servers")
-    def source_servers(request: Request):
-        return handlers.source_servers(request)
+    def source_servers(request: Request, mode: Literal["khd", "ohd"] = "khd"):
+        return handlers.source_servers(request, mode=mode)
 
     @router.get("/source-load/tables")
-    def source_tables(target_schema: str, request: Request):
-        return handlers.source_tables(target_schema, request)
+    def source_tables(target_schema: str, request: Request, mode: Literal["khd", "ohd"] = "khd"):
+        return handlers.source_tables(target_schema, request, mode=mode)
 
     @router.get("/source-load/table-details")
-    def source_table_details(target_schema: str, target_table: str, request: Request):
-        return handlers.source_table_details(target_schema, target_table, request)
+    def source_table_details(target_schema: str, target_table: str, request: Request, mode: Literal["khd", "ohd"] = "khd"):
+        return handlers.source_table_details(target_schema, target_table, request, mode=mode)
 
     @router.post("/source-load/run")
     def run_source_load(payload: PrototypeReviewSourceLoadPayload, request: Request):

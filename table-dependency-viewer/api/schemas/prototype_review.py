@@ -82,7 +82,7 @@ class PrototypeReviewItemPayload(BaseModel):
 
 
 class PrototypeReviewCreateIssuePayload(PrototypeReviewModePayload):
-    mr_input: str
+    mr_input: str = ""
     task_text: Optional[str] = None
     issue_summary: Optional[str] = None
     load_mode: Optional[str] = None
@@ -96,10 +96,11 @@ class PrototypeReviewCreateIssuePayload(PrototypeReviewModePayload):
     parent_issue: Optional[str] = None
     diff_comment: Optional[str] = None
     source_load: Optional["PrototypeReviewSourceLoadIssuePayload"] = None
+    source_loads: Optional[List["PrototypeReviewSourceLoadIssuePayload"]] = None
     review_items: List[PrototypeReviewItemPayload]
 
 
-class PrototypeReviewSourceLoadPayload(BaseModel):
+class PrototypeReviewSourceLoadPayload(PrototypeReviewModePayload):
     target_schema: str = "stg"
     target_table: str
     source_schema: str
@@ -108,11 +109,11 @@ class PrototypeReviewSourceLoadPayload(BaseModel):
     fields: str = "ALL"
     distribution_field: str = "RN"
     primary_key: str
-    entity_name: str
+    entity_name: str = ""
 
 
 class PrototypeReviewSourceLoadIssuePayload(PrototypeReviewSourceLoadPayload):
-    yaml_content: str
+    yaml_content: str = ""
     yaml_contents: Optional[Dict[str, str]] = None
     recreate_sql: str = ""
     insert_sql: str = ""

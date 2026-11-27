@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .prototype_review import infer_removed_table_targets
 from .stg_source_loader import source_load_entity_names
+from .prototype_source_batch import source_load_items
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,7 @@ def deliver_prototype_issue(
     bundle: dict[str, Any],
     user: Any,
     dependencies: PrototypeIssueDeliveryDependencies,
-    source_load: dict[str, Any] | None = None,
+    source_load: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     author = getattr(user, "email", None) or getattr(user, "username", None) or "prototype-review"
     meta_branch = None
@@ -187,7 +188,9 @@ def deliver_prototype_issue(
         # produced the canonical recreate/insert/truncate scripts.  Put those
         # files into the same task branch so one engineer MR contains both the
         # SQL diff metadata and the STG source-load change.
-        if not meta_error and source_load:
+        for source_load in source_load_items(source_load):
+            if meta_error:
+                break
             schema_name = str(source_load.get("target_schema") or "").strip().lower()
             table_name = str(source_load.get("target_table") or "").strip()
             entity_names = source_load_entity_names(source_load.get("entity_name"))

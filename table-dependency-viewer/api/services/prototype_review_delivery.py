@@ -57,7 +57,7 @@ def publish_dbt_registry(
             "skip_dev_execution": False,
         }
         for item in review_items
-        if not item.get("is_clickhouse_view")
+        if not item.get("is_clickhouse_view") and not item.get("source_load_sql")
     ]
     sql_by_target = {
         str(plan_item.get("item_id") or plan_item.get("target_fqn") or "").strip().lower(): str(plan_item.get("sql_text") or "").strip()
@@ -68,6 +68,8 @@ def publish_dbt_registry(
         )
         if str(plan_item.get("target_fqn") or "").strip()
     }
+    sql_by_target.update({str(item.get("item_id") or item.get("target_fqn")).lower(): item["source_load_sql"]
+                          for item in review_items if item.get("source_load_sql")})
     # A physical table has one DQ registry; algorithms keep separate SQL files.
     merged_entities = {}
     validate_common_variant_settings(review_items)

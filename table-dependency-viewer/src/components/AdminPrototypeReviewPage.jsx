@@ -136,7 +136,7 @@ export default function AdminPrototypeReviewPage() {
   const [releaseSlotsLoading, setReleaseSlotsLoading] = useState(false);
   const [releaseSlotsError, setReleaseSlotsError] = useState("");
   const [selectedReleaseSlot, setSelectedReleaseSlot] = useState("");
-  const [sourceLoad, setSourceLoad] = useState(null);
+  const [sourceBatch, setSourceBatch] = useState({ loads: [], valid: true, selected: 0 });
   const [mappingGroups, setMappingGroups] = useState([]);
   const [mappingChoices, setMappingChoices] = useState({});
   useEffect(() => { setMappingGroups([]); setMappingChoices({}); setResult(null); setReviewItemsDraft([]); }, [mrInput]);
@@ -489,6 +489,9 @@ export default function AdminPrototypeReviewPage() {
       setError("Заполните обязательное поле «Дашборд КХД/Направление»");
       return;
     }
+    if (includeSourceLoad && !sourceBatch.valid) {
+      setError("Завершите генерацию всех выбранных STG-таблиц или снимите их выбор"); return;
+    }
     setCreatingIssue(true);
     setError(null);
     try {
@@ -502,7 +505,7 @@ export default function AdminPrototypeReviewPage() {
         direction: String(form.direction || "").trim(),
         parent_issue: String(form.parent_issue || "").trim() || null,
         diff_comment: String(form.diff_comment || "").trim() || null,
-        source_load: !isOhd && includeSourceLoad && sourceLoad ? sourceLoad : null,
+        source_loads: includeSourceLoad ? sourceBatch.loads : [],
         review_items: reviewItemsDraft.map((item) => ({
           item_id: item.item_id,
           sql_variant_mode: item.sql_variant_mode || null,
@@ -574,15 +577,15 @@ export default function AdminPrototypeReviewPage() {
       <section aria-label="Режим Prototype Review" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
         {[
           { value: "khd", title: "КХД", description: "ETL metadata, dbt и инженерный MR" },
-          { value: "ohd", title: "ОХД · dbt", description: "SQL, registry и DQ · MR в main · отдельный проект YouTrack" },
+          { value: "ohd", title: "ОХД · dbt", description: "STG, SQL, registry и DQ · dbt MR в main" },
         ].map((mode) => <button key={mode.value} type="button" aria-pressed={reviewMode === mode.value}
-          className="cc-surface" disabled={loading || creatingIssue || parentLoading}
+          className="cc-surface" disabled={loading || creatingIssue || parentLoading || sourceBatch.busy}
           style={{ margin: 0, textAlign: "left", cursor: "pointer", borderColor: reviewMode === mode.value ? "var(--accent, #4f7cff)" : undefined }}
           onClick={() => {
             if (reviewMode === mode.value) return;
             setReviewMode(mode.value); setMrInput(""); setForm(DEFAULT_FORM); setLinkedIssues("");
             setResult(null); setReviewItemsDraft([]); setMappingGroups([]); setMappingChoices({});
-            setSourceLoad(null); setRunProgress(null); setError(null);
+            setSourceBatch({ loads: [], valid: true, selected: 0 }); setRunProgress(null); setError(null);
           }}>
           <div className="section-title">{mode.title}</div><div className="muted">{mode.description}</div>
         </button>)}
@@ -628,7 +631,7 @@ export default function AdminPrototypeReviewPage() {
 
       {!isOhd && <BusinessDqPanel />}
 
-      {!isOhd && <PrototypeSourceLoadPanel onSourceLoadReady={(value) => { setSourceLoad(value); setIncludeSourceLoad(true); }} />}
+      <PrototypeSourceLoadPanel key={reviewMode} mode={reviewMode} onSourceLoadsChange={setSourceBatch} hasDiff={Boolean(mrInput.trim())} disabled={loading || creatingIssue} />
 
       {error ? <div className="page-error">{error}</div> : null}
 
@@ -1086,21 +1089,21 @@ export default function AdminPrototypeReviewPage() {
             <div className="section-title">Создание задачи</div>
             <div className="prototype-import-actions">
               <div className="muted">
-                {isOhd ? "Одна задача будет создана в проекте ОХД. SQL, registry и DQ-модели попадут в dbt MR с целевой веткой main." : "Одна задача будет создана на весь diff. ETL YAML, SQL объектов, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи."}
+                {isOhd ? "Одна задача для diff и выбранных STG-таблиц будет создана в проекте ОХД. SQL, registry и DQ-модели попадут в dbt MR с целевой веткой main." : "Одна задача будет создана на весь diff. ETL YAML, SQL объектов, dbt registry и DQ-модели будут синхронизированы в одноимённых ветках задачи."}
               </div>
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={handleCreateIssue}
-                disabled={loading || creatingIssue || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
+                disabled={loading || creatingIssue || (includeSourceLoad && !sourceBatch.valid) || result.composition_stale || reviewItemsDraft.some((i) => i.source_stale) || unresolvedItemsCount > 0 || (!reviewItemsDraft.length && !hasDeletedFiles) || !hasDashboardDirection}
               >
                 {creatingIssue ? (isOhd ? "Создаём задачу и dbt MR…" : "Ищем зависимости и создаём задачу…") : "Создать задачу"}
               </button>
             </div>
-            {!isOhd && sourceLoad ? (
+            {sourceBatch.selected > 0 ? (
               <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 14, cursor: "pointer" }}>
                 <input type="checkbox" checked={includeSourceLoad} onChange={(event) => setIncludeSourceLoad(event.target.checked)} />
-                Добавить загрузку из источника <span className="mono">{sourceLoad.target_schema}.{sourceLoad.target_table}</span> в эту задачу и тот же инженерный MR
+                Добавить выбранные STG-таблицы ({sourceBatch.ready || 0} из {sourceBatch.selected} готовы) в эту задачу и общий MR
               </label>
             ) : null}
             {creatingIssue ? (

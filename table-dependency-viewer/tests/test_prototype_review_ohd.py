@@ -292,9 +292,9 @@ class OhdPrototypeReviewTests(unittest.TestCase):
         self.assertEqual(comments[0]["issue_id"], "OHD-5")
         self.assertTrue(result["dbt_registry"]["task_link_attached"])
 
-    def test_source_load_is_rejected_before_any_ohd_external_calls(self):
-        with self.assertRaisesRegex(ValueError, "без STG-загрузки"):
-            create_prototype_review_issue(SimpleNamespace(mode="ohd", source_load={"target_table": "unsafe"}, review_items=[]),
+    def test_source_load_from_khd_is_rejected_before_any_ohd_external_calls(self):
+        with self.assertRaisesRegex(ValueError, "другом контуре"):
+            create_prototype_review_issue(SimpleNamespace(mode="ohd", source_load={"target_schema": "stg", "target_table": "unsafe", "mode": "khd"}, review_items=[]),
                 None, dependencies=fixtures.PrototypeIssueWorkflowTests.dependencies())
 
     def test_ohd_publishes_actual_sql_target_and_registry_in_main_not_khd_project(self):

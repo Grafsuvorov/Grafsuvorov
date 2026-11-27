@@ -10,7 +10,8 @@ from .prototype_review_issue_delivery import PrototypeIssueDeliveryDependencies
 from .prototype_review_variants import validate_issue_variants
 from .prototype_review_retry import validate_review_sources
 from .prototype_review_dbt import build_registry_yaml
-from .prototype_review import infer_review_targets
+from .prototype_review import infer_review_targets, infer_removed_table_targets
+from .prototype_source_batch import payload_source_loads, validate_source_loads
 
 
 @dataclass(frozen=True)
@@ -89,9 +90,12 @@ def create_prototype_review_issue(
     dependencies: PrototypeIssueWorkflowDependencies,
 ) -> dict[str, Any]:
     ohd = getattr(payload, "mode", "khd") == "ohd"
-    if ohd and (getattr(payload, "source_load", None)
-                or any(getattr(i, "is_clickhouse_view", False) for i in payload.review_items)):
-        raise ValueError("В режиме ОХД поддерживается только dbt Greenplum без STG-загрузки и ClickHouse")
+    source_loads = payload_source_loads(payload)
+    review_items = [item.model_dump() if hasattr(item, "model_dump") else dict(item)
+                    for item in getattr(payload, "review_items", [])]
+    if ohd and any(getattr(i, "is_clickhouse_view", False) for i in payload.review_items):
+        raise ValueError("В режиме ОХД поддерживается только dbt Greenplum без ClickHouse")
+    validate_source_loads(source_loads, mode="ohd" if ohd else "khd", review_items=review_items)
     dashboard_direction = str(payload.direction or "").strip()
     requested_parent_issue = str(getattr(payload, "parent_issue", None) or "").strip().upper()
     if requested_parent_issue:
@@ -117,10 +121,18 @@ def create_prototype_review_issue(
         gitlab_ssl_verify=dependencies.gitlab_ssl_verify,
         mr_input=payload.mr_input,
         default_project=dependencies.analyst_gitlab_project or dependencies.gitlab_project,
-    )
+    ) if str(payload.mr_input or "").strip() else {"mr": {}, "files": [], "deleted_files": []}
     parsed_task = dependencies.parse_task(payload.task_text or "")
-    review_items = [item.model_dump() for item in payload.review_items]
+    if not str(payload.mr_input or "").strip() and review_items:
+        raise ValueError("Для объектов diff укажите исходный MR")
+    if not str(payload.mr_input or "").strip() and not source_loads:
+        raise ValueError("Добавьте STG-таблицы или укажите MR")
     changed_files = bundle.get("files") or []
+    removed_targets = infer_removed_table_targets(files=changed_files, deleted_files=bundle.get("deleted_files") or [],
+        active_targets={str(item.get("target_fqn") or "").lower() for item in review_items})
+    for load in source_loads:
+        if f"{load['target_schema']}.{load['target_table']}".lower() in removed_targets:
+            raise ValueError("STG-таблица одновременно добавляется из источника и удаляется в diff")
     if ohd and any(t.get("is_clickhouse_view") for t in infer_review_targets(changed_files)):
         raise ValueError("Режим ОХД поддерживает только dbt Greenplum, без ClickHouse")
     validate_review_sources(review_items, changed_files)
@@ -225,8 +237,6 @@ def create_prototype_review_issue(
         or parsed_task.get("summary")
         or f"[Prototype Review] {bundle.get('mr', {}).get('source_branch') or 'prototype'}"
     )
-    source_load = getattr(payload, "source_load", None)
-    source_load_data = source_load.model_dump() if hasattr(source_load, "model_dump") else dict(source_load or {})
     description = dependencies.build_description(
         mr=bundle.get("mr") or {},
         task_context=task_context,
@@ -234,11 +244,11 @@ def create_prototype_review_issue(
         review_items=review_items,
         deleted_files=bundle.get("deleted_files") or [],
     )
-    if source_load_data:
-        description += "\n\n## Загрузка из источника в STG\n\n" + "\n".join([
-            f'**Таблица target:** {source_load_data.get("target_schema")}."{source_load_data.get("target_table")}";',
-            f'**Источник:** {source_load_data.get("source_schema")}.{source_load_data.get("source_table")};',
-            f'**Расписание:** {source_load_data.get("entity_name")};',
+    for index, load in enumerate(source_loads, 1):
+        description += f"\n\n## STG {index}\n\n" + "\n".join([
+            f'**Таблица target:** {load["target_schema"]}."{load["target_table"]}";',
+            f'**Источник:** {load.get("source_schema")}.{load.get("source_table")};',
+            *([f'**Расписание:** {load.get("entity_name")};'] if not ohd else []),
         ])
     issue_result = dependencies.create_issue(
         base_url=dependencies.youtrack_url,
@@ -321,7 +331,7 @@ def create_prototype_review_issue(
         bundle=bundle,
         user=user,
         dependencies=dependencies.delivery,
-        source_load=source_load_data or None,
+        source_load=source_loads or None,
     )
     if issue_result.get("issue_id"):
         issue_result["link"] = dependencies.build_issue_link(issue_result["issue_id"])
